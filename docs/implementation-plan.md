@@ -119,9 +119,9 @@ survives plugin upgrades and server restarts, run at the correct point in
 plugin lifecycle — has no example to model. Needs to be worked out carefully
 at implementation time rather than copied from a reference.
 
-### 4.4 Scanner-side HTTP client — CLAUDE.md and the reference plugin disagree
+### 4.4 Scanner-side HTTP client — CLAUDE.md and the reference plugin disagreed (resolved)
 
-CLAUDE.md states: "Scanner/importer-side HTTP → `LWP::UserAgent`
+CLAUDE.md stated: "Scanner/importer-side HTTP → `LWP::UserAgent`
 (synchronous)". The actual reference plugin's scanner-side code instead uses
 `Slim::Networking::SimpleSyncHTTP`
 (`refs/lms-plugin-tidal/API/Sync.pm:9,104`; confirmed real module at
@@ -130,8 +130,8 @@ CLAUDE.md states: "Scanner/importer-side HTTP → `LWP::UserAgent`
 request logging, caching, and timeout conventions for free; bare
 `LWP::UserAgent` would not.
 
-**Status: open decision, not yet resolved.** `API/Sync.pm` has not been
-written pending this choice.
+**Resolved:** use `Slim::Networking::SimpleSyncHTTP`, matching the reference
+plugin. `CLAUDE.md`'s architecture constraint has been updated to match.
 
 ### 4.5 FX-rate source for currency conversion (v3, not blocking v1)
 
