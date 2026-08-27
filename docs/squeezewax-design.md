@@ -638,6 +638,6 @@ implementation, rather than open design questions:
   cold once.
 - **LMS**: single-threaded — server-side calls must be async
   (`Slim::Networking::SimpleAsyncHTTP`), scanner-side calls synchronous
-  (`LWP::UserAgent`); Perl plugin architecture per the official
-  music-service-plugin reference.
+  (`Slim::Networking::SimpleSyncHTTP`); Perl plugin architecture per the
+  official music-service-plugin reference.
 - **Spotify branding**: no overlays on Spotify-provided artwork.

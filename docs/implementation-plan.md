@@ -35,7 +35,7 @@ v2/v3 do not start until matching works end to end.
 | `Importer.pm` | Scan-time matching cascade (Strict → Structural → Fuzzy). Runs in the scanner process (`main::SCANNER`), registered via `Slim::Music::Import->addImporter`. Does **not** subclass `Slim::Plugin::OnlineLibraryBase` — that base class exists to let a plugin *create* tracks for a service it streams from (TIDAL/Spotty's job); SqueezeWax never creates tracks, it annotates albums LMS already scanned from disk. Deliberate divergence from both reference plugins. | Structurally similar to `refs/lms-plugin-tidal/Importer.pm:21-49` (`startScan`, progress reporting via `Slim::Utils::Progress`) but without the `OnlineLibraryBase` inheritance | §3, §8 |
 | `API.pm` | Shared Discogs constants/helpers: base URL, rate-limit constant (60/min), response-shape → internal-hash transforms, image URL helpers. | `refs/lms-plugin-tidal/API.pm:12-25`, `:79-118` | §1, §13 |
 | `API/Async.pm` | Server-side (LMS process) Discogs calls — search, release lookup, marketplace lookup, OAuth-authenticated collection/wantlist pulls — via `Slim::Networking::SimpleAsyncHTTP` (confirmed: `refs/lms-plugin-tidal/API/Async.pm:13,801`). Handles the 60 req/min throttle. | `refs/lms-plugin-tidal/API/Async.pm:717-886` (`_call`, caching/throttling pattern) | §5, §7, §13 |
-| `API/Sync.pm` | Scanner-side Discogs calls for the matching cascade. **HTTP client choice is an open decision — see §4 below before writing this file.** | `refs/lms-plugin-tidal/API/Sync.pm:9,104` | §3, §13 |
+| `API/Sync.pm` | Scanner-side Discogs calls for the matching cascade, via `Slim::Networking::SimpleSyncHTTP` (resolved — see §4.4 below). | `refs/lms-plugin-tidal/API/Sync.pm:9,104` | §3, §13 |
 | `Settings.pm` | Matching-tier selector, duration margin, badge colors/toggles, marketplace filter defaults, sync intervals. | `refs/lms-plugin-tidal/Settings.pm:1-51` | §9 |
 | `Settings/Auth.pm` | Discogs OAuth flow page + credential storage. | `refs/lms-plugin-tidal/Settings/Auth.pm:1-89` — structural inspiration only; Discogs uses OAuth 1.0a, not TIDAL's device-code flow, so the actual handshake will differ | §5, §9 |
 | `Schema.pm` | Owns `discogs_match` / `discogs_collection` / `discogs_price_snapshot`: creation, migration, query helpers. No reference plugin demonstrates *persistent* custom tables — see §4 below. | Primitive confirmed real (`Slim::Schema->dbh()->do('CREATE TABLE ...')`, `refs/slimserver/Slim/Plugin/OnlineLibraryBase.pm:47-52`), pattern itself unprecedented in refs/ | §10 |
@@ -149,5 +149,5 @@ blocking for the Strict/Structural matching skeleton itself.
 
 ## 5. Immediate next step
 
-Proceed with the plugin skeleton (build-order step 1), deferring `API/Sync.pm`
-until §4.4 above is resolved.
+Proceed with build-order step 1: the plugin skeleton and `install.xml` that
+LMS actually loads.
