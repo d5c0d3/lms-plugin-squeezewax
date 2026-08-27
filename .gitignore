@@ -1,0 +1,15 @@
+refs/
+
+*.swp
+*.swo
+*~
+.DS_Store
+.vscode/
+.idea/
+*.iml
+
+Makefile.PL.old
+blib/
+MYMETA.json
+MYMETA.yml
+pm_to_blib
