@@ -54,7 +54,10 @@ plugin without Spotty's helper-binary complexity.
 
 - LMS is single-threaded.
   - Server-side HTTP → `Slim::Networking::SimpleAsyncHTTP` (async)
-  - Scanner/importer-side HTTP → `LWP::UserAgent` (synchronous)
+  - Scanner/importer-side HTTP → `Slim::Networking::SimpleSyncHTTP` (synchronous)
+    — matches the reference plugin (`refs/lms-plugin-tidal/API/Sync.pm`);
+    gets LMS's own request logging, caching, and timeout conventions for
+    free, unlike bare `LWP::UserAgent`.
 - **This plugin never plays audio.** No ProtocolHandler, no streaming URI
   scheme, no transcoding entries. Spotty has all of these — do not copy them.
 - Discogs API: 60 requests/min authenticated. All matching must be batched,
