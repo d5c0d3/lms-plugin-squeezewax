@@ -10,6 +10,12 @@ Everything below was checked against `LMS-Community/slimserver` at commit
 Items marked **UNVERIFIED** are explicitly not confirmed and must not be
 treated as settled.
 
+All twelve `refs/slimserver`-sourced citations in this document were
+re-verified by symbol against branch `public/9.1` on 2026-08-28; one
+correction was made (§3, `DATE`/`MUSICBRAINZ_ID` attribution below). Line
+numbers elsewhere in this document remain as cited against `50e5b725`/
+v9.2.0 — resolve by symbol, not line, on `public/9.1`.
+
 ---
 
 ## 1. v1 scope (final)
@@ -215,8 +221,11 @@ name would silently fail on half a mixed-format library.
   This also serves as the coverage report, so silent failure is impossible.
 - **One parser for all matched tags.** Accept a bare number, a
   `discogs.com/release/123456-Title` URL, and `[r123456]` markup. Values may
-  arrive as a scalar **or an arrayref** — LMS special-cases this for `DATE`
-  and `MUSICBRAINZ_ID` at `MP3.pm:343-352`.
+  arrive as a scalar **or an arrayref** — LMS special-cases this per format,
+  not in one place: `MUSICBRAINZ_ID` in `MP3.pm:343-344`, `DATE` in
+  `FLAC.pm`'s `doTagMapping` (~247-251). Another instance of this section's
+  format divergence — FLAC and MP3 don't even special-case the same tags in
+  the same file, let alone present them the same way.
 - **Disagreement is not Strict.** Two configured tags present with different
   IDs, or a value that doesn't parse → review queue, not first-wins. Strict's
   justification is "no ambiguity"; the moment there is ambiguity it isn't
