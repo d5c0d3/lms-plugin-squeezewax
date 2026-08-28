@@ -663,11 +663,23 @@ implementation, rather than open design questions:
 ## 13. Key Technical Constraints (Summary)
 
 - **Discogs API**: 60 req/min authenticated; OAuth for user data; no
-  historical price endpoint (snapshot locally). **Scan-time budget:** at
-  ~1–2 search requests per album, a cold match of a 2,000-album library is
-  bounded below by roughly **35–70 minutes** of pure API time — matching must
-  therefore be incremental, resumable (§8), and cached so it only ever runs
-  cold once.
+  historical price endpoint (snapshot locally).
+
+  **Scan-time budget** (corrected from an earlier flat "1–2 requests per
+  album" estimate — see `squeezewax-v1-decisions.md` §4):
+
+  | Operation | Cost |
+  |---|---|
+  | Strict match | 0 requests — the tag names the release |
+  | Owned badge | ~20 requests per collection sync (100 items/page) |
+  | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) |
+  | Completeness check (v2) | 1 release fetch per matched album, cacheable forever |
+
+  For a well-tagged, Strict-dominant library, cold matching is
+  **disk-bound, not rate-limit-bound**. Structural-heavy libraries can still
+  be expensive — an album with eight pressings on Discogs costs nine
+  requests, not two — so matching must still be incremental, resumable
+  (§8), and cached so it only ever runs cold once.
 - **LMS**: single-threaded — server-side calls must be async
   (`Slim::Networking::SimpleAsyncHTTP`), scanner-side calls synchronous
   (`Slim::Networking::SimpleSyncHTTP`); Perl plugin architecture per the
