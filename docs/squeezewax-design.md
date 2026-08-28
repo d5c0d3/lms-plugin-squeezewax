@@ -662,8 +662,13 @@ implementation, rather than open design questions:
   edge cases (e.g. bonus-disc-only mismatches, box sets with non-audio discs)
   should be validated against real Discogs release data once implementation
   starts.
-- Verify how LMS's rescan flags changed files, to hook the tag-change
-  re-match trigger (§3) into the scanner correctly.
+- ~~Verify how LMS's rescan flags changed files~~ — **Resolved.**
+  `Slim::Utils::Scanner::API` provides `onNewTrack` / `onChangedTrack` /
+  `onDeletedTrack` / `onFinished` hooks, confirmed against
+  `refs/slimserver` `public/9.1`. `Importer.pm` registers `onChangedTrack`
+  (and `onNewTrack`/`onDeletedTrack`) to accumulate affected album ids per
+  track event, then runs the deduped re-match cascade once in `onFinished`.
+  See `squeezewax-v1-decisions.md` §6 and `implementation-plan.md` §4.6.
 
 ---
 
