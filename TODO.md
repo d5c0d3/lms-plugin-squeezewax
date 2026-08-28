@@ -15,15 +15,24 @@ Shared reminder list. Both I and Claude Code read and update this.
 ## Blocking — do before build-order step 2
 
 - [ ] Add `<importmodule>Plugins::SqueezeWax::Importer</importmodule>` to
-      `SqueezeWax/install.xml`. Without it, `PluginManager->load('import')`
-      skips the plugin and nothing runs in the scanner.
-      Check first whether a manifest naming a not-yet-existing module breaks
-      plugin load.
-- [ ] Reconcile `docs/v1-decisions.md` into `docs/squeezewax-design.md` and
-      `docs/implementation-plan.md`, so there is one source of truth again.
-- [ ] Re-verify the slimserver citations in `docs/v1-decisions.md` against
-      `refs/slimserver/` (they were taken on v9.2.0; refs is on `public/9.1`,
-      so line numbers will differ — locate by symbol).
+      `SqueezeWax/install.xml` together with a minimal `Importer.pm`, in the
+      same commit — so the scanner never logs a load failure for a module
+      that doesn't exist yet. Deferred to the build session (Schema.pm is
+      not this session's job either).
+      Answered 2026-08-28: naming a not-yet-existing `<importmodule>` is
+      **tolerated, not fatal** — `PluginManager.pm`'s `load()` calls
+      `Slim::bootstrap::tryModuleLoad`, which wraps the require in
+      `eval "use $module ()"`; a failure is logged and that one plugin is
+      left disabled, but the loop over all plugins continues
+      (`Slim/bootstrap.pm`, `tryModuleLoad`). Still landing it together with
+      `Importer.pm` rather than relying on that tolerance.
+- [ ] Reconcile `docs/squeezewax-v1-decisions.md` into
+      `docs/squeezewax-design.md` and `docs/implementation-plan.md`, so
+      there is one source of truth again.
+- [x] Re-verify the slimserver citations in `docs/squeezewax-v1-decisions.md`
+      against `refs/slimserver/` (they were taken on v9.2.0; refs is on
+      `public/9.1`, so line numbers differ — located by symbol). All twelve
+      confirmed; one citation corrected (DATE/MUSICBRAINZ_ID attribution).
 
 ## Next — build-order step 2
 
@@ -34,6 +43,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **Failed `<importmodule>` load visibility.** Does LMS surface the
+      failed-to-load module as a persistent error state on the Plugins page?
+      Does that state clear on its own once the module exists (next scan or
+      restart), or does it need a plugin reinstall? Bears on whether the
+      install.xml/Importer.pm split above is worth the tolerance at all.
 - [ ] **Material Skin.** Does a plugin settings page render in Material Skin?
       Does a custom page via `Slim::Web::Pages->addPageFunction`? This blocks
       both the §4 badge overlay and the v2 triage page, so it is worth an early
