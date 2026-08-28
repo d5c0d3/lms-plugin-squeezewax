@@ -142,8 +142,16 @@ Matching runs at **library scan time** via `Importer.pm` (synchronous, like
 Spotty). Each result is stored in a plugin-owned table:
 
 ```
-lms_album_id → discogs_release_id, match_tier, match_confidence, matched_at
+album_key → discogs_release_id, match_tier, match_confidence, matched_at
 ```
+
+`album_key` — a hash over the album's tracks' `urlmd5`, sorted — is the
+match's identity, not `lms_album_id`. LMS's own `albums.id` is
+`INTEGER PRIMARY KEY AUTOINCREMENT` and does not survive a `library.db`
+wipe; `urlmd5` is LMS's own cross-wipe key (see §10, and
+`squeezewax-v1-decisions.md` §2 for the full finding). `lms_album_id` is
+still cached alongside for fast lookups, refreshed whenever a rescan
+completes, but is never treated as identity.
 
 ### Three matching tiers — a cascading pipeline
 
@@ -156,7 +164,7 @@ single-mode picker.
 | Tier | Signal | Behavior |
 |---|---|---|
 | **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm. No ambiguity. Ideal case for rips tagged with Discogs (user's ripped albums are largely tagged this way). |
-| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. |
+| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget. |
 | **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
 
 ### Matching pipeline (flowchart)
