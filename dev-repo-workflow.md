@@ -155,23 +155,29 @@ requirement (zip → sha1 → versioned filename):
    dev copy's `install.xml`.
 4. Zip: `cd <tmp> && zip -r SqueezeWaxDev_<version>.zip SqueezeWaxDev/`
    — version **in the filename**, per the official requirement, or LMS may
-   serve a cached copy on "upgrade."
-5. Hash: sha1 of the zip. On the Linux dev container this is
-   `sha1sum SqueezeWaxDev_<version>.zip`; the official docs only mention a
-   Windows GUI tool (HashMyFiles) — `sha1sum` isn't itself confirmed against
-   Lyrion's docs, so treat it as a standard-toolchain assumption to verify
-   the first time LMS actually accepts (or rejects) the resulting sha,
-   rather than something guaranteed by the reference.
+   serve a cached copy on "upgrade." **Structure confirmed** against a real,
+   known-working release (`FilterMusic_2_1_2.zip`, downloaded from
+   `d5c0d3.github.io/filtermusic_sb/`): a top-level `<PluginName>/`
+   directory holding `install.xml`/`Plugin.pm`/etc, not those files at the
+   archive root. Zipping from the parent of the renamed dev folder (as
+   above) produces exactly that shape — verified by comparing `unzip -l` on
+   both archives.
+5. Hash: sha1 of the zip — `sha1sum SqueezeWaxDev_<version>.zip`. The
+   official docs only mention a Windows GUI tool (HashMyFiles), so this was
+   originally flagged as a standard-toolchain assumption pending
+   verification. **Confirmed**: LMS's Extension Downloader accepted and
+   verified `sha1sum`'s digest before extracting
+   `SqueezeWaxDev_0.0.0.3.zip` on a successful "SqueezeWax (Dev)" install —
+   see §9.
 6. Write the new `<version>` and `<sha>` into `repo-dev.xml`.
 7. Move the zip into `dist/` (gitignored except via explicit `git add`, or
    committed directly — your call, but it must end up reachable at the exact
    `raw.githubusercontent.com` URL `repo-dev.xml` references).
 8. `git add repo-dev.xml dist/SqueezeWaxDev_<version>.zip && git commit && git push`.
 
-I haven't written the actual script content yet — this is the spec for it.
-Say the word and I'll write it, but I'd want to confirm the exact `zip`/
-`sha1sum` invocations behave as expected in your actual dev container before
-calling that step "done," rather than asserting it working from here.
+`scripts/package-dev-build.sh` implements all of the above and has produced
+a dev build LMS installed successfully — see §9 for what's now confirmed
+working end to end.
 
 ---
 
@@ -193,19 +199,28 @@ pattern as "FilterMusic (Dev)."
 ## 7. Iteration loop
 
 1. Edit `SqueezeWax/` (real source only).
-2. Run the packaging script (§5) → new `SqueezeWaxDev_<version>.zip`,
+2. **Commit the edit.** The packaging script builds from `git archive HEAD`
+   (§5 step 1), not the working tree, so an uncommitted change is invisible
+   to it — skipping this step doesn't fail loudly, it just silently
+   packages the *previous* commit's content. This already happened once: an
+   uncommitted `install.xml` category change (`tools` → `musicservices`)
+   was correctly left out of a dev build packaged before it was committed,
+   which is the intended behavior (`git archive HEAD`, not a working-tree
+   copy, exists specifically so a dev build always reflects real, committed
+   code per §2) but only if you remember the commit comes first.
+3. Run the packaging script (§5) → new `SqueezeWaxDev_<version>.zip`,
    updated `repo-dev.xml`, pushed.
-3. In LMS: **Settings → Plugins → Additional Repositories**, re-save (or use
+4. In LMS: **Settings → Plugins → Additional Repositories**, re-save (or use
    a cache-busting query string on the dev repo URL, e.g. `?v=<n>`) if the
    new version doesn't show up — both GitHub's raw CDN and LMS's own
    repository-list cache can serve a stale copy even after the version bump,
    per the FilterMusic README's explicit gotcha.
-4. Install/update "SqueezeWax (Dev)" from the Plugins page.
-5. Check LMS's own log (`Settings → Information` / server log file) for
+5. Install/update "SqueezeWax (Dev)" from the Plugins page.
+6. Check LMS's own log (`Settings → Information` / server log file) for
    load errors — this is still the actual verification step; packaging and
    hosting only gets the code *onto* the server, it doesn't confirm it's
    correct.
-6. Repeat.
+7. Repeat.
 
 ---
 
@@ -227,13 +242,28 @@ pattern as "FilterMusic (Dev)."
 
 ---
 
-## 9. Open items before this is fully actionable
+## 9. Open items — all closed
 
-- `scripts/package-dev-build.sh` itself isn't written yet (§5) — say so and
-  I'll write it once you confirm the rename list is complete/correct.
-- `minTarget`/`maxTarget`/`category` in `repo-dev.xml` are placeholders
-  until the real `install.xml` (build-order step 1, still not started) sets
-  them for real.
-- `sha1sum` as the hashing tool is an assumption, not something Lyrion's
-  docs confirm outright (they only document a Windows tool) — worth a quick
-  sanity check the first time a dev build actually installs successfully.
+- **`scripts/package-dev-build.sh`** is written and in the repo
+  (`scripts/package-dev-build.sh`, commit `d2be3f6`).
+- **`minTarget`/`maxTarget`/`category`** in `repo-dev.xml` are no longer
+  placeholders. The script reads them out of the packaged commit's own
+  `install.xml` — extracted via `git archive HEAD` (§5 step 1), not the
+  live working tree — so `repo-dev.xml` always tracks whatever the real
+  plugin's manifest says at the commit actually being packaged, and can't
+  silently disagree with it. Current values: `minTarget="8.4"
+  maxTarget="*" category="musicservices"` — the real `install.xml` was
+  initially written with `category="tools"`, a generic guess made without
+  checking this doc's own §4 placeholder, and corrected to `musicservices`
+  once the design spec's framing was checked directly ("a music-service
+  plugin for a catalog you don't stream from", `squeezewax-design.md:133`),
+  which §4's placeholder had guessed correctly all along. The script
+  re-derives `category` from the real manifest every build rather than
+  hardcoding it, so it can't drift again either way.
+- **`sha1sum`** is confirmed, not just assumed. LMS's Extension Downloader
+  verified the sha1 digest of `SqueezeWaxDev_0.0.0.3.zip`
+  (`c4a5ba53c901c151ff2aa31b89b08ecc3b681ecd`) before extracting it on a
+  successful "SqueezeWax (Dev)" install.
+- **Zip structure** confirmed against a real, known-working release
+  (`FilterMusic_2_1_2.zip`): a top-level `<PluginName>/` directory, not
+  files at the archive root — see §5 step 4.
