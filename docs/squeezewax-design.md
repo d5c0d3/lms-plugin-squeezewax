@@ -621,6 +621,7 @@ never stored in the match table.
 ## 11. v1 Scope & Roadmap
 
 **v1 (core value, smallest surface):**
+- Configurable Discogs tag names, ordered list, with detection (§3, §9).
 - Strict + Structural matching, review queue, manual re-match.
 - Owned badge (grid + Now Playing) with badge context menu (pressing details,
   credits, on-demand value, Discogs link-out).
@@ -629,8 +630,14 @@ never stored in the match table.
 
 **v2:**
 - Fuzzy tier (streaming-album matching) + Wantlist sync & wantlist badge.
+- Triage / library-health page (problem releases only).
+- Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
 - Collection value total + price snapshots.
+
+**Not planned:** any write to the Discogs Collection (§5) — adding a release
+is a record-in-hand act performed on the Discogs website; LMS has no
+advantage there and no way to see the physical object.
 
 **v3:**
 - Flow 2 (native Discogs grids, "Find on …" / "Find" fan-out).
