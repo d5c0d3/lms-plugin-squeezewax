@@ -101,3 +101,16 @@ One line only. Do not repeat it within the same session.
 - Prefer small, reviewable commits over large ones
 - When the spec and your instinct disagree, follow the spec and tell me why
   you disagree
+
+## TODO.md
+
+`TODO.md` in the repo root is a shared reminder list — both of us read and
+write it.
+
+- Read it at the start of a session, before proposing what to work on.
+- When something can't be done now — blocked on a real server, on an external
+  answer, or deferred by decision — add it there rather than only mentioning
+  it in chat.
+- Tick items off as part of the commit that completes them.
+- Don't restate the whole list back to me. Mention only what's relevant to
+  what we're doing.
