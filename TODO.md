@@ -26,7 +26,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       left disabled, but the loop over all plugins continues
       (`Slim/bootstrap.pm`, `tryModuleLoad`). Still landing it together with
       `Importer.pm` rather than relying on that tolerance.
-- [ ] Reconcile `docs/squeezewax-v1-decisions.md` into
+- [x] Reconcile `docs/squeezewax-v1-decisions.md` into
       `docs/squeezewax-design.md` and `docs/implementation-plan.md`, so
       there is one source of truth again.
 - [x] Re-verify the slimserver citations in `docs/squeezewax-v1-decisions.md`
