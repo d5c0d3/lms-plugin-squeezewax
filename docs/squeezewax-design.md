@@ -566,12 +566,27 @@ or unreachable:
 
 ```
 discogs_match
-  lms_album_id        (FK to LMS album)
+  album_key           (PK — hash over the album's tracks' urlmd5, sorted;
+                       identity of the match, not lms_album_id — see §3)
+  mb_album_id         (albums.musicbrainz_id where present, secondary
+                       resolution path)
+  lms_album_id        (denormalised cache column, refreshed whenever a
+                       rescan completes; never trusted as identity)
   discogs_release_id
   discogs_master_id
   match_tier          (strict | structural | fuzzy)
   state               (candidate | confirmed)
   matched_at
+  -- orphan-recovery snapshot, captured at confirm time:
+  snapshot_artist
+  snapshot_album_title
+  snapshot_track_count
+  snapshot_total_duration
+
+discogs_release_cache
+  discogs_release_id  (PK)
+  -- cached release payload: tracklist, format, year, country, etc.
+  fetched_at
 
 discogs_collection
   instance_id         (PK — Discogs collection instance; the same release
@@ -587,10 +602,19 @@ discogs_price_snapshot
   price_low, price_median, price_high, currency
 ```
 
+`album_key` replaces `lms_album_id` as the match table's identity because
+`albums.id` (`INTEGER PRIMARY KEY AUTOINCREMENT`) does not survive a
+`library.db` wipe, while `urlmd5` does — see §3 and
+`squeezewax-v1-decisions.md` §2 for the full finding, including the
+orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
+makes relinks and completeness checks (v2) cost no API calls once a release
+has been fetched once — added explicitly rather than left implied.
+
 **Badge derivation** (see §4 flowchart): badge presence and color are computed
 by joining `discogs_match` (state = confirmed) with `discogs_collection` on
-`discogs_release_id` and reading `list_state`. Ownership is never stored in
-the match table.
+`discogs_release_id` and reading `list_state`. This join never touches album
+identity — it is unaffected by the `album_key` change above. Ownership is
+never stored in the match table.
 
 ---
 
