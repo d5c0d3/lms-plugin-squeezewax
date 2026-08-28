@@ -123,6 +123,20 @@ survives plugin upgrades and server restarts, run at the correct point in
 plugin lifecycle — has no example to model. Needs to be worked out carefully
 at implementation time rather than copied from a reference.
 
+**Resolved (see `squeezewax-v1-decisions.md` §2):** a plugin-owned attached
+SQLite file (`squeezewax.db`) in the LMS preferences directory, ATTACHed
+per-connection via a `postDBConnect` handler registered through
+`addPostConnectHandler` (confirmed real, `SQLiteHelper.pm:390`, documented
+in-file as intended for plugins; sole in-tree caller
+`Slim/Plugin/FullTextSearch/Plugin.pm:199`). Versioned via
+`PRAGMA squeezewax.user_version`, migrated by an ordered list of idempotent
+Perl subs in `Schema.pm` — not `$prefs->migrate`, not shipped `.sql` files.
+No foreign keys into LMS tables: `schema_clear.sql`'s unqualified
+`DELETE FROM albums` would silently empty any such FK (verified empirically
+against the confirmed SQL), and a separate attached file makes the FK
+impossible to create at all, since SQLite resolves FK targets within the
+same database.
+
 ### 4.4 Scanner-side HTTP client — CLAUDE.md and the reference plugin disagreed (resolved)
 
 CLAUDE.md stated: "Scanner/importer-side HTTP → `LWP::UserAgent`
@@ -148,6 +162,15 @@ Spec §3/§12 flags "verify how LMS's rescan flags changed files" as unverified.
 Not yet investigated against `refs/slimserver/Slim/Utils/Scanner/` — needed
 before the re-match-on-tag-change trigger (§3) can be implemented, but not
 blocking for the Strict/Structural matching skeleton itself.
+
+**Resolved (see `squeezewax-v1-decisions.md` §6):**
+`Slim::Utils::Scanner::API` (confirmed real, all six hook methods present)
+provides `onNewTrack` / `onChangedTrack` / `onDeletedTrack` /
+`onNewPlaylist` / `onDeletedPlaylist` / `onFinished`. These fire per-track
+during a rescan; `Importer.pm` should register `onChangedTrack` (and
+`onNewTrack`/`onDeletedTrack`) to accumulate affected album ids, then do the
+deduped re-match work once in `onFinished` — matching the pattern used by
+`Slim::Plugin::FullTextSearch::Plugin` and `Slim::Plugin::MusicMagic::Plugin`.
 
 ---
 
