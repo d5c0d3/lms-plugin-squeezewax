@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<extension>
+	<id>b13de6d1-98cc-4443-9057-9b716f94557e</id>
+	<name>PLUGIN_SQUEEZEWAX_NAME</name>
+	<description>PLUGIN_SQUEEZEWAX_DESC</description>
+	<creator>d5c0d3</creator>
+	<version>0.1.0</version>
+	<module>Plugins::SqueezeWax::Plugin</module>
+	<category>tools</category>
+	<targetApplication>
+		<minVersion>8.4</minVersion>
+		<maxVersion>*</maxVersion>
+	</targetApplication>
+</extension>

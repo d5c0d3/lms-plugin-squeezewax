@@ -1,0 +1,5 @@
+PLUGIN_SQUEEZEWAX_NAME
+	EN	SqueezeWax
+
+PLUGIN_SQUEEZEWAX_DESC
+	EN	Links your physical record collection to your LMS library.
