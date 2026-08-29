@@ -6,6 +6,7 @@
 	<creator>d5c0d3</creator>
 	<version>0.1.0</version>
 	<module>Plugins::SqueezeWax::Plugin</module>
+	<importmodule>Plugins::SqueezeWax::Importer</importmodule>
 	<category>musicservices</category>
 	<targetApplication>
 		<minVersion>8.4</minVersion>
