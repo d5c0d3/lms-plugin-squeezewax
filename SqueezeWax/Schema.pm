@@ -21,6 +21,19 @@ use Slim::Utils::OSDetect;
 use constant DB_NAME   => 'squeezewax.db';
 use constant DB_SCHEMA => 'squeezewax';
 
+# Ordered list of migrations. Index n produces user_version n+1, so the target
+# version is simply the count. Never reorder or remove an entry: append.
+#
+# Each must be idempotent - CREATE TABLE IF NOT EXISTS and friends - because a
+# run that dies partway leaves user_version at the last step that completed,
+# and the next connect retries from there.
+my @MIGRATIONS = (
+);
+
+# A sub, not a `use constant`: constants are folded at BEGIN, before the
+# runtime assignment to @MIGRATIONS above has happened.
+sub SCHEMA_VERSION { scalar @MIGRATIONS }
+
 my $log = logger('plugin.squeezewax');
 
 my $registered = 0;
@@ -120,15 +133,27 @@ sub postDBConnect {
 
 		$dbh->do( 'PRAGMA ' . DB_SCHEMA . '.cache_size = 2000' );
 
+		# DDL is the server's job alone. The scanner takes what it finds.
+		if (main::SCANNER) {
+			$class->_checkVersion($dbh);
+		}
+		else {
+			$class->_migrate($dbh);
+		}
+
 		$ready = 1;
 	};
 
 	if ($@) {
 		$error = $@;
+		$error =~ s/\s+$//;
 		$ready = 0;
 
-		$log->error("Couldn't attach " . DB_NAME . ": $error");
-		logError("SqueezeWax is disabled: couldn't attach " . DB_NAME . ": $error");
+		$log->error( DB_NAME . " is unusable: $error" );
+
+		# logError goes to the root logger, so this is visible at default log
+		# levels in both server.log and scanner.log (Slim/Utils/Log.pm:318-330).
+		logError( 'SqueezeWax is inactive: ' . DB_NAME . " is unusable: $error" );
 	}
 
 	return $ready;
@@ -163,6 +188,77 @@ sub _ensureWalMode {
 
 	if ( !$mode || lc($mode) ne 'wal' ) {
 		die 'failed to set WAL journal mode (got ' . ($mode || 'no result') . ")\n";
+	}
+
+	return 1;
+}
+
+# Version lives in the database file itself, not in prefs: prefs and the file
+# are destroyed independently, so a prefs-held version could claim v5 against a
+# database that does not exist. See decisions §2.
+sub _version {
+	my ( $class, $dbh ) = @_;
+
+	my ($version) = $dbh->selectrow_array( 'PRAGMA ' . DB_SCHEMA . '.user_version' );
+
+	return $version || 0;
+}
+
+# Server only. Runs whatever migrations are outstanding, bumping user_version
+# after each so an interrupted run resumes rather than restarting.
+sub _migrate {
+	my ( $class, $dbh ) = @_;
+
+	my $from = $class->_version($dbh);
+
+	if ( $from > SCHEMA_VERSION ) {
+		# Downgraded plugin against a newer file. Refuse rather than guess:
+		# the newer schema may hold columns this version would silently drop.
+		die DB_NAME . " is at version $from, newer than this plugin understands ("
+			. SCHEMA_VERSION . "). Refusing to touch it.\n";
+	}
+
+	return 1 if $from == SCHEMA_VERSION;
+
+	main::INFOLOG && $log->is_info
+		&& $log->info( 'Migrating ' . DB_NAME . " from version $from to " . SCHEMA_VERSION );
+
+	for my $i ( $from .. SCHEMA_VERSION - 1 ) {
+		my $to = $i + 1;
+
+		eval {
+			$MIGRATIONS[$i]->($dbh);
+
+			# user_version takes no bind parameters, hence the interpolation.
+			# $to is a loop index over our own list, not external input.
+			$dbh->do( 'PRAGMA ' . DB_SCHEMA . ".user_version = $to" );
+		};
+
+		if ($@) {
+			die "migration to version $to failed: $@";
+		}
+
+		main::INFOLOG && $log->is_info && $log->info("Migrated " . DB_NAME . " to version $to");
+	}
+
+	return 1;
+}
+
+# Scanner only. The tables must already exist; we never create them here.
+#
+# Note that the ATTACH above cannot tell us anything: SQLite creates a missing
+# file silently, so a first-ever run that starts with a scan would attach a
+# perfectly valid empty database. This check is what catches that - a fresh
+# file reports version 0.
+sub _checkVersion {
+	my ( $class, $dbh ) = @_;
+
+	my $version = $class->_version($dbh);
+
+	if ( $version != SCHEMA_VERSION ) {
+		die DB_NAME . " is at version $version, expected " . SCHEMA_VERSION
+			. ' - start the server once to create or migrate it'
+			. "\n";
 	}
 
 	return 1;
