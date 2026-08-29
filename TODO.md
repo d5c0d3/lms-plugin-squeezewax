@@ -91,15 +91,19 @@ Shared reminder list. Both I and Claude Code read and update this.
       Does that state clear on its own once the module exists (next scan or
       restart), or does it need a plugin reinstall? Bears on whether the
       install.xml/Importer.pm split above is worth the tolerance at all.
-- [ ] **Material Skin.** Does a plugin settings page render in Material Skin?
-      Does a custom page via `Slim::Web::Pages->addPageFunction`? This blocks
-      both the §4 badge overlay and the v2 triage page, so it is worth an early
-      throwaway dev build to find out.
+- [x] **Material Skin — settings page.** Confirmed 2026-08-29 on the real
+      server: all plugin settings pages are reachable in Material Skin.
+- [ ] **Material Skin — badge overlay.** Still open, and a different question
+      from the settings-page one above: Material renders the browse UI itself
+      rather than proxying the Default skin's templates, so a badge injected
+      into Default-skin templates presumably would not appear there. That's
+      unverified inference, not observed fact — still blocks the §4 badge
+      overlay design until actually checked against a build that has one.
 - [ ] **Album-id stability on a normal rescan.** Record some album ids, rescan,
       compare. Then edit an album title and rescan again.
-- [ ] **`addPostConnectHandler` from a third-party plugin.** Registration forces
-      a disconnect/reconnect; the interaction with plugin load ordering has been
-      read, not observed.
+- [x] **`addPostConnectHandler` from a third-party plugin.** Confirmed
+      2026-08-29 on the real server: working — `squeezewax.db` exists in the
+      prefs directory, which it could not without the handler having fired.
 - [ ] **DDL during a scan.** Only evidence is a 2016 CustomScan log; WAL and
       `sqlite_use_immediate_transaction` have both changed since.
 - [ ] **Step 2 end-to-end on a server.** Plugin loads with the new

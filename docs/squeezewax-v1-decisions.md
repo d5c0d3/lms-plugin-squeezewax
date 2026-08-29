@@ -183,6 +183,23 @@ LMS does to its own database, so relinks and completeness checks cost no API
 calls once populated. Add to §10 explicitly rather than leaving it implied by
 §3's "cached in a local SQLite table."
 
+### The optimize step reaches into our file
+
+Content is untouched, but the file itself is not fully hands-off:
+`SQL/SQLite/schema_optimize.sql` ends with a bare, schema-unqualified
+`ANALYZE;` (`refs/slimserver/SQL/SQLite/schema_optimize.sql:15`), run by
+`Slim::Schema->optimizeDB` against `$class->storage->dbh`
+(`Slim/Schema.pm:393-411`) — the same connection our `postDBConnect` handler
+has attached `squeezewax` to. Per SQLite's own semantics, `ANALYZE` with no
+schema-name analyzes every attached database, not just `main`. Confirmed on
+the real server: `squeezewax.db` contains a `sqlite_stat1` table nobody here
+created.
+
+Harmless — it improves our own query planning and touches no row we own —
+but it means LMS's post-scan housekeeping does write into `squeezewax.db`.
+Worth knowing before treating an unexpected table there as a sign of
+corruption or foreign access.
+
 ---
 
 ## 3. Tag reading — new, v1
