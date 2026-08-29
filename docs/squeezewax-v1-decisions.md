@@ -95,9 +95,13 @@ dashboard, artist-level badge, currency conversion.
 ### Decisions
 
 **Location.** A plugin-owned file, `squeezewax.db`, created at runtime in the
-LMS **preferences** directory — resolved the way LMS resolves `persist.db`,
-via `Slim::Utils::Prefs::dir() || Slim::Utils::OSDetect::dirsFor('prefs')`
-(`SQLiteHelper.pm:556-566`). Attached as schema `squeezewax`.
+LMS **preferences** directory — resolved by calling LMS's own accessor,
+`sqlHelperClass->dbFile($name, $persistent)` (`SQLiteHelper.pm:556-566`),
+rather than reimplementing its body. The second argument is a plain boolean;
+in-tree callers pass different truthy values (`'persistent'` at `:345`,
+a regex result at `Slim/Schema/Storage.pm:62`). Its persistent branch is
+`Slim::Utils::Prefs::dir() || Slim::Utils::OSDetect::dirsFor('prefs')`.
+Attached as schema `squeezewax`.
 
 Not `library.db` (dies with the cache). Not `persistentdb` (squatting in a
 file LMS owns). **Never inside the plugin directory** — installed plugins live
@@ -373,7 +377,32 @@ Read-only about ownership. Show only rows with a problem, plus a summary line
   `Slim/Plugin/MusicMagic/Plugin.pm:202-204`. Options are
   `{ cb => sub {...}, want_object => 0|1 }`; the POD warns against
   `want_object` on scanner-performance grounds. These are **track**-level —
-  accumulate affected album ids and do the deduped work in `onFinished`.
+  accumulate affected album ids and do the deduped work at the end.
+
+  **Correction (implementation, build-order step 2): `onFinished` is the wrong
+  hook for the `lms_album_id` cache refresh.** Use the server-side
+  `['rescan','done']` notification via `Slim::Control::Request::subscribe`,
+  debounced — the hook `Slim::Schema` itself uses (`Slim/Schema.pm:243-248`)
+  and `FullTextSearch` uses (`:204-209`). Three reasons:
+  - **Wrong process.** For an external scan `onFinished` fires inside the
+    scanner; the cache column is a server-side convenience.
+  - **Too early.** `markDone` ends the media-folder phase only. `runScan`
+    (`Import.pm:371`) returns, and `runScanPostProcessing` (`:432-460`) then
+    runs the `post` importers — `ReleaseTypes`, `VirtualLibraries` — which
+    still touch `albums`.
+  - **Incomplete coverage.** It fires only if `Scanner::Local::rescan` ran.
+
+  `['rescan','done']` also demonstrably fires where the plugin can write: in
+  `SQLiteHelper::_notifyFromScanner` the post-scan
+  `Slim::Schema->disconnect; Slim::Schema->init;` is at `:626-628` and the
+  notification at `:638`, so the reconnect — and our re-ATTACH — happens
+  first. It fires more than once per logical scan (six sites:
+  `SQLiteHelper.pm:638`, `Import.pm:238`, `:741`, `Local.pm:391`, `:663`,
+  `:1224`), hence the debounce.
+
+  The track-level hooks are still the right mechanism for the *re-match*
+  trigger, but they have no route from the scanner process to the server —
+  see TODO.md, open design question.
 
 ---
 

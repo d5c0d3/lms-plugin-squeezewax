@@ -28,11 +28,16 @@ use constant DB_SCHEMA => 'squeezewax';
 # run that dies partway leaves user_version at the last step that completed,
 # and the next connect retries from there.
 my @MIGRATIONS = (
+	\&_migration_1,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
 # runtime assignment to @MIGRATIONS above has happened.
-sub SCHEMA_VERSION { scalar @MIGRATIONS }
+#
+# The empty prototype is load-bearing. Without it a bareword call slurps
+# whatever follows as arguments, so `SCHEMA_VERSION - 1` parses as
+# `SCHEMA_VERSION(-1)` and quietly yields the unreduced version.
+sub SCHEMA_VERSION () { scalar @MIGRATIONS }
 
 my $log = logger('plugin.squeezewax');
 
@@ -260,6 +265,126 @@ sub _checkVersion {
 			. ' - start the server once to create or migrate it'
 			. "\n";
 	}
+
+	return 1;
+}
+
+# Migration 1: the v1 data model, per design §10.
+#
+# No foreign keys anywhere. Not into LMS's tables - schema_clear.sql's
+# unqualified DELETE FROM albums would silently empty anything referencing
+# them, and a separate attached file makes such a reference impossible to
+# declare in the first place, since SQLite resolves FK targets within one
+# database. And none between our own tables either: LMS sets
+# PRAGMA foreign_keys = ON connection-wide (Slim/Utils/SQLiteHelper.pm:99), so
+# an ON DELETE CASCADE here would be live, and nothing is worth a cascade that
+# could remove a confirmed match.
+sub _migration_1 {
+	my $dbh = shift;
+
+	# discogs_match. Identity is album_key - a hash over the album's tracks'
+	# urlmd5, sorted - because albums.id is INTEGER PRIMARY KEY AUTOINCREMENT
+	# and does not survive a library.db wipe, while urlmd5 is LMS's own
+	# cross-wipe key. lms_album_id is a cache column, never identity.
+	#
+	# The length CHECK matters: an album with no qualifying tracks must produce
+	# no key at all rather than a hash of the empty string, which is a single
+	# constant every empty album would collide on.
+	#
+	# match_tier records provenance, not just which cascade tier ran, so it
+	# carries 'manual' alongside design §3's three tiers - the review queue and
+	# manual re-match both write it. Typos in either enum would otherwise
+	# surface as a silently missing badge, indistinguishable from "not matched".
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_match (
+			album_key               TEXT    NOT NULL PRIMARY KEY
+			                                CHECK (length(album_key) = 32),
+			mb_album_id             TEXT,
+			lms_album_id            INTEGER,
+			discogs_release_id      INTEGER,
+			discogs_master_id       INTEGER,
+			match_tier              TEXT    NOT NULL
+			                                CHECK (match_tier IN ('strict','structural','fuzzy','manual')),
+			state                   TEXT    NOT NULL DEFAULT 'candidate'
+			                                CHECK (state IN ('candidate','confirmed')),
+			matched_at              INTEGER,
+
+			-- Orphan-recovery snapshot, captured at confirm time. Lives here
+			-- rather than in discogs_collection so that recovery survives a
+			-- collection wipe.
+			snapshot_artist         TEXT,
+			snapshot_album_title    TEXT,
+			snapshot_track_count    INTEGER,
+			snapshot_total_duration INTEGER
+		)
+	});
+
+	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_release
+		ON discogs_match (discogs_release_id)');
+	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_lms_album
+		ON discogs_match (lms_album_id)');
+	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_mb_album
+		ON discogs_match (mb_album_id)');
+
+	# The orphan lookup: confirmed rows whose snapshot might fit a new album.
+	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_orphan
+		ON discogs_match (state, snapshot_track_count)');
+
+	# discogs_release_cache. Untouched by anything LMS does to its own
+	# database, so relinks and the v2 completeness check cost no API calls once
+	# a release has been fetched once. GET /releases/{id} is the only endpoint
+	# that returns a tracklist, which makes this worth keeping indefinitely.
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_release_cache (
+			discogs_release_id INTEGER NOT NULL PRIMARY KEY,
+			discogs_master_id  INTEGER,
+			payload            TEXT,
+			fetched_at         INTEGER NOT NULL
+		)
+	});
+
+	# discogs_collection. Entirely regenerable - it caches Discogs' own data
+	# and holds nothing the user entered here, since we deliberately do not
+	# keep a local owned flag (design §5). A rekey costs DROP, recreate and a
+	# ~20-request re-sync, so schema changes here are cheap.
+	#
+	# Note that instance_id cannot hold wantlist rows: a Discogs want has no
+	# instance. v1 writes owned rows only; see TODO.md for the v2 rekey.
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_collection (
+			instance_id        INTEGER NOT NULL PRIMARY KEY,
+			discogs_release_id INTEGER NOT NULL,
+			list_state         TEXT    NOT NULL DEFAULT 'owned'
+			                           CHECK (list_state IN ('owned','wantlist')),
+			format             TEXT,
+			catalog_no         TEXT,
+			label              TEXT,
+			country            TEXT,
+			year               INTEGER,
+			condition          TEXT,
+			added_at           INTEGER,
+			notes              TEXT,
+			synced_at          INTEGER
+		)
+	});
+
+	# The badge-derivation join in design §4: confirmed match, then is the
+	# release in the collection, then what list_state.
+	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_collection_release
+		ON discogs_collection (discogs_release_id, list_state)');
+
+	# discogs_price_snapshot. One row per lookup, so history is retained.
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_price_snapshot (
+			discogs_release_id INTEGER NOT NULL,
+			snapshot_at        INTEGER NOT NULL,
+			price_low          REAL,
+			price_median       REAL,
+			price_high         REAL,
+			currency           TEXT,
+			PRIMARY KEY (discogs_release_id, snapshot_at)
+		)
+	});
 
 	return 1;
 }

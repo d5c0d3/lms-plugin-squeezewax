@@ -30,15 +30,32 @@ trap 'rm -rf "$INCDIR"' EXIT
 mkdir -p "$INCDIR/Plugins"
 ln -s "$ROOT/SqueezeWax" "$INCDIR/Plugins/SqueezeWax"
 
-# refs ships XS modules per perl-version and architecture; add the matching
-# dirs the same way LMS does at Slim/Utils/PluginManager.pm:276-289, including
-# its archname normalisation.
-PERLVER=$(perl -e 'printf "%vd", $^V' | cut -d. -f1,2)
-ARCH=$(perl -MConfig -e 'my $a = $Config{archname}; $a =~ s/^i[3456]86-/i386-/; $a =~ s/gnu-//; print $a')
-ARCHINC=""
-for d in "$REFS/CPAN/arch/$PERLVER/$ARCH/auto" "$REFS/CPAN/arch/$PERLVER/$ARCH"; do
-	[ -d "$d" ] && ARCHINC="$ARCHINC -I$d"
-done
+# refs ships XS modules per perl-version and architecture, and the pure-perl
+# halves in more than one place - CPAN/DBI.pm and CPAN/arch/<ver>/DBI.pm are
+# different versions, and crossing them with the wrong .so is a DynaLoader
+# mismatch rather than a clean failure. Mirror Slim::bootstrap's @SlimINC
+# exactly (refs/slimserver/Slim/bootstrap.pm:90-127) rather than approximating.
+SLIMINC=$(perl -MConfig -e '
+	my $p = shift;
+	my $arch = $Config::Config{archname};
+	$arch =~ s/^i[3456]86-/i386-/;
+	$arch =~ s/gnu-//;
+	my $major = $Config{version};
+	$major =~ s/\.\d+$//;
+	print join " ", map { "-I$_" } grep { -d } (
+		"$p/CPAN/arch/$major/$arch",
+		"$p/CPAN/arch/$major/$arch/auto",
+		"$p/CPAN/arch/$Config{version}/$Config::Config{archname}",
+		"$p/CPAN/arch/$Config{version}/$Config::Config{archname}/auto",
+		"$p/CPAN/arch/$major/$Config::Config{archname}",
+		"$p/CPAN/arch/$major/$Config::Config{archname}/auto",
+		"$p/CPAN/arch/$Config::Config{archname}",
+		"$p/CPAN/arch/$major",
+		"$p/lib",
+		"$p/CPAN",
+		$p,
+	);
+' "$REFS")
 
 # Plugin.pm inherits from Slim::Plugin::Base, which transitively loads a large
 # part of LMS including XS modules whose refs-shipped versions do not match an
@@ -71,9 +88,8 @@ for scanner in 0 1; do
 			note=""
 		fi
 
-		# shellcheck disable=SC2086 # ARCHINC is a deliberate word-split list
-		out=$(perl \
-			-I"$INCDIR" -I"$REFS" -I"$REFS/lib" -I"$REFS/CPAN" $ARCHINC \
+		# shellcheck disable=SC2086 # SLIMINC is a deliberate word-split list
+		out=$(perl -I"$INCDIR" $SLIMINC \
 			-e "
 				package main;
 				use constant SCANNER      => $scanner;

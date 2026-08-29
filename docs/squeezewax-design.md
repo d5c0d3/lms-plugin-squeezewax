@@ -142,7 +142,7 @@ Matching runs at **library scan time** via `Importer.pm` (synchronous, like
 Spotty). Each result is stored in a plugin-owned table:
 
 ```
-album_key → discogs_release_id, match_tier, match_confidence, matched_at
+album_key → discogs_release_id, match_tier, state, matched_at
 ```
 
 `album_key` — a hash over the album's tracks' `urlmd5`, sorted — is the
@@ -166,6 +166,14 @@ single-mode picker.
 | **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm. No ambiguity. Ideal case for rips tagged with Discogs (user's ripped albums are largely tagged this way). |
 | **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget. |
 | **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
+
+These three are the *cascade's* tiers. The stored `match_tier` records
+**provenance**, so it has a fourth value the cascade never produces:
+`manual`, written when the user establishes the link themselves from the
+review queue or the "re-match" action. That case genuinely is none of the
+three — leaving `strict` would claim a file tag names the release the user
+just overrode, and writing `fuzzy` would claim a search produced it and make
+a resolved row indistinguishable from an unresolved candidate.
 
 ### Matching pipeline (flowchart)
 
@@ -220,7 +228,7 @@ Collection, not of the match itself. (An earlier draft called the state
 - The review queue offers search-as-you-type against Discogs to manually link
   an album to a specific pressing; confirming promotes candidate → confirmed.
 - A successful manual "Find on Spotify" (see §6) can retroactively backfill /
-  upgrade the confidence of the original scan-time match.
+  promote the original scan-time match.
 
 ### Multi-disc releases & box sets (resolved)
 
@@ -574,7 +582,8 @@ discogs_match
                        rescan completes; never trusted as identity)
   discogs_release_id
   discogs_master_id
-  match_tier          (strict | structural | fuzzy)
+  match_tier          (strict | structural | fuzzy | manual — provenance,
+                       not just which cascade tier ran; see §3)
   state               (candidate | confirmed)
   matched_at
   -- orphan-recovery snapshot, captured at confirm time:
@@ -609,6 +618,20 @@ discogs_price_snapshot
 orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
 makes relinks and completeness checks (v2) cost no API calls once a release
 has been fetched once — added explicitly rather than left implied.
+
+**`discogs_collection` is entirely regenerable, and that is a design property
+worth relying on.** It caches Discogs' own data and holds nothing the user
+entered here — §5 rules out a local "owned" flag deliberately, so there is no
+second source of truth to lose. Rebuilding it costs `DROP TABLE`, recreate,
+and a collection re-sync of roughly 20 requests (§4). Two consequences:
+
+- Schema changes to this table are cheap at any time, unlike `discogs_match`.
+  The known one is `instance_id` as primary key: a Discogs *wantlist* entry
+  has no instance id, so `list_state = wantlist` rows do not fit the current
+  key. v1 writes owned rows only, so this is deferred rather than urgent.
+- **Orphan recovery must never depend on this table.** The identity snapshot
+  lives in `discogs_match` precisely so that recovering a match survives the
+  collection being wiped and re-synced.
 
 **Badge derivation** (see §4 flowchart): badge presence and color are computed
 by joining `discogs_match` (state = confirmed) with `discogs_collection` on
