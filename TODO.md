@@ -36,6 +36,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order step 2
 
+- [ ] **`postDBConnect` fires twice in immediate succession.** 91ms apart on
+      server, 2ms apart in scanner, before the separate post-scan firing. Either
+      two genuine connections or the handler runs twice against one handle;
+      second ATTACH fails with "already in use", eval swallows it, pragma
+      read-back succeeds — so logs success either way. Benign today, but
+      `postDBConnect` should explicitly detect an already-attached schema rather
+      than getting the right outcome by accident. Do this in whichever session
+      next touches `Schema.pm`.
 - [x] `Schema.pm`: plugin-owned attached SQLite file, `postDBConnect`
       registration, `PRAGMA user_version` migrations, per `docs/v1-decisions.md` §2.
 - [ ] Configurable Discogs tag names + detection action (v1, per §3 of the
@@ -106,12 +114,17 @@ Shared reminder list. Both I and Claude Code read and update this.
       prefs directory, which it could not without the handler having fired.
 - [ ] **DDL during a scan.** Only evidence is a 2016 CustomScan log; WAL and
       `sqlite_use_immediate_transaction` have both changed since.
-- [ ] **Step 2 end-to-end on a server.** Plugin loads with the new
-      `<importmodule>`; `squeezewax.db` appears in the prefs directory;
-      `PRAGMA squeezewax.user_version` is 1 after first start; the file
-      survives a wipe-and-rescan; deleting it and then running a scan before
-      restarting the server logs loudly and writes nothing (the scanner should
-      attach the empty file SQLite creates for it, then fail the version check).
+- [x] **Step 2 end-to-end on a server.** Verified 2026-08-29 on Ubuntu package
+      install, Lyrion 9.x: `squeezewax.db` created in prefs folder (not cache),
+      owned by squeezeboxserver; `user_version` 1; `journal_mode` wal; all four
+      tables present. Migration ran once (0→1), did not repeat on restart.
+      `<importmodule>` working — Importer::initPlugin logs from scanner.
+      Server and scanner attach concurrently under WAL with no lock errors.
+      Post-scan disconnect/init/reconnect at SQLiteHelper.pm:626-628 observed
+      firing, confirming postDBConnect necessity — one-shot startup attach would
+      have been dropped there. Scanner-fails-safely-on-missing-database check
+      unreachable on real server (server recreates during startup); marked as
+      untested-on-hardware, covered by offline suite.
 
 ## Waiting — external
 
@@ -121,6 +134,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **Revisit `plugin.squeezewax` defaultLevel before v1 release.** INFO is
+      correct while the plugin emits ~six lines per session. Once matching
+      writes per-album output, it won't be — drop back to WARN and move noisy
+      lines to DEBUG. Easy to miss since volume grows gradually rather than at
+      one identifiable moment.
 - [ ] Decide whether `dev-repo-workflow.md` lives in the repo root or in
       `docs/` — its own §3 layout diagram says `docs/`, but the file is at the
       root. Pick one and make them agree.
