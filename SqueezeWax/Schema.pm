@@ -129,7 +129,7 @@ sub postDBConnect {
 		# silently. Only a missing or unwritable directory fails here. It is
 		# the user_version check that catches an empty database, not this.
 
-		$class->_ensureWalMode($dbh);
+		my $journalMode = $class->_ensureWalMode($dbh);
 
 		# Deliberately no synchronous pragma. Pragmas are not inherited by an
 		# attached database: main is at OFF (SQLiteHelper.pm:99) but ours
@@ -147,6 +147,16 @@ sub postDBConnect {
 		}
 
 		$ready = 1;
+
+		# The only proof postDBConnect ran to completion rather than merely
+		# reaching a die - see the module header. journal_mode especially,
+		# since _ensureWalMode's pragma fails silently by design and this
+		# read-back is the only signal we have of it.
+		main::INFOLOG && $log->is_info && $log->info(
+			DB_NAME . ' ready (' . ( main::SCANNER ? 'scanner' : 'server' ) . ' process): path='
+			. $path . ' user_version=' . $class->_version($dbh)
+			. ' journal_mode=' . ( $journalMode || 'unknown' )
+		);
 	};
 
 	if ($@) {
@@ -186,7 +196,7 @@ sub _ensureWalMode {
 			);
 		}
 
-		return;
+		return $mode;
 	}
 
 	my ($mode) = $dbh->selectrow_array( 'PRAGMA ' . DB_SCHEMA . '.journal_mode = WAL' );
@@ -195,7 +205,7 @@ sub _ensureWalMode {
 		die 'failed to set WAL journal mode (got ' . ($mode || 'no result') . ")\n";
 	}
 
-	return 1;
+	return $mode;
 }
 
 # Version lives in the database file itself, not in prefs: prefs and the file
