@@ -4,13 +4,13 @@
 		<title lang="EN">SqueezeWax dev builds</title>
 	</details>
 	<plugins>
-		<plugin name="SqueezeWaxDev" version="0.0.0.5" minTarget="8.4" maxTarget="*">
+		<plugin name="SqueezeWaxDev" version="0.0.0.6" minTarget="8.4" maxTarget="*">
 			<title lang="EN">SqueezeWax (Dev)</title>
 			<desc lang="EN">Development build of SqueezeWax — not for general use.</desc>
 			<creator>d5c0d3</creator>
 			<category>musicservices</category>
-			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/dist/SqueezeWaxDev_0.0.0.5.zip</url>
-			<sha>6d9c005a13c12d6c0c395e41fe035eb03de227fa</sha>
+			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/dist/SqueezeWaxDev_0.0.0.6.zip</url>
+			<sha>58114783554201a317f27d845bb76345ce5fcd9d</sha>
 		</plugin>
 	</plugins>
 </extensions>
