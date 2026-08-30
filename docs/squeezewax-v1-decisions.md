@@ -202,6 +202,114 @@ corruption or foreign access.
 
 ---
 
+## 2a. `discogs_no_match` — the examined-and-found-nothing record
+
+**Decided 2026-08-29 (design chat), during build-order step 3 planning.**
+
+Migration 2 adds a second table alongside `discogs_match.source_timestamp`:
+
+```
+discogs_no_match
+  album_key        TEXT NOT NULL CHECK (length(album_key) = 32)
+  tier             TEXT NOT NULL CHECK (tier IN ('strict','structural'))
+  source_timestamp INTEGER
+  checked_at       INTEGER NOT NULL
+  PRIMARY KEY (album_key, tier)
+```
+
+A row means: this tier was attempted for this album at this source state and
+produced no candidate.
+
+### Why a row at all
+
+Without one, an album with no Discogs tag gets nothing written, so every
+rescan re-reads one or two of its files forever. At step 3 that is disk
+rather than API — but LMS reads *no* audio files on a no-change rescan, so
+we would be adding one read per unmatched album where there were none. On a
+mostly-untagged 5,000-album library on slow storage that is minutes per
+rescan for no result. At step 4 the same albums would re-run a Discogs
+search every scan, which is not merely slow.
+
+### Why a separate table rather than a `'none'` tier in `discogs_match`
+
+Three reasons, in order of weight:
+
+- `discogs_match` is the one table that is **not** disposable (§2, design
+  §10). Negative rows are pure regenerable cache; mixing them in couples
+  cache lifetime to durable state.
+- They would pollute the `(state, snapshot_track_count)` orphan-recovery
+  index, whose whole population is meant to be confirmed matches with a
+  snapshot.
+- Every review-queue and badge query would need a new exclusion predicate,
+  and forgetting one degrades to a wrong badge rather than an error.
+
+`match_tier` is also defined as the provenance of *a match* (design §3).
+There is no match here.
+
+### Why now rather than at step 4
+
+Nothing has shipped past `user_version` 1, so this rides migration 2 instead
+of needing a migration 3; commit 5's skip logic is written once against both
+tables instead of written and then rewritten; and step 4's strict negatives do
+not need rebuilding (its own structural negatives are still built from
+scratch, since `tier` is part of the key). The table is
+entirely regenerable, so a wrong guess costs `DROP` and recreate — the same
+argument design §10 makes for `discogs_collection`, and the reason deciding
+early is safe here and would not be for `discogs_match`.
+
+### Shape notes
+
+- **PK `(album_key, tier)`, not `album_key`.** Strict-negative ("don't
+  re-read the file") and Structural-negative ("don't re-run the search") are
+  different facts with different costs, and step 4 needs both to be true of
+  one album simultaneously.
+- **`tier` carries a CHECK**, matching the `match_tier` convention and its
+  reasoning: a typo'd value degrades to "not examined", which is
+  indistinguishable from correct behaviour and therefore silent.
+- **`'fuzzy'` is deliberately absent.** Fuzzy is v2. Widening the CHECK means
+  `DROP` + recreate on a regenerable table, which is the cheapest migration
+  available.
+- **Skip semantics are identical to `discogs_match`**: skip when a row exists
+  *and* `source_timestamp` equals the album's current `MAX(tracks.timestamp)`.
+  A NULL `source_timestamp` therefore never skips, which is the correct
+  behaviour for an album whose timestamp cannot be established (see the
+  online-library case in TODO).
+- **`checked_at NOT NULL`** is inert for Strict and load-bearing for
+  Structural, where a search that found nothing today may find something in
+  six months. The staleness policy itself is **step-4 scope and not decided
+  here**; the column exists so step 4 can add one without a migration.
+
+### Invariants
+
+1. An album never has a row in both `discogs_match` and `discogs_no_match`
+   for the same tier. Enforced in `Match.pm`; asserted in the offline suite.
+   No constraint can express it — foreign keys are banned (§2) and SQLite
+   has no cross-table CHECK.
+2. A tag **conflict** is not a no-match. It writes to `discogs_match` per
+   §3a. A `discogs_no_match` row means nothing was found at all.
+   Where an album that already has a conflict row later loses its tags
+   altogether, the conflict row is **deleted** and a `discogs_no_match` row
+   written as normal, so invariant 1 holds without a special case and
+   "no tag found → write a no-match row" has no exception. The deletion is
+   permitted for exactly
+   `match_tier = 'strict' AND state = 'candidate' AND
+   discogs_release_id IS NULL AND snapshot_track_count IS NULL`.
+   The governing rule is **never delete a row that carries a decision or a
+   recovery snapshot** — that predicate is the rule written out, not an
+   exemption from it. Refreshing the row in place instead was considered and
+   rejected: it leaves the album in the review queue permanently advertising a
+   conflict that no longer exists and that step 5 cannot render, since §3a
+   stores no `conflict_note` and re-reads tags that are now absent.
+   Narrowing a never-delete rule does create a boundary someone can widen, so
+   the test to apply is the reason above, never resemblance to this row shape.
+3. The table is entirely regenerable. Orphan recovery must never read it,
+   and design §9's "clear & rebuild matches" action must clear it.
+4. Rows orphaned by an `album_key` change are **not** swept in v1. Growth is
+   bounded by library churn and the maintenance action is the escape hatch.
+   Recorded in TODO rather than built.
+
+---
+
 ## 3. Tag reading — new, v1
 
 ### Finding: LMS discards custom tags

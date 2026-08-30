@@ -29,6 +29,7 @@ use constant DB_SCHEMA => 'squeezewax';
 # and the next connect retries from there.
 my @MIGRATIONS = (
 	\&_migration_1,
+	\&_migration_2,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -444,6 +445,70 @@ sub _migration_1 {
 			price_high         REAL,
 			currency           TEXT,
 			PRIMARY KEY (discogs_release_id, snapshot_at)
+		)
+	});
+
+	return 1;
+}
+
+# Migration 2: the skip caches that make a rescan cheap. See decisions §2a.
+#
+# Must be idempotent like every migration, and ALTER TABLE ADD COLUMN is not -
+# it throws "duplicate column name" on a re-run - so the column list is checked
+# first. The whole point of the idempotence rule is that a migration dying
+# partway leaves user_version at the last completed step and the next connect
+# retries from there.
+sub _migration_2 {
+	my $dbh = shift;
+
+	# source_timestamp: MAX(tracks.timestamp) over the album's qualifying local
+	# tracks at match time. urlmd5 is md5_hex($url) (Slim/Schema.pm:1758,
+	# :1947), so editing tags in place does not move album_key - and editing
+	# tags is exactly what Strict matching cares about. tracks.timestamp is the
+	# file mtime, which is what LMS's own changed-file detection compares
+	# (Slim/Utils/Scanner/Local.pm:270-284).
+	#
+	# Preferred over tracks.updated_time (Slim/Schema.pm:2007): a wipe-and-rescan
+	# resets updated_time for every track, which would re-match the whole
+	# library, while album_key and timestamp both survive a wipe intact.
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	if ( !$columns{source_timestamp} ) {
+		$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN source_timestamp INTEGER');
+	}
+
+	# discogs_no_match: "this tier was attempted for this album at this source
+	# state and produced no candidate". Without it, an album with no Discogs tag
+	# is re-read on every rescan forever - and LMS reads no audio files at all on
+	# a no-change rescan, so that would be a cost where there is currently none.
+	#
+	# Deliberately NOT a 'none' tier in discogs_match: that would put regenerable
+	# cache in the one table that is not disposable, and would pollute the
+	# (state, snapshot_track_count) orphan-recovery index. This table is
+	# regenerable in full - dropping it costs re-reads, never a match.
+	#
+	# PK is (album_key, tier), not album_key: strict-negative ("don't re-read the
+	# file") and structural-negative ("don't re-run the search") are different
+	# facts with different costs, and step 4 needs both true of one album at once.
+	#
+	# 'fuzzy' is deliberately absent - Fuzzy is v2, and widening the CHECK later
+	# is DROP + recreate on a regenerable table, the cheapest migration there is.
+	#
+	# No conflict_note column; conflict rows carry a NULL discogs_release_id,
+	# see §3a.
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_no_match (
+			album_key        TEXT    NOT NULL
+			                         CHECK (length(album_key) = 32),
+			tier             TEXT    NOT NULL
+			                         CHECK (tier IN ('strict','structural')),
+			source_timestamp INTEGER,
+			checked_at       INTEGER NOT NULL,
+			PRIMARY KEY (album_key, tier)
 		)
 	});
 

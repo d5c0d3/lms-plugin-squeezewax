@@ -188,9 +188,18 @@ my %tables = map { $_->[0] => 1 } @{
 	$dbh->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
 };
 
-for my $t (qw(discogs_match discogs_release_cache discogs_collection discogs_price_snapshot)) {
+for my $t (qw(discogs_match discogs_release_cache discogs_collection discogs_price_snapshot
+              discogs_no_match)) {
 	ok( $tables{$t}, "table $t exists" );
 }
+
+# migration 2's column, added by ALTER TABLE rather than in the CREATE
+my %matchColumns = map { $_->{name} => 1 } @{
+	$dbh->selectall_arrayref(
+		'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+	)
+};
+ok( $matchColumns{source_timestamp}, 'discogs_match has source_timestamp' );
 
 # --- no foreign keys, anywhere -------------------------------------------
 for my $t ( sort keys %tables ) {
@@ -244,5 +253,48 @@ ok( eval {
 	$dbh->do( 'INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id, list_state)'
 		. " VALUES (2, 1, 'wantlist')" ); 1
 }, "list_state CHECK accepts 'wantlist'" );
+
+# --- discogs_no_match -----------------------------------------------------
+my $insertNoMatch = sub {
+	my %col = ( album_key => 'n' x 32, tier => 'strict', checked_at => 1, @_ );
+	my @names = sort keys %col;
+	return eval {
+		$dbh->do(
+			'INSERT INTO squeezewax.discogs_no_match (' . join( ',', @names ) . ') VALUES ('
+				. join( ',', ('?') x @names ) . ')',
+			undef, map { $col{$_} } @names
+		);
+		1;
+	};
+};
+
+ok( $insertNoMatch->(), 'a well-formed no-match row inserts' );
+
+# The composite PK is the point: strict-negative and structural-negative are
+# different facts and step 4 needs both true of one album at once.
+ok( $insertNoMatch->( tier => 'structural' ),
+	'the same album_key takes a second row under a different tier' );
+ok( !$insertNoMatch->(), 'but not a duplicate (album_key, tier)' );
+
+# 'fuzzy' is v2 and deliberately outside the CHECK; a typo'd tier would
+# otherwise degrade to "not examined", which looks identical to correct
+# behaviour.
+ok( !$insertNoMatch->( album_key => 'o' x 32, tier => 'fuzzy' ),
+	"tier CHECK rejects 'fuzzy' (v2, deliberately absent)" );
+ok( !$insertNoMatch->( album_key => 'o' x 32, tier => 'Strict' ),
+	"tier CHECK rejects 'Strict'" );
+ok( !$insertNoMatch->( album_key => 'short', tier => 'strict' ),
+	'album_key CHECK rejects a short key here too' );
+
+# NULL source_timestamp must be allowed and must never compare equal, which is
+# what makes an album whose timestamp cannot be established re-examine rather
+# than skip.
+ok( $insertNoMatch->( album_key => 'p' x 32, source_timestamp => undef ),
+	'source_timestamp may be NULL' );
+my ($skips) = $dbh->selectrow_array(
+	'SELECT COUNT(*) FROM squeezewax.discogs_no_match WHERE album_key = ? AND source_timestamp = ?',
+	undef, 'p' x 32, 12345
+);
+is( $skips, 0, 'a NULL source_timestamp never matches a timestamp, so it never skips' );
 
 done_testing();

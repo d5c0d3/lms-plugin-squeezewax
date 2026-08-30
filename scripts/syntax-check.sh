@@ -69,7 +69,20 @@ STUB='BEGIN {
 	*Slim::Plugin::Base::initPlugin = sub { 1 };
 }'
 
-MODULES="Schema Importer Plugin"
+# Slim::Schema loses to the same JSON::XS problem, one layer further down
+# (Slim::Schema -> Slim::Music::Info -> ... -> Slim::Utils::Prefs::Base ->
+# JSON::XS::VersionOneAndTwo). Modules that talk to the database still `use
+# Slim::Schema` - Slim/Plugin/OnlineLibraryBase.pm:11 does the same - so stub it
+# here rather than dropping the honest declaration from our code.
+#
+# This costs nothing the check was already unable to do: its own header says it
+# cannot prove a Slim::* method exists, only that the module containing it
+# loads. Every Slim::Schema call still has to be found in refs/ and cited.
+SCHEMA_STUB='BEGIN {
+	$INC{q(Slim/Schema.pm)} = 1;
+}'
+
+MODULES="Schema Library Importer Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -80,13 +93,20 @@ for scanner in 0 1; do
 		# (Slim/Utils/PluginManager.pm:204), so don't check it in scanner mode.
 		if [ "$scanner" = 1 ] && [ "$m" = "Plugin" ]; then continue; fi
 
-		if [ "$m" = "Plugin" ]; then
-			prelude="$STUB"
-			note=" (Slim::Plugin::Base stubbed)"
-		else
-			prelude=""
-			note=""
-		fi
+		case "$m" in
+			Plugin)
+				prelude="$STUB"
+				note=" (Slim::Plugin::Base stubbed)"
+				;;
+			Library)
+				prelude="$SCHEMA_STUB"
+				note=" (Slim::Schema stubbed)"
+				;;
+			*)
+				prelude=""
+				note=""
+				;;
+		esac
 
 		# shellcheck disable=SC2086 # SLIMINC is a deliberate word-split list
 		out=$(perl -I"$INCDIR" $SLIMINC \
