@@ -121,13 +121,34 @@ sub postDBConnect {
 	eval {
 		my $path = $class->dbFile();
 
-		# Quoted rather than interpolated as SQLiteHelper.pm:353 does, so a
-		# path containing an apostrophe cannot break the statement.
-		$dbh->do( 'ATTACH ' . $dbh->quote($path) . ' AS ' . DB_SCHEMA );
+		# Detect an existing attach rather than relying on the ATTACH failing.
+		# Slim/Schema.pm:273-275 sets RaiseError => 1, PrintError => 0, so a
+		# second ATTACH of the same name would die ("database squeezewax is
+		# already in use"), be caught below, and mark us unusable over a
+		# condition that is entirely benign.
+		my $attached = $class->_attachedFile($dbh);
 
-		# Note that a missing *file* is not an error - SQLite creates it
-		# silently. Only a missing or unwritable directory fails here. It is
-		# the user_version check that catches an empty database, not this.
+		if ( !defined $attached ) {
+			# Quoted rather than interpolated as SQLiteHelper.pm:353 does, so a
+			# path containing an apostrophe cannot break the statement.
+			$dbh->do( 'ATTACH ' . $dbh->quote($path) . ' AS ' . DB_SCHEMA );
+
+			# Note that a missing *file* is not an error - SQLite creates it
+			# silently. Only a missing or unwritable directory fails here. It is
+			# the user_version check that catches an empty database, not this.
+		}
+		elsif ( $attached ne $path ) {
+			# Never observed, and no way to see it before this check existed.
+			# Continuing would read and write someone else's file under our
+			# schema name.
+			die DB_SCHEMA . " is already attached to a different file:\n"
+				. "  attached: $attached\n"
+				. "  expected: $path\n";
+		}
+		else {
+			main::DEBUGLOG && $log->is_debug
+				&& $log->debug( DB_SCHEMA . " already attached to $path; skipping ATTACH" );
+		}
 
 		my $journalMode = $class->_ensureWalMode($dbh);
 
@@ -172,6 +193,36 @@ sub postDBConnect {
 	}
 
 	return $ready;
+}
+
+# The file our schema name is currently attached to, or undef if it is not
+# attached on this handle.
+#
+# postDBConnect fires once per connect (Slim/Schema.pm:283, inside _connect),
+# and the number of connects is not fixed: addPostConnectHandler forces a
+# disconnect/reconnect on the *first* registration of each handler, guarded on
+# $postConnectHandlers{$handler} == 1 per handler
+# (Slim/Utils/SQLiteHelper.pm:390-402). So it is one connect for the initial
+# init plus one for every distinct handler that registers after us - today
+# Slim::Plugin::FullTextSearch::Plugin, which registers in both processes
+# (its install.xml declares <module> and <importmodule>, and the registration
+# at Plugin.pm:199 precedes the `return if main::SCANNER` at :202), tomorrow
+# whatever the user installs. Detecting the attach makes the count irrelevant,
+# which is the point of doing it rather than reasoning about the count.
+sub _attachedFile {
+	my ( $class, $dbh ) = @_;
+
+	# No row when the name is not attached, so this is undef. Verified on
+	# SQLite 3.50.6: attaching a path that does not exist yet still reports the
+	# absolute path here (SQLite creates the file), so a first-ever run is
+	# indistinguishable from a later one - which is what we want. Only
+	# ':memory:' reports the empty string, and we never attach that; it would
+	# fall through to the mismatch branch, which is the right answer anyway.
+	my ($file) = $dbh->selectrow_array(
+		'SELECT file FROM pragma_database_list WHERE name = ?', undef, DB_SCHEMA
+	);
+
+	return $file;
 }
 
 # journal_mode must be WAL: both the server and the scanner attach this file,

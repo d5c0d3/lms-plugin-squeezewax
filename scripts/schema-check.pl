@@ -133,6 +133,27 @@ is( version_of($dbh), $target, "migrated to version $target" );
 my ($mode) = $dbh->selectrow_array('PRAGMA squeezewax.journal_mode = WAL');
 is( lc $mode, 'wal', 'journal_mode can be set to WAL outside a transaction' );
 
+# --- attach detection -----------------------------------------------------
+# postDBConnect fires once per connect and the connect count is not fixed (see
+# _attachedFile's comment), so the handler must recognise its own attach rather
+# than rely on a second ATTACH failing.
+is( $S->_attachedFile($dbh), "$dir/squeezewax.db",
+	'_attachedFile reports the file our schema name is attached to' );
+
+my $unattached = DBI->connect( "dbi:SQLite:dbname=$dir/main3.db", '', '', {
+	RaiseError => 1, PrintError => 0, AutoCommit => 1,
+} );
+is( $S->_attachedFile($unattached), undef,
+	'_attachedFile returns undef when the name is not attached' );
+
+# The reason the check exists: LMS connects with RaiseError => 1 and
+# PrintError => 0 (Slim/Schema.pm:273-275), so a repeat ATTACH throws rather
+# than being ignored, and postDBConnect's eval would mark the plugin unusable
+# over a benign condition.
+ok( !eval { $dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax"); 1 },
+	'a second ATTACH of the same name dies under RaiseError' );
+like( $@, qr/already in use/, '  ...with "already in use"' );
+
 # --- migrating again is a no-op -------------------------------------------
 $S->_migrate($dbh);
 is( version_of($dbh), $target, 'a second migrate leaves the version alone' );
