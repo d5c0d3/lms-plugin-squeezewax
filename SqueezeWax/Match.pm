@@ -6,20 +6,75 @@ package Plugins::SqueezeWax::Match;
 # invalidation is DML on our schema and Settings.pm should not carry SQL. The
 # Strict write path arrives in commit 5.
 #
-# Every entry point here must check Schema->isReady first. And note finding 2b:
-# during a scan the scanner holds a write lock on every attached database,
-# because Slim/Utils/SQLiteHelper.pm:358 sets sqlite_use_immediate_transaction
-# and BEGIN IMMEDIATE locks all of them. Server-side writes must therefore be
-# refused while Slim::Music::Import->stillScanning, not attempted and retried.
+# Every entry point here calls _writeOk first, which enforces both rules rather
+# than leaving them to each caller: the schema has to be usable, and a
+# server-side write has to be refused while a scan is running, because
+# BEGIN IMMEDIATE locks every attached database (finding 2b). The scanner is
+# exempt from the second - it holds that lock and is entitled to it.
 
 use strict;
 
+use Slim::Music::Import;
 use Slim::Schema;
 use Slim::Utils::Log;
 
 use Plugins::SqueezeWax::Schema;
 
 my $log = logger('plugin.squeezewax');
+
+# Whether this process may write to our tables right now.
+#
+# The rule was previously stated in the header and enforced in Settings.pm, which
+# meant every new caller had to remember something the module claimed to
+# guarantee. Commit 5 adds one caller and step 5 will add more, so it lives here.
+#
+# It cannot be a blanket stillScanning check: in the scanner stillScanning is
+# true by definition and the importer is exactly the thing that must write. But
+# the distinction is expressible - the scanner owns writes during a scan, the
+# server defers until it is over (finding 2b).
+# The policy, as a pure function of the three inputs. Returns the reason to
+# refuse, or undef to allow.
+#
+# Separate from _writeOk because main::SCANNER is a compile-time constant that
+# Perl inlines, so a test in one process cannot exercise both branches of
+# `return 1 if main::SCANNER` - and the scanner branch is the one whose removal
+# would silently stop the importer writing anything at all.
+sub _writeRefusal {
+	my ( $ready, $isScanner, $isScanning ) = @_;
+
+	return 'database not ready' unless $ready;
+
+	# The scanner holds the write lock during a scan and is entitled to it.
+	return undef if $isScanner;
+
+	# BEGIN IMMEDIATE locks every attached database, forced by
+	# sqlite_use_immediate_transaction at Slim/Utils/SQLiteHelper.pm:358, so a
+	# server-side write during a scan fails with "database is locked" rather than
+	# waiting. Refuse deliberately instead of surfacing a lock error.
+	return 'a scan is running' if $isScanning;
+
+	return undef;
+}
+
+sub _writeOk {
+	my $class = shift;
+
+	my $ready = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
+
+	# Not called when the scanner is running: in that process the answer is
+	# already known and stillScanning is not a pure read (Import.pm:730-754 does
+	# crash cleanup and can fire a ['rescan','done'] notification).
+	my $scanning = main::SCANNER ? 0 : ( Slim::Music::Import->stillScanning ? 1 : 0 );
+
+	my $refusal = _writeRefusal( $ready, main::SCANNER ? 1 : 0, $scanning );
+
+	return 1 unless defined $refusal;
+
+	$log->warn( "refusing to write to squeezewax.db: $refusal"
+		. ( $ready ? '' : ' (' . ( Plugins::SqueezeWax::Schema->lastError || 'unknown' ) . ')' ) );
+
+	return 0;
+}
 
 =head2 invalidateStrict()
 
@@ -39,11 +94,7 @@ is not usable.
 sub invalidateStrict {
 	my $class = shift;
 
-	if ( !Plugins::SqueezeWax::Schema->isReady ) {
-		$log->warn( 'cannot invalidate the strict cache: '
-			. ( Plugins::SqueezeWax::Schema->lastError || 'database not ready' ) );
-		return undef;
-	}
+	return undef unless $class->_writeOk;
 
 	my $dbh = Slim::Schema->dbh;
 
@@ -72,15 +123,18 @@ sub invalidateStrict {
 		   WHERE match_tier = 'strict'}
 	);
 
-	# do() returns '0E0' for zero rows, which is true but numerically zero.
-	my $total = ( $deleted || 0 ) + ( $nulled || 0 );
+	# do() returns the string '0E0' for zero rows - true, but numerically zero.
+	# It has to be forced through numeric context for display too, or a no-op
+	# invalidation logs "0E0 no-match rows deleted".
+	$deleted = 0 + ( $deleted || 0 );
+	$nulled  = 0 + ( $nulled  || 0 );
 
 	main::INFOLOG && $log->is_info && $log->info(
 		"strict cache invalidated: $deleted no-match rows deleted, "
 		. "$nulled match rows will be re-examined"
 	);
 
-	return $total;
+	return $deleted + $nulled;
 }
 
 1;

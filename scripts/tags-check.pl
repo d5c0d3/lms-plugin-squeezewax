@@ -296,7 +296,7 @@ my @hits = $T->candidateKeys( {
 # rather than suppressed, so the caller can render decisions §3's coverage
 # report and a user whose tagger writes RELEASE_ID is not told nothing at all.
 my @corroborated = grep { $_->[2] } @hits;
-is_deeply( \@corroborated, [ [ 'DISCOGS_RELEASE_ID', 123456, 1 ] ],
+is_deeply( \@corroborated, [ [ 'DISCOGS_RELEASE_ID', 123456, 1, '123456' ] ],
 	'only the Discogs-named key is corroborated' );
 
 my %demoted = map { $_->[0] => $_->[1] } grep { !$_->[2] } @hits;
@@ -310,17 +310,24 @@ is( $demoted{BARCODE}, 724358213423,
 # An unambiguous value is reported whatever the key is called - this is what
 # catches a tagger using a name nobody would have guessed.
 @hits = $T->candidateKeys( { WEIRD_CUSTOM_FIELD => 'https://www.discogs.com/release/42' } );
-is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 1 ] ],
-	'a URL value is corroborated under any key name' );
+is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 1, 'https://www.discogs.com/release/42' ] ],
+	'a URL value is corroborated under any key name, and carries the raw value' );
 
 @hits = $T->candidateKeys( { WEIRD_CUSTOM_FIELD => '42' } );
-is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 0 ] ],
+is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 0, '42' ] ],
 	'a bare integer under an unguessable key is returned uncorroborated' );
 
 # DISCOG without the S - decisions §3 records both spellings in the wild.
 @hits = $T->candidateKeys( { DISCOG_RELEASE_ID => '123456' } );
-is_deeply( \@hits, [ [ 'DISCOG_RELEASE_ID', 123456, 1 ] ],
+is_deeply( \@hits, [ [ 'DISCOG_RELEASE_ID', 123456, 1, '123456' ] ],
 	'DISCOG without the S corroborates a bare id' );
+
+# The raw value is what the report shows: a parsed integer would lose the URL
+# the user has to recognise in their own files, and a raw 13-digit barcode is
+# self-evidently not a release id where an integer is not.
+@hits = $T->candidateKeys( { BARCODE => '0075678264122' } );
+is( $hits[0]->[3], '0075678264122', 'the raw value is carried, zero padding intact' );
+isnt( $hits[0]->[3], $hits[0]->[1], '  ...and differs from the parsed id' );
 
 # A master URL is not a release, so detection must not offer it at all - not
 # even demoted.

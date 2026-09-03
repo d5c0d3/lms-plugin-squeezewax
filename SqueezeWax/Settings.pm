@@ -25,6 +25,10 @@ my $prefs = preferences('plugin.squeezewax');
 
 use constant SAMPLE_PER_FORMAT => 25;
 
+# A run that has not finished in this long is treated as dead, so a wedged
+# detection cannot outlive the session with no way for the user to retry.
+use constant DETECTION_TIMEOUT => 600;
+
 # Detection state, server-process only. Not a pref: it is a transient report,
 # and writing it to disk would outlive the library it describes.
 my %detection;
@@ -57,7 +61,12 @@ sub handler {
 
 	$params->{scanning} = $scanning;
 
-	return $class->SUPER::handler( $client, $params, @args );
+	# $callback is core's fourth argument ($pageSetup). It reaches only the
+	# player-redirect branch and the async form at
+	# Slim/Web/Settings/Server/Plugins.pm:49, neither of which applies to us -
+	# but refs/lms-plugin-tidal/Settings.pm passes it through and dropping an
+	# argument core defines is the kind of thing that breaks on an upgrade.
+	return $class->SUPER::handler( $client, $params, $callback, @args );
 }
 
 sub _saveTagNames {
@@ -156,8 +165,18 @@ sub _startDetection {
 		return;
 	}
 
-	if ( $detection{running} ) {
+	# Staleness backstop. Scheduler splices a dead task out of its list, so
+	# running => 1 with nothing behind it is unrecoverable without this - and a
+	# wedged run must not outlive the session. Each album is also individually
+	# evalled, so reaching this is a belt-and-braces case rather than the
+	# expected one.
+	if ( $detection{running} && ( time() - ( $detection{started} || 0 ) ) < DETECTION_TIMEOUT ) {
 		return;
+	}
+
+	if ( $detection{running} ) {
+		$log->warn('previous detection run appears to have died; starting a new one');
+		Slim::Utils::Scheduler::remove_task( \&_detectionTick );
 	}
 
 	# All the database work in one synchronous shot, materialised. Only the file
@@ -170,9 +189,10 @@ sub _startDetection {
 		queue    => $albums,
 		total    => scalar @$albums,
 		done     => 0,
-		keys     => {},   # tag key => { count, id, corroborated }
-		formats  => {},   # content_type => albums sampled
-		started  => time(),
+		keys       => {},  # tag key => { count, example, corroborated, formats }
+		formats    => {},  # content_type => albums sampled
+		unreadable => 0,
+		started    => time(),
 	);
 
 	# One album per tick, deliberately. A single readTags on a cold spinning
@@ -195,28 +215,61 @@ sub _detectionTick {
 		return 0;
 	}
 
+	my $format = $album->{content_type} || 'unknown';
+
 	$detection{done}++;
-	$detection{formats}->{ $album->{content_type} || 'unknown' }++;
+	$detection{formats}->{$format}++;
 
-	my $url = $album->{candidates}->[0];
+	# Each album's own eval. Slim::Utils::Scheduler evals the task and splices it
+	# out of the list on death (Slim/Utils/Scheduler.pm:156-172), so the event
+	# loop is safe - but %detection would be left with running => 1 and no task
+	# behind it, _startDetection would return early forever, and the page would
+	# show "running (17/50)" until the server restarted. The loop survives; the
+	# feature does not. readTrack already evals readTags, so the residual risk is
+	# small and the consequence is total, which is the wrong ratio to leave.
+	my $ok = eval {
+		my $url = $album->{candidates}->[0];
 
-	if ($url) {
-		my $tags = Plugins::SqueezeWax::Tags->readTrack($url);
+		if ($url) {
+			my $tags = Plugins::SqueezeWax::Tags->readTrack($url);
 
-		for my $hit ( Plugins::SqueezeWax::Tags->candidateKeys($tags) ) {
-			my ( $key, $id, $corroborated ) = @$hit;
+			for my $hit ( Plugins::SqueezeWax::Tags->candidateKeys($tags) ) {
+				my ( $key, $id, $corroborated, $raw ) = @$hit;
 
-			my $entry = $detection{keys}->{$key} ||= {
-				count        => 0,
-				example      => $id,
-				corroborated => $corroborated,
-			};
+				my $entry = $detection{keys}->{$key} ||= {
+					count        => 0,
+					example      => $raw,
+					corroborated => $corroborated,
+					formats      => {},
+				};
 
-			$entry->{count}++;
+				$entry->{count}++;
 
-			# One corroborated sighting is enough to promote the key.
-			$entry->{corroborated} ||= $corroborated;
+				# Per format, not just a global count. The sample is stratified
+				# by content type precisely because the same tag is spelled
+				# differently per format - MUSICBRAINZ_ALBUMID from FLAC
+				# (Slim/Formats/FLAC.pm:51) against 'MUSICBRAINZ ALBUM ID' from
+				# MP3 (Slim/Formats/MP3.pm:48). Recording only a global count
+				# throws away the finding the stratified sample was taken for:
+				# the user would see two similar keys with no reason to tick
+				# both, which is the mistake the list-of-names design exists to
+				# prevent.
+				$entry->{formats}->{$format}++;
+
+				# One corroborated sighting is enough to promote the key.
+				$entry->{corroborated} ||= $corroborated;
+			}
 		}
+
+		1;
+	};
+
+	if ( !$ok ) {
+		# Counted and surfaced, not swallowed: "sampled 50, 12 unreadable" is
+		# coverage information, and without it an unreadable album looks exactly
+		# like one that simply has no tags.
+		$detection{unreadable}++;
+		$log->warn( "detection could not read album $album->{album_id}: $@" );
 	}
 
 	return 1;
@@ -233,9 +286,10 @@ sub beforeRender {
 	return unless %detection;
 
 	$params->{detection} = {
-		running => $detection{running},
-		done    => $detection{done},
-		total   => $detection{total},
+		running    => $detection{running},
+		done       => $detection{done},
+		total      => $detection{total},
+		unreadable => $detection{unreadable},
 	};
 
 	# Corroborated keys first, then the demoted list. decisions §3 makes
@@ -252,6 +306,12 @@ sub beforeRender {
 			name    => $key,
 			count   => $entry->{count},
 			example => $entry->{example},
+
+			# "FLAC 25, MP3 4" rather than a bare 29. This is the whole point of
+			# stratifying the sample.
+			formats => join( ', ',
+				map { "$_ $entry->{formats}->{$_}" }
+					sort keys %{ $entry->{formats} || {} } ),
 		};
 
 		if ( $entry->{corroborated} ) {
@@ -262,7 +322,11 @@ sub beforeRender {
 		}
 	}
 
-	$params->{detection}->{keys}  = \@corroborated;
+	# Not 'keys': Template Toolkit has a `keys` hash vmethod, and TT only
+	# resolves the hash entry first *because it exists*. If it were ever absent,
+	# detection.keys would silently become ('running','done',...), .size would be
+	# truthy, and the FOREACH would render blank rows rather than nothing.
+	$params->{detection}->{found} = \@corroborated;
 	$params->{detection}->{other} = \@other;
 
 	$params->{detection}->{formats} = [

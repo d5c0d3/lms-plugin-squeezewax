@@ -199,8 +199,9 @@ arrayref of the same records C<eachAlbum> yields. Albums with no local tracks
 are excluded - there is nothing to read tags from.
 
 B<All database work happens here, synchronously, and the result is
-materialised.> The caller spreads the *file reads* over scheduler ticks, never
-the query. Building this on C<eachAlbum>'s callback would hold a
+materialised> - in two passes, so peak memory is bounded by the sample size
+rather than the library size. The caller spreads the *file reads* over
+scheduler ticks, never the query. Holding a
 C<prepare_cached> handle open across many event-loop turns - potentially
 minutes, since scheduler tasks only run when the server is otherwise idle - and
 in that window C<Slim::Schema-E<gt>disconnect; Slim::Schema-E<gt>init> can fire:
@@ -229,7 +230,16 @@ sub sample_albums {
 
 	$perFormat ||= 25;
 
-	my %byFormat;
+	# Two passes, deliberately. The obvious single pass accumulates every album
+	# record and then strides - which makes peak memory scale linearly with
+	# library size, in a module whose header rejects the per-album query form on
+	# scaling grounds. The first pass here keeps only an id per format, the
+	# stride picks ids, and the second pass keeps just the chosen records.
+	#
+	# The cost is a second table scan. Detection is user-initiated and rare, so
+	# trading I/O for bounded memory is the right way round; and both passes see
+	# the same ORDER BY, so the choice is as deterministic as the one-pass form.
+	my %idsByFormat;
 
 	$class->eachAlbum( sub {
 		my $album = shift;
@@ -237,34 +247,41 @@ sub sample_albums {
 		# Nothing to read tags from, and its content_type is undef.
 		return 1 unless $album->{local_tracks};
 
-		push @{ $byFormat{ $album->{content_type} || 'unknown' } }, $album;
+		push @{ $idsByFormat{ $album->{content_type} || 'unknown' } }, $album->{album_id};
 
 		return 1;
 	} );
 
-	my @sample;
+	my %wanted;
 
-	for my $format ( sort keys %byFormat ) {
-		my $albums = $byFormat{$format};
-		my $total  = scalar @$albums;
+	for my $format ( sort keys %idsByFormat ) {
+		my $ids   = $idsByFormat{$format};
+		my $total = scalar @$ids;
 
 		if ( $total <= $perFormat ) {
-			push @sample, @$albums;
+			$wanted{$_} = 1 for @$ids;
 			next;
 		}
 
-		# Even stride across this format's albums. int() rather than rounding,
-		# and a distinct-index guard, so a stride that repeats an index cannot
-		# put the same album in twice.
+		# Even stride, so the sample spans the library rather than clustering at
+		# whichever end insertion order put first. int() rather than rounding,
+		# with a distinct-index guard so a repeated index cannot double-count.
 		my $stride = $total / $perFormat;
-		my %taken;
 
 		for my $i ( 0 .. $perFormat - 1 ) {
-			my $index = int( $i * $stride );
-			next if $taken{$index}++;
-			push @sample, $albums->[$index];
+			$wanted{ $ids->[ int( $i * $stride ) ] } = 1;
 		}
 	}
+
+	my @sample;
+
+	$class->eachAlbum( sub {
+		my $album = shift;
+
+		push @sample, $album if $wanted{ $album->{album_id} };
+
+		return 1;
+	} );
 
 	return \@sample;
 }

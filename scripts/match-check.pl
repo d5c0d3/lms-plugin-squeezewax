@@ -48,6 +48,14 @@ BEGIN {
 	$INC{'Slim/Schema.pm'}    = 1;
 	$INC{'Slim/Utils/Log.pm'} = 1;
 
+	# Slim::Music::Import reaches Slim::Utils::DateTime -> Slim::Utils::Unicode,
+	# which needs an initialised OSDetect. Only stillScanning is called.
+	$INC{'Slim/Music/Import.pm'} = 1;
+	{
+		no strict 'refs';
+		*{'Slim::Music::Import::stillScanning'} = sub { $main::SCANNING };
+	}
+
 	no strict 'refs';
 	*{'Slim::Utils::Log::logger'}   = sub { Test::StubLogger->new };
 	*{'Slim::Utils::Log::logError'} = sub { };
@@ -164,9 +172,46 @@ sub noMatchTiers {
 		'  ...and changes nothing, rather than half-applying' );
 }
 
+# --- _writeOk: the server defers to a running scan, the scanner does not ---
+# The rule used to be stated in Match.pm's header and enforced in Settings.pm,
+# which left every new caller to remember it. These pin the branch.
 {
 	no warnings 'redefine', 'once';
 	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+	local $main::SCANNING = 0;
+	ok( $M->_writeOk, 'the server may write when no scan is running' );
+
+	local $main::SCANNING = 1;
+	ok( !$M->_writeOk, 'the server refuses to write while a scan is running' );
+
+	seed();
+	is( $M->invalidateStrict, undef, '  ...so invalidateStrict is a no-op then' );
+	is( tierTimestamp('strict'), 555, '  ...and changes nothing' );
+}
+
+# The policy itself, exhaustively. main::SCANNER is a compile-time constant that
+# Perl inlines, so `return 1 if main::SCANNER` cannot be flipped in one process -
+# and the scanner branch is the one whose removal would silently stop the
+# importer writing anything at all. Hence _writeRefusal being a pure function of
+# its three inputs.
+my $refusal = \&Plugins::SqueezeWax::Match::_writeRefusal;
+
+#                     ready  scanner  scanning
+is( $refusal->( 1, 0, 0 ), undef, 'server, no scan: allowed' );
+is( $refusal->( 1, 1, 0 ), undef, 'scanner, no scan: allowed' );
+is( $refusal->( 1, 1, 1 ), undef,
+	'scanner during a scan: allowed - it holds the lock and is entitled to it' );
+like( $refusal->( 1, 0, 1 ), qr/scan is running/,
+	'server during a scan: refused, because BEGIN IMMEDIATE locks our file too' );
+like( $refusal->( 0, 0, 0 ), qr/not ready/, 'unusable schema: refused' );
+like( $refusal->( 0, 1, 1 ), qr/not ready/,
+	'unusable schema outranks everything, including the scanner exemption' );
+
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
 
 	seed();
 

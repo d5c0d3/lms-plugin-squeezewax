@@ -111,7 +111,6 @@ SETTINGS_STUB='BEGIN {
 	$INC{q(Slim/Web/Settings.pm)}   = 1;
 	$INC{q(Slim/Utils/Scheduler.pm)} = 1;
 	$INC{q(Slim/Utils/Strings.pm)}  = 1;
-	$INC{q(Slim/Music/Import.pm)}   = 1;
 
 	@Slim::Web::Settings::ISA = ();
 	*Slim::Web::Settings::new     = sub { 1 };
@@ -126,6 +125,14 @@ SETTINGS_STUB='BEGIN {
 	package Slim::Web::HTTP::CSRF;
 	sub protectName { $_[1] }
 	sub protectURI  { $_[1] }
+}'
+
+# Slim::Music::Import reaches Slim::Utils::DateTime -> Slim::Utils::Unicode,
+# which needs an initialised OSDetect to answer localeDetails. Only stillScanning
+# is called, and only at runtime.
+IMPORT_STUB='BEGIN {
+	$INC{q(Slim/Music/Import.pm)} = 1;
+	*Slim::Music::Import::stillScanning = sub { 0 };
 }'
 
 MODULES="Schema Library Tags Match Importer Settings Plugin"
@@ -156,13 +163,13 @@ for scanner in 0 1; do
 				note=" (Slim::Utils::Prefs, Slim::Formats stubbed)"
 				;;
 			Match)
-				prelude="$SCHEMA_STUB$TAGS_STUB"
-				note=" (Slim::Schema, Slim::Utils::Prefs stubbed)"
+				prelude="$SCHEMA_STUB$IMPORT_STUB"
+				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
 			Settings)
 				# Slim::Web::Settings is a web-UI class; stub the base the same
-				# way Plugin.pm's is stubbed, and reuse the Schema/Prefs stubs.
-				prelude="$SCHEMA_STUB$TAGS_STUB$SETTINGS_STUB"
+				# way Plugin.pm's is stubbed, and reuse the other stubs.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$SETTINGS_STUB"
 				note=" (Slim::Web::Settings and friends stubbed)"
 				;;
 			*)

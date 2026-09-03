@@ -304,7 +304,13 @@ what is configured. This is what the Settings detection action reports, and it
 uses the same parser as matching so the report cannot promise something
 matching would then reject.
 
-Returns a list of C<[ $key, $id, $corroborated ]> triples.
+Returns a list of C<[ $key, $id, $corroborated, $raw ]> tuples, where C<$raw> is
+the value as it appears in the file.
+
+C<$raw> matters for the report: for a bare integer it is the same as C<$id>, but
+for a URL the parsed integer loses what would let the user recognise their own
+tag, and in the demoted list a raw C<0075678264122> under C<BARCODE> is
+self-evidently not a release ID in a way an integer is not.
 
 Two tiers of evidence, because a bare integer is not evidence of anything on its
 own:
@@ -351,7 +357,7 @@ sub candidateKeys {
 			# accepted form is unambiguous on its own.
 			my $bare = $value =~ /^\s*\d+\s*$/ ? 1 : 0;
 
-			push @hits, [ $key, $id, ( $bare ? $named : 1 ) ];
+			push @hits, [ $key, $id, ( $bare ? $named : 1 ), $value ];
 			last;
 		}
 	}

@@ -49,7 +49,11 @@
 				([% detection.done %]/[% detection.total %])</div>
 		[% ELSE %]
 			<div>[% "PLUGIN_SQUEEZEWAX_DETECT_SAMPLED" | string %][% "COLON" | string %]
-				[% detection.done %]</div>
+				[% detection.done %]
+				[% IF detection.unreadable %]
+					&mdash; [% detection.unreadable %]
+					[% "PLUGIN_SQUEEZEWAX_DETECT_UNREADABLE" | string %]
+				[% END %]</div>
 
 			[% IF detection.formats.size %]
 				<div>[% "PLUGIN_SQUEEZEWAX_DETECT_FORMATS" | string %][% "COLON" | string %]
@@ -57,17 +61,19 @@
 				[% END %]</div>
 			[% END %]
 
-			[% IF detection.keys.size %]
+			[% IF detection.found.size %]
 				<table>
 					<tr>
 						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_TAG" | string %]</th>
 						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_COUNT" | string %]</th>
+						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_FORMATS" | string %]</th>
 						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_EXAMPLE" | string %]</th>
 					</tr>
-				[% FOREACH k = detection.keys %]
+				[% FOREACH k = detection.found %]
 					<tr>
 						<td>[% k.name | html %]</td>
 						<td>[% k.count %]</td>
+						<td>[% k.formats | html %]</td>
 						<td>[% k.example | html %]</td>
 					</tr>
 				[% END %]
@@ -84,6 +90,7 @@
 					<tr>
 						<td>[% k.name | html %]</td>
 						<td>[% k.count %]</td>
+						<td>[% k.formats | html %]</td>
 						<td>[% k.example | html %]</td>
 					</tr>
 				[% END %]
