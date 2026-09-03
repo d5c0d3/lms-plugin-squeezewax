@@ -96,10 +96,33 @@ my @accept = (
 	[ 'http://discogs.com/release/123456',                 123456, 'no www, http' ],
 	[ 'https://www.discogs.com/de/release/123456-Titel',   123456, 'locale prefix' ],
 	[ 'https://www.discogs.com/pt_BR/release/123456',      123456, 'locale with region' ],
+
+	# Zero-padded. Normalised to an integer so a padded and an unpadded tag do
+	# not look like two tags disagreeing - discogs_release_id is INTEGER, so
+	# they would have stored identically anyway.
+	[ '0123456',                                           123456, 'zero-padded bare id' ],
+
+	# Markup variants. Discogs' own forum shows all three working.
+	[ '[r 123456]',                                        123456, 'markup with a space' ],
+	[ '[r= 123456]',                                       123456, 'markup with equals and space' ],
+	[ '[r=123456]',                                        123456, 'markup with equals' ],
+
+	# The slug-prefixed form is what Discogs itself emits, so a value pasted
+	# from a browser or copied out of an API uri field must parse. Failing it
+	# would be worse than a miss: decide() treats unparseable as a conflict, so
+	# the album would land in the review queue as a false conflict instead of
+	# falling through to Structural.
+	[ 'https://www.discogs.com/Various-Aldre-Svenska-Spelman-Volym-I/release/4198228',
+	  4198228, 'slug before /release/' ],
+	[ 'https://www.discogs.com/Miles-Davis-Kind-Of-Blue/releases/123456',
+	  123456, 'slug before plural /releases/' ],
+	[ 'https://www.discogs.com/de/Some-Slug/release/123456',
+	  123456, 'locale and slug together' ],
 );
 
 for my $case (@accept) {
-	is( $T->can('parseReleaseId')->( $case->[0] ), $case->[1], "accepts: $case->[2]" );
+	is( Plugins::SqueezeWax::Tags::_parseReleaseId( $case->[0] ), $case->[1],
+		"accepts: $case->[2]" );
 }
 
 # --- parseReleaseId: what must NOT parse ----------------------------------
@@ -118,14 +141,28 @@ my @reject = (
 	[ '123456abc',                                  'trailing junk on a bare id' ],
 	[ 'abc123456',                                  'leading junk on a bare id' ],
 	[ undef,                                        'undef' ],
+
+	# The slug widening allows an arbitrary segment before release/, so these
+	# guard against it swallowing an entity path whose trailing number is not a
+	# release id. I could not settle against the live site whether
+	# .../releases/<n> exists as a paginated label tab - discogs.com 403s an
+	# automated fetch - so the guard is there to make that not matter.
+	[ 'https://www.discogs.com/label/23528-Warp-Records/releases/2',
+	  'a label path whose trailing number is not a release id' ],
+	[ 'https://www.discogs.com/artist/41-Autechre/releases/3',
+	  'an artist path, likewise' ],
+	[ 'https://www.discogs.com/user/someone/releases/1',
+	  'a user path, likewise' ],
+	[ 'https://www.discogs.com/master/1000/releases/2',
+	  'a master path, likewise' ],
 );
 
 for my $case (@reject) {
-	is( $T->can('parseReleaseId')->( $case->[0] ), undef, "rejects: $case->[1]" );
+	is( Plugins::SqueezeWax::Tags::_parseReleaseId( $case->[0] ), undef,
+		"rejects: $case->[1]" );
 }
 
 # --- decide: no configured tag means no opinion ---------------------------
-$T->can('tagNames');
 Test::StubPrefs->new->set( 'discogsTagNames', [] );
 is_deeply( $T->decide( { DISCOGS_RELEASE_ID => '123456' } ), {},
 	'nothing configured, so nothing found - the tag is ignored' );
@@ -181,6 +218,15 @@ is( $T->decide( {
 	DISCOGS_RELEASE_ID => '123456',
 	DISCOG_RELEASE_ID  => '123456',
 } )->{id}, 123456, 'two configured tags agreeing is agreement, not conflict' );
+
+# Zero padding must not manufacture a conflict: the two strings are different
+# hash keys but the same release, and discogs_release_id is INTEGER.
+my $padded = $T->decide( {
+	DISCOGS_RELEASE_ID => '0123456',
+	DISCOG_RELEASE_ID  => '123456',
+} );
+is( $padded->{id}, 123456, 'a zero-padded and a plain id are agreement' );
+ok( !$padded->{conflict}, '  ...not a conflict' );
 
 # --- decide: disagreement is not Strict ---------------------------------
 my $conflict = $T->decide( {
@@ -242,28 +288,42 @@ my @hits = $T->candidateKeys( {
 	TRACKNUM           => '7',
 	YEAR               => '1959',
 	BPM                => '120',
+	BARCODE            => '0724358213423',
 	TITLE              => 'So What',
 } );
 
-is_deeply( \@hits, [ [ 'DISCOGS_RELEASE_ID', 123456 ] ],
-	'a bare id is reported only when the key name mentions Discogs' );
+# Corroborated hits come back flagged; the numeric noise comes back demoted
+# rather than suppressed, so the caller can render decisions §3's coverage
+# report and a user whose tagger writes RELEASE_ID is not told nothing at all.
+my @corroborated = grep { $_->[2] } @hits;
+is_deeply( \@corroborated, [ [ 'DISCOGS_RELEASE_ID', 123456, 1 ] ],
+	'only the Discogs-named key is corroborated' );
+
+my %demoted = map { $_->[0] => $_->[1] } grep { !$_->[2] } @hits;
+is_deeply( [ sort keys %demoted ], [qw(BARCODE BPM TRACKNUM YEAR)],
+	'the other numeric tags are returned but demoted, not dropped' );
+
+# A magnitude gate would not have helped: BARCODE here is 13 digits.
+is( $demoted{BARCODE}, 724358213423,
+	'a 13-digit barcode is demoted by key name, not by length' );
 
 # An unambiguous value is reported whatever the key is called - this is what
 # catches a tagger using a name nobody would have guessed.
 @hits = $T->candidateKeys( { WEIRD_CUSTOM_FIELD => 'https://www.discogs.com/release/42' } );
-is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42 ] ],
-	'a URL value is reported under any key name' );
+is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 1 ] ],
+	'a URL value is corroborated under any key name' );
 
 @hits = $T->candidateKeys( { WEIRD_CUSTOM_FIELD => '42' } );
-is_deeply( \@hits, [],
-	'a bare integer under an unguessable key is not reported' );
+is_deeply( \@hits, [ [ 'WEIRD_CUSTOM_FIELD', 42, 0 ] ],
+	'a bare integer under an unguessable key is returned uncorroborated' );
 
 # DISCOG without the S - decisions §3 records both spellings in the wild.
 @hits = $T->candidateKeys( { DISCOG_RELEASE_ID => '123456' } );
-is_deeply( \@hits, [ [ 'DISCOG_RELEASE_ID', 123456 ] ],
+is_deeply( \@hits, [ [ 'DISCOG_RELEASE_ID', 123456, 1 ] ],
 	'DISCOG without the S corroborates a bare id' );
 
-# A master URL is not a release, so detection must not offer it.
+# A master URL is not a release, so detection must not offer it at all - not
+# even demoted.
 @hits = $T->candidateKeys( { DISCOGS_MASTER_ID => 'https://www.discogs.com/master/999' } );
 is_deeply( \@hits, [], 'a master URL is not offered as a release candidate' );
 

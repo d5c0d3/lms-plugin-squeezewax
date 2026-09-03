@@ -341,9 +341,16 @@ name would silently fail on half a mixed-format library.
 
 ### Decisions
 
-- **Ordered list of tag names** in Settings, precedence by position, first hit
-  wins. Stored as an arrayref pref (LMS supports these natively; `mediadirs`
-  is one).
+- **Ordered list of tag names** in Settings, precedence by position. Stored as
+  an arrayref pref (LMS supports these natively; `mediadirs` is one).
+
+  **Position determines which tag name is *reported* as the source of a clean
+  hit — it does not resolve a disagreement.** An earlier draft of this bullet
+  said "first hit wins", which contradicts the "Disagreement is not Strict"
+  bullet below and the whole of §3a. The shipped behaviour is the latter: when
+  every configured tag that is present agrees, the highest-placed one is
+  recorded as `match_tier`'s source; when they disagree, none of them wins and
+  the row goes to the review queue with a NULL `discogs_release_id`.
 - **Detection rather than guessed defaults.** A Settings action samples albums,
   reads them with `readTags`, and reports every tag key found whose value
   looks like a Discogs ID or URL, with counts. The user ticks what they want.
@@ -363,9 +370,18 @@ name would silently fail on half a mixed-format library.
   per-track tagging is not a maintained collection and isn't worth paying 12×
   the file reads to accommodate. If the first track has no configured tag, try
   one more before falling through to Structural.
-- **Capture the neighbours** while the file is open: master release ID and
-  artist ID. Free, and they serve master-release resolution (§6) and the v3
-  artist badge without a later re-read.
+- **Capture the master release ID** while the file is open, from a conventional
+  tag name. Free, and it serves master-release resolution (§6) without a later
+  re-read. It has a column: `discogs_match.discogs_master_id`.
+
+  **The artist ID is deliberately *not* captured** (build-order step 3, commit
+  3). This bullet originally said to capture it alongside, justified as saving
+  a later re-read — but there is nowhere to put it. Migration 1 has no artist
+  column, nothing reads one before the v3 artist badge, and step 2's finding 8
+  is the precedent for not carrying a column nothing reads. With no column
+  there is no re-read saved, only a variable that is discarded. Recorded in
+  TODO.md under *Deferred by decision* so the v3 work knows to add both the
+  column and the capture together.
 
 ---
 

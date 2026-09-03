@@ -102,6 +102,24 @@ One line only. Do not repeat it within the same session.
 - When the spec and your instinct disagree, follow the spec and tell me why
   you disagree
 
+### Calling convention — fixed
+
+In `Plugins::SqueezeWax::*`:
+
+- **Public subs are class methods** and take `$class` as their first argument.
+  Call them as `Plugins::SqueezeWax::Foo->bar(...)`.
+- **`_`-prefixed helpers are plain functions** and take their arguments
+  directly. Call them as `_bar(...)`, including from the offline suites.
+
+This exists because the slip has happened twice: a helper declared as a plain
+function but called method-style silently eats the class name as its first
+argument. The suites caught it both times, which is the outcome that matters —
+but the rule makes it greppable rather than a matter of care.
+
+Existing mixed usage in `Schema.pm` (`_migration_1($dbh)` plain,
+`_attachedFile` a method) is **grandfathered and not to be refactored**. The
+churn would touch working, tested code to no behavioural end.
+
 ## TODO.md
 
 `TODO.md` in the repo root is a shared reminder list — both of us read and

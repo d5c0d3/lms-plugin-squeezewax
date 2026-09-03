@@ -147,6 +147,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Deferred by decision — not forgotten
 
+- **v3: Discogs artist ID — add the column and the capture together.** Decisions
+  §3 originally said to capture it while the file is open, justified as saving a
+  later re-read. Migration 1 has no artist column and nothing reads one before
+  the v3 artist badge, so with nowhere to store it there was no re-read to save
+  (step 2 finding 8: don't carry a column nothing reads). `Tags.pm` therefore
+  does not capture it. When v3 lands, do both in one migration — the parser
+  already has `_parseEntityId`, so the capture is a few lines once the column
+  exists.
 - v2: triage / library-health page (problem releases only).
 - v2: completeness check ("you have 9 of 12 tracks").
 - v2: "Add to Wantlist" action, alongside Wantlist sync.

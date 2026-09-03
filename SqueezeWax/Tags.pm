@@ -52,26 +52,30 @@ sub tagNames {
 # UI. Best-effort, matched case-insensitively.
 my @MASTER_KEYS = ( 'DISCOGS_MASTER_ID', 'DISCOGS MASTER ID', 'DISCOGS_MASTER_RELEASE_ID' );
 
-=head2 parseReleaseId( $value )
+# Path segments that mark a Discogs *entity* rather than a title slug. A release
+# URL's intervening segments are the title slug and/or a locale, never one of
+# these, so rejecting them keeps the release/master separation intact while still
+# allowing an arbitrary slug.
+#
+# The guard exists because I could not verify the one case that would make the
+# permissive form unsafe: whether a path of the form .../releases/<digits> exists
+# on Discogs where the digits are NOT a release id - a label's releases tab
+# paginated as /label/23528-Warp-Records/releases/2, say. discogs.com returns 403
+# to an automated fetch, so this was not settled against the live site. What is
+# established: web and API pagination both use a ?page= query parameter rather
+# than a path segment, and the canonical release forms are /release/<id>-<slug>
+# and /<artist-title-slug>/release/<id>. Guarding costs nothing and removes the
+# need to have been right about that.
+my $ENTITY_SEGMENT = qr{^(?:label|artist|master|user|seller|lists?|forum|group)$}i;
 
-Extract a Discogs release ID from one tag value. Returns the ID, or undef if
-the value does not look like one.
-
-Accepts, per decisions §3:
-
-  123456                                        bare
-  https://www.discogs.com/release/123456-Title  URL, /releases/ and a locale
-                                                prefix included
-  [r123456]                                     Discogs markup
-
-A value that is present but unparseable returns undef, and the caller treats
-that as a conflict rather than as absence - "there is a tag here and I cannot
-read it" is not the same as "there is no tag".
-
-=cut
-
-sub parseReleaseId {
-	my $value = shift;
+# Bare digits, Discogs markup, or a URL. Kept as one string so both the release
+# and master parsers stay in step.
+#
+# Markup variants: Discogs' own forum shows [r123456], [r 123456] and [r= 1234]
+# all working, and someone pasting from a release note could have any of them.
+# No variant can create a false positive - they all denote the same release.
+sub _parseEntityId {
+	my ( $value, $type, $markup ) = @_;
 
 	return undef unless defined $value;
 
@@ -79,35 +83,71 @@ sub parseReleaseId {
 
 	return undef if $value eq '';
 
-	# Bare id.
-	return $1 if $value =~ /^(\d+)$/;
+	# Bare id. `0 +` normalises, so a zero-padded '0123456' and a plain
+	# '123456' are the same answer rather than two hash keys that look like two
+	# tags disagreeing. discogs_release_id is INTEGER, so they would have stored
+	# identically anyway.
+	return 0 + $1 if $value =~ /^(\d+)$/;
 
-	# Discogs markup. [r123456] is a release; [m...] master, [a...] artist,
-	# [l...] label - deliberately not accepted, they are different things.
-	return $1 if $value =~ /^\[r(\d+)\]$/i;
+	return 0 + $1 if $value =~ /^\[$markup\s*=?\s*(\d+)\]$/i;
 
-	# URL. The optional segment before release/releases is a locale ('de',
-	# 'pt_BR'), which is why it is not a catch-all: /master/123456 must not
-	# parse as a release, and a catch-all would let /master/release-ish paths
-	# through.
-	return $1 if $value =~ m{discogs\.com/(?:[a-z]{2}(?:[-_][A-Za-z]{2})?/)?releases?/(\d+)}i;
+	if ( $value =~ m{discogs\.com/((?:[^/\s]+/)*)$type/(?:view/)?(\d+)}i ) {
+		my ( $prefix, $id ) = ( $1, $2 );
+
+		for my $segment ( grep { length } split m{/}, ( $prefix // '' ) ) {
+			return undef if $segment =~ $ENTITY_SEGMENT;
+		}
+
+		return 0 + $id;
+	}
 
 	return undef;
 }
 
-# Master ids appear as a bare number, a /master/123456 URL, or [m123456].
+=head2 _parseReleaseId( $value )
+
+Extract a Discogs release ID from one tag value. Returns the ID as an integer,
+or undef if the value does not look like one.
+
+Accepts, per decisions §3:
+
+  123456                                                bare
+  0123456                                               zero-padded, same answer
+  [r123456] / [r 123456] / [r= 123456]                  Discogs markup
+  https://www.discogs.com/release/123456-Title          canonical URL
+  https://www.discogs.com/releases/123456               plural
+  https://www.discogs.com/de/release/123456             locale prefix
+  https://www.discogs.com/Some-Artist-Title/release/123456   slug prefix
+
+The slug form is the one Discogs itself emits, so a value pasted from a browser
+or copied out of an API C<uri> field has to parse. It particularly must not fail:
+decide() treats present-but-unparseable as a *conflict*, so a URL this could not
+read would put the album in the review queue as a false conflict rather than
+letting it fall through to Structural - worse than simply missing it.
+
+Never returns a valid falsy id: 0 is not a Discogs release, so callers may use
+C<if ( my $id = ... )>.
+
+A private function, per CLAUDE.md's calling convention: reached through decide()
+and candidateKeys(), and directly from the offline suite.
+
+=cut
+
+sub _parseReleaseId {
+	my $value = shift;
+
+	# releases? so the plural form parses; view/ is a master-only path but
+	# harmless here.
+	return _parseEntityId( $value, 'releases?', 'r' );
+}
+
+# Master ids appear as a bare number, [m123456], or a /master/123456 URL - the
+# example in Discogs' own API documentation is the slug form,
+# ".../Electric-Universe-Stardiver/master/1000", so the same widening applies.
 sub _parseMasterId {
 	my $value = shift;
 
-	return undef unless defined $value;
-
-	$value =~ s/^\s+|\s+$//g;
-
-	return $1 if $value =~ /^(\d+)$/;
-	return $1 if $value =~ /^\[m(\d+)\]$/i;
-	return $1 if $value =~ m{discogs\.com/(?:[a-z]{2}(?:[-_][A-Za-z]{2})?/)?master/(?:view/)?(\d+)}i;
-
-	return undef;
+	return _parseEntityId( $value, 'master', 'm' );
 }
 
 # A tag value may be a scalar or an arrayref, and LMS does not normalise this in
@@ -182,7 +222,7 @@ sub decide {
 
 			$present++;
 
-			if ( my $id = parseReleaseId($value) ) {
+			if ( my $id = _parseReleaseId($value) ) {
 				$found{$id} ||= { tag => $name, raw => $value };
 			}
 			else {
@@ -194,6 +234,11 @@ sub decide {
 	return {} unless $present;
 
 	# Several tags agreeing on one ID is agreement, not conflict.
+	#
+	# The sort is for a stable conflict report only, and is a string sort over
+	# integer ids - deliberately not load-bearing: one key means there is no
+	# order, and more than one means conflict, where the list is prose for a log
+	# line rather than anything a caller indexes into.
 	my @ids = sort keys %found;
 
 	if ( @unparsed || @ids > 1 ) {
@@ -259,7 +304,7 @@ what is configured. This is what the Settings detection action reports, and it
 uses the same parser as matching so the report cannot promise something
 matching would then reject.
 
-Returns a list of [ key, id ] pairs.
+Returns a list of C<[ $key, $id, $corroborated ]> triples.
 
 Two tiers of evidence, because a bare integer is not evidence of anything on its
 own:
@@ -267,19 +312,23 @@ own:
 =over 4
 
 =item * A B<URL or [r...] markup> value is unambiguous, so the key is reported
-whatever it is called. This is what catches a tagger using a name nobody would
-have guessed.
+whatever it is called, with C<$corroborated> true. This is what catches a tagger
+using a name nobody would have guessed.
 
-=item * A B<bare integer> is only reported when the key name mentions Discogs.
-Otherwise TRACKNUM, YEAR, BPM, DISCNUMBER and every other numeric tag would be
-reported as a candidate release ID, and a report full of false positives is
-worse than a short one - the user is being asked to tick the right box.
+=item * A B<bare integer> is corroborated only when the key name mentions
+Discogs. Otherwise TRACKNUM, YEAR, BPM, BARCODE and every other numeric tag
+would look like a candidate release ID - and a magnitude test buys nothing
+clean, since BARCODE and UPC are 12-13 digits and LENGTH in milliseconds is 6.
+The key name is the honest discriminator.
 
 =back
 
-A bare integer under an unguessable key is therefore missed. That is what the
-Settings page's free-text "add a tag name" field is for; detection is a
-convenience, not the only route in.
+Uncorroborated hits are still B<returned>, with C<$corroborated> false, so the
+caller can render them as a demoted "other numeric tags found" list. decisions
+§3 makes detection the coverage report - "so silent failure is impossible" - and
+a user whose tagger writes C<RELEASE_ID> would otherwise be told nothing at all.
+Whether to show the second list is the caller's decision; suppressing it here
+would take that choice away.
 
 =cut
 
@@ -291,17 +340,18 @@ sub candidateKeys {
 	for my $key ( sort keys %$tags ) {
 		# DISCOG, not DISCOGS: decisions §3 records both DISCOGS_RELEASE_ID and
 		# DISCOG_RELEASE_ID (no S) in Discogs' own forum threads.
-		my $named = $key =~ /DISCOG/i;
+		my $named = $key =~ /DISCOG/i ? 1 : 0;
 
 		for my $value ( _values( $tags->{$key} ) ) {
 			next unless defined $value;
 
-			my $id = parseReleaseId($value) or next;
+			my $id = _parseReleaseId($value) or next;
 
-			# A bare integer needs the key name to corroborate it.
-			next if $value =~ /^\s*\d+\s*$/ && !$named;
+			# A bare integer is only corroborated by the key name; any other
+			# accepted form is unambiguous on its own.
+			my $bare = $value =~ /^\s*\d+\s*$/ ? 1 : 0;
 
-			push @hits, [ $key, $id ];
+			push @hits, [ $key, $id, ( $bare ? $named : 1 ) ];
 			last;
 		}
 	}
