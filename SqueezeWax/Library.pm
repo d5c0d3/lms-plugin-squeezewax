@@ -89,30 +89,48 @@ sub eachAlbum {
 		return $cb->($album) ? 1 : 0;
 	};
 
-	while ( $continue && $sth->fetch ) {
-		if ( !$current || $current->{album_id} != $albumId ) {
-			$continue = $flush->() or last;
-			$current = { album_id => $albumId, urlmd5 => [], local => [], remote_tracks => 0 };
+	# The handle comes from prepare_cached, so it is reused on the next call. A
+	# callback that dies part-way through would otherwise leave it Active and the
+	# next eachAlbum would get DBI's "prepare_cached(...) statement handle
+	# ... still Active" warning, with a half-consumed result set behind it.
+	#
+	# Moot in the scanner, where an abort exits the process outright
+	# (Slim/Utils/SQLiteHelper.pm:443-460), but not in the server: the Settings
+	# detection worker runs this shape of work through Slim::Utils::Scheduler,
+	# where one unreadable file must not poison the handle for the rest of the
+	# session.
+	my $ok = eval {
+		while ( $continue && $sth->fetch ) {
+			if ( !$current || $current->{album_id} != $albumId ) {
+				$continue = $flush->() or last;
+				$current = { album_id => $albumId, urlmd5 => [], local => [], remote_tracks => 0 };
+			}
+
+			push @{ $current->{urlmd5} }, $urlmd5;
+
+			if ($remote) {
+				$current->{remote_tracks}++;
+			}
+			else {
+				push @{ $current->{local} }, {
+					url       => $url,
+					timestamp => $timestamp,
+					disc      => $disc,
+					tracknum  => $tracknum,
+				};
+			}
 		}
 
-		push @{ $current->{urlmd5} }, $urlmd5;
+		$flush->() if $continue;
 
-		if ($remote) {
-			$current->{remote_tracks}++;
-		}
-		else {
-			push @{ $current->{local} }, {
-				url       => $url,
-				timestamp => $timestamp,
-				disc      => $disc,
-				tracknum  => $tracknum,
-			};
-		}
-	}
+		1;
+	};
 
-	$flush->() if $continue;
+	my $err = $@;
 
 	$sth->finish;
+
+	die $err if !$ok;
 
 	return $seen;
 }

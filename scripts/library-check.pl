@@ -204,6 +204,24 @@ my $stopped = 0;
 my $count = $L->eachAlbum( sub { $stopped++; return 0 } );
 is( $stopped, 1, 'returning false from the callback stops the walk' );
 
+# --- a dying callback does not poison the cached handle --------------------
+# prepare_cached reuses the handle, so an exception escaping mid-result-set
+# would leave it Active and the next call would warn and see a half-consumed
+# result. The scanner exits on abort so it never notices; the server's Settings
+# detection worker would.
+ok( !eval { $L->eachAlbum( sub { die "callback exploded\n" } ); 1 },
+	'an exception in the callback propagates' );
+like( $@, qr/callback exploded/, '  ...unchanged' );
+
+my @after;
+my $warned = '';
+{
+	local $SIG{__WARN__} = sub { $warned .= $_[0] };
+	$L->eachAlbum( sub { push @after, $_[0]; 1 } );
+}
+is( scalar @after, 3, 'the next eachAlbum still returns every album' );
+unlike( $warned, qr/still Active/i, '  ...with no "still Active" warning' );
+
 # --- albumTitle is a display lookup, never identity ------------------------
 is( $L->albumTitle(1), 'One', 'albumTitle reads the title' );
 is( $L->albumTitle(999), undef, 'albumTitle on a missing album is undef, not fatal' );
