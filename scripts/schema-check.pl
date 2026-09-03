@@ -75,9 +75,11 @@ BEGIN {
 	};
 
 	# Schema.pm is compiled with main::SCANNER already defined by its callers.
-	*{'main::SCANNER'}  = sub () { 0 };
-	*{'main::INFOLOG'}  = sub () { 0 };
-	*{'main::DEBUGLOG'} = sub () { 0 };
+	*{'main::SCANNER'}   = sub () { 0 };
+	*{'main::INFOLOG'}   = sub () { 0 };
+	*{'main::DEBUGLOG'}  = sub () { 0 };
+	# _samePath case-folds under ISWINDOWS; these tests run the POSIX branch.
+	*{'main::ISWINDOWS'} = sub () { 0 };
 }
 
 {
@@ -153,6 +155,44 @@ is( $S->_attachedFile($unattached), undef,
 ok( !eval { $dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax"); 1 },
 	'a second ATTACH of the same name dies under RaiseError' );
 like( $@, qr/already in use/, '  ...with "already in use"' );
+
+# The path SQLite reports is canonicalised; the path dbFile() builds is not
+# (Slim/Utils/Prefs.pm:90-92 takes --prefsdir verbatim, :645 returns it as-is).
+# A raw string comparison would therefore disable the plugin on any host with a
+# symlinked or relative prefs directory - Synology, QNAP, most Docker images -
+# on the *second* postDBConnect, which is the normal case.
+SKIP: {
+	skip 'symlinks unavailable', 4 unless eval { symlink( '', '' ); 1 };
+
+	mkdir "$dir/real";
+	symlink "$dir/real", "$dir/link" or skip 'could not create symlink', 4;
+
+	my $linked = DBI->connect( "dbi:SQLite:dbname=$dir/main4.db", '', '', {
+		RaiseError => 1, PrintError => 0, AutoCommit => 1,
+	} );
+	$linked->do("ATTACH '$dir/link/squeezewax.db' AS squeezewax");
+
+	my $reported = $S->_attachedFile($linked);
+	is( $reported, "$dir/real/squeezewax.db",
+		'SQLite reports the symlink-resolved path, not the one we passed' );
+	isnt( $reported, "$dir/link/squeezewax.db",
+		'  ...so a raw string comparison against dbFile() would not match' );
+
+	ok( $S->_samePath( $reported, "$dir/link/squeezewax.db" ),
+		'_samePath sees through a symlinked directory' );
+	ok( $S->_samePath( $reported, "$dir/real/../real/squeezewax.db" ),
+		'_samePath collapses ".."' );
+}
+
+# A genuinely different file must still be caught - the die this protects is
+# what stops us reading and writing someone else's database under our name.
+ok( !$S->_samePath( "$dir/squeezewax.db", "$dir/somethingelse.db" ),
+	'_samePath rejects two genuinely different files' );
+
+# An unresolvable path falls back to the raw strings rather than being treated
+# as a mismatch.
+ok( $S->_samePath( '/no/such/dir/x.db', '/no/such/dir/x.db' ),
+	'_samePath falls back to string equality when abs_path cannot resolve' );
 
 # --- migrating again is a no-op -------------------------------------------
 $S->_migrate($dbh);

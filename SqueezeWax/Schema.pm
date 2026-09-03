@@ -15,6 +15,8 @@ package Plugins::SqueezeWax::Schema;
 
 use strict;
 
+use Cwd ();
+
 use Slim::Utils::Log;
 use Slim::Utils::OSDetect;
 
@@ -138,7 +140,7 @@ sub postDBConnect {
 			# silently. Only a missing or unwritable directory fails here. It is
 			# the user_version check that catches an empty database, not this.
 		}
-		elsif ( $attached ne $path ) {
+		elsif ( !$class->_samePath( $attached, $path ) ) {
 			# Never observed, and no way to see it before this check existed.
 			# Continuing would read and write someone else's file under our
 			# schema name.
@@ -194,6 +196,50 @@ sub postDBConnect {
 	}
 
 	return $ready;
+}
+
+# Do two paths name the same database file?
+#
+# A raw string comparison is wrong, and wrong in the direction that disables the
+# plugin on a perfectly healthy system. SQLite canonicalises the path it reports
+# in pragma_database_list - verified on 3.50.6, it resolves symlinks, collapses
+# '..' and absolutises a relative path - while dbFile() is not canonicalised
+# anywhere: Slim/Utils/Prefs.pm:90-92 takes --prefsdir straight off the command
+# line and `sub dir` at :645 returns it verbatim, and dbFile just catfiles onto
+# that. So a symlinked prefs directory (the default on Synology and QNAP, and
+# common in Docker images) or a relative --prefsdir (a checkout, a hand-written
+# systemd unit) would make the strings differ on the *second* postDBConnect -
+# which is the normal case, not a rare one, since FullTextSearch is bundled,
+# enabled by default and registers in both processes. The plugin would go dead
+# with an error naming two paths that are the same file.
+#
+# NOT stat dev+inode, though that is what "same file" actually means: Windows
+# inode numbers are frequently 0, so two genuinely different files would compare
+# equal, the ATTACH would be skipped, and we would silently read and write
+# someone else's database under our schema name - the exact failure the die
+# exists to prevent. abs_path fails in the safe direction: a false negative
+# disables the plugin loudly, a false positive corrupts data quietly. Do not
+# "simplify" this to an inode check.
+sub _samePath {
+	my ( $class, $left, $right ) = @_;
+
+	return 0 unless defined $left && defined $right;
+
+	# abs_path resolves a missing leaf inside an existing directory, so a
+	# first-ever run is fine; it returns undef only when a directory component
+	# is missing. Fall back to the raw strings in that case rather than treating
+	# an unresolvable path as a mismatch.
+	my $canonLeft  = Cwd::abs_path($left);
+	my $canonRight = Cwd::abs_path($right);
+
+	if ( defined $canonLeft && defined $canonRight ) {
+		( $left, $right ) = ( $canonLeft, $canonRight );
+	}
+
+	# NTFS case-folds, so the same file can be reported with different case.
+	return lc($left) eq lc($right) if main::ISWINDOWS;
+
+	return $left eq $right;
 }
 
 # The file our schema name is currently attached to, or undef if it is not
