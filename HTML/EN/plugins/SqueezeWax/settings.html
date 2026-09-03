@@ -1,0 +1,96 @@
+[% title = "PLUGIN_SQUEEZEWAX_NAME" %]
+[% PROCESS settings/header.html %]
+
+[% IF !dbReady %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DB_UNUSABLE" desc="" %]
+		<div>[% dbError | html %]</div>
+	[% END %]
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
+	<table>
+	[% counter = 0 %]
+	[% FOREACH name = prefs.pref_discogsTagNames %]
+		<tr>
+			<td>
+				<input type="text" class="stdedit" size="40"
+					name="pref_discogsTagNames[% counter %]" value="[% name | html %]" />
+			</td>
+		</tr>
+		[% counter = counter + 1 %]
+	[% END %]
+		<tr>
+			<td>
+				<input type="text" class="stdedit" size="40"
+					name="pref_discogsTagNames[% counter %]" value="" />
+			</td>
+		</tr>
+		<tr>
+			<td>
+				<input type="text" class="stdedit" size="40"
+					name="pref_discogsTagNames[% counter + 1 %]" value="" />
+			</td>
+		</tr>
+	</table>
+	<div>[% "PLUGIN_SQUEEZEWAX_TAGNAMES_ORDER" | string %]</div>
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DETECT" desc="PLUGIN_SQUEEZEWAX_DETECT_DESC" %]
+	[% IF scanning %]
+		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSE %]
+		<input name="detectTagNames" type="submit" class="stdclick"
+			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]" />
+	[% END %]
+
+	[% IF detection %]
+		[% IF detection.running %]
+			<div>[% "PLUGIN_SQUEEZEWAX_DETECT_RUNNING" | string %]
+				([% detection.done %]/[% detection.total %])</div>
+		[% ELSE %]
+			<div>[% "PLUGIN_SQUEEZEWAX_DETECT_SAMPLED" | string %][% "COLON" | string %]
+				[% detection.done %]</div>
+
+			[% IF detection.formats.size %]
+				<div>[% "PLUGIN_SQUEEZEWAX_DETECT_FORMATS" | string %][% "COLON" | string %]
+				[% FOREACH f = detection.formats %][% f.name | html %] ([% f.count %])
+				[% END %]</div>
+			[% END %]
+
+			[% IF detection.keys.size %]
+				<table>
+					<tr>
+						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_TAG" | string %]</th>
+						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_COUNT" | string %]</th>
+						<th>[% "PLUGIN_SQUEEZEWAX_DETECT_EXAMPLE" | string %]</th>
+					</tr>
+				[% FOREACH k = detection.keys %]
+					<tr>
+						<td>[% k.name | html %]</td>
+						<td>[% k.count %]</td>
+						<td>[% k.example | html %]</td>
+					</tr>
+				[% END %]
+				</table>
+				<div>[% "PLUGIN_SQUEEZEWAX_DETECT_COPY" | string %]</div>
+			[% ELSE %]
+				<div>[% "PLUGIN_SQUEEZEWAX_DETECT_NONE" | string %]</div>
+			[% END %]
+
+			[% IF detection.other.size %]
+				<div>[% "PLUGIN_SQUEEZEWAX_DETECT_OTHER" | string %]</div>
+				<table>
+				[% FOREACH k = detection.other %]
+					<tr>
+						<td>[% k.name | html %]</td>
+						<td>[% k.count %]</td>
+						<td>[% k.example | html %]</td>
+					</tr>
+				[% END %]
+				</table>
+			[% END %]
+		[% END %]
+	[% END %]
+[% END %]
+
+[% PROCESS settings/footer.html %]

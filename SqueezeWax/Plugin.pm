@@ -29,6 +29,14 @@ sub initPlugin {
 
 	Plugins::SqueezeWax::Schema->init();
 
+	# Only the server has a web UI; the scanner never loads this file anyway
+	# (Slim/Utils/PluginManager.pm:204). Guarded and required lazily as
+	# refs/lms-plugin-tidal/Plugin.pm:60-66 does.
+	if (main::WEBUI) {
+		require Plugins::SqueezeWax::Settings;
+		Plugins::SqueezeWax::Settings->new();
+	}
+
 	$class->SUPER::initPlugin(@_);
 }
 

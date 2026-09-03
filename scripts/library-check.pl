@@ -226,4 +226,66 @@ unlike( $warned, qr/still Active/i, '  ...with no "still Active" warning' );
 is( $L->albumTitle(1), 'One', 'albumTitle reads the title' );
 is( $L->albumTitle(999), undef, 'albumTitle on a missing album is undef, not fatal' );
 
+# --- content_type is carried for the detection report --------------------
+is( $by{1}->{content_type}, 'flc', 'content_type comes from the primary candidate' );
+is( $by{3}->{content_type}, undef, 'an all-remote album has no content_type' );
+
+# --- sample_albums --------------------------------------------------------
+# A wider library: 40 FLAC albums and 4 MP3 ones, so a uniform sample would
+# barely see the MP3s - and the MP3s are exactly where the tag key differs
+# (MUSICBRAINZ_ALBUMID from FLAC, 'MUSICBRAINZ ALBUM ID' from MP3), which is the
+# finding detection exists to surface.
+my $id = 100;
+for my $n ( 1 .. 40 ) {
+	$insert->execute( $id++, 1000 + $n, md5_hex("flac$n"), "file:///flac$n",
+		100 + $n, 1, 1, 0, 1, 'flc' );
+}
+for my $n ( 1 .. 4 ) {
+	$insert->execute( $id++, 2000 + $n, md5_hex("mp3$n"), "file:///mp3$n",
+		200 + $n, 1, 1, 0, 1, 'mp3' );
+}
+
+my $sample = $L->sample_albums(10);
+
+isa_ok( $sample, 'ARRAY', 'sample_albums returns a materialised arrayref' );
+
+my %sampledFormats;
+$sampledFormats{ $_->{content_type} }++ for @$sample;
+
+is( $sampledFormats{mp3}, 4,
+	'every MP3 album is sampled, because there are fewer than the per-format cap' );
+is( $sampledFormats{flc}, 10,
+	'FLAC is capped at the per-format limit rather than dominating' );
+
+# The point of stratifying: a uniform sample of this library would return about
+# one MP3 album in ten.
+cmp_ok( $sampledFormats{mp3}, '>', 10 * 4 / 44,
+	'MP3 is over-represented relative to a uniform sample, which is the intent' );
+
+ok( !grep( { !$_->{local_tracks} } @$sample ),
+	'no album without local tracks is sampled - there is nothing to read' );
+
+# Deterministic: a user who re-runs detection and gets different counts will
+# trust neither result.
+my $again = $L->sample_albums(10);
+is_deeply(
+	[ map { $_->{album_id} } @$sample ],
+	[ map { $_->{album_id} } @$again ],
+	'sampling is deterministic across runs, not ORDER BY RANDOM()'
+);
+
+# An even stride, not the first N - taking the head would sample one corner of a
+# library stored in insertion order.
+my @flacIds = sort { $a <=> $b } map { $_->{album_id} }
+	grep { $_->{content_type} eq 'flc' } @$sample;
+cmp_ok( $flacIds[-1] - $flacIds[0], '>', 10,
+	'the FLAC sample spans the library rather than clustering at the start' );
+
+# A cap larger than the library returns everything.
+my $all = $L->sample_albums(1000);
+my %allFormats;
+$allFormats{ $_->{content_type} }++ for @$all;
+is( $allFormats{flc}, 42, 'a cap above the album count returns every FLAC album' );
+is( $allFormats{mp3}, 4,  '  ...and every MP3 album' );
+
 done_testing();

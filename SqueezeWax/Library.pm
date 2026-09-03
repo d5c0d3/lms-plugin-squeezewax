@@ -36,7 +36,8 @@ my $log = logger('plugin.squeezewax');
 # streaming albums with no local file (design §3, walkthrough 4); filtering here
 # would have to be undone then. The Strict caller decides, not the iterator.
 my $ALBUM_TRACKS_SQL = q{
-	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote
+	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote,
+	       t.content_type
 	  FROM tracks t
 	 WHERE t.album IS NOT NULL
 	   AND t.audio = 1
@@ -72,8 +73,10 @@ sub eachAlbum {
 	my $sth = Slim::Schema->dbh->prepare_cached($ALBUM_TRACKS_SQL);
 	$sth->execute;
 
-	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote );
-	$sth->bind_columns( \( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote ) );
+	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote, $contentType );
+	$sth->bind_columns(
+		\( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote, $contentType )
+	);
 
 	my $seen    = 0;
 	my $current;
@@ -113,10 +116,11 @@ sub eachAlbum {
 			}
 			else {
 				push @{ $current->{local} }, {
-					url       => $url,
-					timestamp => $timestamp,
-					disc      => $disc,
-					tracknum  => $tracknum,
+					url          => $url,
+					timestamp    => $timestamp,
+					disc         => $disc,
+					tracknum     => $tracknum,
+					content_type => $contentType,
 				};
 			}
 		}
@@ -179,7 +183,90 @@ sub _finish {
 		local_tracks     => scalar @local,
 		remote_tracks    => $acc->{remote_tracks},
 		candidates       => \@candidates,
+
+		# The primary candidate's content_type. Carried for the detection
+		# report's format mix and for stratifying the sample - the tag key
+		# spelling differs by format, which is the whole reason the pref is a
+		# list. undef for an album with no local tracks.
+		content_type     => $sorted[0] ? $sorted[0]->{content_type} : undef,
 	};
+}
+
+=head2 sample_albums( $perFormat )
+
+Up to C<$perFormat> albums for B<each> distinct local content type, as a plain
+arrayref of the same records C<eachAlbum> yields. Albums with no local tracks
+are excluded - there is nothing to read tags from.
+
+B<All database work happens here, synchronously, and the result is
+materialised.> The caller spreads the *file reads* over scheduler ticks, never
+the query. Building this on C<eachAlbum>'s callback would hold a
+C<prepare_cached> handle open across many event-loop turns - potentially
+minutes, since scheduler tasks only run when the server is otherwise idle - and
+in that window C<Slim::Schema-E<gt>disconnect; Slim::Schema-E<gt>init> can fire:
+a completing scan does exactly that at C<Slim/Utils/SQLiteHelper.pm:626-628>,
+and so does any plugin registering a post-connect handler. The next tick would
+then fetch from a handle on a dead C<$dbh>.
+
+B<Stratified by content type, not uniform.> A uniform sample of a library that
+is 90% FLAC returns about five MP3 albums out of fifty - and the MP3s are
+exactly where the tag key differs, since the same tag is
+C<MUSICBRAINZ_ALBUMID> from FLAC (C<Slim/Formats/FLAC.pm:51>) and
+C<'MUSICBRAINZ ALBUM ID'> from MP3 (C<Slim/Formats/MP3.pm:48>). Sampling per
+format is what makes the report able to say "your FLACs use this key and your
+MP3s use that one", which is the finding the whole list-of-names design exists
+to surface.
+
+B<Deterministic stride, not C<ORDER BY RANDOM()> or reservoir sampling.> A user
+who re-runs detection and gets different counts will not trust either result.
+An even stride over each format's albums also beats taking the first N, which
+on a library sorted by insertion order means sampling one corner of it.
+
+=cut
+
+sub sample_albums {
+	my ( $class, $perFormat ) = @_;
+
+	$perFormat ||= 25;
+
+	my %byFormat;
+
+	$class->eachAlbum( sub {
+		my $album = shift;
+
+		# Nothing to read tags from, and its content_type is undef.
+		return 1 unless $album->{local_tracks};
+
+		push @{ $byFormat{ $album->{content_type} || 'unknown' } }, $album;
+
+		return 1;
+	} );
+
+	my @sample;
+
+	for my $format ( sort keys %byFormat ) {
+		my $albums = $byFormat{$format};
+		my $total  = scalar @$albums;
+
+		if ( $total <= $perFormat ) {
+			push @sample, @$albums;
+			next;
+		}
+
+		# Even stride across this format's albums. int() rather than rounding,
+		# and a distinct-index guard, so a stride that repeats an index cannot
+		# put the same album in twice.
+		my $stride = $total / $perFormat;
+		my %taken;
+
+		for my $i ( 0 .. $perFormat - 1 ) {
+			my $index = int( $i * $stride );
+			next if $taken{$index}++;
+			push @sample, $albums->[$index];
+		}
+	}
+
+	return \@sample;
 }
 
 =head2 albumTitle( $albumId )

@@ -104,7 +104,31 @@ TAGS_STUB='BEGIN {
 	sub set  { 1 }
 }'
 
-MODULES="Schema Library Tags Importer Plugin"
+# Settings.pm inherits Slim::Web::Settings, which reaches the same web stack
+# Plugin.pm's base class does. Slim::Utils::Scheduler and Slim::Music::Import are
+# only called at runtime, so a marker in %INC is enough for the compile.
+SETTINGS_STUB='BEGIN {
+	$INC{q(Slim/Web/Settings.pm)}   = 1;
+	$INC{q(Slim/Utils/Scheduler.pm)} = 1;
+	$INC{q(Slim/Utils/Strings.pm)}  = 1;
+	$INC{q(Slim/Music/Import.pm)}   = 1;
+
+	@Slim::Web::Settings::ISA = ();
+	*Slim::Web::Settings::new     = sub { 1 };
+	*Slim::Web::Settings::handler = sub { 1 };
+	*Slim::Utils::Strings::string = sub { $_[0] };
+	*Slim::Utils::Strings::import = sub {
+		my $caller = caller;
+		no strict q(refs);
+		*{$caller . q(::string)} = \&Slim::Utils::Strings::string;
+	};
+
+	package Slim::Web::HTTP::CSRF;
+	sub protectName { $_[1] }
+	sub protectURI  { $_[1] }
+}'
+
+MODULES="Schema Library Tags Match Importer Settings Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -112,8 +136,11 @@ for scanner in 0 1; do
 
 	for m in $MODULES; do
 		# Plugin.pm is the server's entry point and the scanner never loads it
-		# (Slim/Utils/PluginManager.pm:204), so don't check it in scanner mode.
-		if [ "$scanner" = 1 ] && [ "$m" = "Plugin" ]; then continue; fi
+		# (Slim/Utils/PluginManager.pm:204). Settings.pm is required only from
+		# Plugin.pm under main::WEBUI, so it never reaches the scanner either.
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ]; }; then
+			continue
+		fi
 
 		case "$m" in
 			Plugin)
@@ -127,6 +154,16 @@ for scanner in 0 1; do
 			Tags)
 				prelude="$TAGS_STUB"
 				note=" (Slim::Utils::Prefs, Slim::Formats stubbed)"
+				;;
+			Match)
+				prelude="$SCHEMA_STUB$TAGS_STUB"
+				note=" (Slim::Schema, Slim::Utils::Prefs stubbed)"
+				;;
+			Settings)
+				# Slim::Web::Settings is a web-UI class; stub the base the same
+				# way Plugin.pm's is stubbed, and reuse the Schema/Prefs stubs.
+				prelude="$SCHEMA_STUB$TAGS_STUB$SETTINGS_STUB"
+				note=" (Slim::Web::Settings and friends stubbed)"
 				;;
 			*)
 				prelude=""

@@ -385,6 +385,109 @@ name would silently fail on half a mixed-format library.
 
 ---
 
+## 3b. Changing the configured tag names invalidates the strict answer
+
+**Decided 2026-08-30 (design chat), during build-order step 3 review.**
+
+Both skip caches — `discogs_match.source_timestamp` and every
+`discogs_no_match` row — key on file state alone. The strict answer also
+depends on `discogsTagNames`, which is not in that key. Without explicit
+invalidation, changing the tag-name list changes nothing on the next scan:
+every album is skipped because no file moved.
+
+Three failures follow, all silent:
+
+- The common one. A user ticks the wrong tag first, gets 4,800 no-match rows,
+  corrects the list, rescans — and nothing happens. Finding 4's
+  `matched == 0 && examined > 0` warning cannot catch it, because `examined`
+  is zero.
+- Removing one of two conflicting tag names leaves the album's
+  `(strict, candidate, NULL)` row in place, so it stays in the review queue
+  with a conflict that no longer exists.
+- Adding a tag name that outranks the configured one can change which ID wins
+  on an already-`confirmed` album, or create a conflict where there was none.
+  Those albums skip too.
+
+**"Alters the list" means the SET of names changed, compared
+case-insensitively.** Added or removed names invalidate; a pure reorder or a
+change of case does not. Position only decides which tag name is *reported* as
+the source of a clean hit, and no column stores that — so making a reorder cost
+a full cold pass over every local file would be a real cost for no benefit.
+Case is excluded because `_lookup` already folds it, so a re-cased name matches
+exactly the same tags.
+
+**On a Settings save that alters the list**, and only then:
+
+```sql
+DELETE FROM squeezewax.discogs_no_match WHERE tier = 'strict';
+UPDATE squeezewax.discogs_match SET source_timestamp = NULL
+ WHERE match_tier = 'strict';
+```
+
+`DELETE` on `discogs_no_match` because it is regenerable in full (§2a); the
+rows cost re-reads, never a match.
+
+`UPDATE` rather than `DELETE` on `discogs_match` because every row this
+predicate touches may carry a decision — `state = 'confirmed'` is one, and any
+non-NULL `discogs_release_id` is a proposal something adjudicated — and §2a's
+rule is *never delete a row that carries a decision or a recovery snapshot*.
+NULLing `source_timestamp` forces re-examination without discarding anything.
+Where re-examination then finds no tag at all, §2a's narrow delete predicate
+applies at that point, in the importer, not here: the two mechanisms compose,
+and invalidation is never the thing that removes a row. `match_tier = 'manual'`
+rows fall outside the predicate entirely and are untouched, consistent with the
+write path's first rule.
+
+The write is safe because the settings page already refuses to save while
+`Slim::Music::Import->stillScanning` is true (finding 2b).
+
+**Cost:** one cold pass over local files on the next scan. That is the correct
+price for a rare, deliberate user action, and it is predictable.
+
+Three alternatives were rejected, ordered by how likely each is to be proposed
+again.
+
+**Rejected — `$prefs->setChange`.** It is the obvious way to catch the change
+wherever it happens, and in-tree plugins use it
+(`Slim/Utils/Prefs/Namespace.pm:148`; callers at
+`Slim/Plugin/PreventStandby/Plugin.pm:47-48`,
+`Slim/Plugin/UPnP/MediaServer.pm:52`). But
+`Slim::Utils::Prefs::Base::set` dispatches onchange on
+`!defined $old || !defined $new || $old ne $new || ref $new` — and
+`ref $new` is always true for an arrayref pref, so the callback fires on
+*every* save, changed or not. The scalar "no change" short-circuit earlier
+in `set` is likewise gated on `!ref $new`. A `setChange` implementation
+would therefore force a full cold re-read pass on every settings save,
+including one that only toggled a checkbox. `set` does pass an
+undocumented fourth argument (`$func->($pref, $new, $obj, $old)`) that
+would allow a comparison, but the POD documents three, and building this on
+undocumented behaviour buys nothing the handler does not already give.
+
+There is in-tree precedent *for* the handler approach, not merely against the
+alternative: `Slim/Web/Settings/Server/Basic.pm:118-121` compares the old
+`mediadirs` against the new inside the handler to decide whether to trigger a
+rescan, rather than hooking an onchange callback.
+
+**Rejected — partial invalidation.** Clearing no-match rows and NULLing only
+the `(candidate, NULL)` conflicts, leaving confirmed rows alone, is cheaper.
+Its failure mode is chosen rather than accidental: a newly-added tag name
+would never revisit an album that already matched, so it could never correct
+a wrong pressing or surface a conflict that now exists.
+
+**Rejected — a tag-list fingerprint per row.** More schema and more code for
+an identical outcome. Recorded so it is not re-proposed.
+
+**Coverage gap, accepted.** Hooking the handler misses a change made outside
+the settings page — the CLI, or a hand-edited prefs file. Both require
+deliberate action, and design §9's "clear & rebuild matches" is the escape
+hatch. Recorded rather than solved.
+
+**Step 4 note.** Structural does not read tag names, so `tier = 'structural'`
+rows are correctly outside both statements. If a later tier ever derives its
+answer from a pref, it needs its own invalidation clause here.
+
+---
+
 ## 4. API request budget — corrects spec §13
 
 Endpoint facts:

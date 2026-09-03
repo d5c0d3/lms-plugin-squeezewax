@@ -1475,6 +1475,14 @@ Three failures follow, all silent:
   on an already-`confirmed` album, or create a conflict where there was none.
   Those albums skip too.
 
+**"Alters the list" means the SET of names changed, compared
+case-insensitively.** Added or removed names invalidate; a pure reorder or a
+change of case does not. Position only decides which tag name is *reported* as
+the source of a clean hit, and no column stores that — so making a reorder cost
+a full cold pass over every local file would be a real cost for no benefit.
+Case is excluded because `_lookup` already folds it, so a re-cased name matches
+exactly the same tags.
+
 **On a Settings save that alters the list**, and only then:
 
 ```sql
@@ -1521,6 +1529,11 @@ including one that only toggled a checkbox. `set` does pass an
 undocumented fourth argument (`$func->($pref, $new, $obj, $old)`) that
 would allow a comparison, but the POD documents three, and building this on
 undocumented behaviour buys nothing the handler does not already give.
+
+There is in-tree precedent *for* the handler approach, not merely against the
+alternative: `Slim/Web/Settings/Server/Basic.pm:118-121` compares the old
+`mediadirs` against the new inside the handler to decide whether to trigger a
+rescan, rather than hooking an onchange callback.
 
 **Rejected — partial invalidation.** Clearing no-match rows and NULLing only
 the `(candidate, NULL)` conflicts, leaving confirmed rows alone, is cheaper.

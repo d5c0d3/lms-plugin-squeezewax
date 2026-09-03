@@ -3,3 +3,57 @@ PLUGIN_SQUEEZEWAX_NAME
 
 PLUGIN_SQUEEZEWAX_DESC
 	EN	Links your physical record collection to your LMS library.
+
+PLUGIN_SQUEEZEWAX_TAGNAMES
+	EN	Discogs release ID tags
+
+PLUGIN_SQUEEZEWAX_TAGNAMES_DESC
+	EN	Tag names in your files that hold a Discogs release ID. There is no standard name, and it differs between formats, so more than one may be needed. Leave blank to disable tag matching.
+
+PLUGIN_SQUEEZEWAX_TAGNAMES_ORDER
+	EN	Order matters only for reporting which tag a match came from. If two tags name different releases, the album goes to the review queue rather than one winning.
+
+PLUGIN_SQUEEZEWAX_DETECT
+	EN	Detect tag names
+
+PLUGIN_SQUEEZEWAX_DETECT_DESC
+	EN	Reads a sample of albums and reports which tags hold something that looks like a Discogs release ID.
+
+PLUGIN_SQUEEZEWAX_DETECT_BUTTON
+	EN	Detect
+
+PLUGIN_SQUEEZEWAX_DETECT_RUNNING
+	EN	Reading files...
+
+PLUGIN_SQUEEZEWAX_DETECT_SAMPLED
+	EN	Albums sampled
+
+PLUGIN_SQUEEZEWAX_DETECT_FORMATS
+	EN	Formats sampled
+
+PLUGIN_SQUEEZEWAX_DETECT_TAG
+	EN	Tag name
+
+PLUGIN_SQUEEZEWAX_DETECT_COUNT
+	EN	Albums
+
+PLUGIN_SQUEEZEWAX_DETECT_EXAMPLE
+	EN	Example ID
+
+PLUGIN_SQUEEZEWAX_DETECT_COPY
+	EN	Copy the tag names you want into the boxes above, then save.
+
+PLUGIN_SQUEEZEWAX_DETECT_NONE
+	EN	No tags holding a Discogs release ID were found in the sample.
+
+PLUGIN_SQUEEZEWAX_DETECT_OTHER
+	EN	Other tags holding a number, shown in case one of them is your release ID. These were not confirmed, because a bare number on its own is not evidence.
+
+PLUGIN_SQUEEZEWAX_BUSY_SCANNING
+	EN	A scan is running. Settings that touch the match database cannot be changed until it finishes.
+
+PLUGIN_SQUEEZEWAX_DB_UNUSABLE
+	EN	The SqueezeWax database is not usable, so matching is inactive.
+
+PLUGIN_SQUEEZEWAX_MATCH_PROGRESS
+	EN	Discogs matching
