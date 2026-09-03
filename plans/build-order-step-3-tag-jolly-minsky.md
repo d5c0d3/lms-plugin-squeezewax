@@ -637,19 +637,45 @@ makes the local-track guard load-bearing for a second, non-obvious reason, and
 a later cleanup that removes it as redundant would silently break tag
 detection. State the contract in the code, not just here.
 
-So the iterator emits `local_track_count` and `remote_track_count` per album;
-Strict skips any album with `local_track_count == 0`; and the
-primary/fallback track pick prefers a local track.
+So the iterator emits `local_tracks` and `remote_tracks` per album; Strict
+skips any album with `local_tracks == 0`; and `candidates` holds up to two
+local track urls in `(disc, tracknum, url)` order — the primary and the
+fallback — so the pick is local by construction rather than by a filter at the
+call site.
+
+**Shipped interface** (`eachAlbum`'s hashref), recorded here because the plan's
+earlier names drifted from the code and a doc/code disagreement is a defect
+under the working agreement's §2:
+
+| Field | Meaning |
+|---|---|
+| `album_id` | LMS `albums.id`, a cache value, never identity |
+| `album_key` | md5 over the album's qualifying tracks' `urlmd5`, sorted |
+| `source_timestamp` | `MAX(timestamp)` over *local* tracks, or `undef` |
+| `local_tracks` | count of local qualifying tracks |
+| `remote_tracks` | count of remote qualifying tracks |
+| `candidates` | up to two local urls, primary first |
+| `title` | album title, added in commit 5 — see below |
 
 **Do not put `remote = 0` in the query.** v2's Fuzzy tier exists precisely
 for streaming albums with no local file (design §3, walkthrough 4). Filtering
 them out at the iterator would have to be undone then; filtering at the
 Strict caller is where the decision belongs.
 
-Also here: `sample_albums($n)` for the detection action — the same iteration
-capped at `$n`, spread across the library rather than the first `$n` album
-ids, so a mixed FLAC/MP3 library is actually sampled, and skipping
-no-local-track albums for the same reason.
+**`sample_albums($n)` moved to commit 4** — the same iteration capped at `$n`,
+spread across the library rather than the first `$n` album ids so a mixed
+FLAC/MP3 library is actually sampled, and skipping no-local-track albums for
+the same reason. It lands with its only caller, the detection worker, rather
+than shipping here as a method nothing calls.
+
+**`title` folded into the iterator in commit 5, and `albumTitle` dropped.** The
+first cut had a `albumTitle($albumId)` lookup per album, which is the N+1 the
+module header disclaims — trivially cheap in itself (a PK lookup in-process),
+but `$progress->update($title)` is called per album while `Progress::update`
+only consumes the string on the 5-second boundary
+(`Slim/Utils/Progress.pm:221`), so almost every one of those lookups feeds a
+string that is discarded. One extra column on a query already running removes
+the round trip rather than making it cheaper.
 
 ### Commit 3 — `Plugins::SqueezeWax::Tags`: the pref and the parser
 

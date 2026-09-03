@@ -82,7 +82,29 @@ SCHEMA_STUB='BEGIN {
 	$INC{q(Slim/Schema.pm)} = 1;
 }'
 
-MODULES="Schema Library Importer Plugin"
+# Tags.pm reaches Slim::Utils::Prefs, which is the module the JSON::XS problem
+# actually lives in, and Slim::Formats, which pulls in Slim::Music::Info and from
+# there most of the server. Stub both, and supply the two symbols Tags.pm uses at
+# compile time (preferences() at file scope, readTags only at runtime).
+TAGS_STUB='BEGIN {
+	$INC{q(Slim/Utils/Prefs.pm)} = 1;
+	$INC{q(Slim/Formats.pm)}     = 1;
+
+	*Slim::Utils::Prefs::preferences = sub { StubPrefs->new };
+	*Slim::Utils::Prefs::import      = sub {
+		my $caller = caller;
+		no strict q(refs);
+		*{$caller . q(::preferences)} = \&Slim::Utils::Prefs::preferences;
+	};
+
+	package StubPrefs;
+	sub new  { bless {}, shift }
+	sub init { 1 }
+	sub get  { [] }
+	sub set  { 1 }
+}'
+
+MODULES="Schema Library Tags Importer Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -101,6 +123,10 @@ for scanner in 0 1; do
 			Library)
 				prelude="$SCHEMA_STUB"
 				note=" (Slim::Schema stubbed)"
+				;;
+			Tags)
+				prelude="$TAGS_STUB"
+				note=" (Slim::Utils::Prefs, Slim::Formats stubbed)"
 				;;
 			*)
 				prelude=""
