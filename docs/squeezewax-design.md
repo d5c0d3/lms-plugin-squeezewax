@@ -163,7 +163,7 @@ single-mode picker.
 
 | Tier | Signal | Behavior |
 |---|---|---|
-| **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm. No ambiguity. Ideal case for rips tagged with Discogs (user's ripped albums are largely tagged this way). |
+| **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm **when the configured tags agree** — the ideal case for rips tagged with Discogs, which is most of a tagged library. When two configured tags name different releases, or a configured tag's value will not parse, there *is* ambiguity and the album goes to the review queue as a candidate instead. See `squeezewax-v1-decisions.md` §3a. |
 | **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget. |
 | **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
 
@@ -213,7 +213,16 @@ flowchart TD
 ### Match states per album
 
 1. **Unmatched** — no link attempted or no candidate found.
-2. **Candidate** — match awaiting user confirmation (review queue).
+2. **Candidate** — match awaiting user resolution (review queue). Reached from
+   every tier, not only Fuzzy and partial Structural:
+   - **Strict**, when the configured tags disagree or one will not parse. Two
+     variants, distinguished by `discogs_release_id` — NULL means "we examined
+     this and could not decide", non-NULL means "we propose this, confirm it".
+     The second arises when a conflict demotes a previously *confirmed* row: the
+     adjudicated id is kept, because a decision survives (decisions §2a), while
+     the demotion to Candidate stops the badge immediately.
+   - **Structural**, on a partial multi-disc match.
+   - **Fuzzy**, always.
 3. **Confirmed** — the album is linked to a specific Discogs release.
 
 **Note:** the match state records only *that* a link exists and how sure we
@@ -226,7 +235,16 @@ Collection, not of the match itself. (An earlier draft called the state
 ### Confirmation & feedback loops
 
 - The review queue offers search-as-you-type against Discogs to manually link
-  an album to a specific pressing; confirming promotes candidate → confirmed.
+  an album to a specific pressing; confirming promotes candidate → confirmed and
+  writes `match_tier = 'manual'`.
+- **The queue must also offer reject / dismiss, not only confirm.** One state the
+  importer can create is otherwise terminal: a confirmed match demoted to
+  candidate by a tag conflict keeps its adjudicated `discogs_release_id` and its
+  snapshots (decisions §3a), and if the user then removes the tags altogether the
+  importer may not delete it — the row carries a decision, and §2a forbids that.
+  It is skipped by Structural because a `discogs_match` row exists, so with a
+  confirm-only queue the album would propose a release with no tag behind it
+  forever. A human has to be able to say no.
 - A successful manual "Find on Spotify" (see §6) can retroactively backfill /
   promote the original scan-time match.
 
@@ -512,6 +530,22 @@ or unreachable:
 - **Badges** render entirely from the **local cache** (match table +
   collection cache) — no network calls at render time, so badges never
   disappear or stall the UI when Discogs is down.
+- **Scan-time writes ride LMS's own transaction.** The scanner sets
+  `AutoCommit = 0` once (`scanner.pl:295`) and commits at intervals, so our
+  writes are enclosed by it and `Slim::Schema->forceCommit` commits both files.
+  The importer commits every 200 albums on top of that, because between its first
+  write and `endImporter` there is no LMS commit at all — an abort would
+  otherwise lose the whole run. (SQLite's cross-database atomicity does not hold
+  when both files are WAL, which both are; that is benign here, since `album_key`
+  is derived entirely from `library.db`, so a lost match row just means the album
+  is matched again next scan.)
+- **Server-side writes are impossible during a scan.** `BEGIN IMMEDIATE`, forced
+  by `sqlite_use_immediate_transaction` (`Slim/Utils/SQLiteHelper.pm:358`), locks
+  *every* attached database, so the scanner holds a write lock on
+  `squeezewax.db` for the whole scan. Reads are unaffected. Server-side actions
+  that write — the review queue, manual re-match, settings changes that
+  invalidate the match cache — refuse while `Slim::Music::Import->stillScanning`
+  and say so, rather than surfacing a lock error.
 - **Marketplace lookup / value fetch** (on-demand actions) fail gracefully
   with a short message ("Discogs not reachable — try again later") and never
   block navigation.
@@ -544,6 +578,12 @@ or unreachable:
   fall to the review queue).
 - Review-queue behavior (auto-open after scan? notification?).
 - Maintenance: **"clear & rebuild matches"** action (§3, re-match triggers).
+  **It must clear `discogs_no_match` as well as `discogs_match`** — decisions
+  §2a invariant 3. Leaving the negative cache behind would make the rebuild skip
+  precisely the albums the user asked it to reconsider, which is the opposite of
+  what the action promises. It is also the escape hatch for two states nothing
+  else clears: `discogs_no_match` rows orphaned by an `album_key` change, and a
+  demoted candidate whose tags have since been removed (§3).
 
 ### Badge
 - Enable/disable badge in grid view.
@@ -586,11 +626,21 @@ discogs_match
                        not just which cascade tier ran; see §3)
   state               (candidate | confirmed)
   matched_at
+  source_timestamp    (MAX(tracks.timestamp) over the album's local tracks at
+                       match time; the skip key for a rescan. NULL forces
+                       re-examination, which is how a settings change
+                       invalidates the cached answer — decisions §3b)
   -- orphan-recovery snapshot, captured at confirm time:
   snapshot_artist
   snapshot_album_title
   snapshot_track_count
   snapshot_total_duration
+
+discogs_no_match
+  album_key           \  PK — "this tier was attempted for this album at this
+  tier                /       source state and produced no candidate"
+  source_timestamp    (as above; NULL never compares equal, so it never skips)
+  checked_at
 
 discogs_release_cache
   discogs_release_id  (PK)
@@ -618,6 +668,15 @@ discogs_price_snapshot
 orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
 makes relinks and completeness checks (v2) cost no API calls once a release
 has been fetched once — added explicitly rather than left implied.
+
+**`discogs_no_match` is entirely regenerable**, like `discogs_collection` and
+unlike `discogs_match`. It exists so a rescan does not re-read one or two files
+for every unmatched album forever — LMS reads no audio files at all on a
+no-change rescan, so without it we would be adding a cost where there is none.
+Dropping it costs re-reads, never a match. Two rules follow, both in decisions
+§2a: **orphan recovery must never read it** (it answers "which local album does
+this existing match belong to", and a no-match row is not a match), and the
+"clear & rebuild matches" action (§9) must clear it.
 
 **`discogs_collection` is entirely regenerable, and that is a design property
 worth relying on.** It caches Discogs' own data and holds nothing the user

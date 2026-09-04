@@ -314,6 +314,20 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( row($key)->{source_timestamp}, 950, '  ...timestamp refreshed so it stops re-examining' );
 	is( noMatchRow($key), undef, '  ...and no no-match row is written (invariant 1)' );
 
+	# LMS reassigns albums.id on a full rescan, and this is the one path that
+	# would otherwise leave a row carrying a stale id indefinitely.
+	is( row($key)->{lms_album_id}, 42, '  ...and lms_album_id is refreshed too' );
+
+	# A no-match row followed by a clean hit must not leave both (invariant 1).
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+	$M->recordStrict( $album, {}, undef );
+	ok( noMatchRow($key), 'a no-tag album gets a no-match row' );
+	$M->recordStrict( $album, { id => 555 }, $M->strictState($key) );
+	is( noMatchRow($key), undef,
+		'a later clean hit clears the no-match row rather than leaving both' );
+	is( row($key)->{discogs_release_id}, 555, '  ...and records the match' );
+
 	# a fresh conflict writes NULL
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	is( $M->recordStrict( $album, { conflict => ['A=1','B=2'] }, undef ), 'candidate',

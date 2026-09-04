@@ -1141,6 +1141,47 @@ not because one arbitrates the other, but because two entries for one fact in
 
 ---
 
+# What implementation changed — two deviations decided by a failing test
+
+Both of these were settled by running code, not by design review, and both are
+recorded because that is the strongest evidence in this build that the offline
+suites are earning their keep.
+
+**`Match.pm` landed in commit 4, not commit 5.** §3b's cache invalidation is
+DML, and `Settings.pm` should not carry SQL. The Strict write path still arrived
+in commit 5 as planned; only the module's first appearance moved.
+
+**`_writeRefusal` is a pure function because `main::SCANNER` is constant-folded.**
+The plan, and the review that specified it, both described `_writeOk` as
+`isReady` always, then `return 1 if main::SCANNER`, then `stillScanning`. That
+was implemented exactly, and the test for the scanner branch **failed** —
+`slimserver.pl:18` is `use constant SCANNER => 0` and `scanner.pl:23` is `=> 1`,
+and `use constant` creates an inlinable sub, so the branch is resolved at
+`Match.pm`'s compile time and is not in the optree at all in the server. One
+process cannot exercise both sides.
+
+The policy is therefore `_writeRefusal($ready, $isScanner, $isScanning)`, with
+`_writeOk` reading the environment around it. That is not test-driven damage:
+the scanner branch is the one whose removal would silently stop the importer
+writing anything, and it is now covered by six cases including that an unusable
+schema outranks the scanner exemption.
+
+Three further defects were found the same way and are worth naming, since none
+would have survived to a hardware test in a form that pointed at its own cause:
+
+- A `[0..1]` list slice on a single-track album yields a read-only `undef`,
+  which `map` aliases, so `$_->{url}` dies rather than returning one candidate.
+  Singles and DJ mixes are common.
+- The first attach-path comparison used string equality. SQLite canonicalises
+  what `pragma_database_list` reports and `dbFile()` is never canonicalised, so
+  it would have disabled the plugin on any symlinked prefs directory — the
+  default on Synology, QNAP and most Docker images.
+- `_parseReleaseId` rejected the slug-prefixed URL Discogs itself emits, and
+  because `decide()` treats unparseable as a *conflict*, that produced a false
+  review-queue entry rather than a miss.
+
+---
+
 # Appendices — verbatim source text
 
 Everything below is the design chat's own wording, reproduced exactly.

@@ -211,7 +211,6 @@ sub recordStrict {
 
 	my $dbh = Slim::Schema->dbh;
 	my $key = $album->{album_key};
-	my $now = time();
 
 	# Rule one, checked before anything else. An in-place file change that has
 	# nothing to do with tags - artwork embedded, ReplayGain written - moves
@@ -364,11 +363,17 @@ sub _recordNoMatch {
 	);
 
 	if ($still) {
-		# A confirmed or manual row we may not touch. Refresh the cheap column so
-		# the album stops being re-examined, and write no no-match row.
+		# A confirmed row, or a demoted candidate carrying an adjudicated id, that
+		# we may not delete. Refresh the cheap columns so the album stops being
+		# re-examined, and write no no-match row.
+		#
+		# lms_album_id as well as source_timestamp: LMS reassigns albums.id on a
+		# full rescan, and this is the one path that would otherwise leave a row
+		# carrying a stale id indefinitely. The other three paths all refresh it.
 		$dbh->do(
-			'UPDATE squeezewax.discogs_match SET source_timestamp = ? WHERE album_key = ?',
-			undef, $album->{source_timestamp}, $key
+			'UPDATE squeezewax.discogs_match SET source_timestamp = ?, lms_album_id = ?
+			  WHERE album_key = ?',
+			undef, $album->{source_timestamp}, $album->{album_id}, $key
 		);
 
 		return 'kept';

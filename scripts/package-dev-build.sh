@@ -87,6 +87,17 @@ while IFS= read -r -d '' f; do
 	" "$f"
 done < <(find "$DEV_DIR" -type f -print0)
 
+# The web path is a directory name on disk as well as a string in Settings.pm.
+# The substitution above rewrote page()'s "plugins/SqueezeWax/settings.html" to
+# "plugins/SqueezeWaxDev/settings.html", but HTML/EN/plugins/SqueezeWax/ is still
+# called SqueezeWax - so without this the dev build's settings page is a 404,
+# and only in the dev build, which is the worst place to find out.
+if [ -d "$DEV_DIR/HTML" ]; then
+	while IFS= read -r d; do
+		mv "$d" "$(dirname "$d")/$DEV_NAME"
+	done < <(find "$DEV_DIR/HTML" -type d -name "$REAL_NAME")
+fi
+
 # Display title: after the token-prefix rename above, strings.txt's
 # PLUGIN_SQUEEZEWAXDEV_NAME block still carries the bare display value
 # ("SqueezeWax") for each language line. Append " (Dev)" inside that one
