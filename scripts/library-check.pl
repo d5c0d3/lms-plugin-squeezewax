@@ -222,9 +222,20 @@ my $warned = '';
 is( scalar @after, 3, 'the next eachAlbum still returns every album' );
 unlike( $warned, qr/still Active/i, '  ...with no "still Active" warning' );
 
-# --- albumTitle is a display lookup, never identity ------------------------
-is( $L->albumTitle(1), 'One', 'albumTitle reads the title' );
-is( $L->albumTitle(999), undef, 'albumTitle on a missing album is undef, not fatal' );
+# --- title and albumLabel are display only, never identity -----------------
+is( $by{1}->{title}, 'One', 'the title is folded into the iterator' );
+is( $L->albumLabel( $by{1} ), 'One', 'albumLabel uses it' );
+
+# A NULL title is possible, so the progress line has to degrade to the id
+# rather than render blank.
+is( $L->albumLabel( { album_id => 7, title => undef } ), 'album 7',
+	'albumLabel degrades to the album id when the title is NULL' );
+is( $L->albumLabel( { album_id => 8, title => '' } ), 'album 8',
+	'  ...and when it is empty' );
+
+# --- albumCount matches what the iterator emits ---------------------------
+is( $L->albumCount, 3,
+	'albumCount agrees with eachAlbum, so the progress bar total is right' );
 
 # --- content_type is carried for the detection report --------------------
 is( $by{1}->{content_type}, 'flc', 'content_type comes from the primary candidate' );

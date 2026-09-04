@@ -263,4 +263,130 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( tierTimestamp('manual'), 555, '  ...and still leaves manual alone' );
 }
 
+# --- the Strict write path -----------------------------------------------
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $key = 'w' x 32;
+
+	my $album = {
+		album_key        => $key,
+		album_id         => 42,
+		title            => 'Kind of Blue',
+		source_timestamp => 900,
+		local_tracks     => 5,
+	};
+
+	sub row {
+		return Slim::Schema->dbh->selectrow_hashref(
+			'SELECT * FROM squeezewax.discogs_match WHERE album_key = ?', undef, $_[0]
+		);
+	}
+
+	sub noMatchRow {
+		return Slim::Schema->dbh->selectrow_hashref(
+			'SELECT * FROM squeezewax.discogs_no_match WHERE album_key = ? AND tier = ?',
+			undef, $_[0], 'strict'
+		);
+	}
+
+	my $M = 'Plugins::SqueezeWax::Match';
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	# a clean hit auto-confirms
+	is( $M->recordStrict( $album, { id => 123, master_id => 9 }, undef ), 'confirmed',
+		'a clean hit auto-confirms' );
+	my $r = row($key);
+	is( $r->{discogs_release_id}, 123,        '  ...with the release id' );
+	is( $r->{discogs_master_id},  9,          '  ...and the master id' );
+	is( $r->{state},              'confirmed', '  ...state confirmed' );
+	is( $r->{match_tier},         'strict',   '  ...tier strict' );
+	is( $r->{source_timestamp},   900,        '  ...and the source timestamp' );
+
+	# no tag at all, over a confirmed row: the row is kept, not deleted
+	is( $M->recordStrict( { %$album, source_timestamp => 950 }, {}, $M->strictState($key) ),
+		'kept', 'no tag over a confirmed row keeps it' );
+	is( row($key)->{discogs_release_id}, 123, '  ...release id survives' );
+	is( row($key)->{source_timestamp}, 950, '  ...timestamp refreshed so it stops re-examining' );
+	is( noMatchRow($key), undef, '  ...and no no-match row is written (invariant 1)' );
+
+	# a fresh conflict writes NULL
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	is( $M->recordStrict( $album, { conflict => ['A=1','B=2'] }, undef ), 'candidate',
+		'a fresh conflict lands in the review queue' );
+	is( row($key)->{discogs_release_id}, undef,
+		'  ...with a NULL release id, per §3a - no first-wins by another name' );
+	is( row($key)->{state}, 'candidate', '  ...state candidate' );
+
+	# a conflict whose tags then disappear: the row is DELETED and a no-match
+	# written. This is §2a's one permitted deletion.
+	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'none',
+		'a conflict row whose tags are gone becomes a no-match' );
+	is( row($key), undef, '  ...the phantom conflict row is deleted' );
+	ok( noMatchRow($key), '  ...and a no-match row replaces it' );
+	is( noMatchRow($key)->{source_timestamp}, 900, '  ...carrying the source timestamp' );
+
+	# THE TRANSITION §3a DID NOT COVER: a conflict over an existing CONFIRMED
+	# row keeps the incumbent id rather than NULLing it. Demoting to candidate
+	# stops the badge (the join is state='confirmed'), so the signal is visible,
+	# and the queue entry carries a proposal.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+	$M->recordStrict( $album, { id => 123 }, undef );
+
+	is( $M->recordStrict( $album, { conflict => ['A=123','B=456'] }, $M->strictState($key) ),
+		'candidate', 'a conflict over a confirmed row demotes it' );
+	is( row($key)->{state}, 'candidate', '  ...so the badge stops immediately' );
+	is( row($key)->{discogs_release_id}, 123,
+		'  ...but the adjudicated id is KEPT, not NULLed - §2a protects a decision' );
+
+	# manual is outside all of it
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do(
+		'INSERT INTO squeezewax.discogs_match
+		 (album_key, match_tier, state, discogs_release_id, source_timestamp, lms_album_id)
+		 VALUES (?,?,?,?,?,?)',
+		undef, $key, 'manual', 'confirmed', 777, 100, 1
+	);
+
+	is( $M->recordStrict( $album, { id => 123 }, $M->strictState($key) ), 'manual',
+		'a manual row is never overwritten, even by a clean hit' );
+	is( row($key)->{discogs_release_id}, 777, "  ...the user's pressing choice survives" );
+	is( row($key)->{match_tier}, 'manual', '  ...and stays manual' );
+
+	# but the cheap columns ARE refreshed, or the importer would re-examine it
+	# on every scan forever - which is why the ON CONFLICT ... WHERE form does
+	# not work here, verified: it leaves the row completely untouched.
+	is( row($key)->{source_timestamp}, 900, '  ...while source_timestamp is refreshed' );
+	is( row($key)->{lms_album_id}, 42, '  ...along with lms_album_id' );
+}
+
+# --- invariant 1 is detected, for free, by the skip query -----------------
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+	my $key = 'v' x 32;
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state, source_timestamp)
+		 VALUES (?, 'strict', 'confirmed', 1)", undef, $key
+	);
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+		 VALUES (?, 'strict', 1, 1)", undef, $key
+	);
+
+	my $state = Plugins::SqueezeWax::Match->strictState($key);
+
+	is( $state->{src}, 'match',
+		'with rows in both tables the match row wins - it may carry a decision' );
+}
+
 done_testing();

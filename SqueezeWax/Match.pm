@@ -18,22 +18,23 @@ use Slim::Music::Import;
 use Slim::Schema;
 use Slim::Utils::Log;
 
+use Plugins::SqueezeWax::Library;
 use Plugins::SqueezeWax::Schema;
 
 my $log = logger('plugin.squeezewax');
 
-# Whether this process may write to our tables right now.
+# Refusal reasons already logged, so a per-album loop cannot repeat one.
+my %warned;
+
+# Whether this process may write to our tables right now, as a pure function of
+# the three inputs. Returns the reason to refuse, or undef to allow.
 #
-# The rule was previously stated in the header and enforced in Settings.pm, which
-# meant every new caller had to remember something the module claimed to
-# guarantee. Commit 5 adds one caller and step 5 will add more, so it lives here.
-#
-# It cannot be a blanket stillScanning check: in the scanner stillScanning is
-# true by definition and the importer is exactly the thing that must write. But
-# the distinction is expressible - the scanner owns writes during a scan, the
-# server defers until it is over (finding 2b).
-# The policy, as a pure function of the three inputs. Returns the reason to
-# refuse, or undef to allow.
+# The rule used to be stated in this module's header and enforced in Settings.pm,
+# which left every new caller to remember something the module claimed to
+# guarantee. It cannot be a blanket stillScanning check either: in the scanner
+# stillScanning is true by definition and the importer is exactly the thing that
+# must write. The scanner owns writes during a scan; the server defers until it
+# is over (finding 2b).
 #
 # Separate from _writeOk because main::SCANNER is a compile-time constant that
 # Perl inlines, so a test in one process cannot exercise both branches of
@@ -70,8 +71,15 @@ sub _writeOk {
 
 	return 1 unless defined $refusal;
 
-	$log->warn( "refusing to write to squeezewax.db: $refusal"
-		. ( $ready ? '' : ' (' . ( Plugins::SqueezeWax::Schema->lastError || 'unknown' ) . ')' ) );
+	# Once per reason per process. The importer calls this on a 5,000-album loop,
+	# and an unusable schema would otherwise produce 5,000 identical warn lines -
+	# turning a diagnostic into the thing that buries the diagnostics. startScan's
+	# early return should stop it reaching that loop at all, but "should" is what
+	# the guard is for.
+	if ( !$warned{$refusal}++ ) {
+		$log->warn( "refusing to write to squeezewax.db: $refusal"
+			. ( $ready ? '' : ' (' . ( Plugins::SqueezeWax::Schema->lastError || 'unknown' ) . ')' ) );
+	}
 
 	return 0;
 }
@@ -135,6 +143,260 @@ sub invalidateStrict {
 	);
 
 	return $deleted + $nulled;
+}
+
+# Both skip caches in one round trip. Two rows back is the invariant-1 violation
+# §2a says Match.pm enforces - an album in discogs_match and discogs_no_match for
+# the same tier - caught for free on the one code path that would ever notice,
+# and it returns match_tier for the manual guard at the same time.
+my $STATE_SQL = q{
+	SELECT 'match' AS src, match_tier AS tier, source_timestamp, discogs_release_id, state
+	  FROM squeezewax.discogs_match
+	 WHERE album_key = ?
+	UNION ALL
+	SELECT 'none' AS src, tier, source_timestamp, NULL, NULL
+	  FROM squeezewax.discogs_no_match
+	 WHERE album_key = ? AND tier = 'strict'
+};
+
+=head2 strictState( $albumKey )
+
+What we already know about this album at Strict tier. Returns a hashref with
+C<src> ('match' or 'none'), C<tier>, C<source_timestamp>, C<discogs_release_id>
+and C<state>, or undef when nothing is recorded.
+
+=cut
+
+sub strictState {
+	my ( $class, $albumKey ) = @_;
+
+	my $rows = Slim::Schema->dbh->selectall_arrayref(
+		$STATE_SQL, { Slice => {} }, $albumKey, $albumKey
+	);
+
+	return undef unless $rows && @$rows;
+
+	if ( @$rows > 1 ) {
+		# §2a invariant 1. No constraint can express it - foreign keys are banned
+		# (§2) and SQLite has no cross-table CHECK - so this is where it is
+		# enforced. Prefer the discogs_match row: it may carry a decision, and a
+		# no-match row never does.
+		$log->error(
+			"album_key $albumKey has rows in both discogs_match and discogs_no_match "
+			. 'for tier strict; preferring the match row'
+		);
+
+		my ($match) = grep { $_->{src} eq 'match' } @$rows;
+
+		return $match if $match;
+	}
+
+	return $rows->[0];
+}
+
+=head2 recordStrict( \%album, \%decision )
+
+Write the outcome of the Strict pass for one album. C<%decision> is what
+C<Plugins::SqueezeWax::Tags-E<gt>decide> returned; an empty hashref means no
+configured tag was present.
+
+Returns one of 'confirmed', 'candidate', 'none', 'manual' or undef.
+
+=cut
+
+sub recordStrict {
+	my ( $class, $album, $decision, $state ) = @_;
+
+	return undef unless $class->_writeOk;
+
+	my $dbh = Slim::Schema->dbh;
+	my $key = $album->{album_key};
+	my $now = time();
+
+	# Rule one, checked before anything else. An in-place file change that has
+	# nothing to do with tags - artwork embedded, ReplayGain written - moves
+	# tracks.timestamp without moving album_key, so a manually re-matched album
+	# WILL be re-examined. An unguarded upsert would silently restore the file's
+	# original tag over the pressing the user chose: no log line, wrong badge, no
+	# way for them to tell.
+	#
+	# Not expressible as `ON CONFLICT ... DO UPDATE ... WHERE match_tier <>
+	# 'manual'`, though SQLite supports that: verified, it leaves the manual row
+	# COMPLETELY untouched, including source_timestamp - so the importer would
+	# re-examine it on every scan forever. We need to refresh the cheap columns
+	# and leave the decision alone, which is two different things.
+	if ( $state && $state->{src} eq 'match' && ( $state->{tier} || '' ) eq 'manual' ) {
+		$dbh->do(
+			'UPDATE squeezewax.discogs_match SET source_timestamp = ?, lms_album_id = ?
+			  WHERE album_key = ?',
+			undef, $album->{source_timestamp}, $album->{album_id}, $key
+		);
+
+		return 'manual';
+	}
+
+	if ( $decision->{conflict} ) {
+		return $class->_recordConflict( $album, $decision, $state );
+	}
+
+	if ( $decision->{id} ) {
+		return $class->_recordMatch( $album, $decision );
+	}
+
+	return $class->_recordNoMatch( $album, $state );
+}
+
+# A clean hit. Auto-confirm is what design §3 specifies for Strict: the tag names
+# the release, so there is nothing to resolve.
+sub _recordMatch {
+	my ( $class, $album, $decision ) = @_;
+
+	my $dbh = Slim::Schema->dbh;
+	my $key = $album->{album_key};
+
+	$dbh->do(
+		q{
+			INSERT INTO squeezewax.discogs_match
+				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
+				 match_tier, state, matched_at, source_timestamp,
+				 snapshot_album_title, snapshot_track_count)
+			VALUES (?,?,?,?,'strict','confirmed',?,?,?,?)
+			ON CONFLICT(album_key) DO UPDATE SET
+				lms_album_id         = excluded.lms_album_id,
+				discogs_release_id   = excluded.discogs_release_id,
+				discogs_master_id    = excluded.discogs_master_id,
+				match_tier           = excluded.match_tier,
+				state                = excluded.state,
+				matched_at           = excluded.matched_at,
+				source_timestamp     = excluded.source_timestamp,
+				snapshot_album_title = excluded.snapshot_album_title,
+				snapshot_track_count = excluded.snapshot_track_count
+		},
+		undef,
+		$key, $album->{album_id}, $decision->{id}, $decision->{master_id},
+		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks}
+	);
+
+	_clearNoMatch( $dbh, $key );
+
+	return 'confirmed';
+}
+
+# Tags disagree, or a configured tag's value will not parse. §3a.
+sub _recordConflict {
+	my ( $class, $album, $decision, $state ) = @_;
+
+	my $dbh = Slim::Schema->dbh;
+	my $key = $album->{album_key};
+
+	# What a conflict does to an EXISTING row, per §3a: an incumbent
+	# discogs_release_id is preserved rather than NULLed. §3a's argument for
+	# writing NULL on a fresh conflict is that taking the top-precedence tag's id
+	# would be first-wins under another name - but preserving an incumbent is not
+	# choosing between the competing tags. That choice was already made and §2a
+	# says a decision survives. The demotion to 'candidate' is what stops the
+	# badge, since the badge join is state = 'confirmed'.
+	my $incumbent = ( $state && $state->{src} eq 'match' )
+		? $state->{discogs_release_id}
+		: undef;
+
+	$log->warn(
+		'conflicting Discogs tags on ' . Plugins::SqueezeWax::Library->albumLabel($album)
+		. ': ' . join( ', ', @{ $decision->{conflict} } )
+		. ( defined $incumbent ? " (keeping the existing match $incumbent)" : '' )
+	);
+
+	$dbh->do(
+		q{
+			INSERT INTO squeezewax.discogs_match
+				(album_key, lms_album_id, discogs_release_id,
+				 match_tier, state, matched_at, source_timestamp)
+			VALUES (?,?,?,'strict','candidate',?,?)
+			ON CONFLICT(album_key) DO UPDATE SET
+				lms_album_id     = excluded.lms_album_id,
+				match_tier       = excluded.match_tier,
+				state            = excluded.state,
+				source_timestamp = excluded.source_timestamp
+		},
+		undef,
+		$key, $album->{album_id}, $incumbent, time(), $album->{source_timestamp}
+	);
+
+	_clearNoMatch( $dbh, $key );
+
+	return 'candidate';
+}
+
+# No configured tag on either candidate track.
+sub _recordNoMatch {
+	my ( $class, $album, $state ) = @_;
+
+	my $dbh = Slim::Schema->dbh;
+	my $key = $album->{album_key};
+
+	# §2a invariant 2, and the one place a discogs_match row may be deleted. A
+	# conflict row whose tags have since been removed would otherwise sit in the
+	# review queue forever advertising a conflict that no longer exists, and step
+	# 5 cannot even render it - §3a stores no conflict_note and re-reads tags that
+	# are now gone.
+	#
+	# The predicate IS the rule "never delete a row that carries a decision or a
+	# recovery snapshot", written out: 'strict' excludes manual, 'candidate'
+	# excludes confirmed, a NULL release id excludes anything adjudicated, and a
+	# NULL snapshot excludes orphan recovery's index material. Anyone widening
+	# this must show their case passes that test, not that it resembles this
+	# shape.
+	$dbh->do(
+		q{
+			DELETE FROM squeezewax.discogs_match
+			 WHERE album_key = ?
+			   AND match_tier = 'strict'
+			   AND state = 'candidate'
+			   AND discogs_release_id IS NULL
+			   AND snapshot_track_count IS NULL
+		},
+		undef, $key
+	);
+
+	# Only when nothing survives in discogs_match, or invariant 1 breaks.
+	my ($still) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key
+	);
+
+	if ($still) {
+		# A confirmed or manual row we may not touch. Refresh the cheap column so
+		# the album stops being re-examined, and write no no-match row.
+		$dbh->do(
+			'UPDATE squeezewax.discogs_match SET source_timestamp = ? WHERE album_key = ?',
+			undef, $album->{source_timestamp}, $key
+		);
+
+		return 'kept';
+	}
+
+	$dbh->do(
+		q{
+			INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+			VALUES (?, 'strict', ?, ?)
+			ON CONFLICT(album_key, tier) DO UPDATE SET
+				source_timestamp = excluded.source_timestamp,
+				checked_at       = excluded.checked_at
+		},
+		undef, $key, $album->{source_timestamp}, time()
+	);
+
+	return 'none';
+}
+
+# An album cannot be both matched and not-matched at the same tier (§2a
+# invariant 1).
+sub _clearNoMatch {
+	my ( $dbh, $key ) = @_;
+
+	$dbh->do(
+		q{DELETE FROM squeezewax.discogs_no_match WHERE album_key = ? AND tier = 'strict'},
+		undef, $key
+	);
 }
 
 1;

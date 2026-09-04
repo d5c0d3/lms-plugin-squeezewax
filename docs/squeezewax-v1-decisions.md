@@ -385,6 +385,131 @@ name would silently fail on half a mixed-format library.
 
 ---
 
+## 3a. Conflicting Discogs tags — what the row records
+
+**Decided 2026-08-29 (design chat), during build-order step 3 planning.**
+Implements §3's "disagreement is not Strict".
+
+Two configured tags parsing to different release IDs, or a configured tag
+whose value does not parse, writes a row in `discogs_match`:
+
+- `match_tier = 'strict'` — provenance is honest; strict tag reading is the
+  mechanism that ran.
+- `state = 'candidate'` — auto-confirm is withheld, and the album is in the
+  review queue.
+- **`discogs_release_id = NULL`.**
+- `source_timestamp` and `lms_album_id` set as normal.
+- `snapshot_*` left NULL — the snapshot is captured at confirm time and
+  nothing has been confirmed.
+
+The competing values are logged once at `warn`, naming the album and every
+value found. The row's `source_timestamp` means this does not re-warn on
+every subsequent scan; fixing the tags moves the file mtime, the album is
+re-examined, and the row is updated in place.
+
+### Why NULL rather than the highest-precedence tag's ID
+
+Writing the top-precedence ID is first-wins by another name, and §3 rejects
+first-wins explicitly. The `candidate` state stops it *acting*, but the
+column would still assert a release that nothing adjudicated — available to
+any future query that reads `discogs_release_id` without also checking
+`state`. NULL records what actually happened: strict ran and produced no
+decidable answer.
+
+It is also the more durable discriminator. Step 2's finding 9 established
+that the orphan-recovery ambiguous branch carries an existing row's values
+forward into the review queue, which can produce `(match_tier, state) =
+('strict','candidate')` for reasons having nothing to do with tags. The pair
+is therefore not a reliable conflict marker; a NULL release id on a
+candidate row is.
+
+So the review queue reads:
+
+- `state='candidate' AND discogs_release_id IS NULL` → we examined and could
+  not decide; show the user their competing tag values.
+- `state='candidate' AND discogs_release_id IS NOT NULL` → we have a
+  proposal; ask the user to confirm it.
+
+### Why no `conflict_note` column
+
+The file tags are the source of truth and can change between the scan that
+would write the note and the review that reads it, so a stored copy needs
+invalidating on `source_timestamp` change to stay honest. Re-reading is
+simpler and always current: step 5's review queue calls
+`Slim::Formats->readTags` (`Slim/Formats.pm:153`) on the album's primary and
+fallback tracks when the user opens the entry — server process, user-
+initiated, one or two reads, bounded. If the files are gone the queue
+degrades to "conflict recorded, tags no longer readable", which is the
+truth.
+
+This also follows step 2's finding 8: do not add a column nothing reads yet.
+
+### Why not a fifth `match_tier` value
+
+`match_tier` is defined as provenance — which mechanism established the link
+(design §3). A conflict is a state, not an origin, and this row's origin
+genuinely is strict tag reading. A fifth value would require amending the
+four-value vocabulary in design §3 and §10, the CHECK in migration 1, and
+every future reader, to express something `state` already expresses.
+
+### Why not fall through to Structural
+
+Rejected outright, and more strongly than "it contradicts §3". At step 4 a
+Structural search could auto-confirm a *third* release over the top of two
+tags the user wrote deliberately, producing a silently wrong badge with no
+trace of the disagreement that caused it.
+
+### v1 invariant, and the trigger to revisit
+
+`state='candidate' AND discogs_release_id IS NULL` means "examined, could not
+decide". Step 4 must not produce a NULL-id candidate for any other reason —
+Structural's partial-multi-disc candidate and Fuzzy's master-release
+candidate both carry a proposed id. **If a later tier genuinely needs a
+NULL-id candidate, that is the trigger to reopen `conflict_note`** — not a
+reason to overload this one silently.
+
+### What a conflict does to an existing row
+
+The record above covers *establishing* a conflict row. The transition it does
+not cover is reachable the first time anyone edits their tag list: an album is
+`strict` / `confirmed` / r123 from `DISCOGS_RELEASE_ID`, the user adds
+`RELEASE_ID` to the list, §3b NULLs `source_timestamp`, the next scan
+re-examines, and the two configured tags now disagree.
+
+Read literally, the rules above would write `state = 'candidate'` and
+`discogs_release_id = NULL` — wiping an adjudicated answer, which §2a's
+governing rule exists to prevent. Keeping the row while destroying what the
+rule protects is not compliance with it.
+
+**Decided: demote to `state = 'candidate'`, keep the incumbent
+`discogs_release_id`, and log every competing value at `warn`.**
+
+The badge join is `state = 'confirmed'`, so the badge stops immediately and the
+user gets a visible signal rather than a silent one. The album lands in the
+review queue *with* a proposal, which is what a review queue is for. And it does
+not contradict the NULL rule above, whose actual argument is that taking the
+top-precedence tag's id would be first-wins under another name: preserving an
+incumbent is not choosing between the competing tags. That choice was already
+made, and §2a says a decision survives.
+
+The v1 invariant is unchanged. `candidate` + NULL id still means "we examined
+this and could not decide"; `candidate` + non-NULL id means "we propose this,
+confirm it".
+
+**Rejected — NULL it as the rules above read.** The badge vanishes with nothing
+to explain it beyond one `warn` line, and the album enters the queue with no
+proposal.
+
+**Rejected — refuse to overwrite a confirmed row and only log.** That preserves
+the decision but leaves a badge standing on evidence we now know is contested,
+with no user-visible signal. Silent is the wrong failure direction here.
+
+A `match_tier = 'manual'` row is outside all of this, per the write path's first
+rule: it is never overwritten, and only its `source_timestamp` and
+`lms_album_id` are refreshed.
+
+---
+
 ## 3b. Changing the configured tag names invalidates the strict answer
 
 **Decided 2026-08-30 (design chat), during build-order step 3 review.**

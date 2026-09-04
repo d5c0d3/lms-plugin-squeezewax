@@ -8,16 +8,19 @@ use Slim::Utils::Log;
 
 use Plugins::SqueezeWax::Schema;
 
-# INFO, not refs/lms-plugin-tidal and refs/Spotty-Plugin's WARN: those plugins
-# log per-request detail at INFO, which would be noise by default. Ours logs a
-# handful of lines per session (see Schema.pm), so INFO by default is exactly
-# what makes a healthy run visible without the user touching
-# Settings -> Advanced -> Logging. Must match Importer.pm's registration of
-# the same category.
+# WARN, matching Importer.pm's registration of the same category and both
+# reference plugins (refs/lms-plugin-tidal/Plugin.pm:18-22).
+#
+# Step 2 used INFO because our own handful of lines were the only evidence of a
+# healthy run. That stopped being true once the importer had a row in the scan
+# progress UI and LMS's own "Starting/Completed ... Scan" pair in scanner.log
+# (Slim/Music/Import.pm:578, :710-712) - neither of which needs the category
+# turned up. The one thing those cannot report, "examined 4,800, confirmed 0",
+# is escalated to warn by the importer itself.
 my $log = Slim::Utils::Log->addLogCategory({
 	category     => 'plugin.squeezewax',
 	description  => 'PLUGIN_SQUEEZEWAX_NAME',
-	defaultLevel => 'INFO',
+	defaultLevel => 'WARN',
 });
 
 sub initPlugin {

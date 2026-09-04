@@ -37,12 +37,25 @@ my $log = logger('plugin.squeezewax');
 # would have to be undone then. The Strict caller decides, not the iterator.
 my $ALBUM_TRACKS_SQL = q{
 	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote,
-	       t.content_type
+	       t.content_type, a.title
 	  FROM tracks t
+	  LEFT JOIN albums a ON a.id = t.album
 	 WHERE t.album IS NOT NULL
 	   AND t.audio = 1
 	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
 	 ORDER BY t.album, t.urlmd5
+};
+
+# One aggregate over the same predicate, for Progress->new's total. An
+# indeterminate progress bar would undercut finding 4's reasoning: the scan-UI
+# row is the healthy-run signal that justified dropping the log category to WARN,
+# and a bar with no total carries less of that.
+my $ALBUM_COUNT_SQL = q{
+	SELECT COUNT(DISTINCT t.album)
+	  FROM tracks t
+	 WHERE t.album IS NOT NULL
+	   AND t.audio = 1
+	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
 };
 
 =head2 eachAlbum( \&callback )
@@ -55,6 +68,8 @@ Call $callback once per album with a hashref:
   local_tracks      count of local qualifying tracks
   remote_tracks     count of remote qualifying tracks
   candidates        up to two local track urls, in (disc, tracknum, url) order
+  content_type      the primary candidate's content type, or undef
+  title             album title for display only - may be undef
 
 Returns the number of albums seen. A callback returning false stops the walk.
 
@@ -73,9 +88,11 @@ sub eachAlbum {
 	my $sth = Slim::Schema->dbh->prepare_cached($ALBUM_TRACKS_SQL);
 	$sth->execute;
 
-	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote, $contentType );
+	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
+		$contentType, $title );
 	$sth->bind_columns(
-		\( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote, $contentType )
+		\( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
+			$contentType, $title )
 	);
 
 	my $seen    = 0;
@@ -106,7 +123,13 @@ sub eachAlbum {
 		while ( $continue && $sth->fetch ) {
 			if ( !$current || $current->{album_id} != $albumId ) {
 				$continue = $flush->() or last;
-				$current = { album_id => $albumId, urlmd5 => [], local => [], remote_tracks => 0 };
+				$current = {
+					album_id      => $albumId,
+					title         => $title,
+					urlmd5        => [],
+					local         => [],
+					remote_tracks => 0,
+				};
 			}
 
 			push @{ $current->{urlmd5} }, $urlmd5;
@@ -178,6 +201,12 @@ sub _finish {
 
 	return {
 		album_id         => $acc->{album_id},
+
+		# For progress and log lines only, never identity. Taken from the
+		# accumulator rather than per track, since it is a property of the album.
+		# May be NULL in the database, so callers degrade to the id.
+		title            => $acc->{title},
+
 		album_key        => md5_hex( join '', @{ $acc->{urlmd5} } ),
 		source_timestamp => $source,
 		local_tracks     => scalar @local,
@@ -286,20 +315,34 @@ sub sample_albums {
 	return \@sample;
 }
 
-=head2 albumTitle( $albumId )
+=head2 albumCount()
 
-Title for progress and log lines only. Never used to identify an album.
+How many albums C<eachAlbum> will emit. One aggregate over the same predicate,
+for C<Slim::Utils::Progress-E<gt>new>'s C<total>.
 
 =cut
 
-sub albumTitle {
-	my ( $class, $albumId ) = @_;
+sub albumCount {
+	my $class = shift;
 
-	my ($title) = Slim::Schema->dbh->selectrow_array(
-		'SELECT title FROM albums WHERE id = ?', undef, $albumId
-	);
+	my ($count) = Slim::Schema->dbh->selectrow_array($ALBUM_COUNT_SQL);
 
-	return $title;
+	return $count || 0;
+}
+
+=head2 albumLabel( $album )
+
+Display label for a progress or log line: the title, or the album id when the
+title is NULL. Never used to identify an album.
+
+=cut
+
+sub albumLabel {
+	my ( $class, $album ) = @_;
+
+	my $title = $album->{title};
+
+	return ( defined $title && $title ne '' ) ? $title : "album $album->{album_id}";
 }
 
 1;

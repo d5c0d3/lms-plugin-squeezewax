@@ -135,6 +135,12 @@ IMPORT_STUB='BEGIN {
 	*Slim::Music::Import::stillScanning = sub { 0 };
 }'
 
+# Slim::Utils::Progress reaches Slim::Schema; only new/update/final are called,
+# and only at runtime.
+PROGRESS_STUB='BEGIN {
+	$INC{q(Slim/Utils/Progress.pm)} = 1;
+}'
+
 MODULES="Schema Library Tags Match Importer Settings Plugin"
 STATUS=0
 
@@ -163,7 +169,11 @@ for scanner in 0 1; do
 				note=" (Slim::Utils::Prefs, Slim::Formats stubbed)"
 				;;
 			Match)
-				prelude="$SCHEMA_STUB$IMPORT_STUB"
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"
+				note=" (Slim::Schema, Slim::Music::Import stubbed)"
+				;;
+			Importer)
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
 			Settings)
