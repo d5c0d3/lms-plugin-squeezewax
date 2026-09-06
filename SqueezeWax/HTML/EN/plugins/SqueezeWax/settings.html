@@ -8,27 +8,31 @@
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
+	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
+	    variables inside FOREACH, so an outer counter reverts to 0 after the
+	    loop and the trailing blank boxes collide with the first two field
+	    names - which silently caps the list at two entries. Core does it this
+	    way for mediadirs (HTML/EN/settings/server/basic.html:63). %]
 	<table>
-	[% counter = 0 %]
 	[% FOREACH name = prefs.pref_discogsTagNames %]
 		<tr>
 			<td>
 				<input type="text" class="stdedit" size="40"
-					name="pref_discogsTagNames[% counter %]" value="[% name | html %]" />
+					name="pref_discogsTagNames[% loop.index %]" value="[% name | html %]" />
 			</td>
 		</tr>
-		[% counter = counter + 1 %]
 	[% END %]
+	[% next = prefs.pref_discogsTagNames.size %]
 		<tr>
 			<td>
 				<input type="text" class="stdedit" size="40"
-					name="pref_discogsTagNames[% counter %]" value="" />
+					name="pref_discogsTagNames[% next %]" value="" />
 			</td>
 		</tr>
 		<tr>
 			<td>
 				<input type="text" class="stdedit" size="40"
-					name="pref_discogsTagNames[% counter + 1 %]" value="" />
+					name="pref_discogsTagNames[% next + 1 %]" value="" />
 			</td>
 		</tr>
 	</table>

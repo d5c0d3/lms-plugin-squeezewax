@@ -23,6 +23,26 @@ use Slim::Utils::Log;
 
 my $log = logger('plugin.squeezewax');
 
+# The iterator's handle, so an END block can finish it.
+#
+# Abort works by Slim::Utils::SQLiteHelper::updateProgress calling exit from
+# inside $progress->update (:443-460), which the importer calls from inside
+# eachAlbum's loop - so the handle is mid-fetch. Perl's exit does not unwind
+# through eval, so the finish-on-die guard below cannot catch it, and
+# scanner.pl's cleanup() then disconnects with the handle still Active, which
+# DBI warns about. Observed on a real aborted scan.
+#
+# Our END runs before scanner.pl's (END blocks are LIFO and this module is
+# loaded later), so the handle is finished before cleanup() disconnects.
+my $activeSth;
+
+END {
+	if ($activeSth) {
+		eval { $activeSth->finish };
+		undef $activeSth;
+	}
+}
+
 # One streaming pass over the whole library, grouped by album in Perl, rather
 # than a per-album query: the per-album form is N+1 over a 5,000-album library.
 #
@@ -87,6 +107,8 @@ sub eachAlbum {
 
 	my $sth = Slim::Schema->dbh->prepare_cached($ALBUM_TRACKS_SQL);
 	$sth->execute;
+
+	$activeSth = $sth;
 
 	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
 		$contentType, $title );
@@ -156,6 +178,7 @@ sub eachAlbum {
 	my $err = $@;
 
 	$sth->finish;
+	undef $activeSth;
 
 	die $err if !$ok;
 
@@ -169,11 +192,17 @@ sub _finish {
 
 	# Skip undef timestamps rather than feeding them to a numeric comparison.
 	# SQL MAX ignores NULLs; a Perl maximum over a list containing undef warns
-	# under `use warnings` and can return the wrong value. Remote rows always
-	# have a NULL timestamp - Slim/Formats.pm:261 is the only producer of a
-	# TIMESTAMP attribute and it sits behind `if (-e $filepath)` at :259, which
-	# is false for a non-file URL because $filepath = $file at :165 - so a mixed
-	# local/remote album is the normal case here, not an edge case.
+	# under `use warnings` and can return the wrong value.
+	#
+	# Some remote rows have a NULL timestamp and some do not, so the guard is
+	# needed either way and the maximum is deliberately taken over @local only.
+	# Slim/Formats.pm:261 is the sole in-tree producer of a TIMESTAMP attribute
+	# and sits behind `if (-e $filepath)` at :259, false for a non-file URL
+	# because $filepath = $file at :165 - but a third-party importer can supply
+	# its own TIMESTAMP through updateOrCreate, and Spotty does: measured on a
+	# real library, 2858 of 2982 remote tracks carried one. An earlier version of
+	# this comment called the NULL "structural", which was in-tree reasoning
+	# stated as a general property. It is not.
 	my $source;
 	for my $t (@local) {
 		next unless defined $t->{timestamp};

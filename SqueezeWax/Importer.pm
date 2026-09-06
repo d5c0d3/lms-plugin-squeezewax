@@ -38,8 +38,23 @@ my $prefs = preferences('plugin.squeezewax');
 # (scanner.pl:295 sets AutoCommit = 0 and never restores it), and the next
 # guaranteed commit after our first write is endImporter
 # (Slim/Music/Import.pm:716) at the very end of startScan - so on a large library
-# that would be the whole run in one commit, and an abort halfway would lose all
-# of it. Same order as Scanner::Local's per-chunk commits.
+# that would otherwise be the whole run in one commit. Same order as
+# Scanner::Local's per-chunk commits.
+#
+# The justification changed after hardware testing, and the value did not.
+# A user-initiated ABORT does commit: exit at Slim/Utils/SQLiteHelper.pm:459
+# runs Perl's END blocks -> scanner.pl:494 -> Slim::bootstrap::theEND ->
+# sigint (bootstrap.pm:423-425, :391) -> scanner.pl's cleanup(), which calls
+# forceCommit at :450 before disconnecting. Observed: an abort five seconds in
+# left 72 albums' writes durable, well short of this boundary. An earlier
+# comment here claimed the opposite.
+#
+# So the exposure this protects against moved from "user clicks abort"
+# (frequent, mild) to "SIGKILL, OOM, power loss" (rare), where END blocks do not
+# run. Lower frequency argues for a longer interval; the near-zero cost of
+# committing argues for leaving it. Both arguments are weak, so 200 stands and
+# was NOT re-tuned on the new evidence - said explicitly so the number is not
+# mistaken for one that was chosen under this reasoning.
 use constant COMMIT_EVERY => 200;
 
 sub initPlugin {
@@ -83,9 +98,20 @@ sub initPlugin {
 sub startScan { if (main::SCANNER) {
 	my $class = shift;
 
+	# endImporter on every early return, not just the successful path. Without
+	# it runImporter's "Starting ... scan" has no matching "Completed ... Scan"
+	# line, so in exactly the situations where someone is reading scanner.log to
+	# find out what went wrong, this importer appears to start and hang. Observed
+	# on a real server during the version-skew test.
+	#
+	# The abort path is different and deliberately not covered: the process exits
+	# inside $progress->update, so neither this nor $progress->final runs, and
+	# Slim::Utils::SQLiteHelper writes its own SCAN_ABORTED progress row instead
+	# (:448-455). The scan UI is covered there; nothing here can or should run.
 	if ( !Plugins::SqueezeWax::Schema->isReady ) {
 		$log->warn( 'skipping Discogs matching: '
 			. ( Plugins::SqueezeWax::Schema->lastError || 'squeezewax.db is not usable' ) );
+		Slim::Music::Import->endImporter($class);
 		return 0;
 	}
 
@@ -96,12 +122,14 @@ sub startScan { if (main::SCANNER) {
 	if ( !@$names ) {
 		main::INFOLOG && $log->is_info
 			&& $log->info('no Discogs tag names configured; nothing to match');
+		Slim::Music::Import->endImporter($class);
 		return 0;
 	}
 
 	# Checked once, here, rather than relying on the per-write guard inside
 	# Match. If we cannot write at all there is no point reading 5,000 files.
 	if ( !Plugins::SqueezeWax::Match->_writeOk ) {
+		Slim::Music::Import->endImporter($class);
 		return 0;
 	}
 
@@ -118,7 +146,10 @@ sub startScan { if (main::SCANNER) {
 		# bounds abort latency to ~5s, which is intended.
 	});
 
-	my %count = ( examined => 0, confirmed => 0, candidate => 0, none => 0, skipped => 0 );
+	my %count = (
+		examined => 0, confirmed => 0, candidate => 0, none => 0,
+		manual   => 0, kept      => 0, skipped   => 0,
+	);
 	my $since = 0;
 
 	main::INFOLOG && $log->is_info
@@ -135,8 +166,11 @@ sub startScan { if (main::SCANNER) {
 		$progress->update( Plugins::SqueezeWax::Library->albumLabel($album) );
 
 		# Nothing to read tags from. Streaming albums are real tracks rows with
-		# audio = 1, and their timestamp is structurally NULL, so they could
-		# never skip on a later scan either - see Library's iterator.
+		# audio = 1, so the iterator emits them; this guard is what excludes
+		# them, and it is the only thing that does. Do not reason about their
+		# timestamps instead: a third-party importer can populate those (Spotty
+		# does - see Library::_finish), so "remote rows have no timestamp" is not
+		# a property to rely on.
 		if ( !$album->{local_tracks} ) {
 			$count{skipped}++;
 			return 1;
@@ -154,9 +188,13 @@ sub startScan { if (main::SCANNER) {
 		my $decision = _examine( $album, $names );
 		my $outcome  = Plugins::SqueezeWax::Match->recordStrict( $album, $decision, $state );
 
-		$count{confirmed}++ if ( $outcome || '' ) eq 'confirmed';
-		$count{candidate}++ if ( $outcome || '' ) eq 'candidate';
-		$count{none}++      if ( $outcome || '' ) eq 'none';
+		$outcome ||= '';
+
+		$count{confirmed}++ if $outcome eq 'confirmed';
+		$count{candidate}++ if $outcome eq 'candidate';
+		$count{none}++      if $outcome eq 'none';
+		$count{manual}++    if $outcome eq 'manual';
+		$count{kept}++      if $outcome eq 'kept';
 
 		if ( ++$since >= COMMIT_EVERY ) {
 			Slim::Schema->forceCommit;
@@ -170,14 +208,25 @@ sub startScan { if (main::SCANNER) {
 
 	my $summary = "Discogs matching finished: examined $count{examined}, "
 		. "confirmed $count{confirmed}, conflicts $count{candidate}, "
-		. "no tag $count{none}, skipped $count{skipped}";
+		. "no tag $count{none}, manual $count{manual}, kept $count{kept}, "
+		. "skipped $count{skipped}";
 
 	# Escalated to warn in the one case LMS's own start/complete pair cannot
 	# report: a mistyped tag name produces "examined 4,800, confirmed 0" and
-	# nothing else, and at WARN our INFO summary would be invisible. examined > 0
-	# is part of the condition deliberately - a library where everything is
-	# already matched examines nothing and must stay quiet.
-	if ( $count{confirmed} == 0 && $count{examined} > 0 ) {
+	# nothing else, and at WARN our INFO summary would be invisible.
+	#
+	# 'decidable' excludes manual and kept, which are outcomes where a match was
+	# deliberately NOT established - a manual row is left alone by rule, and a
+	# kept row already carries a decision we may not overwrite. Counting them as
+	# failures made the warning fire on a run that examined one manual album and
+	# did exactly the right thing, telling the user to check tag names that were
+	# not the problem. Observed on a real server.
+	#
+	# examined > 0 was already part of the condition, so a fully-matched library
+	# that examines nothing stays quiet.
+	my $decidable = $count{examined} - $count{manual} - $count{kept};
+
+	if ( $count{confirmed} == 0 && $decidable > 0 ) {
 		$log->warn("$summary - check the configured tag names");
 	}
 	else {
