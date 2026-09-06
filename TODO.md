@@ -115,6 +115,35 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **Detection has no progress feedback, and the fix depends on the next
+      item.** The Settings worker runs through `Slim::Utils::Scheduler` and the
+      page never refreshes, so it shows "Reading files... (0/79)" until the user
+      reloads by hand - observed 2026-09-06. Three options were weighed:
+      (a) a hint telling the user to reload - honest, but an apology for missing
+      feedback; (b) a `<meta http-equiv="refresh">` emitted only while
+      `detection.running`, which stops by itself when the run ends - the
+      mechanism exists, `settings/header.html:17-18` re-blocks
+      `pageHeaderScripts` so a page can inject into the head, and the one
+      caveat is that a reload discards anything typed into the tag boxes;
+      (c) LMS's own `progress.js` polling `rescanprogress`, which is NOT
+      available - that machinery is bound to the scanner's `progress` table and
+      only reports while `stillScanning`.
+      Held deliberately: if detection moves into the scan (next item) the worker
+      and its display may be reshaped anyway, and fixing the display of
+      something about to change shape is wasted work.
+- [ ] **Should detection run as a by-product of the Strict pass?**
+      `_examine` already holds the tag hash for every examined album, so
+      `candidateKeys` could run there at zero extra I/O, building the report
+      from the whole library instead of a 76-album sample and refreshing it on
+      every scan.
+      **It cannot replace the standalone Detect action**, and the reason is one
+      of our own guards: `use` is gated on a non-empty `discogsTagNames`, so on
+      a fresh install the importer never runs - which is exactly when detection
+      is needed. So this would be an enrichment, not a replacement: the sample
+      report for first-run configuration, the full-library report thereafter.
+      Open question is whether that is worth it at all, since the sample is
+      already stratified per format, which is the property that matters for the
+      one decision it informs.
 - [ ] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
       §3 says the action wipes the match table and re-runs the cascade; §2a says
       never delete a row that carries a decision, and `match_tier='manual'` is
