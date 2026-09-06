@@ -7,6 +7,13 @@
 	<version>0.1.0</version>
 	<module>Plugins::SqueezeWax::Plugin</module>
 	<importmodule>Plugins::SqueezeWax::Importer</importmodule>
+	<!-- Drives the cog/SETTINGS link on Manage Plugins. ExtensionsManager.pm:342
+	     maps optionsURL to plugin.settings (only while the plugin is enabled),
+	     and plugins_main.html:39 renders the link only `IF plugin.settings`.
+	     Without this the page shows the plugin with no way through to its
+	     settings, which is what every other plugin offers. Must match
+	     Settings.pm's page(); the dev-build rename covers plugins/SqueezeWax/. -->
+	<optionsURL>plugins/SqueezeWax/settings.html</optionsURL>
 	<category>musicservices</category>
 	<targetApplication>
 		<minVersion>8.4</minVersion>

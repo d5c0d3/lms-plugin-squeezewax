@@ -115,6 +115,18 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
+      §3 says the action wipes the match table and re-runs the cascade; §2a says
+      never delete a row that carries a decision, and `match_tier='manual'` is
+      exactly that - a pressing the user chose by hand, unrecoverable once gone.
+      Options: (a) wipe everything, literal §3, but one click silently destroys
+      every override; (b) wipe everything except manual, so "rebuild" still
+      re-matches the 400+ automatic rows, which is what the action is for;
+      (c) two actions - "rebuild automatic matches" and "clear everything" with
+      a confirmation. Leaning (b). **Blocks implementing the action**, which is
+      otherwise small - Match.pm already has the machinery, and the SQL reset is
+      the workaround meanwhile.
+
 - [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
       no handover: step-3 finding 3 shows `album_key` covers structural
       change and `MAX(tracks.timestamp)` covers in-place tag edits, both
