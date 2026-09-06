@@ -42,6 +42,15 @@ REAL_TOKEN="PLUGIN_SQUEEZEWAX_"           # string token prefix
 DEV_TOKEN="PLUGIN_SQUEEZEWAXDEV_"
 REAL_NS="plugin.squeezewax"               # Slim::Utils::Prefs namespace + log category
 DEV_NS="plugin.squeezewaxdev"
+# Progress names are lowercase with underscores (Progress->new's `name`), and
+# Slim::Control::Queries turns them into <NAME>_PROGRESS string tokens
+# (Queries.pm:3727, uppercased by Strings::string). Neither the dotted namespace
+# nor the uppercase token prefix matches that form, so without this the dev
+# build's progress row looks up PLUGIN_SQUEEZEWAX_MATCH_PROGRESS while
+# strings.txt only has the DEV token - and the scan UI shows no label at all.
+# Observed on a real server.
+REAL_PROGRESS="plugin_squeezewax"
+DEV_PROGRESS="plugin_squeezewaxdev"
 # Display title ("SqueezeWax (Dev)") is handled separately below — it's a
 # value, not an identifier, so it isn't a blanket find/replace.
 
@@ -84,6 +93,7 @@ while IFS= read -r -d '' f; do
 		s#\Q${REAL_WEBPATH}\E#${DEV_WEBPATH}#g;
 		s#\Q${REAL_TOKEN}\E#${DEV_TOKEN}#g;
 		s#\Q${REAL_NS}\E#${DEV_NS}#g;
+		s#\Q${REAL_PROGRESS}\E#${DEV_PROGRESS}#g;
 	" "$f"
 done < <(find "$DEV_DIR" -type f -print0)
 

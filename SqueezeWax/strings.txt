@@ -38,7 +38,7 @@ PLUGIN_SQUEEZEWAX_DETECT_COUNT
 	EN	Albums
 
 PLUGIN_SQUEEZEWAX_DETECT_EXAMPLE
-	EN	Example ID
+	EN	Example value
 
 PLUGIN_SQUEEZEWAX_DETECT_COPY
 	EN	Copy the tag names you want into the boxes above, then save.
