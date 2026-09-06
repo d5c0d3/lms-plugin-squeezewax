@@ -255,12 +255,13 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
-- [ ] **`package-dev-build.sh` writes git history as a side effect.** It runs
-      `git add`/`commit`/`push` in step 8 unless `--dry-run` is passed, so
-      merely building to check something rewrites history and attempts a push -
-      which happened once during step 3 and had to be reset. Invert the default,
-      or require an explicit `--publish`. Not blocking; it will bite again at a
-      worse moment.
+- [x] **`package-dev-build.sh` writes git history as a side effect.** Done
+      2026-09-06: the SqueezeWaxDev/repo-dev.xml arrangement is dropped
+      entirely (see decisions §6a, `docs/dev-repo-workflow.md`). Its
+      replacement, `scripts/package-build.sh`, never calls git unless
+      `--publish` is passed explicitly, and a failed `git push` under
+      `--publish` is now a named, non-zero-exit error rather than a bare
+      `set -e` abort.
 - [ ] **The review queue must not present `matched_at` as "since when".**
       A demoted row keeps the `matched_at` of the match it still carries, so a
       queue sorted by it would place last night's conflict among rows from
@@ -277,9 +278,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       LMS's own "Starting/Completed ... Scan" pair carry the healthy-run signal
       that INFO was standing in for; the one thing neither reports —
       "examined 4,800, confirmed 0" — is escalated to warn by the importer.
-- [ ] **`working-agreement.md` exists twice** — repo root and
-      `docs/working-agreement.md`, identical content. Same defect class as
-      the `dev-repo-workflow.md` location item; pick one.
+- [x] **`working-agreement.md` exists twice** — checked 2026-09-06: it
+      doesn't (`git log --all -- working-agreement.md` shows no root copy
+      was ever committed). Stale; the file exists only at
+      `docs/working-agreement.md`.
 - [ ] **`working-agreement.md` §2 names `docs/v1-decisions.md`;** the file is
       `docs/squeezewax-v1-decisions.md`. TODO's ticked step-2 line repeats
       the wrong name. Two documents disagreeing is a defect (§2's own rule).
@@ -291,11 +293,35 @@ Shared reminder list. Both I and Claude Code read and update this.
       resumability promise leans on it. A rollback would discard our
       uncommitted matches along with LMS's uncommitted scan work — recoverable,
       but it changes what §8 can promise.
-- [ ] Decide whether `dev-repo-workflow.md` lives in the repo root or in
-      `docs/` — its own §3 layout diagram says `docs/`, but the file is at the
-      root. Pick one and make them agree.
+- [x] Decide whether `dev-repo-workflow.md` lives in the repo root or in
+      `docs/`. Done 2026-09-06: moved to `docs/dev-repo-workflow.md` as part
+      of the packaging rewrite (decisions §6a) — it was rewritten anyway, so
+      there was no working copy to preserve at the old path.
 - [ ] After any commit under `docs/`, hit "Sync now" in the claude.ai project
       before the next design chat.
+
+## Waiting — needs a real server (packaging)
+
+- [ ] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
+      server and confirm the transition `docs/dev-repo-workflow.md` §8
+      describes.** Needs: switching Additional Repositories from
+      `repo-dev.xml` to the branch `repo.xml`
+      (`scripts/package-build.sh --publish` must run first so the zip is
+      reachable), installing, and checking: the plugin loads; the settings
+      page renders (this is the one the old rename broke once); the scan
+      progress row shows its label; `squeezewax.db` is still at
+      `user_version` 2 with matches intact; and that `discogsTagNames` comes
+      back empty until reconfigured (expected, not a bug — §8). Not done
+      this session: `--publish` pushes to `origin/master`, which is a
+      shared/visible action outside this session's scope of "no plugin
+      source changes" without confirming first.
+- [ ] **At SqueezeWax's first real release:** enable GitHub Pages for
+      `lms-plugin-squeezewax` (currently off — confirmed 404, no
+      `_config.yml`), add the release-mode step to
+      `scripts/package-build.sh` that regenerates `repo.xml` with a
+      `d5c0d3.github.io/...` `<url>` instead of a raw one, and give
+      `SqueezeWax/install.xml`'s `<version>` its first real value instead of
+      the placeholder `0.1.0`. See `docs/dev-repo-workflow.md` §2.
 
 ## Deferred by decision — not forgotten
 

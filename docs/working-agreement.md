@@ -67,7 +67,7 @@ badges rather than a crash.
 - **Prefer several short sessions to one long one.** Setup, then planning,
   then implementation — each with its own model.
 - **Small, reviewable commits.** One concern per commit.
-- **Commit before packaging.** `scripts/package-dev-build.sh` builds from
+- **Commit before packaging.** `scripts/package-build.sh` builds from
   `git archive HEAD`, not the working tree, so an uncommitted edit is silently
   invisible to the dev build. Edit → commit → package → push.
 

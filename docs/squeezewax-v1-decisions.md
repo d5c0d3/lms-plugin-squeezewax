@@ -804,6 +804,79 @@ Read-only about ownership. Show only rows with a problem, plus a summary line
 
 ---
 
+## 6a. Build & repository distribution — drops the renamed dev-build package
+
+Testing had used a "SqueezeWaxDev" arrangement: a fully renamed duplicate
+package, its own `repo-dev.xml`, hosted via `raw.githubusercontent.com`,
+alongside — never in place of — a hypothetical real install. Dropped in
+favor of one package, `SqueezeWax`, shipped as itself on every branch, with
+a single `repo.xml` whose `<url>` differs by branch (raw GitHub content) vs.
+release (GitHub Pages, once one exists). Full rationale and the replacement
+workflow are in `docs/dev-repo-workflow.md`; the findings that drove the
+decision are recorded here because they're evidence, not process.
+
+**The rename never isolated the database.** `Schema.pm`'s `DB_NAME =>
+'squeezewax.db'` and `DB_SCHEMA => 'squeezewax'` are bare strings the old
+rename table never touched (it substituted the package namespace, web
+paths, string-token prefix, prefs namespace, and progress-name prefix —
+none of which is the string `squeezewax`). A dev build and a real install
+would have shared one database file and attached schema name while running
+under separate prefs namespaces: shared data, split configuration. A dev
+build carrying a newer migration would push `user_version` past what the
+real plugin's `_migrate` expects and hit the downgrade guard. Never
+observed, because nobody ever ran both at once — which is exactly the
+condition the isolation was supposed to make safe.
+
+**Nothing hardware-tested was ever the shipping package.** Every
+build-order step-2/step-3 hardware test ran a build transformed by the
+rename script, and that transform produced three defects of its own — an
+`HTML/` directory needing a second manual rename pass, a progress-name
+mismatch that left the scan UI unlabeled, and the `DB_NAME`/`DB_SCHEMA` gap
+above — none reachable by the offline suites. The risk this left was
+asymmetric: a bug present only in the un-renamed form could not be caught
+by anything that only ever ran the renamed one.
+
+**One package name is what the update mechanism expects.**
+`Slim::Utils::ExtensionsManager::findUpdates` (`Slim/Utils/ExtensionsManager.pm:366`,
+branch `public/9.1`) keys candidates by plugin name (`$res->{'name'}`,
+`:378`) and keeps whichever result has the higher version
+(`Slim::Utils::Versions->compareVersions`, `:382`) regardless of which
+configured repository it came from. The merge across repositories happens
+one level up, in `appsQuery` (`:261`): its `getAllPluginRepos` `stepCb`
+(`:281-284`) flattens every configured repository's results into one array
+before `findUpdates` ever runs (`:286`). The rule this implies is not "give
+the test build a different name" but "never configure a production
+repository and a branch repository at once" — LMS cannot tell which one was
+meant and silently prefers the higher version either way. Confirmed as the
+reference project's (`d5c0d3/filtermusic_sb`) own documented operational
+rule, fetched directly from its README rather than assumed:
+
+> "Never configure both production and branch repositories simultaneously.
+> LMS aggregates all repositories into a single list and silently keeps
+> whichever entry has the highest version number, regardless of which repo
+> it came from."
+
+That README cites `Slim::Plugin::Extensions::Plugin::findUpdates`; the
+symbol has moved on `public/9.1` — corrected to
+`Slim::Utils::ExtensionsManager::findUpdates` above, per working-agreement
+§6 (citations crossing sides are re-verified by symbol, not line number).
+
+**The Pages/release URL split is confirmed, not inferred.** GitHub Pages
+serves only the default branch — confirmed from `filtermusic_sb`'s own
+README (its branch-testing section uses a raw-content URL for exactly this
+reason) — so a release `repo.xml` on Pages and a branch `repo.xml` on
+`raw.githubusercontent.com` must be different documents with different
+`<url>` values, generated as distinct, explicit script steps rather than
+one hand-maintained file. Also confirmed directly: GitHub Pages is not
+currently enabled for `lms-plugin-squeezewax`
+(`https://d5c0d3.github.io/lms-plugin-squeezewax/` returns 404; no
+`_config.yml` at the repo root, unlike `filtermusic_sb`, which has one).
+SqueezeWax has never released, so the Pages/release variant of `repo.xml`
+is deferred to first release rather than invented now — tracked in
+`TODO.md`.
+
+---
+
 ## 7. Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
