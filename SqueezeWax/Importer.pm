@@ -146,6 +146,22 @@ sub startScan { if (main::SCANNER) {
 		# bounds abort latency to ~5s, which is intended.
 	});
 
+	# Make the progress row visible to the server immediately.
+	#
+	# The scan UI reads the `progress` TABLE from library.db - the scanner's
+	# HTTP "progress:..." notifications are logged and otherwise ignored
+	# server-side (SQLiteHelper::_notifyFromScanner handles only start/end/exit).
+	# Our writes to that table sit inside the scanner's uncommitted transaction,
+	# and under WAL another connection cannot see them, so without this the step
+	# does not appear until our first COMMIT_EVERY commit - observed on a real
+	# server as the bar materialising around album 170 while every other
+	# importer's appeared at once. Scanner::Local commits per chunk, which is why
+	# theirs do.
+	#
+	# One extra commit per scan, and it keeps the fix out of COMMIT_EVERY, whose
+	# value governs durability rather than visibility.
+	Slim::Schema->forceCommit;
+
 	my %count = (
 		examined => 0, confirmed => 0, candidate => 0, none => 0,
 		manual   => 0, kept      => 0, skipped   => 0,
@@ -222,11 +238,19 @@ sub startScan { if (main::SCANNER) {
 	# did exactly the right thing, telling the user to check tag names that were
 	# not the problem. Observed on a real server.
 	#
-	# examined > 0 was already part of the condition, so a fully-matched library
-	# that examines nothing stays quiet.
+	# hasAnyStrictMatch is the second half of the same lesson, and the first fix
+	# was not enough on its own: a run that examines ONE untagged album in a
+	# library where hundreds are matched also reported "confirmed 0" and sent the
+	# user to check tag names that were demonstrably fine. Also observed. The
+	# warning is about the configuration producing nothing, not about this run
+	# producing nothing, so it asks whether anything has ever matched.
+	#
+	# Deliberately not a threshold on $decidable: any number would be arbitrary,
+	# and the question being asked is not "how many" but "has this ever worked".
 	my $decidable = $count{examined} - $count{manual} - $count{kept};
 
-	if ( $count{confirmed} == 0 && $decidable > 0 ) {
+	if ( $count{confirmed} == 0 && $decidable > 0
+		&& !Plugins::SqueezeWax::Match->hasAnyStrictMatch ) {
 		$log->warn("$summary - check the configured tag names");
 	}
 	else {

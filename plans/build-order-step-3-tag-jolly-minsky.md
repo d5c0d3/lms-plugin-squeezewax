@@ -983,7 +983,57 @@ appendices. Commit 6 carries only the doc edits listed above.
 
 ---
 
-# Verification on a real server
+# Verification on a real server — RUN 2026-09-04/06
+
+**13 of 14 executed; the 14th deliberately substituted. All passed.**
+
+Library: 764 albums (later 765), ~8,700 local tracks across FLAC/MP3/OGG/WMA
+plus ~2,980 Spotty tracks, on Lyrion 9.1.1.
+
+| Test | Result |
+|---|---|
+| Unconfigured install is silent | pass — no importer line, no progress row |
+| Detection | pass — 76 albums sampled, `flc 25 / mp3 25 / ogg 25 / wma 1` |
+| Strict end to end | pass — 478 confirmed of 578 examined, 45.5s |
+| Rescan is cheap | pass — **45.552s → 0.049s**, 764 skipped |
+| Tag-change trigger | pass — `touch` alone, then a tag edit; key held |
+| Conflict | pass — demoted, incumbent id preserved |
+| Tag-list invalidation | pass — 579 rows, manual row correctly excluded |
+| Manual-row survival | pass — `manual`/`888888` held through a file touch |
+| Online-library counts | **falsified a documented claim** (see below) |
+| Version-skew fail-safe | pass — both `postDBConnect` and `startScan` refused |
+| Abort | pass — no corruption, **and it commits** (see below) |
+| Resumability | pass — 501 examined, the 76 already done were skipped |
+| Conflict tags removed | pass — `0|1`, §2a's one permitted deletion |
+| Album-id stability | pass — **`lms_album_id` 3632 → 3633, `album_key` unchanged** |
+| ~~Missing database~~ | **substituted** by version skew — same `_checkVersion`
+  branch, without the window in which a restart strands every match in a
+  renamed file |
+
+**The album-id result is decisions §2's central claim on real data.** LMS
+re-created the album under a new id when its title changed, and the match
+followed, because identity is derived from the files rather than from
+`albums.id`. One row, no orphan.
+
+**An unplanned case proved more than the planned one.** Copying an album into a
+second folder merged it into the existing album rather than creating a new one,
+doubling its track count and therefore changing `album_key`. The old rows were
+preserved as orphans and new rows written — the never-delete rule and
+content-derived identity, both exercised without being asked for.
+
+**Eleven defects found, none reachable by the offline suites** — they need a
+real scanner process, a real file, or a real UI. All fixed. Two documented
+claims were falsified: remote `tracks.timestamp` is not structurally NULL
+(Spotty populates it), and an aborted scan *does* commit
+(`exit` → `END` → `theEND` → `sigint` → `cleanup` → `forceCommit`).
+
+**The pattern in both falsifications**, and in the earlier brace-depth error:
+a mechanism verified for one path, stated as a general property. See the
+provenance note.
+
+---
+
+# Verification procedure
 
 Step 2's untestable branch is now reachable, because the importer does
 something whose absence is visible.

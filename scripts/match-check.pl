@@ -379,6 +379,37 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( row($key)->{lms_album_id}, 42, '  ...along with lms_album_id' );
 }
 
+# --- hasAnyStrictMatch: "has this ever worked", not "did this run work" ---
+# The importer's anomaly warning uses this to tell a broken configuration from
+# a run that examined one untagged album in a library that is otherwise fine.
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	is( $M->hasAnyStrictMatch, 0, 'no rows at all: nothing has ever matched' );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state)
+		 VALUES (?, 'strict', 'candidate')", undef, 'c' x 32
+	);
+	is( $M->hasAnyStrictMatch, 0,
+		'a strict candidate does not count - it is an unresolved proposal' );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state)
+		 VALUES (?, 'manual', 'confirmed')", undef, 'd' x 32
+	);
+	is( $M->hasAnyStrictMatch, 0,
+		'a manual match does not count - it says nothing about the tag names' );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state)
+		 VALUES (?, 'strict', 'confirmed')", undef, 'e' x 32
+	);
+	is( $M->hasAnyStrictMatch, 1, 'one confirmed strict match is enough' );
+}
+
 # --- invariant 1 is detected, for free, by the skip query -----------------
 {
 	no warnings 'redefine', 'once';

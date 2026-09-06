@@ -159,6 +159,27 @@ my $STATE_SQL = q{
 	 WHERE album_key = ? AND tier = 'strict'
 };
 
+=head2 hasAnyStrictMatch()
+
+True if anything in the library has ever matched under Strict.
+
+Used by the importer's anomaly warning to tell "this configuration produces
+nothing" from "this one album has no tag". A run that examines a single
+untagged album in a library where hundreds are matched is not an anomaly.
+
+=cut
+
+sub hasAnyStrictMatch {
+	my $class = shift;
+
+	my ($found) = Slim::Schema->dbh->selectrow_array(
+		q{SELECT 1 FROM squeezewax.discogs_match
+		   WHERE match_tier = 'strict' AND state = 'confirmed' LIMIT 1}
+	);
+
+	return $found ? 1 : 0;
+}
+
 =head2 strictState( $albumKey )
 
 What we already know about this album at Strict tier. Returns a hashref with

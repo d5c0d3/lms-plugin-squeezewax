@@ -160,30 +160,25 @@ Shared reminder list. Both I and Claude Code read and update this.
       into Default-skin templates presumably would not appear there. That's
       unverified inference, not observed fact — still blocks the §4 badge
       overlay design until actually checked against a build that has one.
-- [ ] **Album-id stability on a normal rescan.** Record some album ids, rescan,
-      compare. Then edit an album title and rescan again.
-- [ ] **Step 3 end-to-end on a server — 11 of 14 run, 2026-09-06.** Passed:
-      unconfigured silence, detection, Strict end to end (478 matched of 764
-      albums), cheap rescan (45.5s -> 0.049s), tag-change trigger, conflict,
-      tag-list invalidation, manual-row survival, online-library counts,
-      version-skew fail-safe, abort + resumability. Nine defects found and
-      fixed. Two documented claims falsified.
-      Outstanding: conflict-resolved-by-removing-tags (leaves two albums in the
-      terminal candidate state until cleared), and album-id stability (largely
-      evidenced incidentally - albums 2918/2919 held across ~10 scans).
-      **The missing-database fail-safe is deliberately substituted, not
-      skipped**: the version-skew test exercises the same `_checkVersion`
-      branch with no window in which a server restart strands every match in a
-      renamed file.
-- [ ] ~~**Step 3 end-to-end on a server — NOT YET RUN.**~~ Step 3 is code-complete
-      as of 2026-09-04 but entirely unverified on hardware. The full procedure
-      is in `plans/build-order-step-3-tag-jolly-minsky.md` under *Verification
-      on a real server*: the two fail-safe branches, detection, Strict end to
-      end, cheap rescan, tag-change trigger, conflict, abort, the manual-row
-      survival test, the unconfigured-install silence check, the tag-list
-      invalidation test, and the online-library counts. **Do not start step 4
-      planning until this has run**, and report what actually happened rather
-      than that it passed.
+- [x] **Album-id stability on a normal rescan.** Verified 2026-09-06. Stable
+      across a dozen rescans - every `skipped 764` run is proof, since a moved
+      key would have forced re-examination. And the important half: changing an
+      album's title moved `lms_album_id` 3632 -> 3633 while `album_key` stayed
+      `6720421d...`, one row, no orphan. An `lms_album_id`-keyed design would
+      have lost the match there, which is what slimserver issue #397 records
+      the Music and Artist Information plugin doing.
+- [x] **Step 3 end-to-end on a server.** Run 2026-09-04/06 on Lyrion 9.1.1,
+      764 albums. **13 of 14 executed, all passed**; the missing-database
+      fail-safe was deliberately SUBSTITUTED by version skew, which exercises
+      the same `_checkVersion` branch without the window in which a restart
+      strands every match in a renamed file.
+      Headline results: 478 matched of 578 examined; a no-change rescan went
+      45.552s -> 0.049s; abort left no corruption and resumed correctly; and a
+      title change moved `lms_album_id` 3632 -> 3633 while `album_key` held,
+      which is decisions §2's central claim on real data.
+      Eleven defects found and fixed, none of them reachable by the offline
+      suites. Two documented claims falsified - see the plan's verification
+      section.
 - [x] **Remote-track timestamps in plugins other than TIDAL.** Answered
       2026-09-06 on the real server, and the answer was **no**: Spotty supplies
       its own `TIMESTAMP` through `updateOrCreate`, so 2858 of 2982 remote
