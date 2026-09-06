@@ -319,13 +319,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server (packaging)
 
-- [ ] **The dev LMS's Additional Repositories entry still points at
-      `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. That branch
-      cannot be deleted until `v1-buildout` cuts its first build and the
-      entry is moved to it — otherwise the test server silently depends on
-      a branch nobody's developing on anymore. Move the entry the next time
-      a build is packaged from `v1-buildout`, then delete
-      `packaging-rewrite` (local and remote).
+- [x] **The dev LMS's Additional Repositories entry still points at
+      `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. Done
+      2026-09-07: `v1-buildout` cut its first build
+      (`SqueezeWax_0_0_0_1.zip`, commit `8522050`), the entry was moved to
+      `https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/repo.xml`
+      (confirmed live, HTTP 200, and confirmed as the only SqueezeWax entry
+      in the dev LMS's `repos` pref), and `packaging-rewrite` was deleted
+      (local and remote).
 - [x] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
       server and confirm the transition `docs/dev-repo-workflow.md` §8
       describes.** Done 2026-09-07, on the `packaging-rewrite` branch build.
