@@ -1,5 +1,7 @@
 # SqueezeWax — TODO
 
+Synced branch: structural-matching @ e08b977, 2026-09-07
+
 Shared reminder list. Both I and Claude Code read and update this.
 
 **Conventions**
@@ -302,19 +304,22 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server (packaging)
 
-- [ ] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
+- [x] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
       server and confirm the transition `docs/dev-repo-workflow.md` §8
-      describes.** Needs: switching Additional Repositories from
-      `repo-dev.xml` to the branch `repo.xml`
-      (`scripts/package-build.sh --publish` must run first so the zip is
-      reachable), installing, and checking: the plugin loads; the settings
-      page renders (this is the one the old rename broke once); the scan
-      progress row shows its label; `squeezewax.db` is still at
-      `user_version` 2 with matches intact; and that `discogsTagNames` comes
-      back empty until reconfigured (expected, not a bug — §8). Not done
-      this session: `--publish` pushes to `origin/master`, which is a
-      shared/visible action outside this session's scope of "no plugin
-      source changes" without confirming first.
+      describes.** Done 2026-09-07, on the `packaging-rewrite` branch build.
+      All four checks passed: plugin loads (`squeezewax.db`'s WAL/SHM files
+      were touched at the exact restart timestamp, proving `postDBConnect`
+      ran); settings page renders (200, real content, no error banner — the
+      one the old rename broke once); scan progress row shows its label
+      (`plugin_squeezewax_match` appeared in `rescanprogress`'s `steps` and
+      progressed 0→100% with live per-album `info`, not a missing-string
+      placeholder); `squeezewax.db` stayed at `user_version` 2 with all 481
+      matches intact (480 strict + 1 manual) through the whole transition
+      and a subsequent real rescan. `discogsTagNames` did come back empty
+      until reconfigured, exactly as §8 predicts — confirmed as the
+      self-heal, not a bug, then reconfigured back to
+      `DISCOGS_RELEASE_ID`/`foobar2000/DISCOGS_RELEASE_ID` to actually
+      exercise the importer live.
 - [ ] **At SqueezeWax's first real release:** enable GitHub Pages for
       `lms-plugin-squeezewax` (currently off — confirmed 404, no
       `_config.yml`), add the release-mode step to

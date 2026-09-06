@@ -84,6 +84,39 @@ Consequence worth remembering: if the design chat is reasoning about a spec
 section you changed yesterday and didn't sync, it is reasoning about the old
 version and will not know.
 
+### Which branch project knowledge follows
+
+Decided 2026-09-07: project knowledge is pointed at the **active feature
+branch**, not master, and re-pointed at each build-order step boundary —
+not per commit, which is churn nobody sustains. Docs and code for a step
+stay together on that branch until it merges. Master keeps its existing
+gate: only a build that's been through hardware verification lands there.
+Written down here for the first time, but not new — every build-order step
+through step 3 held to it, informally, before there was a branch to name it
+on.
+
+**Rejected: project knowledge on master, docs merged ahead of code.** That
+makes master internally inconsistent by construction — design docs
+describing code that isn't there yet — and a design session would see docs
+for code it cannot read. Worse than the staleness it was meant to solve.
+
+**Rejected: loosening the merge gate** to "offline suites green + review
+done," moving hardware verification to a release gate instead. The case for
+it: nothing on master reaches a user anyway, since publishing needs a
+release `repo.xml` with a GitHub Pages URL, and Pages is not enabled on
+this repo (confirmed: 404, no `_config.yml`). The case against: one simple
+rule beats two gates of different strength for different destinations.
+Simplicity won — the merge gate is therefore stricter than the actual risk
+requires, deliberately, not by oversight. Recorded so this isn't
+re-litigated from scratch the next time it's proposed.
+
+Re-pointing is manual and forgets silently: a design session searches
+project knowledge, gets a coherent but stale tree, and gives confident
+advice about code that's moved — no error, no warning. See
+`docs/dev-repo-workflow.md`'s "Starting a new build-order step" checklist
+for the re-pointing procedure, and `TODO.md`'s `Synced branch:` marker line
+for the check against forgetting it.
+
 ## 6. Verifying claims across the two sides
 
 The design chat clones slimserver fresh (latest tag or master). `refs/` here

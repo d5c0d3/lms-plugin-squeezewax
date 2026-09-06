@@ -261,6 +261,38 @@ silently (a higher-versioned branch build gets offered to a production
 install, or a production release is never offered because a branch's
 number is still ahead) rather than with an error.
 
+### Starting a new build-order step
+
+Project knowledge in the claude.ai design chat follows the active feature
+branch, re-pointed at step boundaries (`docs/working-agreement.md`,
+"Which branch project knowledge follows"). One action, not three
+separately-remembered ones:
+
+1. Cut the branch for the step.
+2. Update `TODO.md`'s first line — `Synced branch: <branch> @ <sha>,
+   <date>` — to the new branch's current commit.
+3. Re-point the claude.ai project's GitHub connector at that branch.
+4. Hit **Sync now**.
+
+Two things about step 3 aren't established yet, and belong here once they
+are rather than being rediscovered each time:
+
+- **Does the per-file/folder selection survive re-pointing to a different
+  branch, or must it be redone?** Not documented (checked the official
+  GitHub-integration support article; it doesn't address branch changes at
+  all). If it must be redone every time, that friction is exactly what
+  eventually gets this checklist skipped under deadline — worth confirming
+  and, if true, worth designing around rather than just noting.
+- **Can the same repository be added twice to one project, on two
+  different branches?** Also not documented — the support article confirms
+  multiple *different* repositories are supported but doesn't address the
+  same repository twice. If this works, master and the active branch are
+  both visible at once and the whole re-pointing problem largely
+  evaporates — worth trying before assuming it doesn't work.
+
+Test both directly in the claude.ai project next time it's open, and
+replace this paragraph with the answer.
+
 ---
 
 ## 6. The development server
