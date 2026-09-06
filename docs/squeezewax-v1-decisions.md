@@ -508,6 +508,35 @@ A `match_tier = 'manual'` row is outside all of this, per the write path's first
 rule: it is never overwritten, and only its `source_timestamp` and
 `lms_album_id` are refreshed.
 
+### `matched_at` is deliberately preserved on a demotion
+
+A demotion does not touch `matched_at`, so a demoted row carries the timestamp
+of the match it still holds, while a *fresh* conflict carries its discovery
+time. The two mean different things in the same column.
+
+That is the correct trade, but it has a consequence worth stating rather than
+discovering: **`matched_at` does not answer "when did this become a problem".**
+A review queue sorted by it would place last night's demotion among rows from
+years ago — wrong information rather than missing information.
+
+Overwriting it is not the fix. The row still carries the incumbent
+`discogs_release_id`, and when *that* was established is genuinely useful and
+genuinely unrecoverable if stamped over. The only real alternative is a new
+`state_changed_at` column, and that is not being added now: only the conflict
+path would ever write it, so the rows that benefit are identical whether it
+lands now or later — NULL before the first demotion either way — and adding it
+speculatively is the pattern step 2's finding 8 rejected. `checked_at` was the
+exception because step 4's staleness policy is a named, certain consumer; "step
+5's queue might sort by date" is not, and a queue of thirty albums may well sort
+by artist.
+
+The information is not lost meanwhile: the conflict is logged at `warn` with the
+album label and every competing value, and `scanner.log` is timestamped. The
+discovery time is on record, just not queryable — a much smaller claim than
+"nothing records it". If step 5 wants it queryable it ships migration 3 with a
+nullable column, which finding 8 itself calls the cheap kind of migration, and
+by then the requirement is concrete.
+
 ---
 
 ## 3b. Changing the configured tag names invalidates the strict answer
