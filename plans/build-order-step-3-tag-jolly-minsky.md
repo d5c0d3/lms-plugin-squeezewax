@@ -53,6 +53,23 @@ re-verified here against `refs/`:
   Line numbers drift between checkouts and brace depth does not, so structural
   claims about `refs/` are to be settled by depth.
 
+- **Second instance of the same pattern, and the method note above did not
+  prevent it.** Two further claims were reasoned confidently from real source
+  and falsified on hardware: that remote `tracks.timestamp` is structurally
+  NULL, and that an aborted scan discards uncommitted work. Both failed the
+  same way — **a mechanism verified for one path, stated as a general
+  property.** `Slim/Formats.pm:261` really is the only in-tree producer of a
+  `TIMESTAMP` attribute, and `exit` really is abrupt; neither fact licenses the
+  conclusion drawn from it, because one ignored third-party importers and the
+  other ignored `END` blocks.
+
+  The sharper lesson is in where the error was *not* made. TODO.md's own entry
+  said the NULL was settled "for the standard path", "leaving only third-party
+  importers unverified" — while the comments in `Library.pm` and `Tags.pm`
+  hardened past that into "structural". **The tracking note was more careful
+  than the code it was tracking.** When the two disagree, the hedged one is
+  usually the one that was written while the uncertainty was still visible.
+
 ---
 
 # Findings
@@ -374,10 +391,19 @@ The real mechanism rides the progress notification.
 
 So: calling `$progress->update` once per album is the whole abort
 implementation — nothing to check, nothing to return. The consequence is the
-one that drives the cadence above: the process exits without committing, and
-DBI rolls back the open transaction, so everything since the last
-`forceCommit` is lost. Nothing is corrupted; the work is simply redone next
-scan.
+one that drove the cadence above — **and it was wrong.**
+
+`exit` runs Perl's `END` blocks: `scanner.pl:494` calls
+`Slim::bootstrap::theEND`, which at `bootstrap.pm:423-425` calls `sigint`,
+which at `:391` calls `main::cleanup()` — and `scanner.pl:450` is
+`Slim::Schema->forceCommit` before the disconnect. **An aborted scan commits.**
+Verified on hardware: an abort five seconds into matching left 72 albums'
+writes durable, far short of the 200-album boundary, and the next scan resumed
+from there.
+
+The cadence still earns its place, but for hard kills — `SIGKILL`, OOM, power
+loss — where `END` blocks do not run. `COMMIT_EVERY` was deliberately not
+re-tuned on this evidence; see the constant's comment.
 
 ## 6. Tag-name detection from a Settings page
 
@@ -599,7 +625,18 @@ tracks are ordinary `tracks` rows with `audio = 1`, so the predicate above
 selects them. **Two independent facts point the same way; do not conflate
 them.**
 
-**Fact 1 — `tracks.timestamp` is structurally NULL for remote rows.** The sole
+**Fact 1 — `tracks.timestamp` is often, but NOT always, NULL for remote rows.**
+
+> **Corrected after hardware testing.** This originally read "structurally
+> NULL". Measured on a real library with Spotty installed: 2858 of 2982 remote
+> tracks carry a timestamp. The in-tree reasoning below is correct as far as it
+> goes; the error was concluding a general property from it. A third-party
+> importer can supply its own `TIMESTAMP` through `updateOrCreate`, and Spotty
+> does. Nothing breaks — Strict skips on `local_tracks == 0` before timestamps
+> are consulted, and `_finish` maxes over local tracks only — but the guard is
+> load-bearing rather than belt-and-braces.
+
+The sole
 in-tree producer of a `TIMESTAMP` attribute is `Slim/Formats.pm:261`,
 `($tags->{'FILESIZE'}, $tags->{'TIMESTAMP'}) = (stat(_))[7,9];`, guarded by
 `if (-e $filepath)` at `:259`. For a non-file URL `$filepath = $file`
@@ -1425,7 +1462,8 @@ planning-session items — keep those, labelled as yours.
       producer of a `TIMESTAMP` attribute and is guarded by
       `if (-e $filepath)` at `:259`; for a non-file URL `$filepath = $file`
       (`:165`), so the stat never happens and `tracks.timestamp` is
-      structurally NULL. `MAX(timestamp)` is therefore NULL, and neither a
+      often NULL (but see the correction in finding 4 - Spotty populates it).
+      `MAX(timestamp)` over an all-remote album is therefore usually NULL, and neither a
       match row nor a `discogs_no_match` row can ever skip them. Expose
       local/remote track counts per album from the iterator, skip
       no-local-track albums at Strict, prefer a local track for the

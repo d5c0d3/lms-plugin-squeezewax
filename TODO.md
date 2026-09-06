@@ -162,7 +162,20 @@ Shared reminder list. Both I and Claude Code read and update this.
       overlay design until actually checked against a build that has one.
 - [ ] **Album-id stability on a normal rescan.** Record some album ids, rescan,
       compare. Then edit an album title and rescan again.
-- [ ] **Step 3 end-to-end on a server — NOT YET RUN.** Step 3 is code-complete
+- [ ] **Step 3 end-to-end on a server — 11 of 14 run, 2026-09-06.** Passed:
+      unconfigured silence, detection, Strict end to end (478 matched of 764
+      albums), cheap rescan (45.5s -> 0.049s), tag-change trigger, conflict,
+      tag-list invalidation, manual-row survival, online-library counts,
+      version-skew fail-safe, abort + resumability. Nine defects found and
+      fixed. Two documented claims falsified.
+      Outstanding: conflict-resolved-by-removing-tags (leaves two albums in the
+      terminal candidate state until cleared), and album-id stability (largely
+      evidenced incidentally - albums 2918/2919 held across ~10 scans).
+      **The missing-database fail-safe is deliberately substituted, not
+      skipped**: the version-skew test exercises the same `_checkVersion`
+      branch with no window in which a server restart strands every match in a
+      renamed file.
+- [ ] ~~**Step 3 end-to-end on a server — NOT YET RUN.**~~ Step 3 is code-complete
       as of 2026-09-04 but entirely unverified on hardware. The full procedure
       is in `plans/build-order-step-3-tag-jolly-minsky.md` under *Verification
       on a real server*: the two fail-safe branches, detection, Strict end to
@@ -171,14 +184,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       invalidation test, and the online-library counts. **Do not start step 4
       planning until this has run**, and report what actually happened rather
       than that it passed.
-- [ ] **Remote-track timestamps in plugins other than TIDAL.** Downgraded from
-      blocking: `Slim/Formats.pm:261` is the sole in-tree producer of a
-      `TIMESTAMP` attribute and sits behind `if (-e $filepath)` at `:259`, which
-      is false for a non-file URL because `$filepath = $file` at `:165`, so the
-      NULL is structural for the standard path. What remains unverified is only
-      whether a third-party online-library importer supplies its own `TIMESTAMP`
-      through `updateOrCreate`. `SELECT remote, COUNT(*), COUNT(timestamp) FROM
-      tracks GROUP BY remote` on a box with Spotty installed settles it.
+- [x] **Remote-track timestamps in plugins other than TIDAL.** Answered
+      2026-09-06 on the real server, and the answer was **no**: Spotty supplies
+      its own `TIMESTAMP` through `updateOrCreate`, so 2858 of 2982 remote
+      tracks carry one. The in-tree reasoning (`Slim/Formats.pm:261` behind the
+      `-e $filepath` guard at `:259`) was correct and did not license the
+      conclusion. This entry was right to hedge; `Library.pm` and `Tags.pm` had
+      hardened it to "structurally NULL" and were corrected.
+      No functional impact - Strict skips on `local_tracks == 0` before any
+      timestamp is read - but the local-tracks guard is load-bearing, not
+      defensive, and is now commented as such.
 - [x] **`addPostConnectHandler` from a third-party plugin.** Confirmed
       2026-08-29 on the real server: working — `squeezewax.db` exists in the
       prefs directory, which it could not without the handler having fired.
@@ -203,6 +218,23 @@ Shared reminder list. Both I and Claude Code read and update this.
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
+
+- [ ] **`package-dev-build.sh` writes git history as a side effect.** It runs
+      `git add`/`commit`/`push` in step 8 unless `--dry-run` is passed, so
+      merely building to check something rewrites history and attempts a push -
+      which happened once during step 3 and had to be reset. Invert the default,
+      or require an explicit `--publish`. Not blocking; it will bite again at a
+      worse moment.
+- [ ] **The review queue must not present `matched_at` as "since when".**
+      A demoted row keeps the `matched_at` of the match it still carries, so a
+      queue sorted by it would place last night's conflict among rows from
+      years ago - wrong information, not missing information. Decided
+      deliberately (decisions §3a): `matched_at` is the establishment time of an
+      incumbent the row still holds, and overwriting it would destroy something
+      useful. If step 5 wants a demotion timestamp it ships migration 3 with a
+      nullable `state_changed_at`, by which point the requirement is concrete
+      rather than assumed. Until then the discovery time is in `scanner.log`,
+      which is timestamped - on record, just not queryable.
 
 - [x] **Revisit `plugin.squeezewax` defaultLevel before v1 release.** Done
       2026-09-04 (cec7a46): WARN in both entry points. The scan-progress row and

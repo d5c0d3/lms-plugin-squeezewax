@@ -533,9 +533,18 @@ or unreachable:
 - **Scan-time writes ride LMS's own transaction.** The scanner sets
   `AutoCommit = 0` once (`scanner.pl:295`) and commits at intervals, so our
   writes are enclosed by it and `Slim::Schema->forceCommit` commits both files.
-  The importer commits every 200 albums on top of that, because between its first
-  write and `endImporter` there is no LMS commit at all — an abort would
-  otherwise lose the whole run. (SQLite's cross-database atomicity does not hold
+  The importer commits every 200 albums on top of that, so a hard kill loses at
+  most that much work.
+- **A user-initiated abort commits rather than discarding.** `exit` inside
+  `Slim::Utils::SQLiteHelper::updateProgress` runs Perl's `END` blocks, which
+  reach `scanner.pl`'s `cleanup()` and its `forceCommit` before the disconnect.
+  So an aborted scan leaves everything matched up to that point **durable**, and
+  the next scan skips those albums on `source_timestamp` and continues with the
+  rest. Verified on a real server: an abort five seconds into matching left 72
+  albums' writes committed — below the 200-album boundary — and the following
+  scan examined only the remainder. Resumability is therefore a property of the
+  abort path itself, not only of our commit cadence; the cadence covers the
+  cases where `END` blocks do not run at all (`SIGKILL`, OOM, power loss). (SQLite's cross-database atomicity does not hold
   when both files are WAL, which both are; that is benign here, since `album_key`
   is derived entirely from `library.db`, so a lost match row just means the album
   is matched again next scan.)

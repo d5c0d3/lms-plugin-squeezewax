@@ -299,9 +299,14 @@ sub _recordConflict {
 		? $state->{discogs_release_id}
 		: undef;
 
+	# The album label is quoted because titles contain colons - a real one from
+	# hardware was "Isolar: Unidentified Explorers", which rendered as
+	# "on Isolar: Unidentified Explorers: TAG=..." with no way to see where the
+	# title ended. This line exists to tell a user which album to go and fix.
 	$log->warn(
-		'conflicting Discogs tags on ' . Plugins::SqueezeWax::Library->albumLabel($album)
-		. ': ' . join( ', ', @{ $decision->{conflict} } )
+		'conflicting Discogs tags on "'
+		. Plugins::SqueezeWax::Library->albumLabel($album) . '": '
+		. join( ', ', @{ $decision->{conflict} } )
 		. ( defined $incumbent ? " (keeping the existing match $incumbent)" : '' )
 	);
 
