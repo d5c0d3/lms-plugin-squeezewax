@@ -1,6 +1,6 @@
 # SqueezeWax — TODO
 
-Synced branch: structural-matching @ c7193e9, 2026-09-07
+Synced branch: v1-buildout, 2026-09-07
 
 Shared reminder list. Both I and Claude Code read and update this.
 
@@ -60,6 +60,21 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **Step 4's plan must open with an enumerated "what step 3 established
+      that step 4 must honour" section**, each item citing its decision
+      record or symbol — the same shape step 3's plan used for step 2's
+      findings 2a, 3 and 9. This is a contract problem, not a git problem:
+      one long-lived branch (`v1-buildout`) and full visibility of step 3's
+      code do not by themselves stop step 4 from writing `recordStructural`
+      alongside `recordStrict` in a way that skips `_writeOk`, reimplements
+      the manual-match guard wrongly, widens the narrow delete predicate, or
+      breaks invariant 1. At minimum, enumerate: `_writeOk`/`_writeRefusal`;
+      the manual guard as rule one of the write path; the narrow delete
+      predicate and the rule behind it; invariant 1 and `_clearNoMatch`; the
+      skip contract (row exists AND `source_timestamp` equals current
+      `MAX(tracks.timestamp)`; NULL never skips); and §3b invalidating
+      `tier='strict'` only, with its note that a pref-derived tier needs its
+      own clause.
 - [x] **`album_key` computation.** Resolved during step 2, deliberately not
       implemented: raw SQL on `Slim::Schema->dbh` (the pattern in
       `Slim/Plugin/FullTextSearch/Plugin.pm:547-556`), not DBIC — the
@@ -304,6 +319,13 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server (packaging)
 
+- [ ] **The dev LMS's Additional Repositories entry still points at
+      `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. That branch
+      cannot be deleted until `v1-buildout` cuts its first build and the
+      entry is moved to it — otherwise the test server silently depends on
+      a branch nobody's developing on anymore. Move the entry the next time
+      a build is packaged from `v1-buildout`, then delete
+      `packaging-rewrite` (local and remote).
 - [x] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
       server and confirm the transition `docs/dev-repo-workflow.md` §8
       describes.** Done 2026-09-07, on the `packaging-rewrite` branch build.

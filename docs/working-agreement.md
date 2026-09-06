@@ -86,36 +86,53 @@ version and will not know.
 
 ### Which branch project knowledge follows
 
-Decided 2026-09-07: project knowledge is pointed at the **active feature
-branch**, not master, and re-pointed at each build-order step boundary —
-not per commit, which is churn nobody sustains. Docs and code for a step
-stay together on that branch until it merges. Master keeps its existing
-gate: only a build that's been through hardware verification lands there.
-Written down here for the first time, but not new — every build-order step
-through step 3 held to it, informally, before there was a branch to name it
-on.
+Corrected 2026-09-07 (replaces a same-day decision that didn't survive the
+day): **one branch carries the entire v1 build-out.** Project knowledge
+points at it and is not re-pointed between steps. Master is the last
+released state — until v1 ships, that means master is a rollback point and
+nothing else. Nothing publishes from it: GitHub Pages is not enabled on
+this repo (confirmed: 404, no `_config.yml`), so master reaching a user
+isn't even mechanically possible yet. After v1 ships, genuinely independent
+features get their own branches, and the re-pointing question returns in a
+form where it actually makes sense — a feature branch for a feature, not a
+slice of one for a step.
+
+**Why this replaced branch-per-build-order-step, recorded because it's the
+part worth keeping:** the original framing answered "should project
+knowledge follow master or the active branch" without first asking whether
+a branch per step made sense. It didn't. Feature branches suit independent,
+short-lived units of work; build-order steps are one feature (v1 matching)
+delivered in slices, and none of them is independently releasable — step 4
+without step 5's review queue isn't a thing a user could run. Master
+already held steps 1-3 under the per-step framing, which was not a product
+either, so every step's merge-to-master was ceremony: it looked like
+progress toward a release gate that doesn't exist yet, while actually just
+relocating code that could equally have stayed on one branch. The
+re-pointing burden the original policy needed guarding against — see the
+staleness note below — existed only because of that mistaken framing. Fix
+the framing and the guard mostly stops being needed.
 
 **Rejected: project knowledge on master, docs merged ahead of code.** That
 makes master internally inconsistent by construction — design docs
 describing code that isn't there yet — and a design session would see docs
 for code it cannot read. Worse than the staleness it was meant to solve.
+Still rejected under the one-branch policy, for the same reason.
 
 **Rejected: loosening the merge gate** to "offline suites green + review
 done," moving hardware verification to a release gate instead. The case for
 it: nothing on master reaches a user anyway, since publishing needs a
 release `repo.xml` with a GitHub Pages URL, and Pages is not enabled on
-this repo (confirmed: 404, no `_config.yml`). The case against: one simple
-rule beats two gates of different strength for different destinations.
-Simplicity won — the merge gate is therefore stricter than the actual risk
-requires, deliberately, not by oversight. Recorded so this isn't
-re-litigated from scratch the next time it's proposed.
+this repo. The case against: one simple rule beats two gates of different
+strength for different destinations. Simplicity won — the merge gate is
+therefore stricter than the actual risk requires, deliberately, not by
+oversight. Still rejected under the one-branch policy: master remains a
+hardware-verified-only rollback point, whether or not anything is currently
+merging into it.
 
-Re-pointing is manual and forgets silently: a design session searches
-project knowledge, gets a coherent but stale tree, and gives confident
-advice about code that's moved — no error, no warning. See
-`docs/dev-repo-workflow.md`'s "Starting a new build-order step" checklist
-for the re-pointing procedure, and `TODO.md`'s `Synced branch:` marker line
-for the check against forgetting it.
+Re-pointing not happening between steps removes most of the silent-staleness
+risk the original policy was written to guard against — see `TODO.md`'s
+`Synced branch:` line, now documentation rather than an active check, and
+`docs/dev-repo-workflow.md` for what's left of the re-pointing procedure.
 
 ## 6. Verifying claims across the two sides
 

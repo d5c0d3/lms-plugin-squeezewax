@@ -875,6 +875,19 @@ SqueezeWax has never released, so the Pages/release variant of `repo.xml`
 is deferred to first release rather than invented now — tracked in
 `TODO.md`.
 
+**Corollary, applied the same day it was written down.** The
+`packaging-rewrite` branch's own test build (`repo.xml` + `dist/*.zip`,
+committed to make the branch raw-fetchable for hardware verification) was
+deliberately **not** merged into master once that verification passed.
+Master already held the validated packaging code from the commit
+`packaging-rewrite` branched from; the build commit added nothing but a
+branch-scoped manifest and a zip, which is exactly the kind of dev artifact
+this section's rationale already argues doesn't belong on master. `master`
+picked up the branch's non-artifact commits directly instead. This is the
+same reasoning generalized in `docs/dev-repo-workflow.md`'s "What actually
+merges at release" — a release's `repo.xml`/zip come from the release
+script, never from merging a branch's accumulated build output.
+
 ---
 
 ## 7. Open items
