@@ -164,7 +164,7 @@ single-mode picker.
 | Tier | Signal | Behavior |
 |---|---|---|
 | **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm **when the configured tags agree** — the ideal case for rips tagged with Discogs, which is most of a tagged library. When two configured tags name different releases, or a configured tag's value will not parse, there *is* ambiguity and the album goes to the review queue as a candidate instead. See `squeezewax-v1-decisions.md` §3a. |
-| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. ~~Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget.~~ — **Falsified 2026-09-07: format cannot be an exclusion gate. Digital releases (FLAC/ALAC/download), USB-delivered concert recordings, and unofficial releases are all objects a user can own. Format, country, released and title are now ranking signals only. The only gate that holds is `local_tracks == 0` (no local files, no evidence about a physical object). Removing the format gate increases candidates per album fetched, which is the main reason §13's budget needs a rewrite — tracked in TODO.md.** |
+| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. ~~Strong enough to disambiguate near-identical pressings/reissues.~~ — **falsified 2026-09-07, same failure as walkthrough 2 below: Structural disambiguates EDITIONS (masters) — e.g. *Violator* from *Violator Live* from *Violator 2000* — on track count, not pressings, which share a tracklist within one edition.** ~~Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget.~~ — **Falsified 2026-09-07: format cannot be an exclusion gate. Digital releases (FLAC/ALAC/download), USB-delivered concert recordings, and unofficial releases are all objects a user can own. Format, country, released and title are now ranking signals only. The only gate that holds is `local_tracks == 0` (no local files, no evidence about a physical object). Removing the format gate increases candidates per album fetched, which is the main reason §13's budget needs a rewrite — tracked in TODO.md.** |
 | **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
 
 These three are the *cascade's* tiers. The stored `match_tier` records
@@ -379,6 +379,10 @@ badge would sit on Spotify-sourced art, this is a gray area to keep in mind.
 Tapping the badge / choosing the Discogs context-menu entry on an owned album
 reveals details of the **owned variant**:
 
+- **The list below applies to matches that resolve a pressing (Strict,
+  manual).** An edition-level (Structural) match has no resolved pressing
+  to show here — see TODO.md for what it shows instead, a product
+  decision not yet taken.
 - Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year
 - Credits (musicians, producers, engineers — a Discogs strength)
 - Collection data: date added/acquired, condition/grading if tracked
