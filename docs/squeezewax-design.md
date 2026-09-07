@@ -717,11 +717,21 @@ and a collection re-sync of roughly 20 requests (§4). Two consequences:
   lives in `discogs_match` precisely so that recovering a match survives the
   collection being wiped and re-synced.
 
-**Badge derivation** (see §4 flowchart): badge presence and color are computed
-by joining `discogs_match` (state = confirmed) with `discogs_collection` on
-`discogs_release_id` and reading `list_state`. This join never touches album
-identity — it is unaffected by the `album_key` change above. Ownership is
-never stored in the match table.
+**Badge derivation** (see §4 flowchart): ~~badge presence and color are
+computed by joining `discogs_match` (state = confirmed) with
+`discogs_collection` on `discogs_release_id` and reading `list_state`.~~ —
+**defect found 2026-09-07: a Structural-confirmed row carries a NULL
+`discogs_release_id` and a set `discogs_master_id` (settled step-4 design,
+see TODO.md), so this join silently yields no badge for the entire
+Structural population — a missing badge, indistinguishable from "not
+matched." Corrected to the dual test already recorded in TODO.md:**
+`release_id in owned_releases` **OR** (`master_id` present and not the
+no-master sentinel **AND** `master_id in owned_masters`) — **note the
+sentinel is endpoint-dependent (`0` in collection `basic_information`,
+`null` in the release payload); see the TODO entry. `owned_releases` and
+`owned_masters` are the collection sync's output, not designed here.**
+This join never touches album identity — it is unaffected by the
+`album_key` change above. Ownership is never stored in the match table.
 
 ---
 
