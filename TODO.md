@@ -73,6 +73,82 @@ Shared reminder list. Both I and Claude Code read and update this.
       `/database/search`? Take it with the budget.~~ — **RESOLVED
       2026-09-07: `/database/search` with `type=master`. See the settled
       step-4 candidate-enumeration flow below.**
+- [ ] **2026-09-07, SETTLED DESIGN: step-4 candidate enumeration, ranking,
+      comparison and write rule.**
+      Enumeration and fetch: `search type=master` with artist + title
+      [1 request] → local title normalisation and ranking [0 requests] →
+      `GET /masters/{id}` for the top N [1 request each] → compare, write
+      `discogs_master_id`. Estimated 1 + N per album, N small after title
+      normalisation (7 wrong-master results for Depeche Mode / Violator
+      reduce to 1-2 after normalisation — artist + title alone returns
+      *Violator Live*, *Violator 2000*, *Violator / Black Celebration*,
+      *Violator Remixes 2024*, *Violator | The 12" Singles* and *Music For
+      The Masses / Violator* alongside the album itself). No versions
+      enumeration, so the 529-pressing problem above never arises for
+      matching. Dropping the `artist=` parameter returns unrelated artists
+      (20 results, 9 artists spotted in one sample) — search quality
+      depends on LMS's album artist being clean.
+      Ranking, none exclusionary: `community.have` (primary, free at
+      search time), then country, released, format, title. Format is never
+      a gate. `user_data.in_collection`/`in_wantlist` (per token holder)
+      is a cross-check only, undocumented — confirm before relying on it;
+      the collection sync remains the ownership mechanism. `type=master`
+      search results also carry `barcode`/`catno` (recorded; local files
+      rarely carry barcodes) but not `main_release` — moot, since masters
+      carry their own tracklist.
+      Comparison: filter Discogs tracklist entries to `type_ == "track"`
+      (an ALLOWLIST — see the tracklist-shape item below); compare counts,
+      unequal counts reject immediately; sort both duration lists, compare
+      element-wise within the margin, any duration outside it rejects.
+      Position is NOT parsed — album-level multiset equality delivers
+      design §9's "all discs must match" without a position vocabulary: if
+      any disc differs, the album-level count or vector differs and the
+      album falls to the review queue. Accepted weakening: multiset
+      equality would also accept an album with its discs transposed — that
+      is the same album.
+      Write rule, on duration availability: durations present both sides
+      and matching → `(structural, confirmed)`; durations absent
+      Discogs-side → `(structural, candidate)` for step 5's review queue —
+      count-and-title alone is Fuzzy-grade evidence, and Structural
+      auto-confirms, so count-only confirmation would ship Fuzzy's evidence
+      quality under Structural's silent behaviour (expected volume ~10% of
+      albums). A candidate with zero countable tracks is skipped, not
+      compared. **`main_release` is NEVER written as `discogs_release_id`**
+      — it is the comparison target, not the pressing the user owns.
+- [ ] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
+      and must not assume duration format.** From a 40-release sample:
+      entries have at least three `type_` values (`"track"`, `"heading"`,
+      `"index"`) though the documentation shows only `"track"` — count and
+      compare ONLY `type_ == "track"`, an ALLOWLIST, so an unknown fourth
+      value is ignored rather than counted as a track. 2 of 40 releases
+      (5%) contain non-track entries, so `.tracklist|length` is wrong for
+      them; the filter is mandatory. Headings are sub-sections, NOT disc
+      boundaries (release 14772 has four headings spanning two per disc
+      across two discs) — discarding headings loses no disc structure.
+      Disc membership appears in `position` as `"D-T"` (`1-1` … `2-8`) on
+      that one sample; vinyl (A1/B2) and other formats are unsurveyed, and
+      position is not parsed regardless (see the settled comparison flow
+      above). After filtering to tracks: 36 of 40 releases (90%) have
+      complete durations, 3 (7.5%) have none at all, 1 (2.5%, release 2516)
+      has zero countable tracks. Unverified: whether long tracks use
+      H:MM:SS — all observed are M:SS, longest 9:10, but the parser must
+      handle both, since mis-parsing `1:02:33` would silently poison a
+      comparison. Duration availability is a property of the Discogs
+      ENTRY, not the endpoint: master 18080 (Violator) has durations,
+      master 3855547 (*Escape The Chaos*) and its main release 33986376 are
+      both blank — fetching the release does not recover what the master
+      lacks.
+- [ ] **2026-09-07: `data_quality` is not usable as a pre-fetch ranking
+      signal.** 40-release sample: 20 "Correct" (0 with missing durations),
+      20 "Needs Vote" (3 with missing durations) — direction is real but
+      doesn't narrow (85% of "Needs Vote" releases have complete
+      durations; Fisher exact p ~ 0.23 on n=40, suggestive not
+      established), and it's absent from search results, so it can't rank
+      candidates before the fetch is paid for. Usable only as (a) a
+      tiebreaker between already-fetched candidates and (b) a confidence
+      note in step 5's review queue — do not build on it. No-durations and
+      masterless are largely independent populations (of 3 genuine
+      no-duration releases, 2 have masters; n=3).
 - [ ] **2026-09-07: Structural skips `local_tracks == 0` for its own
       reason** (no local files, no evidence about a physical object), not
       inherited from Strict. Needs its own test.
@@ -204,6 +280,21 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **2026-09-07: decisions §3a's v1 invariant ("Structural must not
+      produce a NULL-id candidate") is in question and BLOCKS THE WRITE
+      PATH.** §3a was written assuming Structural resolves a pressing,
+      which it cannot (see the settled step-4 design above) — a
+      master-only Structural match has a NULL `discogs_release_id`.
+      Recommend amending §3a rather than writing `main_release` as a
+      nominal release id, which would assert a pressing we did not
+      determine. Interacts with the narrow delete predicate in
+      `Match.pm::_recordNoMatch`: a structural NULL-id row must not become
+      collateral of a predicate written for `(strict, candidate, NULL,
+      NULL)`.
+- [ ] **2026-09-07, recorded not designed: a user with both a local rip and
+      a streaming copy sees the album twice in the grid, and only the
+      local row is badged.** Arguably correct; will read oddly. A UI
+      question for step 6, not a matching one.
 - [ ] **Detection has no progress feedback, and the fix depends on the next
       item.** The Settings worker runs through `Slim::Utils::Scheduler` and the
       page never refreshes, so it shows "Reading files... (0/79)" until the user
@@ -300,6 +391,41 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [x] **LMS multi-disc grouping, verified 2026-09-07.** LMS GROUPS
+      multi-disc sets into one `albums` row. Verified three ways: (a)
+      whole-set track counts — "Die 100 besten Ostsongs" `discc=6` with
+      100 tracks in one row, DMBX4 `discc=6` with 52; (b) no title appears
+      once per disc — the only duplicated titlesorts at `discc>=2` are
+      *Delta Machine* and *Singles 86>98*, both "2,2", i.e. two complete
+      copies, not two halves; (c) `albums.disc` always equals
+      `albums.discc` where non-null (1/1, 2/2, 3/3, 6/6). **TRAP:
+      `albums.disc` is NOT a disc index on a grouped album — it equals the
+      disc COUNT.** A filter reading `disc=2` as "the second disc" would
+      silently drop albums. `tracks.disc` exists and is indexed
+      (`trackDiscIndex`), so per-disc structure is reconstructible from
+      track rows if step 5 wants to report which disc mismatched — not
+      needed for matching. Incompletely-ripped sets already exist in the
+      library (*Akasha*: `discc=2`, 7 tracks; *Fourteen Pieces*: `discc=2`,
+      14 tracks) and correctly fail count equality, falling to the review
+      queue — design §3 walkthrough 3, arriving from real data.
+      `albums.extid` carries the online-library URI (Spotify) and is empty
+      for local albums — observed for Spotty only, 2 samples; the
+      `local_tracks == 0` guard remains the primary mechanism.
+- [x] **Discogs API, second hardware-testing session, 2026-09-07.**
+      `type=master` search results do not carry `main_release` (moot —
+      masters carry their own tracklist). Master tracklists sometimes lack
+      durations entirely and fetching the release does not recover what
+      the master lacks (see the tracklist-parsing item above). Artist +
+      title search on `type=master` returns multiple wrong masters (7 for
+      Depeche Mode / Violator, 1 correct) — not sufficient identification
+      on its own, hence the track-shape fingerprint. Dropping `artist=`
+      returns unrelated artists. Search results carry `community.have`/
+      `community.want` (free ranking signal) and `user_data.in_collection`/
+      `in_wantlist` per token holder (confirmed true on master 18080,
+      which the user owns a pressing of — independent confirmation that
+      master-level ownership is Discogs-native, but undocumented and a
+      cross-check only). See the settled step-4 design above for how these
+      feed the candidate-enumeration flow.
 - [x] **Discogs API, hardware-tested with a personal access token,
       2026-09-07.** Verified: token yields `x-discogs-ratelimit: 60`;
       `/oauth/identity` confirms token auth works via the
