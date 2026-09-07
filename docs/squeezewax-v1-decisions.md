@@ -892,6 +892,209 @@ script, never from merging a branch's accumulated build output.
 
 ---
 
+## 8. Structural matching targets the master, not the release
+
+**Decided 2026-09-07 (design chat), during build-order step 4 planning. All API
+behaviour below was verified against a live Discogs account with a personal
+access token on that date; each measurement names its sample.**
+
+Structural resolves an LMS album to a Discogs **master** (edition), writing
+`discogs_master_id` and leaving `discogs_release_id` NULL. It does not identify
+a pressing, and cannot.
+
+### Why not the release
+
+Design §3 originally had Structural fingerprint a specific pressing, and
+walkthrough 2 claimed it *"identified the specific pressing, not just the
+album."* Both were falsified.
+
+Master 3855547 (*Escape The Chaos*) has 15 versions. Its LP variants —
+Worldwide, UK & Germany, Europe, White Label, Numbered — **share a tracklist**.
+Track count and durations cannot separate them, and nothing else available can
+either. Any design implying Structural resolves a pressing was promising
+precision the signal does not carry.
+
+This gives `match_tier` a meaning beyond provenance: **Strict knows the pressing
+because the tag names it; Structural knows the edition; `manual` is whatever the
+user chose.**
+
+### Why the master level is not merely a retreat
+
+Enumerating a master's versions to find the right pressing is not just useless,
+it is unbounded. *Violator* has **529 versions**, and the owned release was not
+in the first 100 under default sort. A negative answer requires exhausting every
+page, so "not this one" is the expensive case. Master-level matching never
+enumerates versions at all.
+
+### The flow
+
+```
+search type=master, artist + title              1 request
+  → local title normalisation and ranking       0 requests
+  → GET /masters/{id} for the top N             1 request each
+  → compare track shape
+  → write discogs_master_id
+```
+
+**1 + N per album, N small.** A `type=master` search for Depeche Mode /
+*Violator* returns 7 masters, of which 1 is the album; the others are *Violator
+Live*, *Violator 2000*, *Violator / Black Celebration*, *Violator Remixes 2024*,
+*Violator | The 12" Singles*, *Music For The Masses / Violator*. Local title
+normalisation reduces 7 to 1–2 before any fetch is paid for.
+
+Artist plus title is **not** sufficient identification on its own — those six
+wrong masters are why the track-shape fingerprint is retained rather than
+dropped. Dropping the `artist=` parameter is worse still: a bare
+`release_title=Violator` search returns 20 results across 9 unrelated artists.
+Search quality therefore depends on LMS's album artist being clean.
+
+`main_release` is **not** present in `type=master` search results. This is moot:
+masters carry their own tracklist, so there is no hop to make.
+
+### Ranking, never gating
+
+Format was originally an exclusion filter and that was falsified: digital
+releases (FLAC/ALAC/download), USB-delivered concert recordings and unofficial
+releases are all objects a user can own. **Format, country, released and title
+are ranking signals only.**
+
+`community.have` / `community.want` arrive free in search results (154,916 /
+209,807 on master 18080) and are the strongest available prior.
+
+The only gate that holds is `local_tracks == 0` — no local files means no
+evidence about a physical object. It is Structural's own rule, not inherited
+from Strict, and needs its own test.
+
+### The comparison
+
+1. Filter Discogs tracklist entries to `type_ == "track"`.
+2. Compare counts. Unequal rejects immediately.
+3. Sort both duration lists; compare element-wise within the margin (design §9's
+   pref, default ±2–3 s).
+4. Any duration outside the margin rejects.
+
+**The `type_` filter is an allowlist, deliberately.** At least three values occur
+— `track`, `heading`, `index` — where the documentation shows only `track`. An
+allowlist ignores an unknown fourth value; a denylist would silently count it as
+a track. Two of 40 sampled releases (5%) contain non-track entries, so
+`.tracklist | length` is wrong for them.
+
+**Position is not parsed.** Disc membership appears as `D-T` (`1-1` … `2-8`) on
+the one multi-disc release examined, but that is one sample and one convention —
+vinyl `A1`/`B2` and other formats are unsurveyed. Building a position parser on a
+single observation is the error this session made five times in other forms.
+
+### Multi-disc, without parsing position
+
+Design §9 requires all discs to match for auto-confirmation. **Album-level
+multiset equality delivers exactly that.** If every disc matches, the
+album-level vector matches; if any disc differs, the count or the vector differs
+and the album falls to the review queue — design §3's walkthrough 3, reached
+without a disc decomposition.
+
+This is safe because **LMS groups multi-disc sets into one `albums` row**,
+verified three ways: whole-set track counts (*Die 100 besten Ostsongs*,
+`discc = 6`, 100 tracks in one row); no title appearing once per disc (the only
+duplicated `titlesort` values at `discc >= 2` are two complete copies,
+`discs = 2,2`, not halves); and `albums.disc` always equalling `albums.discc`
+where non-null.
+
+**Trap, recorded because it will bite someone:** `albums.disc` is *not* a disc
+index on a grouped album. It equals the disc *count*. A filter reading `disc = 2`
+as "the second disc" would silently drop albums.
+
+Headings are sub-sections, not disc boundaries — release 14772 has four headings
+spanning `1-1..1-4`, `1-5..1-8`, `2-1..2-4`, `2-5..2-8`, two per disc.
+Discarding them loses no structure.
+
+Accepted weakening: multiset equality would also accept an album with its discs
+transposed. That is the same album.
+
+Incompletely-ripped sets already exist in the reference library (*Akasha*,
+`discc = 2`, 7 tracks; *Fourteen Pieces*, `discc = 2`, 14 tracks). They correctly
+fail count equality and reach the review queue.
+
+### Confirm versus candidate
+
+**Duration availability is a property of the Discogs entry, not of the
+endpoint.** Master 18080 carries durations; master 3855547 and its main release
+33986376 both carry none. Fetching the release does not recover what the master
+lacks.
+
+Measured over 40 releases from the reference collection, after filtering to
+`type_ == "track"`:
+
+| | count | share |
+|---|---|---|
+| Complete durations | 36 | 90% |
+| No durations at all | 3 | 7.5% |
+| Zero countable tracks | 1 | 2.5% |
+
+So:
+
+- **Durations present both sides and matching** → `(structural, confirmed)`.
+- **Durations absent Discogs-side** → `(structural, candidate)` for step 5's
+  review queue.
+- **Zero countable tracks** → candidate skipped, not compared.
+
+Count and title alone is **Fuzzy-grade evidence**, and Fuzzy is review-gated by
+design (§3) precisely because it is. Structural auto-confirms silently.
+Confirming on count alone would ship Fuzzy's evidence quality under Structural's
+behaviour, which is the one combination the tier design exists to prevent. The
+expected cost is a review queue holding roughly 10% of albums — a usable feature
+rather than a chore.
+
+### What is written
+
+`discogs_master_id` set, `discogs_release_id` NULL. **`main_release` is never
+written as `discogs_release_id`** — it is a release we might have compared
+against, not the pressing the user owns, and writing it would assert a fact we
+did not determine.
+
+No migration is required: `Schema.pm::_migration_1` declares
+`discogs_release_id INTEGER` with no NOT NULL, consistent with §3a's conflict
+rows and with `Match.pm::_recordNoMatch`'s `discogs_release_id IS NULL`
+predicate.
+
+### Consequences this creates elsewhere
+
+- **§3a's v1 invariant must be amended.** It forbids Structural producing a
+  NULL-id candidate, on the stated grounds that *"Structural's
+  partial-multi-disc candidate and Fuzzy's master-release candidate both carry a
+  proposed id."* That was written assuming Structural resolves a pressing. It
+  cannot. Amending §3a is correct; writing a nominal id to satisfy it is not.
+- **The narrow delete predicate must not widen.** `Match.pm::_recordNoMatch`
+  deletes `match_tier = 'strict' AND state = 'candidate' AND
+  discogs_release_id IS NULL AND snapshot_track_count IS NULL`. A structural
+  NULL-id row must never become collateral. Structural needs no delete path of
+  its own.
+- **The badge test is a disjunction**, corrected in design §10:
+  `release_id in owned_releases OR (master_id present and not the no-master
+  sentinel AND master_id in owned_masters)`.
+- **The no-master sentinel is endpoint-dependent** — `0` in collection
+  `basic_information` (5 of 100 sampled, zero nulls), `null` in the release
+  payload (release 9701013). Both must be guarded. Fixtures need **two**
+  masterless releases, because the failure is that distinct masterless ones
+  collide on `0`.
+- **An edition-level match has no pressing to show** in §4's context menu.
+  Product decision, recorded not taken.
+
+### Unverified, carried forward
+
+- Whether long tracks use `H:MM:SS`. All observed durations are `M:SS`, longest
+  `9:10`. The parser must handle both; mis-parsing `1:02:33` would silently
+  poison a comparison.
+- `data_quality` is **not** usable as a pre-fetch signal. Base rate over 40
+  releases: 20 `Correct` (0 missing durations), 20 `Needs Vote` (3 missing).
+  Real direction, but 85% of `Needs Vote` entries are fine, the split is 50/50,
+  and the field is absent from search results so it cannot rank candidates
+  before the fetch is paid for. Usable only as a tiebreaker between
+  already-fetched candidates and as a confidence note in the review queue.
+- Whether the per-album fetch cap is needed given N is small after title
+  normalisation. §13's rewrite decides it.
+
+---
+
 ## Appendix — Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
