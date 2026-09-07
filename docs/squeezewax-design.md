@@ -42,7 +42,7 @@ Typical plugin layout (per lyrion.org/reference/music-service-plugin/):
 | `API/Sync.pm` | Synchronous calls (scanner/importer side) |
 | `Importer.pm` | Scan-time import/matching (synchronous HTTP only) |
 | `Settings.pm` | Configuration pages |
-| `Settings/Auth.pm` | Discogs OAuth handling |
+| `Settings/Auth.pm` | Discogs personal-access-token entry and storage |
 
 ### Naming (resolved)
 
@@ -385,9 +385,9 @@ their mark.
 
 ## 5. Collection Value & Statistics
 
-Requires Discogs **OAuth** (`Settings/Auth.pm`); pulls the user's Collection
-(and optionally Wantlist) into a local cache via a slow background sync job
-(rate-limit-aware).
+Requires a Discogs **personal access token** (`Settings/Auth.pm`); pulls the
+user's Collection (and optionally Wantlist) into a local cache via a slow
+background sync job (rate-limit-aware).
 
 ### Features
 
@@ -567,16 +567,19 @@ or unreachable:
   (cached), and unprocessed albums are picked up by the next scan or a manual
   "continue matching" action. A partial scan must never corrupt or discard
   existing confirmed matches.
-- **OAuth token expiry/revocation**: collection-dependent features degrade to
-  cached data and Settings shows a "re-authenticate" prompt; matching and
-  read-only browsing (which work with app-level auth) continue.
+- **Token revocation**: a personal access token does not expire, but the
+  user can revoke it from their Discogs account at any time. Collection-
+  dependent features degrade to cached data and Settings shows a
+  "re-enter token" prompt; matching and read-only browsing (which work
+  with app-level auth) continue.
 
 ---
 
 ## 9. Settings (`Settings.pm`)
 
 ### Authentication
-- Discogs OAuth (required for Collection/Wantlist features; token storage).
+- Discogs personal access token (required for Collection/Wantlist
+  features; token storage).
 
 ### Matching
 - Maximum matching tier enabled: **Strict / Structural / Fuzzy** — the
