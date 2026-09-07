@@ -199,8 +199,18 @@ flowchart TD
    most of the user's ripped library.
 2. *Structural:* An untagged-by-ID rip of a 1994 CD reissue: artist + title
    search yields six pressings; only one has the same 12 tracks with all
-   durations within ±3 s → **Confirmed** automatically, and it identified the
-   *specific pressing*, not just the album.
+   durations within ±3 s → **Confirmed** automatically, and ~~it identified
+   the *specific pressing*, not just the album~~ — **falsified 2026-09-07:
+   pressings of one edition share a tracklist, so track shape cannot tell
+   them apart. Verified against master 3855547 (*Escape The Chaos*), whose
+   15 versions include LP variants for Worldwide, UK & Germany, Europe,
+   White Label and Numbered — indistinguishable by track count or
+   durations. Structural identifies the *edition* (the master), not the
+   pressing.**
+
+   Precision by tier: **Strict** knows the pressing, because the tag names
+   it. **Structural** knows the edition. **Manual** is whatever the user
+   chose.
 3. *Partial multi-disc:* A 2-CD deluxe edition where disc 1 matches perfectly
    but disc 2 (bonus disc) has an extra track → **not** auto-confirmed; lands
    in the **review queue** for the user to resolve (maybe they own the
