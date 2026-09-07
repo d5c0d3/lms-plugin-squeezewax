@@ -649,7 +649,9 @@ Endpoint facts:
 - **Collection sync** returns `instance_id`, `rating` and a
   `basic_information` block per item. **No tracklist.** Paginated at a maximum
   of **100 per page** (confirmed by Discogs staff on the equivalent inventory
-  endpoint). A 2,000-item collection is ~20 requests.
+  endpoint). ~~A 2,000-item collection is ~20 requests.~~ — **corrected,
+  measured 2026-09-07: cost is `ceil(items / 100)`; 3 requests for a
+  203-item collection.**
 - **`GET /releases/{id}`** is the only endpoint returning a tracklist.
 - **Search results** carry id, title, year, country, format, label and
   catalogue number — but no durations.
@@ -659,7 +661,7 @@ Consequences:
 | Operation | Cost |
 |---|---|
 | Strict match | **0 requests** — the tag names the release |
-| Owned badge | ~20 requests per collection sync |
+| Owned badge | ~~~20 requests per collection sync~~ — **`ceil(items / 100)`; measured 2026-09-07: 3 requests for a 203-item collection** |
 | Structural match | 1 search **+ 1 release fetch per candidate pressing** |
 | Completeness check (v2) | 1 release fetch per matched album, cacheable forever |
 
@@ -890,7 +892,7 @@ script, never from merging a branch's accumulated build output.
 
 ---
 
-## 7. Open items
+## Appendix — Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
 

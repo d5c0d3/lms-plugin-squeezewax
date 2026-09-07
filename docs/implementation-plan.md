@@ -16,7 +16,7 @@ Per `CLAUDE.md` / spec §11, v1 only, in this order:
 
 1. Plugin skeleton + `install.xml` that LMS actually loads
 2. SQLite schema per spec §10 (`discogs_match`, `discogs_collection`,
-   `discogs_price_snapshot`)
+   `discogs_price_snapshot`, `discogs_release_cache`, `discogs_no_match`)
 3. Strict-tier matching (release ID already in file tags)
 4. Structural-tier matching (track count + per-track durations)
 5. Review queue + manual re-match
