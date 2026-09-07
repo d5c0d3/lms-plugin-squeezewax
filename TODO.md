@@ -60,6 +60,73 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **2026-09-07: no cheap discriminating filter exists for Structural
+      candidates — track count and durations appear only in the release
+      payload.** Strategy must be rank, fetch in rank order, stop early, cap
+      hard — not filter-then-fetch. Ranking signals, none exclusionary:
+      `stats.community.in_collection` (strongest), country, released,
+      format, title. **A hard per-album fetch cap is REQUIRED** and is what
+      makes the budget bounded now that the format gate is a ranking signal
+      (see the falsified-claims item below), not a filter. Over-cap albums
+      go to the review queue rather than grinding. Blocks the §13 rewrite.
+      OPEN: enumerate candidates via `/masters/{id}/versions` or
+      `/database/search`? Take it with the budget.
+- [ ] **2026-09-07: Structural skips `local_tracks == 0` for its own
+      reason** (no local files, no evidence about a physical object), not
+      inherited from Strict. Needs its own test.
+- [ ] **2026-09-07: the `use` gate must become `discogsTagNames` configured
+      OR (max tier >= structural AND token present).** Decide the max-tier
+      pref's DEFAULT explicitly — a default of `'structural'` makes the
+      gate true on every fresh install and defeats its purpose.
+- [ ] **2026-09-07, verified: `master_id` uses `0` as the "no master"
+      sentinel, not null** — 5 of 100 sampled were 0, zero were null. Every
+      master comparison needs an explicit `!= 0` guard. Fixtures need TWO
+      masterless releases, because the failure mode is that distinct
+      masterless releases collide on 0.
+- [ ] **2026-09-07: ownership test needs BOTH sets** —
+      `release_id in owned_releases` OR (`master_id != 0` AND
+      `master_id in owned_masters`). The release arm is required, not a
+      fallback — it's the only arm that fires for the ~5% masterless
+      releases. Ownership is decided at MASTER level; identity stays at
+      RELEASE level (resolves the ripped-the-CD-owns-the-LP case).
+- [ ] **2026-09-07, FALSIFIED: "one request per master answers ownership
+      across every pressing."** `/masters/{id}/versions` is paginated and
+      unbounded — Depeche Mode, *Violator*: 529 versions, and the owned
+      release was not in the first 100 under default sort. A negative
+      answer requires exhausting every page, so "not owned" is the
+      expensive case. Dropped as the ownership mechanism; the collection
+      sync's owned-master set replaces it.
+- [ ] **2026-09-07, FALSIFIED: "`/database/search` requires
+      authentication."** Returns 200 unauthenticated, despite the
+      documentation stating otherwise. Consequence: requiring a token is a
+      throughput/setup-coherence choice (60/min vs 25/min), not a technical
+      necessity — the use-gate rationale needs rewriting accordingly; the
+      gate condition itself is unchanged.
+- [ ] **2026-09-07: pin an explicit stable sort on every paged Discogs
+      endpoint, or document the accepted risk.** Collection listing
+      defaults to `sort=label&sort_order=asc`; `/masters/{id}/versions` has
+      its own default order. Paging over a mutable, non-unique sort key can
+      shift rows between pages, silently dropping or duplicating results.
+- [ ] **2026-09-07: no `discogs_collection` mirror in v1.** Ownership is a
+      derived per-album label, written by a sync that fetches transiently
+      and stores only the conclusion. The column lands in migration 3, in
+      the step that reads it — NOT step 4 (step 2 finding 8: don't add a
+      column nothing reads yet). Sync has its own trigger: interval pref
+      plus a visible manual "Sync collection now" — a music rescan does not
+      refresh it, since the skip contract keys on file state and ownership
+      isn't in it. Settings page shows collection last-synced time.
+- [ ] **2026-09-07: artist pre-filter** to shrink any master backfill from
+      library-sized to collection-sized, at zero request cost. Needs a
+      conservative fallback for various-artists and album-artist
+      mismatches.
+- [ ] **2026-09-07: mandatory Discogs attribution, not currently in the
+      design doc.** (a) "This application uses Discogs' API but is not
+      affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a
+      trademark of Zink Media, LLC." — prominently. (b) "Data provided by
+      Discogs." — directly next to any data used, hyperlinked to the
+      discogs.com page for that data, not nofollow. (b) is a live
+      constraint on the badge and the review queue — a grid badge has no
+      natural place for it; decide before step 6 starts.
 - [ ] **Step 4's plan must open with an enumerated "what step 3 established
       that step 4 must honour" section**, each item citing its decision
       record or symbol — the same shape step 3's plan used for step 2's
@@ -172,6 +239,25 @@ Shared reminder list. Both I and Claude Code read and update this.
       a confirmation. Leaning (b). **Blocks implementing the action**, which is
       otherwise small - Match.pm already has the machinery, and the SQL reset is
       the workaround meanwhile.
+      **2026-09-07: promoted to a PRECONDITION of step 4, not a step-5
+      nicety.** Three decisions depend on it: §3b's tag-name coverage gap,
+      the duration-margin invalidation below, and the structural no-match
+      TTL below. The manual-rows question above blocks all three.
+- [ ] **2026-09-07: `discogs_no_match` tier `'structural'` skip predicate.**
+      Two-part, unlike Strict's one-part: `source_timestamp` unchanged AND
+      `checked_at` within TTL. Proposed TTL 30 days as a pref — not
+      TOU-constrained, a UX/freshness choice. Depends on the clear & rebuild
+      precondition above.
+- [ ] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
+      keyed on the duration-margin pref** — §3b's own "Step 4 note" trigger
+      has fired. Depends on the clear & rebuild precondition above.
+- [ ] **2026-09-07, recorded not designed: master-level badge fallback vs.
+      pressing-level collectors.** Keep both answers recoverable — product
+      decision, not yet taken.
+- [ ] **2026-09-07, recorded not designed: is a derived "owned" label our
+      conclusion, or one bit of Restricted Data under the Discogs TOU?**
+      Leaning conclusion; NOT settled. Kept academic by choosing the sync
+      interval on UX grounds regardless. Do not record as decided.
 
 - [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
       no handover: step-3 finding 3 shows `album_key` covers structural
@@ -193,18 +279,47 @@ Shared reminder list. Both I and Claude Code read and update this.
       disagree".** Both write `(strict, candidate, NULL)` in v1, which is
       correct for v1 — neither is a match — but they are different user actions
       (fix one file's tag vs. decide between two). Recorded, not designed.
-- [ ] **`discogs_collection` wantlist rekey (v2).** `instance_id` as primary
-      key cannot hold wantlist rows — a Discogs want has no instance id. The
-      table is entirely regenerable (design §10), so the migration is DROP +
-      re-sync, ~20 requests. Note the obvious fix does **not** work:
-      `UNIQUE(list_state, discogs_release_id, instance_id)` with `instance_id`
-      NULL for wants constrains nothing, since SQLite treats NULLs as distinct
-      in unique indexes — verified, three identical rows inserted without
-      error. Needs a partial unique index (`... WHERE instance_id IS NULL`) or
-      a non-NULL sentinel.
+- [ ] ~~**`discogs_collection` wantlist rekey (v2).** `instance_id` as
+      primary key cannot hold wantlist rows — a Discogs want has no
+      instance id. The table is entirely regenerable (design §10), so the
+      migration is DROP + re-sync, ~20 requests. Note the obvious fix does
+      **not** work: `UNIQUE(list_state, discogs_release_id, instance_id)`
+      with `instance_id` NULL for wants constrains nothing, since SQLite
+      treats NULLs as distinct in unique indexes — verified, three
+      identical rows inserted without error. Needs a partial unique index
+      (`... WHERE instance_id IS NULL`) or a non-NULL sentinel.~~ —
+      **2026-09-07: no longer applicable.** v1 holds no `discogs_collection`
+      mirror at all (see the "Next — build-order steps 3–5" item above);
+      ownership is a derived per-album label, not a synced table. Revisit
+      if/when a collection mirror is actually built.
 
 ## Waiting — needs a real server
 
+- [x] **Discogs API, hardware-tested with a personal access token,
+      2026-09-07.** Verified: token yields `x-discogs-ratelimit: 60`;
+      `/oauth/identity` confirms token auth works via the
+      `Authorization: Discogs token=...` header form; collection listing
+      path is `/users/{username}/collection/folders/0/releases`; collection
+      `basic_information` carries `master_id` and `master_url`; collection
+      sync cost is `ceil(items/100)` (measured 3 requests for 203 items);
+      `stats.user.in_collection`/`in_wantlist` on `/masters/{id}/versions`
+      is per-token-holder (null unauthenticated, 0/1 authenticated) —
+      retained as a diagnostic only, see the derived-owned-label open
+      question above. Responses now come via Cloudflare; the
+      documentation's example headers (lighttpd, Varnish) are a 2014
+      snapshot — do not reason about caching behaviour from them. See
+      "Next — build-order steps 3–5" above for the two falsified claims and
+      the master_id-sentinel finding from the same session.
+- [ ] **2026-09-07, still unverified: unauthenticated rate tier.** Is the
+      header actually 25/min? Documented, not confirmed by header.
+- [ ] **2026-09-07, still unverified: do unauthenticated search results
+      differ in content?** Docs say image URLs are withheld.
+- [ ] **2026-09-07, still unverified: collection pages 2–3 unchecked for
+      `master_id` population.** Only page 1 of the 203-item sample was
+      checked.
+- [ ] **2026-09-07, still unverified: does LMS ever group local and
+      streaming copies of one album under a single `albums.id`?** If yes,
+      Structural must count local tracks only.
 - [ ] **Failed `<importmodule>` load visibility.** Does LMS surface the
       failed-to-load module as a persistent error state on the Plugins page?
       Does that state clear on its own once the module exists (next scan or
@@ -272,6 +387,13 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-07: this is the third, fourth and fifth instance of a
+      pattern step 3 identified** — a claim derived from one path, or from
+      a documented example, stated as a general property. (The
+      `/database/search` auth claim, the one-request-per-master claim, and
+      the format-exclusion claim, all in "Next — build-order steps 3–5"
+      above.) The specific lesson from this pass: **reading a documented
+      response example is not verification.**
 - [x] **`package-dev-build.sh` writes git history as a side effect.** Done
       2026-09-06: the SqueezeWaxDev/repo-dev.xml arrangement is dropped
       entirely (see decisions §6a, `docs/dev-repo-workflow.md`). Its
@@ -353,6 +475,22 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Deferred by decision — not forgotten
 
+- **2026-09-07: monthly CC0 data dumps (data.discogs.com) as an alternative
+  to the API for tracklists.** Would solve caching and rate limits; is a
+  different plugin (multi-GB XML, local index, often on a NAS). v2/v3.
+- **2026-09-07: register "SqueezeWax" at
+  discogs.com/settings/developers** for breaking-change email notices.
+  Obtain key and secret; commit neither.
+- **2026-09-07: settle the User-Agent string** — unique, RFC 1945 form,
+  contact URL, plugin version. Silent blocking is the documented penalty.
+- **2026-09-07: token storage is plaintext LMS prefs, an unscoped account
+  credential** (can create Marketplace listings). Settings page needs a
+  warning and a revocation link. Check how `refs/lms-plugin-tidal` and
+  `refs/Spotty-Plugin` store secrets before inventing anything.
+- **2026-09-07: `discogs_price_snapshot` vs. Discogs TOU item 5 (v2/v3)** —
+  storing and displaying historical Restricted Data. The
+  dated-historical-observation reading is an interpretation, not a
+  citation. If built, label snapshots with observation dates.
 - **v3: Discogs artist ID — add the column and the capture together.** Decisions
   §3 originally said to capture it while the file is open, justified as saving a
   later re-read. Migration 1 has no artist column and nothing reads one before
