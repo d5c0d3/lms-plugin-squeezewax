@@ -439,9 +439,9 @@ sub _migration_1 {
 		ON discogs_match (state, snapshot_track_count)');
 
 	# discogs_release_cache. Untouched by anything LMS does to its own
-	# database, so relinks and the v2 completeness check cost no API calls once
-	# a release has been fetched once. GET /releases/{id} is the only endpoint
-	# that returns a tracklist, which makes this worth keeping indefinitely.
+	# database. Not written in v1 - retention here is constrained by the
+	# Discogs API Terms of Use, not "worth keeping indefinitely"; see
+	# TODO.md for the pending retention policy.
 	$dbh->do(q{
 		CREATE TABLE IF NOT EXISTS squeezewax.discogs_release_cache (
 			discogs_release_id INTEGER NOT NULL PRIMARY KEY,
