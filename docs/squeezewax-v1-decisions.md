@@ -463,8 +463,35 @@ trace of the disagreement that caused it.
 
 `state='candidate' AND discogs_release_id IS NULL` means "examined, could not
 decide". Step 4 must not produce a NULL-id candidate for any other reason —
-Structural's partial-multi-disc candidate and Fuzzy's master-release
-candidate both carry a proposed id. **If a later tier genuinely needs a
+~~Structural's partial-multi-disc candidate and Fuzzy's master-release
+candidate both carry a proposed id.~~ — **Amended 2026-09-07 (decisions §8).**
+This was written assuming Structural resolves a specific pressing. It cannot:
+pressings of one edition share a tracklist, verified against master 3855547,
+whose LP variants are indistinguishable by track count or duration.
+Structural therefore writes `discogs_master_id` with a NULL
+`discogs_release_id` by design.
+
+The invariant is restated rather than dropped. A row with a NULL
+`discogs_release_id` must carry one of:
+  - a strict conflict context (`match_tier = 'strict'`, `state =
+    'candidate'`) — §3a's original case; or
+  - a `discogs_master_id` (`match_tier = 'structural'`) — an
+    edition-level match.
+A NULL-id row carrying neither is a defect.
+
+What this does NOT change: `Match.pm::_recordNoMatch`'s delete
+predicate stays exactly as written. It is scoped to
+`match_tier = 'strict'`, so a structural NULL-id row is already
+outside it. Structural needs no delete path of its own, and the
+predicate must not be widened or parameterised by tier — see §2a
+invariant 2.
+
+The alternative considered and rejected: writing the master's
+`main_release` as a nominal `discogs_release_id` to preserve the
+original invariant. That asserts a pressing we did not determine,
+which is the failure the tier design exists to prevent.
+
+**If a later tier genuinely needs a
 NULL-id candidate, that is the trigger to reopen `conflict_note`** — not a
 reason to overload this one silently.
 
