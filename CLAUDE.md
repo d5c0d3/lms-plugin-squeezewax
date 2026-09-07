@@ -72,13 +72,15 @@ plugin without Spotty's helper-binary complexity.
 
 1. Plugin skeleton + `install.xml` that LMS actually loads
 2. SQLite schema per spec §10 (`discogs_match`, `discogs_collection`,
-   `discogs_price_snapshot`)
+   `discogs_price_snapshot`, `discogs_release_cache`, `discogs_no_match`)
 3. Strict-tier matching (release ID already in file tags)
 4. Structural-tier matching (track count + per-track durations)
 5. Review queue + manual re-match
 
 Do not start OAuth, badges, marketplace lookup, or anything in v2/v3 until
-matching works end to end.
+matching works end to end. **This still forbids OAuth**: v1 auth is a
+user-supplied Discogs personal access token (decided 2026-09-07), not
+OAuth, and is in scope for step 4.
 
 ## Workflow split
 

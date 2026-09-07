@@ -1485,6 +1485,8 @@ reason to overload this one silently.
 These are additions from the design chat. They do not replace your own
 planning-session items — keep those, labelled as yours.
 
+Snapshot as delivered; TODO.md is the live list.
+
 ## Next — build-order step 3
 
 - [ ] **Importer must never overwrite a `match_tier='manual'` row.** An

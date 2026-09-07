@@ -356,6 +356,10 @@ assumed — see §7.
 
 ## 8. The transition off SqueezeWaxDev
 
+**Archived record of a completed migration.** Written while the transition
+was still pending; TODO.md records it done 2026-09-07. Kept in present
+tense below as the plan-as-written, not as current state.
+
 The dev server currently runs `SqueezeWaxDev`: prefs under
 `plugin.squeezewaxdev`, database `squeezewax.db` (never renamed — §1).
 Uninstalling it and installing `SqueezeWax` in its place means:
