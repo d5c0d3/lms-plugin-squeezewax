@@ -164,7 +164,7 @@ single-mode picker.
 | Tier | Signal | Behavior |
 |---|---|---|
 | **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm **when the configured tags agree** — the ideal case for rips tagged with Discogs, which is most of a tagged library. When two configured tags name different releases, or a configured tag's value will not parse, there *is* ambiguity and the album goes to the review queue as a candidate instead. See `squeezewax-v1-decisions.md` §3a. |
-| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget. |
+| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. ~~Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget.~~ — **Falsified 2026-09-07: format cannot be an exclusion gate. Digital releases (FLAC/ALAC/download), USB-delivered concert recordings, and unofficial releases are all objects a user can own. Format, country, released and title are now ranking signals only. The only gate that holds is `local_tracks == 0` (no local files, no evidence about a physical object). Removing the format gate increases candidates per album fetched, which is the main reason §13's budget needs a rewrite — tracked in TODO.md.** |
 | **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
 
 These three are the *cascade's* tiers. The stored `match_tier` records
@@ -278,9 +278,9 @@ rescans cheap under the rate limit).
 
 ### Constraints
 
-- Discogs API rate limit: **60 requests/min (authenticated)**. Large-library
-  scans must be batched/throttled; results cached in a local SQLite table so
-  re-scans are cheap.
+- Discogs API rate limit: see §13 for the authoritative figure and how it
+  was verified. Large-library scans must be batched/throttled; results
+  cached in a local SQLite table so re-scans are cheap.
 - Matching a Discogs *pressing* to LMS tracks is inherently ambiguous when only
   generic tags exist — hence the tier system rather than one algorithm.
 
@@ -675,8 +675,11 @@ discogs_price_snapshot
 `library.db` wipe, while `urlmd5` does — see §3 and
 `squeezewax-v1-decisions.md` §2 for the full finding, including the
 orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
-makes relinks and completeness checks (v2) cost no API calls once a release
-has been fetched once — added explicitly rather than left implied.
+~~makes relinks and completeness checks (v2) cost no API calls once a release
+has been fetched once~~ — **superseded 2026-09-07: the Discogs API Terms of
+Use (API Use and Restrictions item 5) forbid caching Content longer than
+necessary, so "cost no API calls once fetched" cannot stand as written. A
+replacement retention policy is pending a decision record — see TODO.md.**
 
 **`discogs_no_match` is entirely regenerable**, like `discogs_collection` and
 unlike `discogs_match`. It exists so a rescan does not re-read one or two files
@@ -753,33 +756,50 @@ implementation, rather than open design questions:
   edge cases (e.g. bonus-disc-only mismatches, box sets with non-audio discs)
   should be validated against real Discogs release data once implementation
   starts.
-- ~~Verify how LMS's rescan flags changed files~~ — **Resolved.**
-  `Slim::Utils::Scanner::API` provides `onNewTrack` / `onChangedTrack` /
-  `onDeletedTrack` / `onFinished` hooks, confirmed against
-  `refs/slimserver` `public/9.1`. `Importer.pm` registers `onChangedTrack`
-  (and `onNewTrack`/`onDeletedTrack`) to accumulate affected album ids per
-  track event, then runs the deduped re-match cascade once in `onFinished`.
-  See `squeezewax-v1-decisions.md` §6 and `implementation-plan.md` §4.6.
+- ~~Verify how LMS's rescan flags changed files~~ — **Not "Resolved" as
+  stated below: see `squeezewax-v1-decisions.md` §6 for the corrected hook,
+  and TODO.md's open `lms_album_id` refresh item for what's still
+  unimplemented.** `Slim::Utils::Scanner::API` provides `onNewTrack` /
+  `onChangedTrack` / `onDeletedTrack` / `onFinished` hooks, confirmed
+  against `refs/slimserver` `public/9.1`. `Importer.pm` registers
+  `onChangedTrack` (and `onNewTrack`/`onDeletedTrack`) to accumulate
+  affected album ids per track event. See `implementation-plan.md` §4.6.
 
 ---
 
 ## 13. Key Technical Constraints (Summary)
 
-- **Discogs API**: 60 req/min authenticated; OAuth for user data; no
-  historical price endpoint (snapshot locally).
+- **Discogs API rate limit: 60 requests/min, authenticated** — this is the
+  one authoritative statement of this figure; §3 and CLAUDE.md point here
+  rather than repeating it. Confirmed 2026-09-07 via the
+  `x-discogs-ratelimit` response header using a personal access token
+  ([discogs.com/developers](https://www.discogs.com/developers/)).
+  Unauthenticated tier is documented at 25/min but not yet confirmed by
+  header — see TODO.md. OAuth for user data; no historical price endpoint
+  (snapshot locally).
 
   **Scan-time budget** (corrected from an earlier flat "1–2 requests per
   album" estimate — see `squeezewax-v1-decisions.md` §4):
 
+  **This table's per-album figures need a full rewrite, not an adjustment —
+  tracked in TODO.md.** Two of its premises no longer hold: the
+  format/year/country pre-filter it assumes is now a ranking signal, not an
+  exclusion gate (§3), so Structural has more candidates to fetch per album
+  than this table counts; and the Strict-match row's "0 requests" describes
+  identifying the release, not answering ownership, which needs the
+  collection sync separately. Pending that rewrite, the table and the
+  disk-bound claim below are unverified.
+
   | Operation | Cost |
   |---|---|
-  | Strict match | 0 requests — the tag names the release |
-  | Owned badge | ~20 requests per collection sync (100 items/page) |
-  | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) |
-  | Completeness check (v2) | 1 release fetch per matched album, cacheable forever |
+  | Strict match | 0 requests to identify the release — the tag names it. Answering *ownership* is a separate cost not counted here; see the note above. |
+  | Owned badge | ~~~20 requests per collection sync (100 items/page)~~ — **corrected 2026-09-07: `ceil(items / 100)` requests. Measured 3 requests for a 203-item collection.** |
+  | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) — **pre-filter corrected to a ranking signal, see §3; candidate count per album is higher than this table assumes.** |
+  | Completeness check (v2) | 1 release fetch per matched album, ~~cacheable forever~~ — **superseded 2026-09-07: the Discogs API Terms of Use (item 5) forbid caching Content longer than necessary. Replacement policy pending a decision record — see TODO.md.** |
 
-  For a well-tagged, Strict-dominant library, cold matching is
-  **disk-bound, not rate-limit-bound**. Structural-heavy libraries can still
+  ~~For a well-tagged, Strict-dominant library, cold matching is
+  **disk-bound, not rate-limit-bound**.~~ — **Unverified pending the rewrite
+  above (2026-09-07).** Structural-heavy libraries can still
   be expensive — an album with eight pressings on Discogs costs nine
   requests, not two — so matching must still be incremental, resumable
   (§8), and cached so it only ever runs cold once.

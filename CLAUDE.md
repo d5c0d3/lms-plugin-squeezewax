@@ -60,8 +60,9 @@ plugin without Spotty's helper-binary complexity.
     free, unlike bare `LWP::UserAgent`.
 - **This plugin never plays audio.** No ProtocolHandler, no streaming URI
   scheme, no transcoding entries. Spotty has all of these — do not copy them.
-- Discogs API: 60 requests/min authenticated. All matching must be batched,
-  throttled, cached in SQLite, and resumable after interruption.
+- Discogs API rate limit: see `docs/squeezewax-design.md` §13 for the
+  authoritative figure and how it was verified. All matching must be
+  batched, throttled, cached in SQLite, and resumable after interruption.
 - A partial or interrupted scan must never corrupt or discard existing
   confirmed matches.
 
