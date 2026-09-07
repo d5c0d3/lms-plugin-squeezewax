@@ -69,8 +69,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       makes the budget bounded now that the format gate is a ranking signal
       (see the falsified-claims item below), not a filter. Over-cap albums
       go to the review queue rather than grinding. Blocks the §13 rewrite.
-      OPEN: enumerate candidates via `/masters/{id}/versions` or
-      `/database/search`? Take it with the budget.
+      ~~OPEN: enumerate candidates via `/masters/{id}/versions` or
+      `/database/search`? Take it with the budget.~~ — **RESOLVED
+      2026-09-07: `/database/search` with `type=master`. See the settled
+      step-4 candidate-enumeration flow below.**
 - [ ] **2026-09-07: Structural skips `local_tracks == 0` for its own
       reason** (no local files, no evidence about a physical object), not
       inherited from Strict. Needs its own test.
@@ -78,11 +80,14 @@ Shared reminder list. Both I and Claude Code read and update this.
       OR (max tier >= structural AND token present).** Decide the max-tier
       pref's DEFAULT explicitly — a default of `'structural'` makes the
       gate true on every fresh install and defeats its purpose.
-- [ ] **2026-09-07, verified: `master_id` uses `0` as the "no master"
-      sentinel, not null** — 5 of 100 sampled were 0, zero were null. Every
-      master comparison needs an explicit `!= 0` guard. Fixtures need TWO
-      masterless releases, because the failure mode is that distinct
-      masterless releases collide on 0.
+- [ ] **2026-09-07, verified: the "no master" sentinel is
+      endpoint-dependent — both representations must be guarded.**
+      Collection `basic_information`: `0` (5 of 100 sampled, zero nulls).
+      Release payload: `null` (verified, release 9701013). Every master
+      comparison needs both an explicit `!= 0` guard AND a definedness
+      check, depending on which endpoint's `master_id` is in hand.
+      Fixtures need TWO masterless releases, because the failure mode is
+      that distinct masterless releases collide on the same sentinel.
 - [ ] **2026-09-07: ownership test needs BOTH sets** —
       `release_id in owned_releases` OR (`master_id != 0` AND
       `master_id in owned_masters`). The release arm is required, not a
@@ -317,9 +322,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-07, still unverified: collection pages 2–3 unchecked for
       `master_id` population.** Only page 1 of the 203-item sample was
       checked.
-- [ ] **2026-09-07, still unverified: does LMS ever group local and
-      streaming copies of one album under a single `albums.id`?** If yes,
-      Structural must count local tracks only.
+- [x] **2026-09-07, ANSWERED: does LMS ever group local and streaming
+      copies of one album under a single `albums.id`?** No. Verified —
+      *Delta Machine* and *Singles 86>98* each exist as two rows, one
+      all-local (`flc`) and one all-remote (`spt`), with `albums.extid`
+      carrying the Spotify URI on the remote row. No mixed album exists.
 - [ ] **Failed `<importmodule>` load visibility.** Does LMS surface the
       failed-to-load module as a persistent error state on the Plugins page?
       Does that state clear on its own once the module exists (next scan or
