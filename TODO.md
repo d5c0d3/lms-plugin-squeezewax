@@ -60,6 +60,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [x] **2026-09-07, verified: step 4's master-only Structural row needs NO
+      migration.** `discogs_match.discogs_release_id` is already nullable
+      (`Schema.pm::_migration_1`: `discogs_release_id INTEGER`, no
+      `NOT NULL`), consistent with §3a's conflict rows and with
+      `Match.pm::_recordNoMatch`'s `discogs_release_id IS NULL` predicate.
 - [ ] **2026-09-07: no cheap discriminating filter exists for Structural
       candidates — track count and durations appear only in the release
       payload.** Strategy must be rank, fetch in rank order, stop early, cap
@@ -347,6 +352,19 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
       keyed on the duration-margin pref** — §3b's own "Step 4 note" trigger
       has fired. Depends on the clear & rebuild precondition above.
+- [ ] **2026-09-07, recorded not designed: an edition-level (Structural)
+      match has no pressing to show in design §4's badge context menu.**
+      Proposed shape — show master-level info plus a version picker ("you
+      own a version — which pressing?"); the user's choice promotes the
+      row to `match_tier='manual'` with a real `discogs_release_id`. Gives
+      `'manual'` a refinement purpose alongside override, and reuses the
+      review queue's machinery. Product decision, not taken.
+- [ ] **2026-09-07, recorded not designed: no index on
+      `discogs_match.discogs_master_id`, and `discogs_collection_release`
+      is on `(discogs_release_id, list_state)` only.** The master arm of
+      the badge's dual test (see design §10) is unindexed on both sides —
+      matters for grid rendering. Belongs in the migration for the step
+      that reads it, NOT step 4 (step 2 finding 8).
 - [ ] **2026-09-07, recorded not designed: master-level badge fallback vs.
       pressing-level collectors.** Keep both answers recoverable — product
       decision, not yet taken.
