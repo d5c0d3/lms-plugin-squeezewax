@@ -243,6 +243,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       because a `discogs_match` row exists. With a confirm-only queue the album
       would propose a release with no tag behind it forever. Recorded in design
       §3.
+      **Now recorded a fourth time, 2026-09-07: a wrong manual row is not
+      fixable by "clear & rebuild matches"** (decisions §10.5) — the action
+      deliberately preserves manual rows, so a user who confirmed the wrong
+      pressing has no recovery path until reject/dismiss exists. Also
+      recorded for the phantom-conflict case and the edition-level context
+      menu.
 
 ## Open design questions
 
@@ -282,29 +288,20 @@ Shared reminder list. Both I and Claude Code read and update this.
       Open question is whether that is worth it at all, since the sample is
       already stratified per format, which is the property that matters for the
       one decision it informs.
-- [ ] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
-      §3 says the action wipes the match table and re-runs the cascade; §2a says
-      never delete a row that carries a decision, and `match_tier='manual'` is
-      exactly that - a pressing the user chose by hand, unrecoverable once gone.
-      Options: (a) wipe everything, literal §3, but one click silently destroys
-      every override; (b) wipe everything except manual, so "rebuild" still
-      re-matches the 400+ automatic rows, which is what the action is for;
-      (c) two actions - "rebuild automatic matches" and "clear everything" with
-      a confirmation. Leaning (b). **Blocks implementing the action**, which is
-      otherwise small - Match.pm already has the machinery, and the SQL reset is
-      the workaround meanwhile.
-      **2026-09-07: promoted to a PRECONDITION of step 4, not a step-5
-      nicety.** Three decisions depend on it: §3b's tag-name coverage gap,
-      the duration-margin invalidation below, and the structural no-match
-      TTL below. The manual-rows question above blocks all three.
+- [x] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
+      ANSWERED 2026-09-07 — see `squeezewax-v1-decisions.md` §10.
 - [ ] **2026-09-07: `discogs_no_match` tier `'structural'` skip predicate.**
       Two-part, unlike Strict's one-part: `source_timestamp` unchanged AND
       `checked_at` within TTL. Proposed TTL 30 days as a pref — not
-      TOU-constrained, a UX/freshness choice. Depends on the clear & rebuild
-      precondition above.
+      TOU-constrained, a UX/freshness choice. The clear & rebuild decision is
+      no longer blocking (decisions §10); its implementation is tracked in
+      the step-4 build order (build-order-step-4-structural-matching.md §3
+      item 9).
 - [ ] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
       keyed on the duration-margin pref** — §3b's own "Step 4 note" trigger
-      has fired. Depends on the clear & rebuild precondition above.
+      has fired. The clear & rebuild decision is no longer blocking
+      (decisions §10); its implementation is tracked in the step-4 build
+      order (build-order-step-4-structural-matching.md §3 item 9).
 - [ ] **2026-09-07, recorded not designed: an edition-level (Structural)
       match has no pressing to show in design §4's badge context menu.**
       Proposed shape — show master-level info plus a version picker ("you
