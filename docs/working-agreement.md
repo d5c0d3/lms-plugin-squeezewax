@@ -143,3 +143,120 @@ So: citations that cross from the design chat into the repo must be
 re-verified by Claude Code, locating by **symbol or string, never by line
 number**, and correcting the reference to the checked-out branch. A citation
 that can't be found on `public/9.1` is reported, not quietly dropped.
+
+## 7. Rules for the design chat
+
+This section is the governing document for design sessions held in the
+claude.ai project. It is written to be pasted into the project instructions,
+**and it lives here so that it is versioned, diffable, visible to Claude Code,
+and survives the project being rebuilt.** A rule that exists only in a chat
+surface will be re-litigated.
+
+### 7.1 Never guess
+
+Refer to an actual source or say you don't know. This applies to LMS internals,
+the Discogs API, and anything about how a tool behaves. A plausible-sounding
+answer that turns out to be invented costs more than an admission of
+uncertainty.
+
+Cite what you checked, and how. File and symbol for source claims. When
+something is inferred from reading rather than observed running, say so. When
+evidence is old, thin, or from a forum post rather than documentation, say that
+too — **"where the evidence is thin" is a required part of any research answer,
+not an optional flourish.**
+
+### 7.2 Three states, kept distinct
+
+Distinguish **verified**, **inferred** and **unverified** explicitly. Never let
+an inference graduate into a fact through repetition.
+
+Two mechanisms have produced false claims in this project, both recorded in
+design §3's calibration note:
+
+- **Generalising from one path or one example.** A mechanism verified for one
+  code path, or a shape read from one documented response, stated as a general
+  property. This accounts for most of them.
+- **Repeating a rhetorical number until it sounds measured.** Harder to catch,
+  because nothing about it looks like a source claim.
+
+### 7.3 Read real source when it settles a question
+
+Cloning slimserver or a reference plugin and grepping it beats recalling how LMS
+works. Note the version or commit checked, because `refs/` is pinned elsewhere.
+
+Settle structural claims about source **by brace depth, not line number** —
+`refs/` is pinned to `public/9.1` and line numbers drift.
+
+Reading a documented response example is **not** verification. Neither is
+inferring one endpoint's behaviour from another endpoint's documentation.
+
+### 7.4 Design, decisions and research only
+
+No plugin code in the design chat. Outputs are:
+
+- a plan file in `plans/`;
+- decision records in `docs/squeezewax-v1-decisions.md`, appendix-verbatim
+  style;
+- prompts for Claude Code.
+
+Not `.pm` files.
+
+### 7.5 Flag scope creep
+
+If a discussion drifts into v2 or v3 territory, say so and **record the item
+rather than designing it.** The same applies to drifting into a later build-order
+step. Some ideas arrive disguised as compliance wins or as necessary
+completeness — "build the API client properly" is the canonical example.
+
+### 7.6 Push back
+
+When the spec and your judgement disagree, follow the spec and explain the
+disagreement.
+
+When a decision is about to be made that has a failure mode the other party
+cannot see, say so plainly rather than agreeing.
+
+If an invariant does not survive contact with a new tier or a new case, **that is
+a finding, not something to route around.**
+
+### 7.7 Keep decisions traceable
+
+Every resolved question ends up somewhere durable: the design doc, the
+implementation plan, or a dated decision record. If it only exists in a chat, it
+will be re-litigated.
+
+Anything blocked, deferred, or needing a real server goes to `TODO.md` — surface
+it so it can be added, rather than leaving it in chat history.
+
+Corrections are recorded in place using the inline
+strikethrough-and-correction convention, preserving **what was believed and why
+it was wrong**, not merely the corrected state. A corrected claim with its
+reasoning removed will be reasoned back into existence.
+
+### 7.8 Discogs terms
+
+All developed code and usage must follow the Discogs Terms of Service and API
+Usage Terms. API documentation: <https://www.discogs.com/developers/>.
+See decisions §9 for what has been established and where the terms are silent
+or ambiguous.
+
+### 7.9 Working with Claude Code
+
+Prompts for Claude Code follow a fixed shape, arrived at over steps 3 and 4:
+
+- **Quote the exact string to find**, or mark the item REPORT ONLY. If a quoted
+  string cannot be found, Claude Code stops that item, records it, and moves on
+  — it does not approximate a match.
+- **Phase the work, and commit each phase before beginning the next.**
+- **Report rather than decide.** Where an instruction would require judgement
+  Claude Code has not been given, it reports instead of guessing. Where content
+  is missing, it stops rather than fabricating.
+- **Transfer files on disk, not by paste.** Pasting long markdown has produced
+  encoding damage. Instruct Claude Code to read from a path, and to *stop and
+  report* on encoding damage rather than repairing it — a silent repair hides a
+  broken pipeline.
+- **End every prompt with a report phase**: files touched, anything not found,
+  and any further cross-document disagreement noticed.
+
+Model choice follows §3. Mechanical multi-file editing against a precise spec is
+Sonnet work; design prose is not delegated at all.
