@@ -802,9 +802,9 @@ implementation, rather than open design questions:
   `x-discogs-ratelimit` response header using a personal access token
   ([discogs.com/developers](https://www.discogs.com/developers/)).
   Unauthenticated tier is documented at 25/min but not yet confirmed by
-  header — see TODO.md. ~~OAuth for user data~~ — **corrected: v1 uses a
-  user-supplied personal access token, not OAuth 1.0a (see CLAUDE.md and
-  `implementation-plan.md`).** No historical price endpoint (snapshot
+  header — see TODO.md. ~~OAuth for user data~~ — **corrected 2026-09-07: v1
+  uses a user-supplied personal access token, not OAuth 1.0a (see CLAUDE.md
+  and `implementation-plan.md`).** No historical price endpoint (snapshot
   locally).
 
   **Scan-time budget** (corrected from an earlier flat "1–2 requests per
