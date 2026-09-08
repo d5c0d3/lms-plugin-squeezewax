@@ -1414,6 +1414,148 @@ Structural.
 
 ---
 
+## 10. "Clear & rebuild matches" preserves manual rows and nothing else
+
+**Decided 2026-09-07 (design chat).** Resolves the open question carried since
+step 3 and named as a precondition in
+`plans/build-order-step-4-structural-matching.md` §2.1.
+
+Design §9's maintenance action deletes every row in `discogs_match` whose
+`match_tier` is not `'manual'`, and **every** row in `discogs_no_match`
+regardless of tier. Manual rows survive untouched.
+
+### 10.1 Why this must exist before step 4 ships
+
+It is not a convenience. Three separate decisions depend on it as their only
+escape hatch, and the dependency count is itself the argument:
+
+- **§3b's accepted coverage gap.** Hooking the settings handler misses a
+  `discogsTagNames` change made via the CLI or a hand-edited prefs file.
+- **§0.6's duration-margin gap.** Same mechanism, same miss.
+- **§0.5's 30-day structural TTL.** A user who adds a release to Discogs
+  themselves waits up to a month unless they can force a re-match.
+
+Three decisions leaning on one unbuilt action is a pattern, not a coincidence.
+Each was accepted on the basis that this escape hatch exists. Shipping step 4
+without it would mean three accepted gaps with no way out, and the current
+workaround is hand-editing SQL against `squeezewax.db`, which is not a feature.
+
+### 10.2 What is deleted
+
+| Table | Deleted | Kept |
+|---|---|---|
+| `discogs_match` | every row where `match_tier <> 'manual'` | `match_tier = 'manual'` |
+| `discogs_no_match` | **every row, both tiers** | nothing |
+
+**`discogs_no_match` is wiped entirely, and this is the part most likely to be
+got wrong.** Clearing `discogs_match` alone would leave a structural no-match
+row in place, which then skips the album for the remainder of its 30-day TTL —
+the escape hatch would fail to escape, silently, for exactly the albums the user
+invoked it to fix. Both tiers go.
+
+Not affected:
+
+- **`discogs_release_cache`** — not written in v1 (§9.5). Nothing to clear.
+- **`discogs_collection`** — v1 holds no collection mirror. Ownership is derived
+  and refreshed on its own trigger, which this action does not touch.
+- **Preferences** — tag names, margin, TTL, tier selector. This action clears
+  results, not configuration.
+
+### 10.3 Manual rows survive intact, including their cheap columns
+
+A manual row keeps its `discogs_release_id`, `source_timestamp` and
+`lms_album_id`. It is not NULLed, not re-examined, not rebuilt. There is nothing
+to rebuild: the answer came from the user, not from evidence that could have
+changed.
+
+Leaving `source_timestamp` intact means the album skips on the next scan, which
+is correct — and is the same reason `invalidateStrict` scopes itself to
+`match_tier = 'strict'`, leaving manual outside the predicate entirely.
+
+This follows §0.2's rule without exception: **nothing overwrites manual.** A
+bulk maintenance action is not a licence to make one.
+
+### 10.4 Why this does not violate invariant 2
+
+Decisions §2a invariant 2: *never delete a row carrying a decision or a recovery
+snapshot.* This action deletes confirmed matches, which are decisions by
+definition, and deletes their `snapshot_track_count` values, which are orphan
+recovery's index material. On its face that is exactly what invariant 2 forbids.
+
+**Invariant 2 governs automatic deletion inside the write path.** It is the
+reason `Match.pm::_recordNoMatch`'s delete predicate is narrow: a matcher
+running unattended must never destroy something a human decided or something
+another mechanism depends on. This action is neither automatic nor unattended —
+it is invoked explicitly by the user, from a settings page, with confirmation,
+and its entire purpose is to discard results.
+
+**This must be stated in the record because the alternative readings are both
+harmful.** Read one way, invariant 2 forbids the feature outright. Read the
+other way, this action becomes precedent for widening the narrow delete
+predicate — "we already delete decisions elsewhere." Neither is correct. The
+predicate stays exactly as written (§0.3), and this action remains the only
+place decisions are deleted, precisely because the user asked.
+
+Orphan recovery loses its snapshots until the next scan regenerates them. That
+is acceptable here and only here: the action's premise is that everything
+derived is about to be rebuilt from scratch, so there is nothing for orphan
+recovery to recover *to*.
+
+### 10.5 A wrong manual row is not fixable by this action
+
+That is the intended trade-off — manual is the user's own choice, and a bulk
+button should not destroy it — but the consequence must be recorded rather than
+discovered.
+
+A user who confirmed the wrong pressing, or promoted the wrong candidate, has
+**no recovery path** until step 5's review queue offers reject / dismiss. Clear
+& rebuild will not help them, and the settings copy should not imply otherwise.
+
+This is the **fourth** dependency on step 5's reject/dismiss, after the demoted
+incumbent row (§0.4), the phantom-conflict case, and the edition-level context
+menu. Step 5's review queue must offer a way to say no; that is now recorded
+four times over.
+
+### 10.6 Execution
+
+**The action goes through `_writeOk`, not around it.** It runs server-side from
+a settings page, and `_writeRefusal` already answers the question that matters:
+a scan holds `BEGIN IMMEDIATE` across its whole duration, so a maintenance
+delete issued mid-scan would contend with the scanner. Reusing the existing
+policy is correct; adding a second, parallel check of scan state is not.
+
+Both deletes execute in **one transaction**. A partial clear — `discogs_match`
+emptied, `discogs_no_match` intact — is the exact failure 10.2 describes, and an
+aborted scan is known to commit (§0.8), so partial states persist rather than
+rolling back on their own.
+
+The action reports counts back to the user: rows deleted per table, and manual
+rows preserved. A destructive action that reports nothing gives the user no way
+to tell it worked from no way to tell it ran.
+
+Invariant 1 cannot be violated by this action: wiping both tables removes rows,
+never creates a pair.
+
+### 10.7 Deferred: what "rebuild" means mechanically
+
+Whether the action triggers a rescan itself or clears and waits for the next one
+is **not decided here**, because it runs into the scanner→server handover item
+that remains open in `TODO.md`.
+
+Recorded as deferred rather than left ambiguous. For v1, the safe reading is
+that the action clears, and the rebuild happens on the next scan the user
+initiates — which the settings copy must say plainly, or a user will click it,
+see nothing happen, and click it again.
+
+### 10.8 Confirmation
+
+The action is destructive and irreversible. It requires an explicit
+confirmation step that states what will be deleted, what will be kept, and that
+rebuilding costs Discogs requests — a full structural rebuild on a large library
+is measured in hours at 60 requests per minute (§9.2), not seconds.
+
+---
+
 ## Appendix — Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
