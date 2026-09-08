@@ -125,10 +125,8 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-07: Structural skips `local_tracks == 0` for its own
       reason** (no local files, no evidence about a physical object), not
       inherited from Strict. Needs its own test.
-- [ ] **2026-09-07: the `use` gate must become `discogsTagNames` configured
-      OR (max tier >= structural AND token present).** Decide the max-tier
-      pref's DEFAULT explicitly — a default of `'structural'` makes the
-      gate true on every fresh install and defeats its purpose.
+- [x] **2026-09-07: the `use` gate's max-tier default is decided.** RESOLVED
+      2026-09-07 — see `plans/build-order-step-4-structural-matching.md` §0.7.
 - [ ] **2026-09-07, verified: the "no master" sentinel is
       endpoint-dependent — both representations must be guarded.**
       Collection `basic_information`: `0` (5 of 100 sampled, zero nulls).
@@ -618,14 +616,11 @@ Shared reminder list. Both I and Claude Code read and update this.
   mistake.
 - **2026-09-07: monthly CC0 data dumps as an alternative to the API for
   tracklists — recorded in `squeezewax-v1-decisions.md` §9.8.** v2/v3.
-- **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
-  obtain key and secret; commit neither.** Rationale recorded in §9.1
-  (breaking-change notices; why not a shared consumer key). Still to do:
-  the registration itself.
-- **2026-09-07: settle the User-Agent string.** Requirement recorded in
-  §9.3 (unique, RFC 1945 form, contact URL, plugin version; silent
-  blocking is the documented penalty). Still to do: choose and implement
-  the actual string.
+- [x] **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
+  obtain key and secret; commit neither.** DONE 2026-09-07 — see
+  `plans/build-order-step-4-structural-matching.md` §2.2.
+- [x] **2026-09-07: settle the User-Agent string.** RESOLVED 2026-09-07 —
+  see `plans/build-order-step-4-structural-matching.md` §3 item 2.
 - **2026-09-07: token storage — settings-page action items.** Risk
   described in §9.1 (unscoped bearer credential, plaintext prefs). Still
   to do: settings page needs a warning and a revocation link; check how
