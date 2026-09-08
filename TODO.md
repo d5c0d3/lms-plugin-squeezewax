@@ -156,11 +156,8 @@ Shared reminder list. Both I and Claude Code read and update this.
       throughput/setup-coherence choice (60/min vs 25/min), not a technical
       necessity — the use-gate rationale needs rewriting accordingly; the
       gate condition itself is unchanged.
-- [ ] **2026-09-07: pin an explicit stable sort on every paged Discogs
-      endpoint, or document the accepted risk.** Collection listing
-      defaults to `sort=label&sort_order=asc`; `/masters/{id}/versions` has
-      its own default order. Paging over a mutable, non-unique sort key can
-      shift rows between pages, silently dropping or duplicating results.
+- [ ] **Implement stable sort pinning on every paged Discogs endpoint.**
+      Hazard and remedy recorded in `squeezewax-v1-decisions.md` §9.4.
 - [ ] **2026-09-07: no `discogs_collection` mirror in v1.** Ownership is a
       derived per-album label, written by a sync that fetches transiently
       and stores only the conclusion. The column lands in migration 3, in
@@ -328,12 +325,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       conclusion, or one bit of Restricted Data under the Discogs TOU?**
       Leaning conclusion; NOT settled. Kept academic by choosing the sync
       interval on UX grounds regardless. Do not record as decided.
-- [ ] **2026-09-07, recorded not designed: `type=master` search results
-      carry `user_data.in_collection`/`in_wantlist` per token holder,
-      undocumented.** Not an action item for v1 — the collection sync is
-      the ownership mechanism, so "confirm before relying on it" is a
-      conditional that never fires. Recorded so anyone who later wants to
-      use it as a cross-check knows it is not in the docs.
+- [ ] **`type=master` search results carry `user_data.in_collection`/
+      `in_wantlist` per token holder, undocumented.** Recorded in
+      `squeezewax-v1-decisions.md` §9.9.
 
 - [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
       no handover: step-3 finding 3 shows `album_key` covers structural
@@ -412,8 +406,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       `squeezewax-v1-decisions.md` §9 (§9.1, §9.2, §9.7) — this entry kept
       only for what isn't there: `stats.user.in_collection`/`in_wantlist`
       on `/masters/{id}/versions` is per-token-holder (null
-      unauthenticated, 0/1 authenticated) — retained as a diagnostic only,
-      see the derived-owned-label open question above. See "Next —
+      unauthenticated, 0/1 authenticated) — kept, not orphaned: it is the
+      fallback ownership mechanism if the collection sync proves
+      unworkable, and it independently confirms master-level ownership is
+      Discogs-native. See the derived-owned-label open question above. See
+      "Next —
       build-order steps 3–5" above for the two falsified claims and the
       master_id-sentinel finding from the same session.
 - [ ] **2026-09-07, still unverified: unauthenticated rate tier.** Is the
