@@ -3,6 +3,16 @@
 Design ideas and decisions for **SqueezeWax**, a Discogs plugin for Lyrion
 Music Server (LMS), collected from brainstorming sessions (August 2026).
 
+**Correction labels.** Inline corrections in this document are dated and
+labelled. The labels are not interchangeable:
+*falsified* — measurement disproved the claim;
+*superseded* — the claim was true but a later decision replaced it;
+*defect found* — the claim was always wrong, nothing external changed;
+*corrected* — a figure moved; the claim's shape did not.
+Corrections stay inline rather than moving to an appendix: reading a claim
+next to what was believed and why it was wrong is what stops the error
+being reasoned back into existence.
+
 ---
 
 ## 1. Background & Research Findings
