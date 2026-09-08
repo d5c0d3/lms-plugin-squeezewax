@@ -79,47 +79,14 @@ Shared reminder list. Both I and Claude Code read and update this.
       2026-09-07: `/database/search` with `type=master`. See the settled
       step-4 candidate-enumeration flow below.**
 - [ ] **2026-09-07, SETTLED DESIGN: step-4 candidate enumeration, ranking,
-      comparison and write rule.**
-      Enumeration and fetch: `search type=master` with artist + title
-      [1 request] → local title normalisation and ranking [0 requests] →
-      `GET /masters/{id}` for the top N [1 request each] → compare, write
-      `discogs_master_id`. Estimated 1 + N per album, N small after title
-      normalisation (7 wrong-master results for Depeche Mode / Violator
-      reduce to 1-2 after normalisation — artist + title alone returns
-      *Violator Live*, *Violator 2000*, *Violator / Black Celebration*,
-      *Violator Remixes 2024*, *Violator | The 12" Singles* and *Music For
-      The Masses / Violator* alongside the album itself). No versions
-      enumeration, so the 529-pressing problem above never arises for
-      matching. Dropping the `artist=` parameter returns unrelated artists
-      (20 results, 9 artists spotted in one sample) — search quality
-      depends on LMS's album artist being clean.
-      Ranking, none exclusionary: `community.have` (primary, free at
-      search time), then country, released, format, title. Format is never
-      a gate. `user_data.in_collection`/`in_wantlist` (per token holder)
-      is a cross-check only, undocumented — confirm before relying on it;
-      the collection sync remains the ownership mechanism. `type=master`
-      search results also carry `barcode`/`catno` (recorded; local files
-      rarely carry barcodes) but not `main_release` — moot, since masters
-      carry their own tracklist.
-      Comparison: filter Discogs tracklist entries to `type_ == "track"`
-      (an ALLOWLIST — see the tracklist-shape item below); compare counts,
-      unequal counts reject immediately; sort both duration lists, compare
-      element-wise within the margin, any duration outside it rejects.
-      Position is NOT parsed — album-level multiset equality delivers
-      design §9's "all discs must match" without a position vocabulary: if
-      any disc differs, the album-level count or vector differs and the
-      album falls to the review queue. Accepted weakening: multiset
-      equality would also accept an album with its discs transposed — that
-      is the same album.
-      Write rule, on duration availability: durations present both sides
-      and matching → `(structural, confirmed)`; durations absent
-      Discogs-side → `(structural, candidate)` for step 5's review queue —
-      count-and-title alone is Fuzzy-grade evidence, and Structural
-      auto-confirms, so count-only confirmation would ship Fuzzy's evidence
-      quality under Structural's silent behaviour (expected volume ~10% of
-      albums). A candidate with zero countable tracks is skipped, not
-      compared. **`main_release` is NEVER written as `discogs_release_id`**
-      — it is the comparison target, not the pressing the user owns.
+      comparison and write rule.** Superseded as the design record by
+      `squeezewax-v1-decisions.md` §8 — see there for the full design
+      (flow, ranking, comparison, write rule, multi-disc handling).
+      Not in §8, kept here: `type=master` search results also carry
+      `user_data.in_collection`/`in_wantlist` per token holder (a
+      cross-check only, **undocumented — confirm before relying on it**;
+      the collection sync remains the ownership mechanism) and
+      `barcode`/`catno` (recorded; local files rarely carry barcodes).
 - [ ] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
       and must not assume duration format.** From a 40-release sample:
       entries have at least three `type_` values (`"track"`, `"heading"`,
