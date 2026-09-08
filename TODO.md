@@ -83,10 +83,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       `squeezewax-v1-decisions.md` §8 — see there for the full design
       (flow, ranking, comparison, write rule, multi-disc handling).
       Not in §8, kept here: `type=master` search results also carry
-      `user_data.in_collection`/`in_wantlist` per token holder (a
-      cross-check only, **undocumented — confirm before relying on it**;
-      the collection sync remains the ownership mechanism) and
-      `barcode`/`catno` (recorded; local files rarely carry barcodes).
+      `barcode`/`catno`. A barcode is a **Strict-grade identifier** — some
+      taggers write a `BARCODE` tag, and where present it identifies a
+      pressing more decisively than durations can, so it is a possible
+      future tag-based path alongside the Discogs release ID. Recorded,
+      not designed; v2.
 - [ ] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
       and must not assume duration format.** From a 40-release sample:
       entries have at least three `type_` values (`"track"`, `"heading"`,
@@ -331,6 +332,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       conclusion, or one bit of Restricted Data under the Discogs TOU?**
       Leaning conclusion; NOT settled. Kept academic by choosing the sync
       interval on UX grounds regardless. Do not record as decided.
+- [ ] **2026-09-07, recorded not designed: `type=master` search results
+      carry `user_data.in_collection`/`in_wantlist` per token holder,
+      undocumented.** Not an action item for v1 — the collection sync is
+      the ownership mechanism, so "confirm before relying on it" is a
+      conditional that never fires. Recorded so anyone who later wants to
+      use it as a cross-check knows it is not in the docs.
 
 - [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
       no handover: step-3 finding 3 shows `album_key` covers structural
