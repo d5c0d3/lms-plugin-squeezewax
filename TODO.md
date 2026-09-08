@@ -285,17 +285,9 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
-- [ ] **2026-09-07: decisions §3a's v1 invariant ("Structural must not
-      produce a NULL-id candidate") is in question and BLOCKS THE WRITE
-      PATH.** §3a was written assuming Structural resolves a pressing,
-      which it cannot (see the settled step-4 design above) — a
-      master-only Structural match has a NULL `discogs_release_id`.
-      Recommend amending §3a rather than writing `main_release` as a
-      nominal release id, which would assert a pressing we did not
-      determine. Interacts with the narrow delete predicate in
-      `Match.pm::_recordNoMatch`: a structural NULL-id row must not become
-      collateral of a predicate written for `(strict, candidate, NULL,
-      NULL)`.
+- [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
+      question.** Landed — see `squeezewax-v1-decisions.md` §3a (amended)
+      and §8.
 - [ ] **2026-09-07, recorded not designed: a user with both a local rip and
       a streaming copy sees the album twice in the grid, and only the
       local row is badged.** Arguably correct; will read oddly. A UI
