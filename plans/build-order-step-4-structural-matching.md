@@ -240,12 +240,11 @@ skipped by the `local_tracks == 0` guard, and route to Fuzzy in v2.
 Step 4 does not start until these are resolved. Both are recorded as blocking in
 `TODO.md`.
 
-**2.1 "Clear & rebuild matches" (design §9) must exist, and the manual-rows
-question must be answered.** Three decisions now depend on it: §3b's accepted
-coverage gap, §0.6's duration-margin gap, and §0.5's 30-day TTL. Three
-dependencies on one unbuilt escape hatch is a pattern, not a coincidence.
-Leaning: wipe everything except `manual`. **This needs a decision record before
-step 4 ships, not after.**
+**2.1 "Clear & rebuild matches" (design §9) must exist.** The manual-rows
+question is answered: decisions §10 — wipe every non-manual `discogs_match`
+row and every `discogs_no_match` row, both tiers; manual rows untouched. The
+remaining precondition is **implementation** of the action, not the decision.
+Built in step 4, §3 item 9.
 
 **2.2 Register `SqueezeWax`** at discogs.com/settings/developers, for
 breaking-change notices only. Commit neither key nor secret (decisions §9.1).
@@ -278,9 +277,12 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
    `local_tracks == 0` guard as Structural's own rule with its own test.
 8. **Settings.** Max-tier selector with an explicitly chosen default, duration
    margin, structural TTL.
-9. **§3b structural invalidation clause**, keyed on the margin pref.
-10. **Offline suites** (§4).
-11. **Hardware pass** (§5).
+9. **"Clear & rebuild matches" action**, per decisions §10. Three step-4
+   decisions (§0.5, §0.6, §3b's coverage gap) depend on it as their escape
+   hatch.
+10. **§3b structural invalidation clause**, keyed on the margin pref.
+11. **Offline suites** (§4).
+12. **Hardware pass** (§5).
 
 ---
 
@@ -318,6 +320,16 @@ Write-path cases, extending `scripts/match-check.pl`:
 - Skip contract: two-part predicate; NULL `source_timestamp` never skips;
   expired `checked_at` does not skip.
 - §3b: a margin change invalidates `tier = 'structural'` and nothing else.
+
+"Clear & rebuild matches" (decisions §10):
+
+- A manual row survives the clear; its `discogs_release_id`,
+  `source_timestamp` and `lms_album_id` are unchanged.
+- Every non-manual `discogs_match` row is deleted.
+- Every `discogs_no_match` row is deleted, both tiers.
+- The clear refuses under every `_writeRefusal` case.
+- Both deletes are one transaction: a failure leaves both tables unchanged,
+  never `discogs_match` emptied with `discogs_no_match` intact.
 
 ---
 
