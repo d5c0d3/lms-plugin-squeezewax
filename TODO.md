@@ -489,6 +489,18 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — external
 
+- [ ] **2026-09-08: collection-page fixture not captured.** Six of the plan's
+      seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
+      the seventh — a page of a real collection, needed to re-verify the
+      `master_id: 0` sentinel and the two-masterless-rows collision — needs a
+      real Discogs personal access token for an account with a collection to
+      page. None was available in the session that ran
+      `scripts/fetch-fixtures.pl` (`$DISCOGS_TOKEN` unset). Run
+      `scripts/fetch-fixtures.pl <token>` (or set `$DISCOGS_TOKEN`) once one
+      is available; it skips fixtures that already exist, so it's safe to
+      re-run. Not blocking build-order items 4-5 (out of scope this session
+      regardless) but should land before Structural's comparison code is
+      tested against it.
 - [ ] **Lyrion forum question** about plugin-owned attached databases. Drafted;
       not posted. Not blocking — an own-file layout cannot collide with anything
       LMS owns, and migrating later is cheap.
@@ -622,10 +634,17 @@ Shared reminder list. Both I and Claude Code read and update this.
 - **2026-09-07: settle the User-Agent string.** RESOLVED 2026-09-07 —
   see `plans/build-order-step-4-structural-matching.md` §3 item 2.
 - **2026-09-07: token storage — settings-page action items.** Risk
-  described in §9.1 (unscoped bearer credential, plaintext prefs). Still
-  to do: settings page needs a warning and a revocation link; check how
-  `refs/lms-plugin-tidal` and `refs/Spotty-Plugin` store secrets before
-  inventing anything.
+  described in §9.1 (unscoped bearer credential, plaintext prefs). DONE
+  2026-09-08 (step 4 item 1): `discogsToken` scalar pref, settings-page
+  warning stating the token's real scope plus a revocation link to Discogs
+  Developer Settings, and a "Test token" action. Checked
+  `refs/lms-plugin-tidal/API/Auth.pm:139` — TIDAL keeps its OAuth access
+  token in `Slim::Utils::Cache`, not prefs, but that token is short-lived
+  and refreshed from a refresh_token; a Discogs personal access token is
+  long-lived and user-generated with no refresh flow, so prefs (survives
+  restarts) is the right place, not an oversight to fix. No secure-storage
+  convention found in either reference plugin beyond that — plaintext-with-
+  warning per decisions §9.1 stands.
 - **2026-09-07: `discogs_price_snapshot` vs. Discogs TOU item 5 (v2/v3) —
   recorded in §9.8.** If built, label snapshots with observation dates.
 - **v3: Discogs artist ID — add the column and the capture together.** Decisions
