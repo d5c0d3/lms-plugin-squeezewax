@@ -793,7 +793,7 @@ implementation, rather than open design questions:
   edge cases (e.g. bonus-disc-only mismatches, box sets with non-audio discs)
   should be validated against real Discogs release data once implementation
   starts.
-- ~~Verify how LMS's rescan flags changed files~~ — **Not "Resolved" as
+- ~~Verify how LMS's rescan flags changed files~~ — **Not "Resolved" (2026-09-08) as
   stated below: see `squeezewax-v1-decisions.md` §6 for the corrected hook,
   and TODO.md's open `lms_album_id` refresh item for what's still
   unimplemented.** `Slim::Utils::Scanner::API` provides `onNewTrack` /
