@@ -492,6 +492,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-07: `plans/` filenames are inconsistent.** Steps 2 and 3
+      use invented verb-adjective-noun names
+      (`build-order-step-2-read-effervescent-squirrel.md`,
+      `build-order-step-3-tag-jolly-minsky.md`); step 4 uses a descriptive
+      one (`build-order-step-4-structural-matching.md`). Descriptive is the
+      convention going forward. Renaming 2 and 3 requires a `grep -rn`
+      reference sweep across `docs/`, `plans/`, `CLAUDE.md` and `TODO.md`;
+      cosmetic, optional, not blocking.
 - [ ] **2026-09-07, before step 5: fold `docs/squeezewax-design.md`'s
       inline strikethrough-and-correction blocks into clean prose, moving
       superseded text to an appendix.** These have accumulated across §3,
