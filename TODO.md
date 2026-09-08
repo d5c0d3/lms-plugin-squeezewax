@@ -236,19 +236,27 @@ Shared reminder list. Both I and Claude Code read and update this.
       `matched == 0 && examined > 0`. Done 2026-09-04 (cec7a46).
 - [x] **`startScan` returns an integer** (matched count). Done (cec7a46).
 - [ ] **Step 5's review queue must offer reject / dismiss, not only confirm.**
-      A confirmed match demoted to candidate by a tag conflict keeps its
-      adjudicated `discogs_release_id` and its snapshots (decisions §3a); if the
-      user then removes the tags entirely, the importer may not delete the row —
-      it carries a decision, and §2a forbids that — and Structural skips it
-      because a `discogs_match` row exists. With a confirm-only queue the album
-      would propose a release with no tag behind it forever. Recorded in design
-      §3.
-      **Now recorded a fourth time, 2026-09-07: a wrong manual row is not
-      fixable by "clear & rebuild matches"** (decisions §10.5) — the action
-      deliberately preserves manual rows, so a user who confirmed the wrong
-      pressing has no recovery path until reject/dismiss exists. Also
-      recorded for the phantom-conflict case and the edition-level context
-      menu.
+      Recorded three times over — corrected 2026-09-07; previously miscounted
+      as four, with two cases that don't actually belong (see below):
+      (a) **A confirmed match demoted to candidate by a tag conflict** keeps
+          its adjudicated `discogs_release_id` and its snapshots (decisions
+          §3a); if the user then removes the tags entirely, the importer may
+          not delete the row — it carries a decision, and §2a forbids that —
+          and Structural skips it because a `discogs_match` row exists. With a
+          confirm-only queue the album would propose a release with no tag
+          behind it forever. Recorded in design §3.
+      (b) **A wrong manual row** is not fixable by "clear & rebuild matches"
+          (decisions §10.5) — the action deliberately preserves manual rows,
+          so a user who confirmed the wrong pressing has no recovery path.
+      (c) **A wrong Structural auto-confirm, introduced by step 4.**
+          Structural confirms silently, so a wrong edition-level match
+          produces a badge with no trace of the disagreement and no way to
+          reverse it. The strongest of the three; not previously recorded
+          anywhere.
+      NOT reject/dismiss cases: the phantom-conflict row, which
+      `Match.pm::_recordNoMatch`'s delete predicate clears automatically; and
+      the edition-level context menu, which needs a version picker promoting
+      to manual — refinement, not rejection.
 
 ## Open design questions
 
