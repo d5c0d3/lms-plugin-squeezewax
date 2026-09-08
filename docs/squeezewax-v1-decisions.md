@@ -1122,6 +1122,298 @@ predicate.
 
 ---
 
+## 9. Discogs API access: authentication, limits, caching and attribution
+
+**Decided 2026-09-07 (design chat), during build-order step 4 planning.**
+Sources: the Discogs API documentation at <https://www.discogs.com/developers/>,
+the API Terms of Use at
+<https://support.discogs.com/hc/articles/360009334593-API-Terms-of-Use>, and the
+Application Name and Description Policy at
+<https://support.discogs.com/hc/articles/360009207054-Application-Name-and-Description-Policy>,
+all read on that date. Measurements were taken against a live Discogs account
+with a personal access token and are labelled as such.
+
+### 9.1 Authentication: a user-supplied personal access token
+
+v1 uses **BYOK** — the user generates a personal access token in their own
+Discogs Developer Settings and pastes it into LMS. SqueezeWax ships no
+credential of any kind.
+
+The documentation offers four modes:
+
+| Credentials | Rate limit | Image URLs | Authenticated as user |
+|---|---|---|---|
+| None | Low tier | No | No |
+| Consumer key + secret | High tier | Yes | No |
+| Full OAuth 1.0a access token/secret | High tier | Yes | Yes, any user |
+| Personal access token | High tier | Yes | Yes, token holder only |
+
+#### Why not a shared consumer key embedded in the plugin
+
+- The documentation is explicit: *"It's important that you don't disclose the
+  Consumer Secret to anyone."* SqueezeWax ships as a zip unpacked into a
+  readable directory from a public repository. There is no mechanism by which a
+  secret in a `.pm` file is not disclosed to every user. Obfuscation would be
+  worse — a deliberate attempt to appear compliant.
+- The TOU's prohibited commercial uses include *"Selling or giving to any third
+  party Our API, the Content, or access to Our API or the Content."*
+- **The technical failure is worse than the legal one.** Every installation
+  worldwide would draw on one 60-requests-per-minute budget. Two users scanning
+  concurrently would both fail.
+- **Single point of revocation.** *"If You violate the TOU or any of Our
+  policies, we may revoke Your API access or Your account privileges."* One
+  misconfigured install would stop every installation simultaneously, with no
+  recovery except shipping a new secret, which has the same problem.
+- *"We reserve the right to charge for access to, or use of, Our API in the
+  future."* Under a shared key that cost falls on the developer, scaled by other
+  people's libraries.
+
+#### Why not OAuth 1.0a
+
+**OAuth does not avoid the shared-secret problem — it requires one.** Its
+documented step 1 is *"Obtain consumer key and consumer secret from Developer
+Settings"*, and every handshake request carries `oauth_consumer_key` and
+`oauth_signature="your_consumer_secret&"`. Choosing OAuth means shipping the
+secret anyway, plus a browser redirect.
+
+OAuth also needs a callback URL registered per application, and an LMS install
+lives at whatever host and port the user chose. One registered callback cannot
+serve all of them. The no-callback path exists (*"they will receive a verifier
+key to use as verification"*), but it is strictly more friction than pasting a
+token, in exchange for a secret we cannot ship.
+
+For a self-hosted, single-user plugin, OAuth's only advantage — acting on behalf
+of arbitrary users — is worth nothing. There is one user, and it is the person
+configuring the server.
+
+#### Application registration
+
+Register `SqueezeWax` at <https://www.discogs.com/settings/developers>, obtain
+the consumer key and secret, and **commit neither**. Registration is worth doing
+solely for breaking-change notices: *"For larger, breaking changes, we will send
+out an email notice to all developers with a registered Discogs application."*
+That is the only push channel that exists.
+
+The name is compliant. The Application Name and Description Policy prohibits
+*"Combin[ing] any part of 'Discogs' with your name, marks, or generic terms"*
+and lists "My Discogs", "Discogs Collector" and "Catalog by Discogs" as
+unacceptable; "SqueezeWax" contains no part of the mark. Accurate functional
+descriptions such as *"View your Discogs Collection"* are explicitly permitted,
+which covers settings-page copy. The same policy confirms design §4's existing
+choice of a generic vinyl glyph over the Discogs logomark: marks may not be
+presented *"in a way that make them the most distinctive or prominent feature of
+what you're creating."*
+
+#### Token storage — a risk we transfer to the user
+
+A personal access token is an **unscoped bearer credential** for the entire
+Discogs account. Documented endpoints reachable with it include creating
+Marketplace listings, editing orders and uploading inventory CSVs. Discogs
+documents no scoping mechanism for either token type, so OAuth would be no
+better here — this is not a reason to reconsider the decision, but it is a
+reason to handle storage honestly.
+
+The token will sit in LMS's prefs file in plaintext, frequently on a NAS with
+permissive defaults. We cannot make that safe. The settings page must therefore
+state what the token can do and link to where it is revoked. A bare "Discogs
+token" field with no warning would be transferring a risk we understood and the
+user did not.
+
+### 9.2 Rate limits
+
+**Verified 2026-09-07:** a personal access token yields
+`x-discogs-ratelimit: 60`.
+
+The documentation states 60 requests per minute authenticated and 25
+unauthenticated, tracked as *"a moving average over a 60 second window. If no
+requests are made in 60 seconds, your window will reset."* Three response
+headers report state: `X-Discogs-Ratelimit`, `X-Discogs-Ratelimit-Used`,
+`X-Discogs-Ratelimit-Remaining`. The documentation instructs that *"Your
+application should take our global limit into account and throttle its requests
+locally."*
+
+**The unauthenticated tier of 25 is documented but not verified by header.**
+
+#### Search does not require authentication — a documented claim, falsified
+
+The Search endpoint states *"Authentication (as any user) is required."*
+**Measured 2026-09-07: an unauthenticated search returns 200.**
+
+The consequence is that requiring a token for Structural is a **choice, not a
+technical necessity**: 2.4× throughput, and the user needs a token for ownership
+anyway so it is not additional setup. Discogs' own guidance supports it —
+*"Your application should identify itself to our servers via a unique user agent
+string and with a form of authentication in order to achieve the maximum number
+of requests per minute."* The `use` gate condition is unchanged; only its
+rationale is.
+
+### 9.3 The User-Agent requirement
+
+Mandatory and independent of authentication. *"Your application must provide a
+User-Agent string that identifies itself"*, following RFC 1945, with documented
+examples of the form `AppName/0.1 +http://example.com`.
+
+The penalty is silent: *"Please don't just copy one of those! Make it unique so
+we can let you know if your application starts to misbehave — the alternative is
+that we just silently block it, which will confuse and infuriate your users."*
+The FAQ confirms the symptom: *"Why am I getting an empty response from the
+server? This generally happens when you forget to add a User-Agent header."*
+
+Ours must be unique, carry a contact URL, and include the plugin version.
+
+### 9.4 Pagination
+
+*"By default, 50 items per page … To browse different pages, or change the
+number of items per page (up to 100), use the page and per_page query string
+parameters."* This confirms at source the 100-per-page figure that decisions §4
+had sourced only to a forum statement about the inventory endpoint.
+
+**Collection sync costs `ceil(items / 100)` requests. Measured: 3 requests for a
+203-item collection.** §4's earlier "~20 requests" was pessimistic.
+
+**Pagination hazard.** The collection listing defaults to
+`sort=label&sort_order=asc`, and `/masters/{id}/versions` has its own default
+order. Paging over a mutable, non-unique sort key can shift rows between pages,
+silently dropping or duplicating them. Pin an explicit stable sort on every
+paged endpoint, or document the accepted risk.
+
+### 9.5 Caching: store conclusions, not Content
+
+The TOU's API USE AND RESTRICTIONS item 5 contains two distinct rules:
+
+> *"The Content within Our API is dynamic and is quickly outdated. You may not
+> display in any format or to any audience the Content if it is more than six (6)
+> hours older than the information on Our online properties and applications. You
+> may not cache or store the Content longer than is necessary to provide a
+> service to Your application's users."*
+
+The first is a **display** rule and is not a six-hour TTL: it triggers on
+divergence from Discogs' copy, not on age. But divergence is unknowable without
+asking Discogs, which is the request being avoided, so in effect it means
+"refresh within six hours or have an independent way to know the data is
+unchanged." We have no such way. Conditional requests do not provide one:
+`If-Modified-Since` and 304 are documented only on the Inventory Export
+endpoint, nothing in `/releases/{id}` mentions ETag or 304, and a 304 would still
+consume a request against the rate limit — saving bandwidth, not budget.
+
+The second is a **necessity** test, deliberately elastic, and it is what governs
+long-term storage.
+
+#### The CC0 tension, stated and deliberately unresolved
+
+The TOU names as CC0 Data *"Release titles, notes, dates, format, track
+listings, barcodes and other identifiers, credits, versions, URL links"* and
+says *"CC0 Data is made available under the CC0 No Rights Reserved license."*
+Track listings — exactly what Structural consumes — are named CC0.
+
+Item 5 nonetheless says "the Content" unqualified, and the preamble defines that
+as all data made available through the API. Literal reading: item 5 reaches CC0
+Data. The counter-argument is that CC0 is a rights waiver Discogs cannot
+un-waive; the counter-counter-argument is that the TOU is a contract for *API
+access*, not a copyright licence, and a contract may impose obligations
+copyright would not.
+
+**This is a contract-interpretation question, not a technical one, and it is not
+resolved here.** No part of the design depends on the permissive reading. If it
+ever needs settling, the TOU itself invites the question: *"If You have
+questions about whether Your intended use will violate the TOU, please contact
+Us."*
+
+#### The design principle
+
+**Store conclusions, not Content.**
+
+- `discogs_match` — a decision plus a bare identifier. Not Content in any
+  meaningful sense. **Unconstrained; kept indefinitely.**
+- `discogs_no_match` — our own observation that a search found nothing.
+  **Unconstrained.**
+- `discogs_release_cache` — raw payload. Content, unambiguously.
+
+**Consequence: `discogs_release_cache` is not written in v1.** Structural holds
+candidate payloads in memory for the duration of one album's decision; once
+decided, the tracklist was the *evidence*, not the answer. Cross-album reuse
+within a scan is marginal — only when two LMS albums resolve to one Discogs
+object. The table remains in the schema, unwritten, commented as v1-unused
+(dropping it would cost a migration and a `schema-check.pl` edit for no
+behavioural gain, and it is regenerable either way).
+
+This corrects three documents that spoke as if there were one cache. Rescans are
+cheap because **`discogs_match` and `discogs_no_match` are permanent**, not
+because payloads are. `Schema.pm`'s "worth keeping indefinitely" comment, design
+§10's "relinks and completeness checks cost no API calls" claim, and §13's
+"cacheable forever" row were all superseded on 2026-09-07.
+
+#### Live rather than cached
+
+The rule: **request count bounded by user actions → live; bounded by library
+size → background job writing a conclusion.**
+
+- Context menu and review queue: live fetches. Data is seconds old, nothing is
+  stored, and the payload carries `uri`, which supplies the mandatory
+  attribution hyperlink for free.
+- Triage page and any overview computed from `discogs_match` plus local
+  ownership state: zero Discogs requests.
+- v2's completeness check: one release fetch per matched album is
+  library-size-bounded, so it becomes a background job storing its *comparison
+  result* — our observation, indefinitely storable — not the payload.
+
+### 9.6 Attribution — two mandatory notices
+
+Neither was previously in the design doc. Both are requirements, not niceties.
+
+1. *"This application uses Discogs' API but is not affiliated with, sponsored or
+   endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC."* —
+   displayed prominently; may live in usage documentation.
+2. *"Data provided by Discogs."* — displayed **directly next to any data used**,
+   including a hyperlink to the discogs.com page containing that data, and the
+   link must not be `nofollow`.
+
+(2) is a live constraint on the badge and on step 5's review queue. Live-fetch
+paths get the hyperlink free from the payload's `uri`. **A grid badge has no
+natural place for the notice** — whether it appears per tile, once per page, or
+only in the context menu the badge opens is a step-6 UI decision that must be
+taken before step 6 begins, not discovered during it.
+
+### 9.7 Endpoints used in v1
+
+| Purpose | Endpoint | Notes |
+|---|---|---|
+| Token sanity check | `GET /oauth/identity` | Returns the username the collection path needs |
+| Structural candidate search | `GET /database/search?type=master` | Carries `community.have/want`, `barcode`, `catno`, `user_data` |
+| Structural comparison | `GET /masters/{id}` | Tracklist with durations where the entry has them |
+| Ownership | `GET /users/{username}/collection/folders/0/releases` | Folder 0 is the read-only "All" view; `basic_information` carries `master_id` |
+
+`GET /releases/{id}` is used by Strict and by the context menu, not by
+Structural.
+
+### 9.8 Recorded, not designed
+
+- **Monthly CC0 data dumps** (<https://data.discogs.com/>) would remove the
+  caching question and the rate limit at once, and would make Structural
+  matching offline and free. They are also a different plugin: multi-gigabyte
+  compressed XML and a local index to build and refresh, frequently on a NAS.
+  **v2/v3.** Recorded because it is the kind of idea that returns in six months
+  looking new.
+- **`discogs_price_snapshot` versus item 5 (v2/v3).** The value-history feature
+  necessarily stores and displays historical Restricted Data. The reading that a
+  dated historical observation is not stale current Content is defensible but is
+  an *interpretation, not a citation*. If built, snapshots must be labelled with
+  their observation dates rather than presented as current pricing.
+
+### 9.9 Unverified, carried forward
+
+- The unauthenticated rate tier — is the header actually 25?
+- Whether unauthenticated search results are content-degraded (the docs state
+  image URLs are withheld without credentials).
+- Whether `user_data.in_collection` / `in_wantlist` on search results is
+  documented anywhere. It is observed to work per token holder and is treated as
+  a cross-check only; the collection sync remains the ownership mechanism.
+- Discogs responses now come via Cloudflare (`cf-ray`, `cf-cache-status`). The
+  documentation's example headers show lighttpd and Varnish and are a 2014
+  snapshot. Do not reason about caching behaviour from them.
+
+---
+
 ## Appendix — Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
