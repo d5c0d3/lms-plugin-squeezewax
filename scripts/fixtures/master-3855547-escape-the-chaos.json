@@ -1,0 +1,249 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 10398,
+         "join" : "",
+         "name" : "Morcheeba",
+         "resource_url" : "https://api.discogs.com/artists/10398",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/I8Z3EcKtXRTGzSwXfRHPyvjJdPOwp0uqsDOevxWwbko/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTEwMzk4/LTE3NTAzNjQ4MTQt/MjA0My5qcGVn.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "data_quality" : "Correct",
+   "genres" : [
+      "Electronic",
+      "Funk / Soul"
+   ],
+   "id" : 3855547,
+   "images" : [
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/32WuV_0DgfoKdcArSkgxqa5abJn1EoNT3Ev6MgsMxOo/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNzcyMS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/32WuV_0DgfoKdcArSkgxqa5abJn1EoNT3Ev6MgsMxOo/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNzcyMS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/gi6hDxpzVMuUHUL0DYPwhj_62Aujo_bRZ3MkYlsWXXw/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNzcyMS5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/o3LrkGkCuuDvP2c0TlxOnZU4hSHCB2j9VRKDh86EkgM/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTYtMjE4MS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/o3LrkGkCuuDvP2c0TlxOnZU4hSHCB2j9VRKDh86EkgM/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTYtMjE4MS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/tZXvZlYuPi1KRXdAluwh0LCDvAR9SLJmN7G0VQlLeLc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTYtMjE4MS5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/MTXJcXNTWS01rRsRBxH_fw0prfGRP1DnnXHeXL9ooPE/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNDk5MC5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/MTXJcXNTWS01rRsRBxH_fw0prfGRP1DnnXHeXL9ooPE/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNDk5MC5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/CFZyxpVFRi7kPdbLjHMayZxC1iPlIp3kA31gmvbxcaI/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTMzOTg2/Mzc2LTE3NDczMTMy/MTgtNDk5MC5qcGVn.jpeg",
+         "width" : 600
+      }
+   ],
+   "lowest_price" : 9.26,
+   "main_release" : 33986376,
+   "main_release_url" : "https://api.discogs.com/releases/33986376",
+   "most_recent_release" : 35098196,
+   "most_recent_release_url" : "https://api.discogs.com/releases/35098196",
+   "num_for_sale" : 145,
+   "resource_url" : "https://api.discogs.com/masters/3855547",
+   "styles" : [
+      "Trip Hop"
+   ],
+   "title" : "Escape The Chaos",
+   "tracklist" : [
+      {
+         "duration" : "",
+         "position" : "A1",
+         "title" : "Call For Love",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "A2",
+         "title" : "Elephant Clouds",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Oscar #Worldpeace",
+               "id" : 4695628,
+               "join" : "",
+               "name" : "Oscar Worldpeace",
+               "resource_url" : "https://api.discogs.com/artists/4695628",
+               "role" : "Featuring",
+               "tracks" : ""
+            }
+         ],
+         "position" : "A3",
+         "title" : "Peace Of Me",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "A4",
+         "title" : "We Live And Die",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "A5",
+         "title" : "Far We Come",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "A6",
+         "title" : "Molten",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "B1",
+         "title" : "Bleeding Out",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "B2",
+         "title" : "Cooler Heads",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "B3",
+         "title" : "Hold It Down",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "B4",
+         "title" : "Dead To Me",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 4567548,
+               "join" : "",
+               "name" : "Amanda Zamolo",
+               "resource_url" : "https://api.discogs.com/artists/4567548",
+               "role" : "Featuring",
+               "tracks" : ""
+            }
+         ],
+         "position" : "B5",
+         "title" : "Pareidolia",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "B6",
+         "title" : "Escape The Chaos",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/master/3855547-Morcheeba-Escape-The-Chaos",
+   "versions_url" : "https://api.discogs.com/masters/3855547/versions",
+   "videos" : [
+      {
+         "description" : "Vignette Video of Call For Love, the new Morcheeba Single\nTaken from the forthcoming studio album Escape The Chaos: https://100percent.it/EscapeTheChaos\nVideo created by Dean Eastment @ Dno Studio\nVisual and artwork elements by Caroline Darche (Mademoisel",
+         "duration" : 263,
+         "embed" : true,
+         "title" : "Morcheeba - Call For Love (Official Audio)",
+         "uri" : "https://www.youtube.com/watch?v=gD6k-TVoO2k"
+      },
+      {
+         "description" : "Vignette Video of We Live And Die, taken from the forthcoming studio album Escape The Chaos\nVideo created by Dean Eastment @ Dno Studio\nVisual and artwork elements by Caroline Darche (Mademoiselle a les nerfs)\nLearn more: https://100percent.it/EscapeTheCh",
+         "duration" : 192,
+         "embed" : true,
+         "title" : "Morcheeba - We Live And Die (Official Audio)",
+         "uri" : "https://www.youtube.com/watch?v=Vj7MjK_jggw"
+      },
+      {
+         "description" : "Vignette Video of Peace Of Me, taken from the forthcoming studio album Escape The Chaos\nVideo created by Dean Eastment @ Dno Studio\nVisual and artwork elements by Caroline Darche (Mademoiselle a les nerfs)\nLearn more: https://100percent.it/EscapeTheChaos",
+         "duration" : 163,
+         "embed" : true,
+         "title" : "Morcheeba - Peace Of Me (feat. Oscar #Worldpeace) [Official Video]",
+         "uri" : "https://www.youtube.com/watch?v=yEjjPtv_Gps"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nEscape the Chaos · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\n\nAuto-g",
+         "duration" : 297,
+         "embed" : true,
+         "title" : "Escape the Chaos",
+         "uri" : "https://www.youtube.com/watch?v=IRjG-M5IRA0"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nDead To Me · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\nComposer: Jor",
+         "duration" : 251,
+         "embed" : true,
+         "title" : "Dead To Me",
+         "uri" : "https://www.youtube.com/watch?v=qcTaMwdSwsw"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nFar We Come · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\n\nAuto-genera",
+         "duration" : 285,
+         "embed" : true,
+         "title" : "Far We Come",
+         "uri" : "https://www.youtube.com/watch?v=m41qbIWlOqU"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nMolten · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\n\nAuto-generated b",
+         "duration" : 282,
+         "embed" : true,
+         "title" : "Molten",
+         "uri" : "https://www.youtube.com/watch?v=4d0Qg-pWjAg"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nHold It Down · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\n\nAuto-gener",
+         "duration" : 191,
+         "embed" : true,
+         "title" : "Hold It Down",
+         "uri" : "https://www.youtube.com/watch?v=lg_DovFdELE"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nCooler Heads · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Hush Counsell\n\nAuto-gene",
+         "duration" : 132,
+         "embed" : true,
+         "title" : "Cooler Heads",
+         "uri" : "https://www.youtube.com/watch?v=4cGh8jSat5w"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nElephant Clouds · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\nComposer",
+         "duration" : 255,
+         "embed" : true,
+         "title" : "Elephant Clouds",
+         "uri" : "https://www.youtube.com/watch?v=o_FtoYTvKpM"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nPareidolia · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nFeatured Artist: Amanda Zamolo\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nCompo",
+         "duration" : 225,
+         "embed" : true,
+         "title" : "Pareidolia",
+         "uri" : "https://www.youtube.com/watch?v=XAYQR-BoZrY"
+      },
+      {
+         "description" : "Provided to YouTube by Republic of Music\n\nBleeding Out · Morcheeba\n\nEscape The Chaos\n\n℗ 100% Records under exclusive license from Fly Agaric Records\n\nReleased on: 2025-05-23\n\nProducer: Ross Godfrey\nComposer: Ross Godfrey\nComposer: Skye Edwards\nComposer: A",
+         "duration" : 344,
+         "embed" : true,
+         "title" : "Bleeding Out",
+         "uri" : "https://www.youtube.com/watch?v=oVS6j_Ax0FU"
+      },
+      {
+         "description" : "Escape the Chaos is the eleventh studio album by British electronic band Morcheeba. It was released on 23 May 2025 under 100% Records. It was preceded by three singles: \"Call for Love\", \"We Live and Die\", and \"Peace of Me\", which features rapper Oscar Wor",
+         "duration" : 269,
+         "embed" : true,
+         "title" : "Morcheeba - Call For Love (2025)",
+         "uri" : "https://www.youtube.com/watch?v=U9-FFL5vHjE"
+      }
+   ],
+   "year" : 2025
+}

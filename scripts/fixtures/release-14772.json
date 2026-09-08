@@ -1,0 +1,639 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 954,
+         "join" : "",
+         "name" : "Pentatonik",
+         "resource_url" : "https://api.discogs.com/artists/954",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/8_4Dc7qPGm2cY7uY0z_lfkOnxE_PtpfKsAJJgHS_0PE/rs:fit/g:sm/q:90/h:500/w:500/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTk1NC0x/NDg1NzYzNTkwLTU3/MTYuanBlZw.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "artists_sort" : "Pentatonik",
+   "blocked_from_sale" : false,
+   "community" : {
+      "contributors" : [
+         {
+            "resource_url" : "https://api.discogs.com/users/Phaelam",
+            "username" : "Phaelam"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/mlo-storm",
+            "username" : "mlo-storm"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/PKS",
+            "username" : "PKS"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/dmaxx",
+            "username" : "dmaxx"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ihall",
+            "username" : "ihall"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/mayday",
+            "username" : "mayday"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/evenflouw",
+            "username" : "evenflouw"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/fabriknos",
+            "username" : "fabriknos"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/synthetixsounds",
+            "username" : "synthetixsounds"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Dragofix",
+            "username" : "Dragofix"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Poke_Mode",
+            "username" : "Poke_Mode"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/dlgladwin",
+            "username" : "dlgladwin"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/GabiB",
+            "username" : "GabiB"
+         }
+      ],
+      "data_quality" : "Needs Vote",
+      "have" : 333,
+      "rating" : {
+         "average" : 4.44,
+         "count" : 84
+      },
+      "status" : "Accepted",
+      "submitter" : {
+         "resource_url" : "https://api.discogs.com/users/Phaelam",
+         "username" : "Phaelam"
+      },
+      "want" : 149
+   },
+   "companies" : [
+      {
+         "catno" : "",
+         "entity_type" : "17",
+         "entity_type_name" : "Pressed By",
+         "id" : 141989,
+         "name" : "Damont",
+         "resource_url" : "https://api.discogs.com/labels/141989",
+         "thumbnail_url" : "https://i.discogs.com/VuTwFRoB2Cr-UC0vjUuRjLSjZjZ_gOWXLS6jzjwduYU/rs:fit/g:sm/q:90/h:291/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE0MTk4/OS0xNTE0MzA4ODg5/LTExNTIuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "31",
+         "entity_type_name" : "Glass Mastered At",
+         "id" : 1531143,
+         "name" : "CDM (10)",
+         "resource_url" : "https://api.discogs.com/labels/1531143",
+         "thumbnail_url" : "https://i.discogs.com/YigMDhPBNu2NguhL86LcKGNDazgWsns962zsuQghakA/rs:fit/g:sm/q:90/h:94/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE1MzEx/NDMtMTY0NjM2OTg1/My0zODQ2LmpwZWc.jpeg"
+      }
+   ],
+   "country" : "UK",
+   "data_quality" : "Needs Vote",
+   "date_added" : "2001-10-30T18:22:59-08:00",
+   "date_changed" : "2022-11-08T12:44:29-08:00",
+   "estimated_weight" : 170,
+   "extraartists" : [
+      {
+         "anv" : "",
+         "id" : 1846386,
+         "join" : "",
+         "name" : "Accident (8)",
+         "resource_url" : "https://api.discogs.com/artists/1846386",
+         "role" : "Design",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 265687,
+         "join" : "",
+         "name" : "Ray Staff",
+         "resource_url" : "https://api.discogs.com/artists/265687",
+         "role" : "Mastered By [Mastering Engineer]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 4124002,
+         "join" : "",
+         "name" : "Derek Bowring",
+         "resource_url" : "https://api.discogs.com/artists/4124002",
+         "role" : "Photography By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "R. Simeon Bowring",
+         "id" : 423829,
+         "join" : "",
+         "name" : "Simeon Bowring",
+         "resource_url" : "https://api.discogs.com/artists/423829",
+         "role" : "Producer, Written-By, Engineer, Mixed By, Saxophone, Drums, Guitar, Flute, Piano, Tape, Other [String Machine], Sampler, Synthesizer, Sequenced By, Programmed By [Drum Machine]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 45690,
+         "join" : "",
+         "name" : "Susi Raymakers",
+         "resource_url" : "https://api.discogs.com/artists/45690",
+         "role" : "Vocals",
+         "tracks" : "1.6, 1.7, 2.7"
+      }
+   ],
+   "format_quantity" : 2,
+   "formats" : [
+      {
+         "descriptions" : [
+            "Album"
+         ],
+         "name" : "CD",
+         "qty" : "2"
+      }
+   ],
+   "genres" : [
+      "Electronic"
+   ],
+   "id" : 14772,
+   "identifiers" : [
+      {
+         "description" : "Text",
+         "type" : "Barcode",
+         "value" : "5 021904 600016"
+      },
+      {
+         "description" : "Scanned",
+         "type" : "Barcode",
+         "value" : "5021904600016"
+      },
+      {
+         "description" : "Disc One",
+         "type" : "Matrix / Runout",
+         "value" : "DAMONT DVNT CD1 CDM01"
+      },
+      {
+         "description" : "Disc Two",
+         "type" : "Matrix / Runout",
+         "value" : "DAMONT DVNT CD2 CDM01"
+      }
+   ],
+   "images" : [
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/DVtymKrQFZ1njk2sTTjD2sj33JbTebnazsKfgSypy70/rs:fit/g:sm/q:90/h:600/w:584/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg0ODku/anBlZw.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/DVtymKrQFZ1njk2sTTjD2sj33JbTebnazsKfgSypy70/rs:fit/g:sm/q:90/h:600/w:584/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg0ODku/anBlZw.jpeg",
+         "uri150" : "https://i.discogs.com/pfBu3DdfrHpij82IPXXoCG8UrYFXEAeJnBLiv8oMAVg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg0ODku/anBlZw.jpeg",
+         "width" : 584
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/R6rBTre4SUQApsB8cSnD1LgABzLFiK1lUJEthmpN0xA/rs:fit/g:sm/q:90/h:600/w:592/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg3OTQu/anBlZw.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/R6rBTre4SUQApsB8cSnD1LgABzLFiK1lUJEthmpN0xA/rs:fit/g:sm/q:90/h:600/w:592/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg3OTQu/anBlZw.jpeg",
+         "uri150" : "https://i.discogs.com/klrUjU2_9EJnGUGOxSL1dkDTFP5JChLj1BinpsgNzFQ/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg3OTQu/anBlZw.jpeg",
+         "width" : 592
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/q8wwrMLm_27wPgCQsl-wi_PaK684Fw7SuR8YnplPrdA/rs:fit/g:sm/q:90/h:600/w:587/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MDEu/anBlZw.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/q8wwrMLm_27wPgCQsl-wi_PaK684Fw7SuR8YnplPrdA/rs:fit/g:sm/q:90/h:600/w:587/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MDEu/anBlZw.jpeg",
+         "uri150" : "https://i.discogs.com/xBvhFqoX1gZEE7ZuNPHOfll9dUhljnxazt49vshdoyw/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MDEu/anBlZw.jpeg",
+         "width" : 587
+      },
+      {
+         "height" : 481,
+         "resource_url" : "https://i.discogs.com/6rPOnM94_1QyDB_ekLrTLeQNZZQNP5tfx4cILiczkgM/rs:fit/g:sm/q:90/h:481/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MzAu/anBlZw.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/6rPOnM94_1QyDB_ekLrTLeQNZZQNP5tfx4cILiczkgM/rs:fit/g:sm/q:90/h:481/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MzAu/anBlZw.jpeg",
+         "uri150" : "https://i.discogs.com/YBbSu-PnPPLRbjyIinekjjGZ0ZsB-NqLYH6bsDEBOJ8/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4MzAu/anBlZw.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 480,
+         "resource_url" : "https://i.discogs.com/z2GhsuO7-jWOLaD3wUfKLBfAFxZjPIWwwB1CZigZ3CE/rs:fit/g:sm/q:90/h:480/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4Mzcu/anBlZw.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/z2GhsuO7-jWOLaD3wUfKLBfAFxZjPIWwwB1CZigZ3CE/rs:fit/g:sm/q:90/h:480/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4Mzcu/anBlZw.jpeg",
+         "uri150" : "https://i.discogs.com/TP9lTHQUbzEuric53TBZmdQSjjuvLJSYpCrE0Pk4ZcY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg4Mzcu/anBlZw.jpeg",
+         "width" : 600
+      }
+   ],
+   "is_offensive" : false,
+   "labels" : [
+      {
+         "catno" : "dvnt1cd",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 753,
+         "name" : "Deviant Records",
+         "resource_url" : "https://api.discogs.com/labels/753",
+         "thumbnail_url" : "https://i.discogs.com/a3hyrQh5HEEDeKdUaVHhIMO_PQduZIw2zhQnZbFsw-0/rs:fit/g:sm/q:90/h:270/w:217/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTc1My0x/NDYzNzQyMDg1LTkw/MzYuZ2lm.jpeg"
+      }
+   ],
+   "lowest_price" : 11.69,
+   "master_id" : 75295,
+   "master_url" : "https://api.discogs.com/masters/75295",
+   "notes" : "Part 4 Live recorded at Trance Europe Express Live and In-Direct at The Leisure Lounge, Holborn.\n\nAs can be seen from the images, the title Anthology appears nowhere on this release. This is in fact the second batch of CD releases for dvnt1cd - the first showed the title on the front and back covers, on the spine, and the two discs, although the barcode and matrix/runout text are the same.",
+   "num_for_sale" : 12,
+   "released" : "1994",
+   "released_formatted" : "1994",
+   "resource_url" : "https://api.discogs.com/releases/14772",
+   "series" : [],
+   "status" : "Accepted",
+   "styles" : [
+      "IDM"
+   ],
+   "thumb" : "https://i.discogs.com/pfBu3DdfrHpij82IPXXoCG8UrYFXEAeJnBLiv8oMAVg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0Nzcy/LTEyOTEwOTg0ODku/anBlZw.jpeg",
+   "title" : "Pentatonik",
+   "tracklist" : [
+      {
+         "duration" : "",
+         "position" : "",
+         "title" : "Movements",
+         "type_" : "heading"
+      },
+      {
+         "duration" : "7:28",
+         "position" : "1-1",
+         "title" : "Part 1",
+         "type_" : "track"
+      },
+      {
+         "duration" : "8:01",
+         "position" : "1-2",
+         "title" : "Part 2",
+         "type_" : "track"
+      },
+      {
+         "duration" : "8:57",
+         "position" : "1-3",
+         "title" : "Part 3",
+         "type_" : "track"
+      },
+      {
+         "duration" : "9:00",
+         "position" : "1-4",
+         "title" : "Part 4",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "",
+         "title" : "Reworks",
+         "type_" : "heading"
+      },
+      {
+         "duration" : "8:00",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 509759,
+               "join" : "",
+               "name" : "Vicki Tanousis",
+               "resource_url" : "https://api.discogs.com/artists/509759",
+               "role" : "Vocals [Answerphone Vocal Loop]",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-5",
+         "title" : "About That",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:56",
+         "position" : "1-6",
+         "title" : "La Vérité",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:26",
+         "position" : "1-7",
+         "title" : "Solution",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:10",
+         "position" : "1-8",
+         "title" : "Create",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "",
+         "title" : "Awakenings",
+         "type_" : "heading"
+      },
+      {
+         "duration" : "6:23",
+         "position" : "2-1",
+         "title" : "The Sleeper",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:41",
+         "position" : "2-2",
+         "title" : "Pentatonik Melody",
+         "type_" : "track"
+      },
+      {
+         "duration" : "7:47",
+         "position" : "2-3",
+         "title" : "Prophesy",
+         "type_" : "track"
+      },
+      {
+         "duration" : "7:54",
+         "position" : "2-4",
+         "title" : "Passion",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "position" : "",
+         "title" : "Additions",
+         "type_" : "heading"
+      },
+      {
+         "duration" : "8:18",
+         "position" : "2-5",
+         "title" : "Green",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:38",
+         "position" : "2-6",
+         "title" : "Real",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:25",
+         "position" : "2-7",
+         "title" : "Detox",
+         "type_" : "track"
+      },
+      {
+         "duration" : "9:10",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 393593,
+               "join" : "",
+               "name" : "Joe Macrae",
+               "resource_url" : "https://api.discogs.com/artists/393593",
+               "role" : "Drums [Electro-acoustic Drumatron, Acoustic]",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 299229,
+               "join" : "",
+               "name" : "Andy Peak",
+               "resource_url" : "https://api.discogs.com/artists/299229",
+               "role" : "Engineer, Electronics [Additional Treatments]",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 1776121,
+               "join" : "",
+               "name" : "Andy Eccleston",
+               "resource_url" : "https://api.discogs.com/artists/1776121",
+               "role" : "Guitar, Electronics [Treatments]",
+               "tracks" : ""
+            },
+            {
+               "anv" : "R. Simeon Bowring",
+               "id" : 423829,
+               "join" : "",
+               "name" : "Simeon Bowring",
+               "resource_url" : "https://api.discogs.com/artists/423829",
+               "role" : "Guitar, Synthesizer, Sampler, Mixed By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-8",
+         "title" : "Part 4 Live",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/release/14772-Pentatonik-Pentatonik",
+   "videos" : [
+      {
+         "description" : "© R. Simeon Bowring\nhttp://www.discogs.com/Pentatonik-Anthology/master/75295",
+         "duration" : 485,
+         "embed" : true,
+         "title" : "Pentatonik - Movements Part 2",
+         "uri" : "https://www.youtube.com/watch?v=2O0zGjdY99E"
+      },
+      {
+         "description" : "Classic electronic chill-out track from 1994.",
+         "duration" : 363,
+         "embed" : true,
+         "title" : "PENTATONIK - Movement (Part 4)",
+         "uri" : "https://www.youtube.com/watch?v=V-zMstfljgM"
+      },
+      {
+         "description" : "© R. Simeon Bowring \nFeatured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease",
+         "duration" : 481,
+         "embed" : true,
+         "title" : "Pentatonik - About That",
+         "uri" : "https://www.youtube.com/watch?v=DRMWKuXH0bk"
+      },
+      {
+         "description" : "© R. Simeon Bowring Featured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease ",
+         "duration" : 417,
+         "embed" : true,
+         "title" : "Pentatonik - La Verite",
+         "uri" : "https://www.youtube.com/watch?v=Fuj0Evd3PEk"
+      },
+      {
+         "description" : "Pentatonik - Prophesy from the album Pentatonik - Anthology \ni don't own any rights for this track...",
+         "duration" : 468,
+         "embed" : true,
+         "title" : "Pentatonik - Prophesy.wmv",
+         "uri" : "https://www.youtube.com/watch?v=FLRsFNuRA8I"
+      },
+      {
+         "description" : "*first time on YouTube\n© Deviant Records 1994\n\nDiscogs: http://www.discogs.com/Pentatonik-Anthology/release/14772\nDeviant Web Site (archived): http://web.archive.org/web/19981203163759/http://www.deviant.co.uk/index.html\n\nWritten and Produced by Simeon B",
+         "duration" : 402,
+         "embed" : true,
+         "title" : "(((IEMN))) Pentatonik - Pentatonik Melody - Deviant 1995 - IDM, Ambient",
+         "uri" : "https://www.youtube.com/watch?v=mN0CJwCrOto"
+      },
+      {
+         "description" : "© R. Simeon Bowring\nhttp://www.discogs.com/Pentatonik-Anthology/master/75295",
+         "duration" : 485,
+         "embed" : true,
+         "title" : "Pentatonik - Movements Part 2",
+         "uri" : "https://www.youtube.com/watch?v=2O0zGjdY99E"
+      },
+      {
+         "description" : "Classic electronic chill-out track from 1994.",
+         "duration" : 363,
+         "embed" : true,
+         "title" : "PENTATONIK - Movement (Part 4)",
+         "uri" : "https://www.youtube.com/watch?v=V-zMstfljgM"
+      },
+      {
+         "description" : "© R. Simeon Bowring \nFeatured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease",
+         "duration" : 481,
+         "embed" : true,
+         "title" : "Pentatonik - About That",
+         "uri" : "https://www.youtube.com/watch?v=DRMWKuXH0bk"
+      },
+      {
+         "description" : "© R. Simeon Bowring Featured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease ",
+         "duration" : 417,
+         "embed" : true,
+         "title" : "Pentatonik - La Verite",
+         "uri" : "https://www.youtube.com/watch?v=Fuj0Evd3PEk"
+      },
+      {
+         "description" : "Pentatonik - Prophesy from the album Pentatonik - Anthology \ni don't own any rights for this track...",
+         "duration" : 468,
+         "embed" : true,
+         "title" : "Pentatonik - Prophesy.wmv",
+         "uri" : "https://www.youtube.com/watch?v=FLRsFNuRA8I"
+      },
+      {
+         "description" : "*first time on YouTube\n© Deviant Records 1994\n\nDiscogs: http://www.discogs.com/Pentatonik-Anthology/release/14772\nDeviant Web Site (archived): http://web.archive.org/web/19981203163759/http://www.deviant.co.uk/index.html\n\nWritten and Produced by Simeon B",
+         "duration" : 402,
+         "embed" : true,
+         "title" : "(((IEMN))) Pentatonik - Pentatonik Melody - Deviant 1995 - IDM, Ambient",
+         "uri" : "https://www.youtube.com/watch?v=mN0CJwCrOto"
+      },
+      {
+         "description" : "This track is from Pentatonik - Anthology (LP), released by Deviant Records in 1994.",
+         "duration" : 449,
+         "embed" : true,
+         "title" : "Pentatonik - Movements (Part 1)",
+         "uri" : "https://www.youtube.com/watch?v=DE11Tw5s9Cs"
+      },
+      {
+         "description" : "© R. Simeon Bowring\nhttp://www.discogs.com/Pentatonik-Anthology/master/75295",
+         "duration" : 485,
+         "embed" : true,
+         "title" : "Pentatonik - Movements Part 2",
+         "uri" : "https://www.youtube.com/watch?v=2O0zGjdY99E"
+      },
+      {
+         "description" : "This track is from Pentatonik - Anthology (LP), released by Deviant Records in 1994.",
+         "duration" : 538,
+         "embed" : true,
+         "title" : "Pentatonik - Movements (Part 3)",
+         "uri" : "https://www.youtube.com/watch?v=_J4rmSZaub0"
+      },
+      {
+         "description" : "Classic electronic chill-out track from 1994.",
+         "duration" : 363,
+         "embed" : true,
+         "title" : "PENTATONIK - Movement (Part 4)",
+         "uri" : "https://www.youtube.com/watch?v=V-zMstfljgM"
+      },
+      {
+         "description" : "© R. Simeon Bowring \nFeatured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease ",
+         "duration" : 481,
+         "embed" : true,
+         "title" : "Pentatonik - About That",
+         "uri" : "https://www.youtube.com/watch?v=DRMWKuXH0bk"
+      },
+      {
+         "description" : "© R. Simeon Bowring Featured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Anthology/release/14772 \nhttp://www.discogs.com/Pentatonik-Anthology/master/75295 \nPlease s",
+         "duration" : 417,
+         "embed" : true,
+         "title" : "Pentatonik - La Verite",
+         "uri" : "https://www.youtube.com/watch?v=Fuj0Evd3PEk"
+      },
+      {
+         "description" : "This track is from Pentatonik - Anthology (LP), released by Deviant Records in 1994.",
+         "duration" : 387,
+         "embed" : true,
+         "title" : "Pentatonik - Solution",
+         "uri" : "https://www.youtube.com/watch?v=FOcm2kUHTjc"
+      },
+      {
+         "description" : " ",
+         "duration" : 372,
+         "embed" : true,
+         "title" : "pentatonik - create.wmv",
+         "uri" : "https://www.youtube.com/watch?v=u25Le_wGHDo"
+      },
+      {
+         "description" : "",
+         "duration" : 480,
+         "embed" : true,
+         "title" : "E1 - Pentatonik - The Sleeper",
+         "uri" : "https://www.youtube.com/watch?v=u5RnSY2Sfs0"
+      },
+      {
+         "description" : "*first time on YouTube\n© Deviant Records 1994\n\nDiscogs: http://www.discogs.com/Pentatonik-Anthology/release/14772\nDeviant Web Site (archived): http://web.archive.org/web/19981203163759/http://www.deviant.co.uk/index.html\n\nWritten and Produced by Simeon Bo",
+         "duration" : 402,
+         "embed" : true,
+         "title" : "(((IEMN))) Pentatonik - Pentatonik Melody - Deviant 1995 - IDM, Ambient",
+         "uri" : "https://www.youtube.com/watch?v=mN0CJwCrOto"
+      },
+      {
+         "description" : "Pentatonik - Prophesy from the album Pentatonik - Anthology \ni don't own any rights for this track...",
+         "duration" : 468,
+         "embed" : true,
+         "title" : "Pentatonik - Prophesy.wmv",
+         "uri" : "https://www.youtube.com/watch?v=FLRsFNuRA8I"
+      },
+      {
+         "description" : "Taken from th LP 'Anthology'\n\nLabel: Deviant Records ‎– DVNT1LP\nCountry: UK\nReleased: 1994",
+         "duration" : 365,
+         "embed" : true,
+         "title" : "Pentatonik - Passion",
+         "uri" : "https://www.youtube.com/watch?v=EDslusxHPD8"
+      },
+      {
+         "description" : "This track is from Pentatonik - Anthology (LP), released by Deviant Records in 1994. Enjoy.\n\nhttps://www.discogs.com/fr/master/75295-Pentatonik-Anthology",
+         "duration" : 499,
+         "embed" : true,
+         "title" : "Pentatonik - Green (Deviant Records, 1994)",
+         "uri" : "https://www.youtube.com/watch?v=nA_iBafjHqA"
+      },
+      {
+         "description" : "http://www.myspace.com/simeonbowring\n© R. Simeon Bowring \nFeatured release from 1995 2 x CD Edition. Original album release on 4 x Vinyl in 1994 on Deviant Records... \nhttp://www.discogs.com/Pentatonik-Ant... \nhttp://www.discogs.com/Pentatonik-Ant...",
+         "duration" : 401,
+         "embed" : true,
+         "title" : "Pentatonik - Real",
+         "uri" : "https://www.youtube.com/watch?v=RzPcUUMRBko"
+      },
+      {
+         "description" : "This track is from Pentatonik - Anthology (LP), released by Deviant Records in 1994.",
+         "duration" : 386,
+         "embed" : true,
+         "title" : "Pentatonik - Detox",
+         "uri" : "https://www.youtube.com/watch?v=B6SWs_5XzB8"
+      },
+      {
+         "description" : "https://www.discogs.com/de/Pentatonik-Anthology/release/55880",
+         "duration" : 552,
+         "embed" : true,
+         "title" : "Pentatonik - Movements Pt.4 (Live)",
+         "uri" : "https://www.youtube.com/watch?v=DyQ-gb4O5ls"
+      },
+      {
+         "description" : "",
+         "duration" : 481,
+         "embed" : true,
+         "title" : "E1 - Pentatonik - The Sleeper",
+         "uri" : "https://www.youtube.com/watch?v=u5RnSY2Sfs0"
+      }
+   ],
+   "year" : 1994
+}

@@ -1,0 +1,545 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 2549,
+         "join" : "",
+         "name" : "The Future Sound Of London",
+         "resource_url" : "https://api.discogs.com/artists/2549",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/ZMqWA-AjRCjiz4wG4a84jTzH6RnTqBBWtCtHvsjos7U/rs:fit/g:sm/q:90/h:563/w:400/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTI1NDkt/MTM3NDA1NzE0OS05/ODM1LmpwZWc.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "artists_sort" : "Future Sound Of London, The",
+   "blocked_from_sale" : false,
+   "community" : {
+      "contributors" : [
+         {
+            "resource_url" : "https://api.discogs.com/users/newmusicmark",
+            "username" : "newmusicmark"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/s_rpg",
+            "username" : "s_rpg"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/elexxii",
+            "username" : "elexxii"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/jedi4q2",
+            "username" : "jedi4q2"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Polynomial-C",
+            "username" : "Polynomial-C"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/darkwave",
+            "username" : "darkwave"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/oparischka",
+            "username" : "oparischka"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/tyler05",
+            "username" : "tyler05"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Yage_2097",
+            "username" : "Yage_2097"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Joseph-J",
+            "username" : "Joseph-J"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ApeAstbury",
+            "username" : "ApeAstbury"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/baalofconfusion",
+            "username" : "baalofconfusion"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/muntz",
+            "username" : "muntz"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/_Fate_",
+            "username" : "_Fate_"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/DiscogsUpdateBot",
+            "username" : "DiscogsUpdateBot"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Miles.Monroe",
+            "username" : "Miles.Monroe"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/cellularsmoke",
+            "username" : "cellularsmoke"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/aesiphron",
+            "username" : "aesiphron"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/bullfinchart",
+            "username" : "bullfinchart"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/splintering",
+            "username" : "splintering"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Kater_Murr",
+            "username" : "Kater_Murr"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/uzumaki",
+            "username" : "uzumaki"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/bobblediscogs",
+            "username" : "bobblediscogs"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ChrisEfterklang",
+            "username" : "ChrisEfterklang"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/toetag39",
+            "username" : "toetag39"
+         }
+      ],
+      "data_quality" : "Needs Vote",
+      "have" : 891,
+      "rating" : {
+         "average" : 4.42,
+         "count" : 216
+      },
+      "status" : "Accepted",
+      "submitter" : {
+         "resource_url" : "https://api.discogs.com/users/newmusicmark",
+         "username" : "newmusicmark"
+      },
+      "want" : 64
+   },
+   "companies" : [
+      {
+         "catno" : "",
+         "entity_type" : "13",
+         "entity_type_name" : "Phonographic Copyright (p)",
+         "id" : 26760,
+         "name" : "Virgin Records Ltd.",
+         "resource_url" : "https://api.discogs.com/labels/26760",
+         "thumbnail_url" : "https://i.discogs.com/o1VQoiLdpvZgC2yr8LVKZaGVCQTEdP01CBlmr9ENc3A/rs:fit/g:sm/q:90/h:155/w:541/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NzYw/LTE2MjcxMjgzMzEt/MzkwNC5qcGVn.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "14",
+         "entity_type_name" : "Copyright (c)",
+         "id" : 188,
+         "name" : "Astralwerks",
+         "resource_url" : "https://api.discogs.com/labels/188",
+         "thumbnail_url" : "https://i.discogs.com/SYZ720ZtyYCR8aNuaHHh6dcFoPqKXXyOKtDrdaUMUtU/rs:fit/g:sm/q:90/h:400/w:400/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE4OC0x/NTUwOTI1OTg5LTY4/MzYuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "14",
+         "entity_type_name" : "Copyright (c)",
+         "id" : 952,
+         "name" : "Caroline Records",
+         "resource_url" : "https://api.discogs.com/labels/952",
+         "thumbnail_url" : "https://i.discogs.com/ecOuq05QxNKnHwjLES7LnJqR-7HGsu3-ZC1Bf-ucvsQ/rs:fit/g:sm/q:90/h:310/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTk1Mi0x/NDczNTU3NDc0LTUx/MjcuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "21",
+         "entity_type_name" : "Published By",
+         "id" : 189548,
+         "name" : "Sony Music Publishing",
+         "resource_url" : "https://api.discogs.com/labels/189548",
+         "thumbnail_url" : "https://i.discogs.com/KtTp68MlOdnlzcoohIkj9boqJmS-jnOD73R_5VTAzBk/rs:fit/g:sm/q:90/h:600/w:573/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE4OTU0/OC0xNjQwNDE3NTkw/LTc4MTkuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 270657,
+         "name" : "Earthbeat Studios",
+         "resource_url" : "https://api.discogs.com/labels/270657",
+         "thumbnail_url" : "https://i.discogs.com/gdY4Lt4zoQkAW8xbqhV6p3vrQVadN8U3_IzhuBGAc2k/rs:fit/g:sm/q:90/h:306/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3MDY1/Ny0xNDM4NzM0MzMz/LTY5NjkuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "31",
+         "entity_type_name" : "Glass Mastered At",
+         "id" : 294033,
+         "name" : "EMI MFG.",
+         "resource_url" : "https://api.discogs.com/labels/294033",
+         "thumbnail_url" : "https://i.discogs.com/w2TUSVvIm_OR7-xb36ESPMX1jRXIwwhDnRiRt5Phf48/rs:fit/g:sm/q:90/h:511/w:551/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI5NDAz/My0xNjU0MTYyODI3/LTc1NjIuanBlZw.jpeg"
+      }
+   ],
+   "country" : "US",
+   "data_quality" : "Needs Vote",
+   "date_added" : "2001-02-26T17:51:28-08:00",
+   "date_changed" : "2025-08-07T07:58:14-07:00",
+   "estimated_weight" : 85,
+   "extraartists" : [
+      {
+         "anv" : "Richie Thomas",
+         "id" : 141743,
+         "join" : "",
+         "name" : "Richard Thomas (2)",
+         "resource_url" : "https://api.discogs.com/artists/141743",
+         "role" : "Drums",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Vage",
+         "id" : 7408,
+         "join" : "",
+         "name" : "Yage",
+         "resource_url" : "https://api.discogs.com/artists/7408",
+         "role" : "Engineer",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 2549,
+         "join" : "",
+         "name" : "The Future Sound Of London",
+         "resource_url" : "https://api.discogs.com/artists/2549",
+         "role" : "Producer",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 17419,
+         "join" : "",
+         "name" : "Ozric Tentacles",
+         "resource_url" : "https://api.discogs.com/artists/17419",
+         "role" : "Sounds [Guitar Sample From 'Pungent Effulgent']",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 297346,
+         "join" : "",
+         "name" : "Mary Hopkin",
+         "resource_url" : "https://api.discogs.com/artists/297346",
+         "role" : "Voice [Voice Sample From 'Bladerunner' Sung By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Dougans",
+         "id" : 416887,
+         "join" : "",
+         "name" : "Brian Dougans",
+         "resource_url" : "https://api.discogs.com/artists/416887",
+         "role" : "Written-By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Cobain",
+         "id" : 40049,
+         "join" : "",
+         "name" : "Garry Cobain",
+         "resource_url" : "https://api.discogs.com/artists/40049",
+         "role" : "Written-By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 15900,
+         "join" : "",
+         "name" : "Ennio Morricone",
+         "resource_url" : "https://api.discogs.com/artists/15900",
+         "role" : "Written-By [Flute Sample From 'Once Upon A Time In America']",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 7027,
+         "join" : "",
+         "name" : "Vangelis",
+         "resource_url" : "https://api.discogs.com/artists/7027",
+         "role" : "Written-By [Voice Sample From 'Bladerunner']",
+         "tracks" : ""
+      }
+   ],
+   "format_quantity" : 1,
+   "formats" : [
+      {
+         "descriptions" : [
+            "Single"
+         ],
+         "name" : "CD",
+         "qty" : "1"
+      }
+   ],
+   "genres" : [
+      "Electronic"
+   ],
+   "id" : 2516,
+   "identifiers" : [
+      {
+         "description" : "Text",
+         "type" : "Barcode",
+         "value" : "0 17046 61842 7"
+      },
+      {
+         "type" : "Barcode",
+         "value" : "017046618427"
+      },
+      {
+         "description" : "Variant 1",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-1"
+      },
+      {
+         "description" : "Variant 1",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 1",
+         "type" : "Mould SID Code",
+         "value" : "IFPI 163D"
+      },
+      {
+         "description" : "Variant 2",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-2"
+      },
+      {
+         "description" : "Variant 2",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 2",
+         "type" : "Mould SID Code",
+         "value" : "IFPI 1634"
+      },
+      {
+         "description" : "Variant 3",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-1"
+      },
+      {
+         "description" : "Variant 3",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 3",
+         "type" : "Mould SID Code",
+         "value" : "IFPI 1650"
+      },
+      {
+         "description" : "Variant 4",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-1"
+      },
+      {
+         "description" : "Variant 4",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 4",
+         "type" : "Mould SID Code",
+         "value" : "ifpi 163E"
+      },
+      {
+         "description" : "Variant 5",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-2"
+      },
+      {
+         "description" : "Variant 5",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 5",
+         "type" : "Mould SID Code",
+         "value" : "ifpi 163F"
+      },
+      {
+         "description" : "Variant 6",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 2-1-1"
+      },
+      {
+         "description" : "Variant 6",
+         "type" : "Matrix / Runout",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 6",
+         "type" : "Mould SID Code",
+         "value" : "ifpi 1643"
+      },
+      {
+         "description" : "Variant 7",
+         "type" : "Matrix / Runout",
+         "value" : "ASW06184 MASTERED BY EMI MFG 1-1-2"
+      },
+      {
+         "description" : "Variant 7",
+         "type" : "Mastering SID Code",
+         "value" : "IFPI L043"
+      },
+      {
+         "description" : "Variant 7",
+         "type" : "Mould SID Code",
+         "value" : "ifpi 1632"
+      }
+   ],
+   "images" : [
+      {
+         "height" : 596,
+         "resource_url" : "https://i.discogs.com/d5Ofj3IwT58USgnaZOaJgTDaoh5KT3YvLJ32PegIu_4/rs:fit/g:sm/q:90/h:596/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTIxNS5q/cGVn.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/d5Ofj3IwT58USgnaZOaJgTDaoh5KT3YvLJ32PegIu_4/rs:fit/g:sm/q:90/h:596/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTIxNS5q/cGVn.jpeg",
+         "uri150" : "https://i.discogs.com/X95yJif9dLROrXYM0iY2ULCzHVOl5qivBEQImqZyIhg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTIxNS5q/cGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 471,
+         "resource_url" : "https://i.discogs.com/mY25hSCkuID49HvXKoqXJ1NIztLugQGGstRyH5lkMJM/rs:fit/g:sm/q:90/h:471/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTI3MS5q/cGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/mY25hSCkuID49HvXKoqXJ1NIztLugQGGstRyH5lkMJM/rs:fit/g:sm/q:90/h:471/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTI3MS5q/cGVn.jpeg",
+         "uri150" : "https://i.discogs.com/Yo8HpM_6bITrV55eYJS-sQ9jfewpm-QKaaOts7d_2wQ/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTI3MS5q/cGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/sJsPxxlKhLiXG2sNGkaVh-ZhEkV_blW9HAH3QDV0j8k/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTMyMi5q/cGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/sJsPxxlKhLiXG2sNGkaVh-ZhEkV_blW9HAH3QDV0j8k/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTMyMi5q/cGVn.jpeg",
+         "uri150" : "https://i.discogs.com/5CMJCDP0jh_G0UUkGfx92JyhD5M9I1-pLz3ZdO37fGQ/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTMyMi5q/cGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/ChI_LqBg2xRWGZVURN7me5R6fLx7v_V1ELruYIp4m10/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTM3MzE5Mzg4NS05/OTY1LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ChI_LqBg2xRWGZVURN7me5R6fLx7v_V1ELruYIp4m10/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTM3MzE5Mzg4NS05/OTY1LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/8eAT_4jkA2wtwvjx_tKCGZI9yfp37LzfgSBbClz8eS8/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTM3MzE5Mzg4NS05/OTY1LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 595,
+         "resource_url" : "https://i.discogs.com/ORCNEfCE9uJ6KS0VauwVHS5BtBoMfbwkKJuUxVTz6Eo/rs:fit/g:sm/q:90/h:595/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTM0NS5q/cGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ORCNEfCE9uJ6KS0VauwVHS5BtBoMfbwkKJuUxVTz6Eo/rs:fit/g:sm/q:90/h:595/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTM0NS5q/cGVn.jpeg",
+         "uri150" : "https://i.discogs.com/Tx3lUCOTFggqYmLF7E-YNc3lnD-Vvk4rFaY0HBXDzZ4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTM0NS5q/cGVn.jpeg",
+         "width" : 600
+      }
+   ],
+   "is_offensive" : false,
+   "labels" : [
+      {
+         "catno" : "ASW 6184",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 188,
+         "name" : "Astralwerks",
+         "resource_url" : "https://api.discogs.com/labels/188",
+         "thumbnail_url" : "https://i.discogs.com/SYZ720ZtyYCR8aNuaHHh6dcFoPqKXXyOKtDrdaUMUtU/rs:fit/g:sm/q:90/h:400/w:400/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE4OC0x/NTUwOTI1OTg5LTY4/MzYuanBlZw.jpeg"
+      },
+      {
+         "catno" : "ASW 6184",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 1460546,
+         "name" : "EBV",
+         "resource_url" : "https://api.discogs.com/labels/1460546",
+         "thumbnail_url" : "https://i.discogs.com/cEx6tRRk2Xwlh3rCOrLdK49sEMFLQVSU9l_hYMhyymQ/rs:fit/g:sm/q:90/h:232/w:406/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE0NjA1/NDYtMTUyNTY4NDAx/My05NTM1LmpwZWc.jpeg"
+      }
+   ],
+   "lowest_price" : 3.65,
+   "master_id" : 59592,
+   "master_url" : "https://api.discogs.com/masters/59592",
+   "notes" : "Packaged in a standard jewel case with 2 page insert.\n\nOn insert:\nGuitar sample • [a17419] from '[m=53468]'\nFlute sampe from [url=https://www.discogs.com/master/72793]'Once Upon A Time In America'[/url] ([a15900]) courtesy of General Music/Warner Chappell Music Ltd.\nVoice sample from 'Rachel's Song' ([a7027]) from the film soundtrack [url=https://www.discogs.com/master/12717]'Bladerunner'[/url], courtesy of Warner Records/EMI United Partnership Ltd.\nRecorded at Earthbeat Studios, London.\nPublished by Sony Music Publishing\n℗ 1996 Virgin Records Ltd\n© 1996 Astralwerks / Caroline\n\nOn disc:\n℗ 1996 Virgin Records Ltd © 1996 Astralwerks / Caroline\n\nOn tray card:\nGuitar sample • [a17419] from '[m=53468]'\nFlute sampe from [url=https://www.discogs.com/master/72793]'Once Upon A Time In America'[/url] ([a15900]) courtesy of General Music/Warner Chappell Music Ltd.\nVoice sample from 'Rachel's Song' ([a7027]) from the film soundtrack [url=https://www.discogs.com/master/12717]'Bladerunner'[/url], courtesy of Warner Records/EMI United Partnership Ltd.\nRecorded at Earthbeat Studios, London.\nPublished by Sony Music Publishing\n1996 Virgin Records Ltd\n1996 Astralwerks / Caroline\nAstralwerks 104 W. 29th St. 4th Floor\nNew York, NY 10001",
+   "num_for_sale" : 15,
+   "released" : "1996-10-07",
+   "released_formatted" : "07 Oct 1996",
+   "resource_url" : "https://api.discogs.com/releases/2516",
+   "series" : [],
+   "status" : "Accepted",
+   "styles" : [
+      "Breakbeat",
+      "Leftfield",
+      "Trip Hop",
+      "Ambient"
+   ],
+   "thumb" : "https://i.discogs.com/X95yJif9dLROrXYM0iY2ULCzHVOl5qivBEQImqZyIhg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTI1MTYt/MTI3MjgyNTIxNS5q/cGVn.jpeg",
+   "title" : "My Kingdom",
+   "tracklist" : [
+      {
+         "duration" : "",
+         "position" : "",
+         "sub_tracks" : [
+            {
+               "duration" : "10:50",
+               "position" : "1",
+               "title" : "Part 1",
+               "type_" : "track"
+            },
+            {
+               "duration" : "3:15",
+               "position" : "2",
+               "title" : "Part 2",
+               "type_" : "track"
+            },
+            {
+               "duration" : "7:11",
+               "position" : "3",
+               "title" : "Part 3",
+               "type_" : "track"
+            },
+            {
+               "duration" : "5:12",
+               "position" : "4",
+               "title" : "Part 4",
+               "type_" : "track"
+            },
+            {
+               "duration" : "3:54",
+               "position" : "5",
+               "title" : "Part 5",
+               "type_" : "track"
+            }
+         ],
+         "title" : "My Kingdom",
+         "type_" : "index"
+      }
+   ],
+   "uri" : "https://www.discogs.com/release/2516-The-Future-Sound-Of-London-My-Kingdom",
+   "videos" : [
+      {
+         "description" : "My Kingdom (Part 1)  10:50\nMy Kingdom (Part 2)  3:15\nMy Kingdom (Part 3)  7:11\nMy Kingdom (Part 4)  5:12\nMy Kingdom (Part 5)  3:54",
+         "duration" : 0,
+         "embed" : true,
+         "title" : "The Future Sound Of London   My Kingdom  Parts 1 To 5",
+         "uri" : "https://www.youtube.com/watch?v=KaNrXVOQpKg"
+      },
+      {
+         "description" : "Download on iTunes: http://smarturl.it/FSOLdeadcities\n \nFollow Future Sound of London\nOfficial Site: http://www.futuresoundoflondon.com/\nFacebook: https://www.facebook.com/pages/Future-Sound-of-London-FSOL/34897435627\nMusic video by Future Sound Of London",
+         "duration" : 237,
+         "embed" : true,
+         "title" : "Future Sound Of London - My Kingdom",
+         "uri" : "https://www.youtube.com/watch?v=EdFKoZHzMQ0"
+      }
+   ],
+   "year" : 1996
+}
