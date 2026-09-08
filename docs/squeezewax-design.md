@@ -823,7 +823,7 @@ implementation, rather than open design questions:
   |---|---|
   | Strict match | 0 requests to identify the release — the tag names it. Answering *ownership* is a separate cost not counted here; see the note above. |
   | Owned badge | ~~~20 requests per collection sync (100 items/page)~~ — **corrected 2026-09-07: `ceil(items / 100)` requests. Measured 3 requests for a 203-item collection.** |
-  | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) — **pre-filter corrected to a ranking signal, see §3; candidate count per album is higher than this table assumes.** |
+  | Structural match | ~~1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3)~~ — **falsified 2026-09-07: the pre-filter is a ranking signal only, never a gate (decisions §8) — candidate count per album is higher than this figure assumes. No replacement figure given; it depends on measured requests-per-album from step 4's hardware pass — see the §13-rewrite note above.** |
   | Completeness check (v2) | 1 release fetch per matched album, ~~cacheable forever~~ — **superseded 2026-09-07: the Discogs API Terms of Use (item 5) forbid caching Content longer than necessary. See `squeezewax-v1-decisions.md` §9.5 for the retention policy.** |
 
   ~~For a well-tagged, Strict-dominant library, cold matching is
