@@ -505,15 +505,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       convention going forward. Renaming 2 and 3 requires a `grep -rn`
       reference sweep across `docs/`, `plans/`, `CLAUDE.md` and `TODO.md`;
       cosmetic, optional, not blocking.
-- [ ] **2026-09-07, before step 5: fold `docs/squeezewax-design.md`'s
-      inline strikethrough-and-correction blocks into clean prose, moving
-      superseded text to an appendix.** These have accumulated across §3,
-      §4, §9, §10 and §13 (all 2026-09-07). Each is individually correct
-      and the convention is worth keeping — it preserves what was believed
-      and why it was wrong — but §3 in particular is now hard to read as a
-      specification, since current truth is interleaved with superseded
-      text. Do this BEFORE step 5, which reads §4 and §10 heavily, not
-      after.
+- [x] **2026-09-07: fold `docs/squeezewax-design.md`'s inline
+      strikethrough-and-correction blocks into clean prose — WITHDRAWN
+      2026-09-07.** Measured: §3 carries 9 superseded lines of 160, and
+      the file has 11 correction blocks total. The premise was an
+      impression, not a measurement. Corrections stay inline by decision
+      — see the correction-labels note at the top of
+      `docs/squeezewax-design.md`. The one genuine readability issue —
+      §3's tiers table packing two falsification blocks into a single
+      cell at line ~167 — is cosmetic and not blocking.
 - [ ] **2026-09-07: this is the third, fourth and fifth instance of a
       pattern step 3 identified** — a claim derived from one path, or from
       a documented example, stated as a general property. (The
