@@ -441,7 +441,7 @@ sub _migration_1 {
 	# discogs_release_cache. Untouched by anything LMS does to its own
 	# database. Not written in v1 - retention here is constrained by the
 	# Discogs API Terms of Use, not "worth keeping indefinitely"; see
-	# TODO.md for the pending retention policy.
+	# squeezewax-v1-decisions.md §9.5 for the retention policy.
 	$dbh->do(q{
 		CREATE TABLE IF NOT EXISTS squeezewax.discogs_release_cache (
 			discogs_release_id INTEGER NOT NULL PRIMARY KEY,

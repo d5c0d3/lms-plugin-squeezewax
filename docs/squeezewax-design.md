@@ -695,8 +695,8 @@ orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
 ~~makes relinks and completeness checks (v2) cost no API calls once a release
 has been fetched once~~ — **superseded 2026-09-07: the Discogs API Terms of
 Use (API Use and Restrictions item 5) forbid caching Content longer than
-necessary, so "cost no API calls once fetched" cannot stand as written. A
-replacement retention policy is pending a decision record — see TODO.md.**
+necessary, so "cost no API calls once fetched" cannot stand as written. See
+`squeezewax-v1-decisions.md` §9.5 for the retention policy.**
 
 **`discogs_no_match` is entirely regenerable**, like `discogs_collection` and
 unlike `discogs_match`. It exists so a rescan does not re-read one or two files
@@ -824,7 +824,7 @@ implementation, rather than open design questions:
   | Strict match | 0 requests to identify the release — the tag names it. Answering *ownership* is a separate cost not counted here; see the note above. |
   | Owned badge | ~~~20 requests per collection sync (100 items/page)~~ — **corrected 2026-09-07: `ceil(items / 100)` requests. Measured 3 requests for a 203-item collection.** |
   | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) — **pre-filter corrected to a ranking signal, see §3; candidate count per album is higher than this table assumes.** |
-  | Completeness check (v2) | 1 release fetch per matched album, ~~cacheable forever~~ — **superseded 2026-09-07: the Discogs API Terms of Use (item 5) forbid caching Content longer than necessary. Replacement policy pending a decision record — see TODO.md.** |
+  | Completeness check (v2) | 1 release fetch per matched album, ~~cacheable forever~~ — **superseded 2026-09-07: the Discogs API Terms of Use (item 5) forbid caching Content longer than necessary. See `squeezewax-v1-decisions.md` §9.5 for the retention policy.** |
 
   ~~For a well-tagged, Strict-dominant library, cold matching is
   **disk-bound, not rate-limit-bound**.~~ — **Unverified pending the rewrite
