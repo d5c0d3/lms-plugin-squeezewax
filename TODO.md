@@ -616,10 +616,10 @@ Shared reminder list. Both I and Claude Code read and update this.
   mistake.
 - **2026-09-07: monthly CC0 data dumps as an alternative to the API for
   tracklists — recorded in `squeezewax-v1-decisions.md` §9.8.** v2/v3.
-- [x] **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
+- **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
   obtain key and secret; commit neither.** DONE 2026-09-07 — see
   `plans/build-order-step-4-structural-matching.md` §2.2.
-- [x] **2026-09-07: settle the User-Agent string.** RESOLVED 2026-09-07 —
+- **2026-09-07: settle the User-Agent string.** RESOLVED 2026-09-07 —
   see `plans/build-order-step-4-structural-matching.md` §3 item 2.
 - **2026-09-07: token storage — settings-page action items.** Risk
   described in §9.1 (unscoped bearer credential, plaintext prefs). Still
