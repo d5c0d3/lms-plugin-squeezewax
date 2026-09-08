@@ -60,3 +60,63 @@ PLUGIN_SQUEEZEWAX_MATCH_PROGRESS
 
 PLUGIN_SQUEEZEWAX_DETECT_UNREADABLE
 	EN	could not be read
+
+PLUGIN_SQUEEZEWAX_TOKEN
+	EN	Discogs personal access token
+
+PLUGIN_SQUEEZEWAX_TOKEN_DESC
+	EN	Required for Structural matching and for the owned badge. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
+
+PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS
+	EN	https://www.discogs.com/settings/developers
+
+PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
+	EN	Discogs Developer Settings (generate or revoke a token here)
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
+	EN	Test token
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_MISSING
+	EN	Enter a token before testing it.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK
+	EN	Token is valid, authenticated as Discogs user "%s".
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER
+	EN	Token is valid.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED
+	EN	Discogs rejected this token. Check that it was copied correctly and has not been revoked.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND
+	EN	Discogs returned "not found" for the identity check, which is unexpected. Try again, or check for a SqueezeWax update.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED
+	EN	Discogs is rate-limiting this connection right now. Wait a minute and try again.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR
+	EN	Discogs returned a server error. Try again later.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE
+	EN	Got no response from Discogs. Check this server's network connection.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY
+	EN	Discogs returned an empty response.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
+	EN	Discogs returned a response SqueezeWax could not understand.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
+	EN	Token test failed (HTTP %s).
+
+PLUGIN_SQUEEZEWAX_MAXTIER
+	EN	Matching tiers to use
+
+PLUGIN_SQUEEZEWAX_MAXTIER_DESC
+	EN	The cascade always starts at Strict and stops at the tier chosen here. Structural spends Discogs API requests; Strict does not.
+
+PLUGIN_SQUEEZEWAX_MAXTIER_STRICT
+	EN	Strict only (tag-based, no Discogs requests)
+
+PLUGIN_SQUEEZEWAX_MAXTIER_STRUCTURAL
+	EN	Strict, then Structural (uses the token above)

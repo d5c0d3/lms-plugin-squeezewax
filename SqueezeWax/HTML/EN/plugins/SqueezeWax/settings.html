@@ -7,6 +7,33 @@
 	[% END %]
 [% END %]
 
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TOKEN" desc="PLUGIN_SQUEEZEWAX_TOKEN_DESC" %]
+	<input type="password" class="stdedit" size="40"
+		name="pref_discogsToken" value="[% prefs.pref_discogsToken | html %]" />
+	<div><a href="[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS" | string %]" target="_blank"
+		rel="noopener">[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL" | string %]</a></div>
+
+	[% IF scanning %]
+		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSE %]
+		<input name="testToken" type="submit" class="stdclick"
+			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]" />
+	[% END %]
+
+	[% IF tokenTestResult %]
+		<div>[% tokenTestResult | html %]</div>
+	[% END %]
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_MAXTIER" desc="PLUGIN_SQUEEZEWAX_MAXTIER_DESC" %]
+	<select class="stdedit" name="pref_discogsMaxTier">
+		<option value="strict" [% IF prefs.pref_discogsMaxTier == "strict" %]selected[% END %]>
+			[% "PLUGIN_SQUEEZEWAX_MAXTIER_STRICT" | string %]</option>
+		<option value="structural" [% IF prefs.pref_discogsMaxTier == "structural" %]selected[% END %]>
+			[% "PLUGIN_SQUEEZEWAX_MAXTIER_STRUCTURAL" | string %]</option>
+	</select>
+[% END %]
+
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
 	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
 	    variables inside FOREACH, so an outer counter reverts to 0 after the

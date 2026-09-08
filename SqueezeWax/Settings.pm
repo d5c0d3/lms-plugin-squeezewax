@@ -23,6 +23,13 @@ use Plugins::SqueezeWax::Tags;
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
 
+# Step 4 §0.7: a single max-tier selector, not a second boolean pref. Default
+# is 'strict', decided 2026-09-07 - a fresh install matches only tag-carrying
+# albums, spends zero Discogs requests, and needs no token.
+$prefs->init({
+	discogsMaxTier => 'strict',
+});
+
 use constant SAMPLE_PER_FORMAT => 25;
 
 # A run that has not finished in this long is treated as dead, so a wedged
@@ -41,7 +48,14 @@ sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html')
 # generic prefs() path only handles scalars; a list pref is edited with indexed
 # form fields assembled by the plugin's own handler, which is how core edits
 # mediadirs (Slim/Web/Settings/Server/Basic.pm:88-121).
-sub prefs { return ($prefs) }
+#
+# discogsToken and discogsMaxTier ARE scalars, so unlike discogsTagNames they
+# go through this generic path (Slim/Web/Settings.pm:135-176): the base
+# handler saves pref_discogsToken/pref_discogsMaxTier on saveSettings and
+# populates params.prefs.pref_discogsToken/pref_discogsMaxTier for the
+# template, same as core's own password/select fields (HTML/EN/settings/
+# server/security.html).
+sub prefs { return ($prefs, qw(discogsToken discogsMaxTier)) }
 
 sub handler {
 	my ( $class, $client, $params, $callback, @args ) = @_;
@@ -57,6 +71,15 @@ sub handler {
 	}
 	elsif ( $params->{saveSettings} ) {
 		_saveTagNames($params, $scanning);
+	}
+	elsif ( $params->{testToken} ) {
+		# Async and self-contained: renders the page itself via $callback
+		# once Discogs answers, the same deferral shape
+		# Slim::Plugin::JiveExtras::Settings uses around a settings-page
+		# SimpleAsyncHTTP call (refs/slimserver/Slim/Plugin/JiveExtras/
+		# Settings.pm:83-101,134). Must return here rather than fall through
+		# to the synchronous SUPER::handler call below.
+		return _testToken( $class, $client, $params, $callback, \@args, $scanning );
 	}
 
 	$params->{scanning} = $scanning;
@@ -155,6 +178,96 @@ sub _setChanged {
 	}
 
 	return 0;
+}
+
+# GET /oauth/identity (decisions §9.7's "Token sanity check"). Server-side, so
+# SimpleAsyncHTTP per CLAUDE.md, not Plugins::SqueezeWax::API->get - that shim
+# is scanner-only (API.pm's own header note; SimpleSyncHTTP::new logs a
+# backtrace outside the scanner). Request construction and response
+# classification are still API.pm's job; only the transport differs here.
+sub _testToken {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	if ($scanning) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_BUSY_SCANNING');
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	if ( !Plugins::SqueezeWax::Schema->isReady ) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_DB_UNUSABLE') . ' '
+			. ( Plugins::SqueezeWax::Schema->lastError || '' );
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	# Test what's currently in the field, even if unsaved - the point of a
+	# "Test token" button is to check before committing to Save.
+	my $token = $params->{pref_discogsToken};
+	$token = $prefs->get('discogsToken') unless defined $token && length $token;
+
+	if ( !defined $token || $token eq '' ) {
+		$params->{tokenTestResult} = string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_MISSING');
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	require Plugins::SqueezeWax::API;
+	require Slim::Networking::SimpleAsyncHTTP;
+
+	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest( '/oauth/identity', {}, $token );
+
+	my $done = sub {
+		my $http = shift;
+		my $result = Plugins::SqueezeWax::API->classifyResponse( $http->code, $http->content );
+		_tokenTested( $class, $client, $params, $callback, $args, $scanning, $result );
+	};
+
+	Slim::Networking::SimpleAsyncHTTP->new( $done, $done, { timeout => 15 } )->get( $url, @headers );
+
+	return;
+}
+
+sub _tokenTested {
+	my ( $class, $client, $params, $callback, $args, $scanning, $result ) = @_;
+
+	if ( $result->{ok} ) {
+		my $username = $result->{data} && $result->{data}->{username};
+
+		$params->{tokenTestResult} = $username
+			? sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK'), $username )
+			: string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER');
+	}
+	else {
+		$params->{tokenTestResult} = _tokenTestFailureString($result);
+	}
+
+	_finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+}
+
+sub _tokenTestFailureString {
+	my ($result) = @_;
+
+	my %tokens = (
+		unauthorized   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED',
+		not_found      => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND',
+		rate_limited   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED',
+		server_error   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR',
+		no_response    => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE',
+		empty_body     => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY',
+		malformed_json => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON',
+	);
+
+	my $token = $tokens{ $result->{error} || '' };
+
+	return string($token) if $token;
+
+	return sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN'), $result->{code} // '?' );
+}
+
+sub _finishTestToken {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	$params->{scanning} = $scanning;
+
+	$callback->( $client, $params, $class->SUPER::handler( $client, $params ), @$args );
 }
 
 sub _startDetection {

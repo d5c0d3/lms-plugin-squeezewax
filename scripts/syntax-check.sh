@@ -141,7 +141,20 @@ PROGRESS_STUB='BEGIN {
 	$INC{q(Slim/Utils/Progress.pm)} = 1;
 }'
 
-MODULES="Schema Library Tags Match Importer Settings Plugin"
+# API.pm's Slim::Utils::PluginManager reaches the same JSON::XS/Unicode/
+# OSDetect problem SCHEMA_STUB and IMPORT_STUB already work around, one hop
+# further down: Slim::Utils::Misc -> Slim::Music::Info -> ... ->
+# Slim::Utils::DateTime -> Slim::Utils::Unicode, which needs an initialised
+# OSDetect. Only dataForPlugin is called (by _pluginVersion, at runtime), so
+# a bare stub returning {} is enough for the compile check - as always, this
+# cannot prove the real dataForPlugin behaves as API.pm assumes, only that
+# the module loads.
+API_STUB='BEGIN {
+	$INC{q(Slim/Utils/PluginManager.pm)} = 1;
+	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
+}'
+
+MODULES="Schema Library Tags Match API Importer Settings Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -171,6 +184,10 @@ for scanner in 0 1; do
 			Match)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
+				;;
+			API)
+				prelude="$API_STUB"
+				note=" (Slim::Utils::PluginManager stubbed)"
 				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
