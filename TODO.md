@@ -538,6 +538,15 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-07, before step 5: fold `docs/squeezewax-design.md`'s
+      inline strikethrough-and-correction blocks into clean prose, moving
+      superseded text to an appendix.** These have accumulated across §3,
+      §4, §9, §10 and §13 (all 2026-09-07). Each is individually correct
+      and the convention is worth keeping — it preserves what was believed
+      and why it was wrong — but §3 in particular is now hard to read as a
+      specification, since current truth is interleaved with superseded
+      text. Do this BEFORE step 5, which reads §4 and §10 heavily, not
+      after.
 - [ ] **2026-09-07: this is the third, fourth and fifth instance of a
       pattern step 3 identified** — a claim derived from one path, or from
       a documented example, stated as a general property. (The
@@ -626,6 +635,20 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Deferred by decision — not forgotten
 
+- **2026-09-07: pressing-vs-edition conflation remains in two ILLUSTRATIVE
+  passages of `docs/squeezewax-design.md`, deliberately uncorrected**
+  pending the step-5/6 "what does an edition-level match show" product
+  decision (see "Open design questions" above), since that decision
+  determines the replacement wording rather than another strikethrough:
+  §2 Core Concept item 1 ("inspect details and value of the owned
+  pressing") and §4's badge-derivation walkthrough ("matched to a
+  different pressing that's on the Wantlist"). Both are illustrative. The
+  NORMATIVE instance — §10's badge join — was corrected 2026-09-07, as
+  were §3's Structural table cell, §4's context-menu list and §3's
+  walkthrough 2. §6 Flow 1's "owns one of the listed pressings" is **NOT**
+  an instance: Flow 1 browses real versions, so the release arm of the
+  dual ownership test applies directly. Recorded so it is not "fixed" by
+  mistake.
 - **2026-09-07: monthly CC0 data dumps (data.discogs.com) as an alternative
   to the API for tracklists.** Would solve caching and rate limits; is a
   different plugin (multi-GB XML, local index, often on a NAS). v2/v3.
