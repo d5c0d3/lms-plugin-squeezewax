@@ -179,11 +179,19 @@ Two notes:
   **maximum-tier selector** (Strict / Structural / Fuzzy) where *"the cascade
   always starts at Strict and stops at the selected tier."* Do not add a second
   boolean pref and end up with two sources of truth.
-- **Decide the max-tier pref's default explicitly.** If it defaults to
-  `'structural'`, the gate is true on every fresh install and its purpose
-  evaporates — `runImporter` logs `Starting $importer scan` at *error* level
-  inside the `use` guard (`Slim/Music/Import.pm:573-579`). Worse, a fresh
-  install with no token would attempt an unattended cold structural pass.
+- **The max-tier pref's default is DECIDED 2026-09-07: `'strict'`.** A fresh
+  install matches only tag-carrying albums, spends zero Discogs requests, and
+  needs no token. Structural is opt-in, so the `use` gate keeps its original
+  purpose of suppressing per-scan log noise on an unconfigured install.
+  Rejected: `'structural'` as the default — it would attempt an unattended
+  cold structural pass on a fresh install, hours of requesting from a user
+  who opted into nothing, and it would make the gate true for everyone,
+  defeating its purpose (`runImporter` logs `Starting $importer scan` at
+  *error* level inside the `use` guard, `Slim/Music/Import.pm:573-579`).
+  **Accepted cost:** for a library tagged by MusicBrainz/Picard rather than a
+  Discogs-aware tagger, a `'strict'` default does nothing on first run and the
+  plugin can appear broken. Mitigated by settings-page copy explaining what
+  each tier does and what Structural costs, NOT by changing the default.
 - The token conjunct is a **choice, not a necessity**: decisions §9.2 records
   that unauthenticated search returns 200. It buys 2.4× throughput and the user
   needs a token for ownership anyway.
@@ -247,7 +255,9 @@ remaining precondition is **implementation** of the action, not the decision.
 Built in step 4, §3 item 9.
 
 **2.2 Register `SqueezeWax`** at discogs.com/settings/developers, for
-breaking-change notices only. Commit neither key nor secret (decisions §9.1).
+breaking-change notices only. **DONE 2026-09-07** — the application is
+registered; consumer key and secret exist. Commit neither key nor secret
+(decisions §9.1).
 
 ---
 
@@ -259,8 +269,20 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
 1. **Token authentication.** Pref, settings field, the risk warning and
    revocation link required by decisions §9.1, and validation via
    `GET /oauth/identity`.
-2. **`API.pm` — request construction.** User-Agent (unique, RFC 1945, contact
-   URL, plugin version — silent blocking is the documented penalty), the
+2. **`API.pm` — request construction.** User-Agent, settled 2026-09-07:
+   `SqueezeWax/<version> +<repo-url>`.
+   - `<version>` is read at runtime from `install.xml`, never hardcoded — a
+     hardcoded version drifts, and the point is that Discogs can identify
+     which build is misbehaving.
+   - `<repo-url>` is `https://github.com/d5c0d3/lms-plugin-squeezewax` — the
+     project's GitHub repository, derived from the raw.githubusercontent.com
+     URL `scripts/package-build.sh` already writes into `repo.xml`.
+   - The LMS version is deliberately **not** included: it is a fingerprint of
+     the user's setup sent to a third party on every request, for a benefit
+     accruing to us rather than to them. Ask for it in a bug report instead.
+
+   Unique, RFC 1945 form, contact URL, plugin version — silent blocking is
+   the documented penalty (decisions §9.3). Also: the
    `Authorization: Discogs token=…` header form, URL building, JSON decode.
 3. **Rate limiting.** Local throttle honouring the documented 60/min moving
    window; read and record `X-Discogs-Ratelimit`, `-Used`, `-Remaining`;
