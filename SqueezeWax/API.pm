@@ -1,24 +1,39 @@
 package Plugins::SqueezeWax::API;
 
-# Discogs API client. Shape mirrored from refs/lms-plugin-tidal/API/Sync.pm
+# Discogs API client, synchronous path (build-order step 4 §1 scope:
+# "Structural runs in the scanner... API/Async.pm is server-side and belongs
+# to steps 5/6"). Shape mirrored from refs/lms-plugin-tidal/API/Sync.pm
 # (commit 8df3d452, 2026-07-26): a thin _get wrapping
 # Slim::Networking::SimpleSyncHTTP, JSON decode, error handling by response
-# code. Built out incrementally over build-order step 4 items 1-3; this
-# commit carries only request construction and response classification
-# (step 4 §3 items 1-2), pulled in early because Settings.pm's token-test
-# action (item 1) needs both. The synchronous transport shim and rate
-# limiting (item 3) follow in later commits.
+# code. Built out incrementally over build-order step 4 items 1-3; rate
+# limiting (item 3) follows in a later commit.
 #
 # Request construction and response classification are pure class methods of
-# their inputs - see the fuller note this gains once the transport shim
-# lands, on why that matters for testability.
+# their inputs. SimpleSyncHTTP::new logs a backtrace if !main::SCANNER
+# (refs/slimserver/Slim/Networking/SimpleSyncHTTP.pm:58), and main::SCANNER
+# is a `use constant`, so the transport itself cannot be exercised in the
+# test process. Match.pm's _writeRefusal solved the same shape of problem the
+# same way: pull the decision out of the shim so it is testable without the
+# shim. _request() below is that shim - no logic beyond wiring the pure
+# functions to SimpleSyncHTTP.
+#
+# Server-side callers (Settings.pm's token test) need the request/response
+# pure functions but must use Slim::Networking::SimpleAsyncHTTP instead of
+# _request() - CLAUDE.md: "Server-side HTTP -> SimpleAsyncHTTP (async)".
+# Settings.pm therefore calls buildRequest/classifyResponse directly and
+# wires its own async transport. A full async client (API/Async.pm) is out
+# of scope for this step (plan §1).
 
 use strict;
 
 use Data::URIEncode qw(complex_to_query);
 use JSON::XS qw(decode_json);
 
+use Slim::Networking::SimpleSyncHTTP;
+use Slim::Utils::Log;
 use Slim::Utils::PluginManager;
+
+my $log = logger('plugin.squeezewax');
 
 use constant BASE_URL => 'https://api.discogs.com';
 use constant REPO_URL => 'https://github.com/d5c0d3/lms-plugin-squeezewax';
@@ -118,6 +133,25 @@ sub _pluginVersion {
 	my $data = Slim::Utils::PluginManager->dataForPlugin($module);
 
 	return ( $data && ref $data && $data->{version} ) || 'unknown';
+}
+
+# ---------------------------------------------------------------------------
+# The transport shim. Scanner-only (see the header note and CLAUDE.md). Not
+# exercised by scripts/api-check.pl for the reason stated there and in the
+# header above - SimpleSyncHTTP itself refuses to run outside the scanner.
+# No rate limiting yet (build-order step 4 item 3); a later commit wraps this
+# with the accounting function and a 429 retry loop.
+# ---------------------------------------------------------------------------
+
+sub _request {
+	my ( $path, $params, $token ) = @_;
+
+	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest( $path, $params, $token );
+
+	my $response = Slim::Networking::SimpleSyncHTTP->new( { timeout => 15 } )
+		->get( $url, @headers );
+
+	return Plugins::SqueezeWax::API->classifyResponse( $response->code, $response->content );
 }
 
 1;
