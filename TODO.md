@@ -173,14 +173,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       library-sized to collection-sized, at zero request cost. Needs a
       conservative fallback for various-artists and album-artist
       mismatches.
-- [ ] **2026-09-07: mandatory Discogs attribution, not currently in the
-      design doc.** (a) "This application uses Discogs' API but is not
-      affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a
-      trademark of Zink Media, LLC." — prominently. (b) "Data provided by
-      Discogs." — directly next to any data used, hyperlinked to the
-      discogs.com page for that data, not nofollow. (b) is a live
-      constraint on the badge and the review queue — a grid badge has no
-      natural place for it; decide before step 6 starts.
+- [ ] **2026-09-07: mandatory Discogs attribution.** Both required notices
+      are recorded in `squeezewax-v1-decisions.md` §9.6. Still open: **a
+      grid badge has no natural place for the "Data provided by Discogs"
+      notice — decide before step 6 starts.**
 - [ ] **Step 4's plan must open with an enumerated "what step 3 established
       that step 4 must honour" section**, each item citing its decision
       record or symbol — the same shape step 3's plan used for step 2's
@@ -411,20 +407,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       cross-check only). See the settled step-4 design above for how these
       feed the candidate-enumeration flow.
 - [x] **Discogs API, hardware-tested with a personal access token,
-      2026-09-07.** Verified: token yields `x-discogs-ratelimit: 60`;
-      `/oauth/identity` confirms token auth works via the
-      `Authorization: Discogs token=...` header form; collection listing
-      path is `/users/{username}/collection/folders/0/releases`; collection
-      `basic_information` carries `master_id` and `master_url`; collection
-      sync cost is `ceil(items/100)` (measured 3 requests for 203 items);
-      `stats.user.in_collection`/`in_wantlist` on `/masters/{id}/versions`
-      is per-token-holder (null unauthenticated, 0/1 authenticated) —
-      retained as a diagnostic only, see the derived-owned-label open
-      question above. Responses now come via Cloudflare; the
-      documentation's example headers (lighttpd, Varnish) are a 2014
-      snapshot — do not reason about caching behaviour from them. See
-      "Next — build-order steps 3–5" above for the two falsified claims and
-      the master_id-sentinel finding from the same session.
+      2026-09-07.** Authentication, the rate-limit header, the collection
+      listing path, and collection sync cost are now recorded in
+      `squeezewax-v1-decisions.md` §9 (§9.1, §9.2, §9.7) — this entry kept
+      only for what isn't there: `stats.user.in_collection`/`in_wantlist`
+      on `/masters/{id}/versions` is per-token-holder (null
+      unauthenticated, 0/1 authenticated) — retained as a diagnostic only,
+      see the derived-owned-label open question above. See "Next —
+      build-order steps 3–5" above for the two falsified claims and the
+      master_id-sentinel finding from the same session.
 - [ ] **2026-09-07, still unverified: unauthenticated rate tier.** Is the
       header actually 25/min? Documented, not confirmed by header.
 - [ ] **2026-09-07, still unverified: do unauthenticated search results
@@ -615,22 +606,23 @@ Shared reminder list. Both I and Claude Code read and update this.
   an instance: Flow 1 browses real versions, so the release arm of the
   dual ownership test applies directly. Recorded so it is not "fixed" by
   mistake.
-- **2026-09-07: monthly CC0 data dumps (data.discogs.com) as an alternative
-  to the API for tracklists.** Would solve caching and rate limits; is a
-  different plugin (multi-GB XML, local index, often on a NAS). v2/v3.
-- **2026-09-07: register "SqueezeWax" at
-  discogs.com/settings/developers** for breaking-change email notices.
-  Obtain key and secret; commit neither.
-- **2026-09-07: settle the User-Agent string** — unique, RFC 1945 form,
-  contact URL, plugin version. Silent blocking is the documented penalty.
-- **2026-09-07: token storage is plaintext LMS prefs, an unscoped account
-  credential** (can create Marketplace listings). Settings page needs a
-  warning and a revocation link. Check how `refs/lms-plugin-tidal` and
-  `refs/Spotty-Plugin` store secrets before inventing anything.
-- **2026-09-07: `discogs_price_snapshot` vs. Discogs TOU item 5 (v2/v3)** —
-  storing and displaying historical Restricted Data. The
-  dated-historical-observation reading is an interpretation, not a
-  citation. If built, label snapshots with observation dates.
+- **2026-09-07: monthly CC0 data dumps as an alternative to the API for
+  tracklists — recorded in `squeezewax-v1-decisions.md` §9.8.** v2/v3.
+- **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
+  obtain key and secret; commit neither.** Rationale recorded in §9.1
+  (breaking-change notices; why not a shared consumer key). Still to do:
+  the registration itself.
+- **2026-09-07: settle the User-Agent string.** Requirement recorded in
+  §9.3 (unique, RFC 1945 form, contact URL, plugin version; silent
+  blocking is the documented penalty). Still to do: choose and implement
+  the actual string.
+- **2026-09-07: token storage — settings-page action items.** Risk
+  described in §9.1 (unscoped bearer credential, plaintext prefs). Still
+  to do: settings page needs a warning and a revocation link; check how
+  `refs/lms-plugin-tidal` and `refs/Spotty-Plugin` store secrets before
+  inventing anything.
+- **2026-09-07: `discogs_price_snapshot` vs. Discogs TOU item 5 (v2/v3) —
+  recorded in §9.8.** If built, label snapshots with observation dates.
 - **v3: Discogs artist ID — add the column and the capture together.** Decisions
   §3 originally said to capture it while the file is open, justified as saving a
   later re-read. Migration 1 has no artist column and nothing reads one before
