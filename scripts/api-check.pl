@@ -334,4 +334,82 @@ for my $headers ( undef, {}, { limit => 60 }, { limit => 'sixty', used => 12, re
 		'_parseRateHeaders degrades to an empty hashref when there is no headers object at all' );
 }
 
+# ---------------------------------------------------------------------------
+# Real fixtures (scripts/fixtures/, scripts/fetch-fixtures.pl) through
+# classifyResponse - the actual JSON Discogs returned, not a synthetic body.
+# Only the shape build-order items 4-5 will need is asserted; nothing here
+# compares against an LMS album, which is item 5 and out of scope.
+# ---------------------------------------------------------------------------
+
+sub load_fixture {
+	my ($filename) = @_;
+	my $path = "$Bin/fixtures/$filename";
+
+	# Raw bytes, not decoded characters: classifyResponse's decode_json
+	# expects UTF-8 bytes the same way $response->content supplies them,
+	# and JSON::XS's functional decode_json dies on an already-decoded wide
+	# character string ("Wide character in subroutine entry").
+	open my $fh, '<:raw', $path or die "could not read $path: $!\n";
+	local $/;
+	return <$fh>;
+}
+
+{
+	my $result = $A->classifyResponse( 200, load_fixture('release-33986376.json') );
+	ok( $result->{ok}, "release-33986376 (master 3855547's main_release) parses" );
+
+	is( $result->{data}{master_id}, 3855547, '...master_id points back at 3855547' );
+
+	my @tracks = grep { ( $_->{type_} // '' ) eq 'track' } @{ $result->{data}{tracklist} };
+	is( scalar(@tracks), 12, '...12 countable tracks' );
+
+	my @withDuration = grep { length( $_->{duration} // '' ) } @tracks;
+	is( scalar(@withDuration), 0,
+		'...durations absent at the release level too, confirmed directly rather than only inferred from the master' );
+}
+
+{
+	my $result = $A->classifyResponse( 200, load_fixture('release-14590709.json') );
+	ok( $result->{ok}, 'release-14590709 (a Violator pressing) parses' );
+
+	is( $result->{data}{master_id}, 18080,
+		'...master_id confirms it belongs to master 18080 (Violator, 529 versions per decisions §8)' );
+
+	my @tracks = grep { ( $_->{type_} // '' ) eq 'track' } @{ $result->{data}{tracklist} };
+	is( scalar(@tracks), 9, '...9 countable tracks' );
+
+	my @withDuration = grep { length( $_->{duration} // '' ) } @tracks;
+	is( scalar(@withDuration), 9, '...all 9 have durations' );
+}
+
+{
+	# Paired fixture: the reference LMS library (hardware-tested throughout
+	# decisions/TODO.md) has this album at albums.id 3359, discc = 2, 25
+	# local tracks. Both sides of a future Structural comparison test are
+	# available once build-order item 5 needs them - not written here, per
+	# instruction; this block only asserts the Discogs side's own shape.
+	my $result = $A->classifyResponse( 200, load_fixture('release-132512.json') );
+	ok( $result->{ok}, 'release-132512 parses' );
+
+	# Defect found 2026-09-10 (plan §4): captured "believed to have no
+	# master"; it has one. Asserted here so the fixture and the plan's table
+	# can't quietly drift apart if either is ever re-captured or re-read.
+	is( $result->{data}{master_id}, 1861554,
+		'...has a master_id after all - not the masterless case it was captured to represent' );
+
+	my @tracks = grep { ( $_->{type_} // '' ) eq 'track' } @{ $result->{data}{tracklist} };
+	is( scalar(@tracks), 25, '...25 countable tracks, matching the paired LMS album\'s 25 local tracks' );
+
+	my @withDuration = grep { length( $_->{duration} // '' ) } @tracks;
+	is( scalar(@withDuration), 25, '...all 25 have durations' );
+
+	my %byDisc;
+	$byDisc{ ( $_->{position} =~ /^(\d+)-/ )[0] // '?' }++ for @tracks;
+	is_deeply( \%byDisc, { 1 => 13, 2 => 12 },
+		'...13+12 tracks across two discs, matching discc = 2' );
+
+	like( $tracks[0]{position}, qr/^\d+-\d{2}$/,
+		'...position format is D-TT (zero-padded), a second convention distinct from release 14772\'s D-T' );
+}
+
 done_testing();
