@@ -22,15 +22,23 @@
 # real <version> by regex instead, since there is no running LMS here to
 # ask.
 #
-# Token: read from $DISCOGS_TOKEN, or pass one as the first argument.
-# Unauthenticated works for six of the seven fixtures (decisions §9.2:
-# search and the catalogue endpoints do not require it) at the lower,
-# 25/min rate tier. The seventh - a page of a real collection - needs a
-# token for a specific account and is skipped with a clear message if none
-# is given; there is no publicly-viewable substitute that stays honest
-# about what decisions §8/§9's collection-page finding was measured against.
+# Token: read from $DISCOGS_TOKEN in the environment ONLY - never a CLI
+# argument (shell history, `ps` output) and never a file inside the repo
+# (an .env would be the obvious place to reach for; .gitignore blocks one
+# from ever being committed, but this script doesn't read one regardless -
+# there is nothing here for a stray file to leak through even if the
+# .gitignore rule were ever removed). NEVER commit a token, in a fixture
+# filename, a comment, or anywhere else - the fixtures themselves are public
+# catalogue/collection data, not the credential that fetched them.
 #
-# Usage: scripts/fetch-fixtures.pl [token]
+# Unauthenticated works for most of the fixtures (decisions §9.2: search and
+# the catalogue endpoints do not require it) at the lower, 25/min rate tier.
+# The collection-page fixture needs a token for a specific account and is
+# skipped with a clear message if none is given; there is no
+# publicly-viewable substitute that stays honest about what decisions
+# §8/§9's collection-page finding was measured against.
+#
+# Usage: DISCOGS_TOKEN=your-token-here scripts/fetch-fixtures.pl
 
 use strict;
 use warnings;
@@ -121,7 +129,7 @@ require SqueezeWax::API;
 
 my $A = 'Plugins::SqueezeWax::API';
 
-my $token = shift @ARGV || $ENV{DISCOGS_TOKEN};
+my $token = $ENV{DISCOGS_TOKEN};
 
 my $fixtureDir = "$Bin/fixtures";
 mkdir $fixtureDir unless -d $fixtureDir;
@@ -213,7 +221,7 @@ for my $fixture (@fixtures) {
 # username to page /users/{username}/collection/... without one.
 if ( !$token ) {
 	print "\nSkipping the collection-page fixture: no token given "
-		. "(\$DISCOGS_TOKEN or first argument).\n"
+		. "(set \$DISCOGS_TOKEN in the environment).\n"
 		. "decisions §8/§9's collection-page finding (master_id: 0 sentinel, "
 		. "five of 100 sampled) was measured against a real account's own "
 		. "collection - there is no honest substitute without one.\n";
