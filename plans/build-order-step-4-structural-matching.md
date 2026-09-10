@@ -299,6 +299,12 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
 5. **`Structural.pm` — comparison.** Filter to `type_ == "track"` (allowlist),
    count equality, sorted duration vectors within margin. Duration parser must
    handle `M:SS` **and** `H:MM:SS`.
+
+**Item 5 writes nothing.** It is a pure function returning a verdict. All
+database writes are item 6, which touches `Match.pm` — the module §0 exists
+to protect. Keeping the boundary means a mistake in the comparison logic
+cannot reach the write path. **Do not merge items 5 and 6 into one commit.**
+
 6. **`Match.pm::recordStructural`.** Via `_writeOk`. Tier-parameterised
    `_clearNoMatch` and `$STATE_SQL`. Confirm/candidate rule per decisions §8.
 7. **`Importer.pm`.** Cascade Strict → Structural; the `use` gate change; the
@@ -315,6 +321,11 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
 ---
 
 ## §4. Offline test coverage
+
+**The ten fixtures ARE the test plan for items 4-5.** Each pins a case that
+reasoning alone got wrong. Tests should read as assertions about those files,
+not as invented scenarios. A test that does not trace to a fixture or to a
+decision record is probably testing an assumption.
 
 **This is the first step where hardware iteration is the main loop, not a final
 check.** Every Discogs call is unverifiable offline. The suites can cover
