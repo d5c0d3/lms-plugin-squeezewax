@@ -1,14 +1,19 @@
 #!/usr/bin/env perl
 #
-# Captures the seven Discogs fixtures named in
+# Captures the Discogs fixtures named in
 # plans/build-order-step-4-structural-matching.md §4, as raw JSON, into
-# scripts/fixtures/. Captured now (build-order step 4 item 3's session)
+# scripts/fixtures/. Captured now (build-order step 4 item 3's sessions)
 # even though items 4-5 (candidate enumeration, comparison) are what
 # consumes them: Discogs' database is mutable - master 3855547 may gain
 # durations, a release's tracklist can be edited - and these fixtures exist
 # to pin the exact objects decisions §8's analysis was derived from, not to
 # be "current" Discogs data. Re-running this script later would defeat that
 # purpose; it is a one-time capture, not a refresh tool.
+#
+# Three fixtures added in a later session (33986376, 14590709, 132512)
+# deliberately do NOT assert what they'll contain in their labels - two of
+# them exist to find out, not to confirm a prediction. See the plan's §4
+# table for what each one actually turned out to encode.
 #
 # This is a standalone developer tool, run by hand outside LMS entirely - it
 # is not loaded by the plugin and does not ship with it. It reuses
@@ -201,6 +206,19 @@ my @fixtures = (
 	[ 'type=master search, Violator - 7 masters, 1 correct',
 		'search-type-master-violator.json', '/database/search',
 		{ type => 'master', artist => 'Depeche Mode', release_title => 'Violator' } ],
+
+	[ "Release 33986376 - master 3855547's main_release",
+		'release-33986376.json', '/releases/33986376', {} ],
+
+	# Deliberately no content claim in either label below - see the file
+	# header. Report what these actually contain rather than what was
+	# expected; the plan's §4 table is updated from the real capture, not
+	# from this label.
+	[ 'Release 14590709 - a pressing belonging to a very large master',
+		'release-14590709.json', '/releases/14590709', {} ],
+
+	[ 'Release 132512 - a multi-disc, various-artists compilation',
+		'release-132512.json', '/releases/132512', {} ],
 );
 
 for my $fixture (@fixtures) {

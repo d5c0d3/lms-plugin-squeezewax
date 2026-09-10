@@ -1,0 +1,890 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 2725,
+         "join" : "",
+         "name" : "Depeche Mode",
+         "resource_url" : "https://api.discogs.com/artists/2725",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/crPqcsdlqMhq94oTHwZCab4tT2obPmERmp5K-dVeTUA/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTI3MjUt/MTc2ODcxMTQwNy0z/MzMwLmpwZWc.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "artists_sort" : "Depeche Mode",
+   "blocked_from_sale" : false,
+   "community" : {
+      "contributors" : [
+         {
+            "resource_url" : "https://api.discogs.com/users/tonio79",
+            "username" : "tonio79"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/EntePips",
+            "username" : "EntePips"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/deschman",
+            "username" : "deschman"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/jcomin",
+            "username" : "jcomin"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/LolH",
+            "username" : "LolH"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ronze.",
+            "username" : "ronze."
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/cubogs",
+            "username" : "cubogs"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/enter-disc",
+            "username" : "enter-disc"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/marce.muinos",
+            "username" : "marce.muinos"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Viril666",
+            "username" : "Viril666"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/schimek",
+            "username" : "schimek"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/_jules",
+            "username" : "_jules"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/allerhande",
+            "username" : "allerhande"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/popiland",
+            "username" : "popiland"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/hflofgren",
+            "username" : "hflofgren"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ChVits",
+            "username" : "ChVits"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/seboki",
+            "username" : "seboki"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/rockingerasmo",
+            "username" : "rockingerasmo"
+         }
+      ],
+      "data_quality" : "Correct",
+      "have" : 12730,
+      "rating" : {
+         "average" : 4.79,
+         "count" : 1168
+      },
+      "status" : "Accepted",
+      "submitter" : {
+         "resource_url" : "https://api.discogs.com/users/tonio79",
+         "username" : "tonio79"
+      },
+      "want" : 1597
+   },
+   "companies" : [
+      {
+         "catno" : "",
+         "entity_type" : "13",
+         "entity_type_name" : "Phonographic Copyright (p)",
+         "id" : 40949,
+         "name" : "Venusnote Limited",
+         "resource_url" : "https://api.discogs.com/labels/40949"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "14",
+         "entity_type_name" : "Copyright (c)",
+         "id" : 40949,
+         "name" : "Venusnote Limited",
+         "resource_url" : "https://api.discogs.com/labels/40949"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "5",
+         "entity_type_name" : "Licensed To",
+         "id" : 877742,
+         "name" : "Sony Music Entertainment International Ltd.",
+         "resource_url" : "https://api.discogs.com/labels/877742"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "9",
+         "entity_type_name" : "Distributed By",
+         "id" : 29073,
+         "name" : "Sony Music Entertainment",
+         "resource_url" : "https://api.discogs.com/labels/29073",
+         "thumbnail_url" : "https://i.discogs.com/brqxJ0_7Bid9TdPXvDixDcKsKR49S1Tu2CJbq1H6qsI/rs:fit/g:sm/q:90/h:43/w:519/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI5MDcz/LTE3NTY5MTIzMzYt/MTIwNS5wbmc.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "4",
+         "entity_type_name" : "Record Company",
+         "id" : 737249,
+         "name" : "Sony Music Entertainment International Services GmbH",
+         "resource_url" : "https://api.discogs.com/labels/737249",
+         "thumbnail_url" : "https://i.discogs.com/ukmrc-CQzP45xqu7pl1WAhVsncRsMdkb9uLji96fFcY/rs:fit/g:sm/q:90/h:27/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTczNzI0/OS0xNzc0NjI0MDAw/LTQwMDcuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "21",
+         "entity_type_name" : "Published By",
+         "id" : 265460,
+         "name" : "EMI Music Publishing Ltd.",
+         "resource_url" : "https://api.discogs.com/labels/265460",
+         "thumbnail_url" : "https://i.discogs.com/QUVURY3OB4iixKDJbWXcejxXVjfw64FEPr6tx2MyyFc/rs:fit/g:sm/q:90/h:192/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NTQ2/MC0xNjE3MDIxMTM3/LTQxMjguanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "21",
+         "entity_type_name" : "Published By",
+         "id" : 276529,
+         "name" : "Grabbing Hands Music Ltd.",
+         "resource_url" : "https://api.discogs.com/labels/276529",
+         "thumbnail_url" : "https://i.discogs.com/EIYgcBflwNur5XSlvRP8EoM6cPGNOVbxxrp9dXerhCw/rs:fit/g:sm/q:90/h:53/w:357/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3NjUy/OS0xMzkwMjIxOTg4/LTY3MTkuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 275272,
+         "name" : "Logic Studios",
+         "resource_url" : "https://api.discogs.com/labels/275272",
+         "thumbnail_url" : "https://i.discogs.com/OfIKSlVoSgU6CjCp6tnYEdnuXeHZsUUZSMERII-BM_E/rs:fit/g:sm/q:90/h:117/w:240/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3NTI3/Mi0xMzI0OTQ0MTE1/LnBuZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 269762,
+         "name" : "Puk Recording Studios",
+         "resource_url" : "https://api.discogs.com/labels/269762",
+         "thumbnail_url" : "https://i.discogs.com/ugphLjoxwz4hGQux9BlpCe4cK11QDRaRnGxEcI-nHzw/rs:fit/g:sm/q:90/h:170/w:159/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2OTc2/Mi0xMzYxMTE1MzQ3/LTMyNjkuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 273118,
+         "name" : "The Church, London",
+         "resource_url" : "https://api.discogs.com/labels/273118",
+         "thumbnail_url" : "https://i.discogs.com/wrxGx_QAUyzv2NzWOWhoJ5ZXtKmrvfBXQUn7sZVsPyg/rs:fit/g:sm/q:90/h:343/w:378/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3MzEx/OC0xNjA2MjE2NjU2/LTIwMDEuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 266266,
+         "name" : "Master Rock Studios",
+         "resource_url" : "https://api.discogs.com/labels/266266",
+         "thumbnail_url" : "https://i.discogs.com/4nQN1fek1bAl_ef6ibKlQotAkazEL8zure0qDZwWY_I/rs:fit/g:sm/q:90/h:416/w:590/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NjI2/Ni0xMzM1NTE2Nzcz/LmpwZWc.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "23",
+         "entity_type_name" : "Recorded At",
+         "id" : 266630,
+         "name" : "Axis Studios",
+         "resource_url" : "https://api.discogs.com/labels/266630",
+         "thumbnail_url" : "https://i.discogs.com/CuiZhf1Eq61zFBOfot1H7lBmmFWvlNs-7L6kxU55hzA/rs:fit/g:sm/q:90/h:512/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NjYz/MC0xNTg5MjQyNTUz/LTQzODcuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "27",
+         "entity_type_name" : "Mixed At",
+         "id" : 275272,
+         "name" : "Logic Studios",
+         "resource_url" : "https://api.discogs.com/labels/275272",
+         "thumbnail_url" : "https://i.discogs.com/OfIKSlVoSgU6CjCp6tnYEdnuXeHZsUUZSMERII-BM_E/rs:fit/g:sm/q:90/h:117/w:240/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3NTI3/Mi0xMzI0OTQ0MTE1/LnBuZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "27",
+         "entity_type_name" : "Mixed At",
+         "id" : 269762,
+         "name" : "Puk Recording Studios",
+         "resource_url" : "https://api.discogs.com/labels/269762",
+         "thumbnail_url" : "https://i.discogs.com/ugphLjoxwz4hGQux9BlpCe4cK11QDRaRnGxEcI-nHzw/rs:fit/g:sm/q:90/h:170/w:159/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2OTc2/Mi0xMzYxMTE1MzQ3/LTMyNjkuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "27",
+         "entity_type_name" : "Mixed At",
+         "id" : 273118,
+         "name" : "The Church, London",
+         "resource_url" : "https://api.discogs.com/labels/273118",
+         "thumbnail_url" : "https://i.discogs.com/wrxGx_QAUyzv2NzWOWhoJ5ZXtKmrvfBXQUn7sZVsPyg/rs:fit/g:sm/q:90/h:343/w:378/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI3MzEx/OC0xNjA2MjE2NjU2/LTIwMDEuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "27",
+         "entity_type_name" : "Mixed At",
+         "id" : 266266,
+         "name" : "Master Rock Studios",
+         "resource_url" : "https://api.discogs.com/labels/266266",
+         "thumbnail_url" : "https://i.discogs.com/4nQN1fek1bAl_ef6ibKlQotAkazEL8zure0qDZwWY_I/rs:fit/g:sm/q:90/h:416/w:590/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NjI2/Ni0xMzM1NTE2Nzcz/LmpwZWc.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "27",
+         "entity_type_name" : "Mixed At",
+         "id" : 266630,
+         "name" : "Axis Studios",
+         "resource_url" : "https://api.discogs.com/labels/266630",
+         "thumbnail_url" : "https://i.discogs.com/CuiZhf1Eq61zFBOfot1H7lBmmFWvlNs-7L6kxU55hzA/rs:fit/g:sm/q:90/h:512/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NjYz/MC0xNTg5MjQyNTUz/LTQzODcuanBlZw.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "35",
+         "entity_type_name" : "Remastered At",
+         "id" : 264289,
+         "name" : "Super Audio Mastering",
+         "resource_url" : "https://api.discogs.com/labels/264289",
+         "thumbnail_url" : "https://i.discogs.com/BOpXHLgo-3BSwThkEVX0acz7mee6ZnFnSePtPILdtm8/rs:fit/g:sm/q:90/h:52/w:275/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NDI4/OS0xMzE1MzQzNDU5/LmpwZWc.jpeg"
+      },
+      {
+         "catno" : "17296",
+         "entity_type" : "17",
+         "entity_type_name" : "Pressed By",
+         "id" : 267164,
+         "name" : "Record Industry",
+         "resource_url" : "https://api.discogs.com/labels/267164",
+         "thumbnail_url" : "https://i.discogs.com/O-Hxe1Kov2i8WglqGPPH_MOH2tRwDR7PcnrGNdcFh7I/rs:fit/g:sm/q:90/h:596/w:596/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2NzE2/NC0xNjQ4NzExMzM5/LTI1MDQuanBlZw.jpeg"
+      }
+   ],
+   "country" : "Europe",
+   "data_quality" : "Correct",
+   "date_added" : "2019-12-30T11:26:08-08:00",
+   "date_changed" : "2026-09-06T23:10:48-07:00",
+   "estimated_weight" : 230,
+   "extraartists" : [
+      {
+         "anv" : "",
+         "id" : 25411,
+         "join" : "",
+         "name" : "Alan Wilder",
+         "resource_url" : "https://api.discogs.com/artists/25411",
+         "role" : "Band [In 1990 Depeche Mode Was]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Andy Fletcher",
+         "id" : 132774,
+         "join" : "",
+         "name" : "Andrew Fletcher",
+         "resource_url" : "https://api.discogs.com/artists/132774",
+         "role" : "Band [In 1990 Depeche Mode Was]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 27158,
+         "join" : "",
+         "name" : "Dave Gahan",
+         "resource_url" : "https://api.discogs.com/artists/27158",
+         "role" : "Band [In 1990 Depeche Mode Was]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Martin Gore",
+         "id" : 26847,
+         "join" : "",
+         "name" : "Martin L. Gore",
+         "resource_url" : "https://api.discogs.com/artists/26847",
+         "role" : "Band [In 1990 Depeche Mode Was]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 2183862,
+         "join" : "",
+         "name" : "Monica Axelsson",
+         "resource_url" : "https://api.discogs.com/artists/2183862",
+         "role" : "Coordinator [Visual Archive Co-ordinator]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 325010,
+         "join" : "",
+         "name" : "Anton Corbijn",
+         "resource_url" : "https://api.discogs.com/artists/325010",
+         "role" : "Design [Sleeve Design]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 1833427,
+         "join" : "",
+         "name" : "Area (10)",
+         "resource_url" : "https://api.discogs.com/artists/1833427",
+         "role" : "Design [Sleeve Design]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 244044,
+         "join" : "",
+         "name" : "Daryl Bamonte",
+         "resource_url" : "https://api.discogs.com/artists/244044",
+         "role" : "Engineer [Engineered By (...) Assisted By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 436978,
+         "join" : "",
+         "name" : "David Browne",
+         "resource_url" : "https://api.discogs.com/artists/436978",
+         "role" : "Engineer [Engineered By (...) Assisted By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Dick Meany",
+         "id" : 40687,
+         "join" : "",
+         "name" : "Dick Meaney",
+         "resource_url" : "https://api.discogs.com/artists/40687",
+         "role" : "Engineer [Engineered By (...) Assisted By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 277252,
+         "join" : "",
+         "name" : "Mark Flannery",
+         "resource_url" : "https://api.discogs.com/artists/277252",
+         "role" : "Engineer [Engineered By (...) Assisted By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 436976,
+         "join" : "",
+         "name" : "Ricky (6)",
+         "resource_url" : "https://api.discogs.com/artists/436976",
+         "role" : "Engineer [Engineered By (...) Assisted By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 36660,
+         "join" : "",
+         "name" : "Alan Gregorie",
+         "resource_url" : "https://api.discogs.com/artists/36660",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 55744,
+         "join" : "",
+         "name" : "Dennis Mitchell",
+         "resource_url" : "https://api.discogs.com/artists/55744",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 25828,
+         "join" : "",
+         "name" : "Goh Hotoda",
+         "resource_url" : "https://api.discogs.com/artists/25828",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 254392,
+         "join" : "",
+         "name" : "Peter Iversen",
+         "resource_url" : "https://api.discogs.com/artists/254392",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 34292,
+         "join" : "",
+         "name" : "Phil Legg",
+         "resource_url" : "https://api.discogs.com/artists/34292",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 305009,
+         "join" : "",
+         "name" : "Pino Pischetola",
+         "resource_url" : "https://api.discogs.com/artists/305009",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 27412,
+         "join" : "",
+         "name" : "Steve Lyon",
+         "resource_url" : "https://api.discogs.com/artists/27412",
+         "role" : "Engineer [Engineered By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 9857,
+         "join" : "",
+         "name" : "Daniel Miller",
+         "resource_url" : "https://api.discogs.com/artists/9857",
+         "role" : "Liner Notes",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 2480048,
+         "join" : "",
+         "name" : "Baron Inc.",
+         "resource_url" : "https://api.discogs.com/artists/2480048",
+         "role" : "Management",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 1651213,
+         "join" : "",
+         "name" : "Jonathan Kessler",
+         "resource_url" : "https://api.discogs.com/artists/1651213",
+         "role" : "Management",
+         "tracks" : ""
+      },
+      {
+         "anv" : "JD Fanger",
+         "id" : 404050,
+         "join" : "",
+         "name" : "J.D. Fanger",
+         "resource_url" : "https://api.discogs.com/artists/404050",
+         "role" : "Management [Depeche Mode Office]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Venusnote Ltd.",
+         "id" : 2642682,
+         "join" : "",
+         "name" : "Venusnote Limited",
+         "resource_url" : "https://api.discogs.com/artists/2642682",
+         "role" : "Management [Depeche Mode Office]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 20662,
+         "join" : "",
+         "name" : "François Kevorkian",
+         "resource_url" : "https://api.discogs.com/artists/20662",
+         "role" : "Mixed By",
+         "tracks" : "A1 to A5, B2 to B4"
+      },
+      {
+         "anv" : "",
+         "id" : 325010,
+         "join" : "",
+         "name" : "Anton Corbijn",
+         "resource_url" : "https://api.discogs.com/artists/325010",
+         "role" : "Photography By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 2725,
+         "join" : "",
+         "name" : "Depeche Mode",
+         "resource_url" : "https://api.discogs.com/artists/2725",
+         "role" : "Producer",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 20661,
+         "join" : "",
+         "name" : "Flood",
+         "resource_url" : "https://api.discogs.com/artists/20661",
+         "role" : "Producer",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 201005,
+         "join" : "",
+         "name" : "Simon Heyworth",
+         "resource_url" : "https://api.discogs.com/artists/201005",
+         "role" : "Remastered By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "Martin Gore",
+         "id" : 26847,
+         "join" : "",
+         "name" : "Martin L. Gore",
+         "resource_url" : "https://api.discogs.com/artists/26847",
+         "role" : "Written-By [All Tracks Written By]",
+         "tracks" : ""
+      }
+   ],
+   "format_quantity" : 1,
+   "formats" : [
+      {
+         "descriptions" : [
+            "LP",
+            "Album",
+            "Reissue",
+            "Remastered"
+         ],
+         "name" : "Vinyl",
+         "qty" : "1",
+         "text" : "Gatefold, 180 Gram"
+      }
+   ],
+   "genres" : [
+      "Electronic",
+      "Rock"
+   ],
+   "id" : 14590709,
+   "identifiers" : [
+      {
+         "description" : "UPC-A, text",
+         "type" : "Barcode",
+         "value" : "8 8985336751 1"
+      },
+      {
+         "description" : "UPC-A, scanned",
+         "type" : "Barcode",
+         "value" : "889853367511"
+      },
+      {
+         "description" : "EAN-Code, Scanned",
+         "type" : "Barcode",
+         "value" : "0889853367511"
+      },
+      {
+         "type" : "Label Code",
+         "value" : "LC 05834"
+      },
+      {
+         "type" : "Rights Society",
+         "value" : "BIEM/STEMRA"
+      },
+      {
+         "description" : "Runout side A, etched, variant 1",
+         "type" : "Matrix / Runout",
+         "value" : "17296 1A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 1",
+         "type" : "Matrix / Runout",
+         "value" : "17296 1B 889853367511"
+      },
+      {
+         "description" : "Runout side A, etched, variant 2",
+         "type" : "Matrix / Runout",
+         "value" : "17296 2A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 2",
+         "type" : "Matrix / Runout",
+         "value" : "17296 2B 889853367511"
+      },
+      {
+         "description" : "Runout side A, etched, variant 3",
+         "type" : "Matrix / Runout",
+         "value" : "17296 3A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 3",
+         "type" : "Matrix / Runout",
+         "value" : "17296 3B 889853367511"
+      },
+      {
+         "description" : "Runout side A, etched, variant 4",
+         "type" : "Matrix / Runout",
+         "value" : "17296 4A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 4",
+         "type" : "Matrix / Runout",
+         "value" : "17296 4B 889853367511"
+      },
+      {
+         "description" : "Runout side A, etched, variant 5",
+         "type" : "Matrix / Runout",
+         "value" : "17296 5A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 5",
+         "type" : "Matrix / Runout",
+         "value" : "17296 5B 889853367511"
+      },
+      {
+         "description" : "Runout side A, etched, variant 6",
+         "type" : "Matrix / Runout",
+         "value" : "17296 6A 889853367511"
+      },
+      {
+         "description" : "Runout side B, etched, variant 6",
+         "type" : "Matrix / Runout",
+         "value" : "17296 6B 889853367511"
+      }
+   ],
+   "images" : [
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/7z2Ar1S3j1N1NadWxlkKPIZPmNFsTr7fYfeLmX_AgQE/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1ODgzNDgx/NzAtNTYxMS5qcGVn.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/7z2Ar1S3j1N1NadWxlkKPIZPmNFsTr7fYfeLmX_AgQE/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1ODgzNDgx/NzAtNTYxMS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/i98bSfhWMpZF8WXo5XFXq0bRef4dKeptlK-t7tQZFyY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1ODgzNDgx/NzAtNTYxMS5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 289,
+         "resource_url" : "https://i.discogs.com/R8hiOwKm-TpS_uQMa0bXll5OoG2g2EdhVxFhoGgAdgQ/rs:fit/g:sm/q:90/h:289/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtODE2MS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/R8hiOwKm-TpS_uQMa0bXll5OoG2g2EdhVxFhoGgAdgQ/rs:fit/g:sm/q:90/h:289/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtODE2MS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/JdlRE9AJDMXIGS0ZJTjFFIzgr6SqD4D9Bw6YQGkgOAM/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtODE2MS5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 588,
+         "resource_url" : "https://i.discogs.com/CLNIhu4TPkYQF7ekfbP68tNZ9rwn38BiYjnp9hbF2KU/rs:fit/g:sm/q:90/h:588/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTY3Ni5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/CLNIhu4TPkYQF7ekfbP68tNZ9rwn38BiYjnp9hbF2KU/rs:fit/g:sm/q:90/h:588/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTY3Ni5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/iJmS5GFhKVynmDN0KugumjO53wdz7Hy_glR4s7J8Z5M/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTY3Ni5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/rnql91jQrZwRmhWXN1sIxzoITltK8hkvH5sWaqNOOXk/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNDYwMi5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/rnql91jQrZwRmhWXN1sIxzoITltK8hkvH5sWaqNOOXk/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNDYwMi5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/8IoiJmrTHluxNFhmWANabmudmWRWdpwZj8lhbtrqvZE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNDYwMi5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/BbCW-YC3y71qC75-dm3nthsMnHDacdLGjbu9taa277s/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNTY2MS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/BbCW-YC3y71qC75-dm3nthsMnHDacdLGjbu9taa277s/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNTY2MS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/MR-e2PAqYVcOpIWZS5PtV29NdsqpYWkOjEWj2xh1FIA/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1Nzc3MzU4/ODctNTY2MS5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 598,
+         "resource_url" : "https://i.discogs.com/GisiPb1wwlYFMrRI775d5sTAKgtbW1SNqRQtSbYdbp8/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTgyOC5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/GisiPb1wwlYFMrRI775d5sTAKgtbW1SNqRQtSbYdbp8/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTgyOC5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/X0nGf8rg6yLvqzzLI6JPVadb9VDPDF2j3uDRde4WRWs/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDUtOTgyOC5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/60P3ofajNjcnDbrJjHr9C5ByUjymQwO59roHI6GjoKw/rs:fit/g:sm/q:90/h:600/w:596/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDYtOTUwMS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/60P3ofajNjcnDbrJjHr9C5ByUjymQwO59roHI6GjoKw/rs:fit/g:sm/q:90/h:600/w:596/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDYtOTUwMS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/EnrBYhoSCaQxIhFVSucioyVZkemKZC_p6Go_4lEjsa4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDYtOTUwMS5qcGVn.jpeg",
+         "width" : 596
+      },
+      {
+         "height" : 488,
+         "resource_url" : "https://i.discogs.com/Mpal0u5eB1Zi0cYxc3F65j_RDyhh354PmSiKIQKFiBU/rs:fit/g:sm/q:90/h:488/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDQtMjAzOS5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/Mpal0u5eB1Zi0cYxc3F65j_RDyhh354PmSiKIQKFiBU/rs:fit/g:sm/q:90/h:488/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDQtMjAzOS5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/-_n8wKMXXTiOXUw9xZhlXexYHd43dTrVL1Jey93FZL4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE2OTUwMjA5/NDQtMjAzOS5qcGVn.jpeg",
+         "width" : 600
+      }
+   ],
+   "is_offensive" : false,
+   "labels" : [
+      {
+         "catno" : "STUMM64",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 15491,
+         "name" : "Legacy",
+         "resource_url" : "https://api.discogs.com/labels/15491",
+         "thumbnail_url" : "https://i.discogs.com/jk2im_GXsDlf_1qNdX0KOoZUX6ivAIvgJH0TEBVW7ck/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTE1NDkx/LTE0OTg4MzQ3MDgt/NzQwOS5wbmc.jpeg"
+      },
+      {
+         "catno" : "STUMM64",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 26391,
+         "name" : "Mute",
+         "resource_url" : "https://api.discogs.com/labels/26391",
+         "thumbnail_url" : "https://i.discogs.com/6FAoiafua9FW8MKtSFr9XjSm93PUFmzPPeuJZ7xqmpk/rs:fit/g:sm/q:90/h:128/w:430/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI2Mzkx/LTEzMTA1MzkzNjMu/anBlZw.jpeg"
+      },
+      {
+         "catno" : "88985336751",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 25487,
+         "name" : "Sony Music",
+         "resource_url" : "https://api.discogs.com/labels/25487",
+         "thumbnail_url" : "https://i.discogs.com/O7quXBkakkeeljzb5ApIswR86acqIHTQ3qzBrCHmqzA/rs:fit/g:sm/q:90/h:571/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTI1NDg3/LTE3MDA5NDA1ODgt/MTYwNS5wbmc.jpeg"
+      }
+   ],
+   "lowest_price" : 20.27,
+   "master_id" : 18080,
+   "master_url" : "https://api.discogs.com/masters/18080",
+   "notes" : "Gatefold and inner sleeve have a matte aqueous coating.\n\nMute logo is placed under the barcode on this release; Legacy logo on disc labels with the same matrix as [r=9947433]. There is no Legacy Vinyl hype sticker on cover.\n[r=9180652] has the Legacy logo, but a different matrix.\nSony Music cat. # appears on center labels and inner sleeve.\n\nMade in the EU.\n\n[On front cover:]\nThe tip of the rose is level with the mid point between \"Depeche\" and \"Mode\" words. The overall rose is more zoomed out when compared to older releases.\n\n[On back cover:]\n℗ 1990 Venusnote Ltd. under exclusive license to Sony Music Entertainment International Ltd. © 1990, 2016 Venusnote Ltd. under exclusive license to Sony Music Entertainment International Ltd. (...) Sony Music Entertainment International Services GmbH, PO Box 510, 33311 Güterloh, Germany.\n\n[On inner sleeve, after lyrics:]\nPublished by EMI Music Publishing Ltd., assigned by Grabbing Hands Music Ltd.\nRecorded and mixed at Logic Studios, Milan, Puk Studios, Denmark, The Church, London, Master Rock Studios, London and Axis, New York.\n\n'Cut by [a325174] at [l158759]', but neither the engineer's nor the studio's identifiers appear in the runout matrices. The inner sleeve appears to retain graphics & credits from previous reissues.\n\nRecorded track lengths using audacity since they are not listed on the release.",
+   "num_for_sale" : 96,
+   "released" : "2016",
+   "released_formatted" : "2016",
+   "resource_url" : "https://api.discogs.com/releases/14590709",
+   "series" : [],
+   "status" : "Accepted",
+   "styles" : [
+      "Synth-pop",
+      "Alternative Rock",
+      "New Wave"
+   ],
+   "thumb" : "https://i.discogs.com/i98bSfhWMpZF8WXo5XFXq0bRef4dKeptlK-t7tQZFyY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTE0NTkw/NzA5LTE1ODgzNDgx/NzAtNTYxMS5qcGVn.jpeg",
+   "title" : "Violator",
+   "tracklist" : [
+      {
+         "duration" : "4:24",
+         "position" : "A1",
+         "title" : "World In My Eyes",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:42",
+         "position" : "A2",
+         "title" : "Sweetest Perfection",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:53",
+         "position" : "A3",
+         "title" : "Personal Jesus",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:26",
+         "position" : "A4",
+         "title" : "Halo",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:04",
+         "position" : "A5",
+         "title" : "Waiting For The Night",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:11",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 9857,
+               "join" : "",
+               "name" : "Daniel Miller",
+               "resource_url" : "https://api.discogs.com/artists/9857",
+               "role" : "Mixed By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 34292,
+               "join" : "",
+               "name" : "Phil Legg",
+               "resource_url" : "https://api.discogs.com/artists/34292",
+               "role" : "Mixed By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "B1",
+         "title" : "Enjoy The Silence",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:51",
+         "position" : "B2",
+         "title" : "Policy Of Truth",
+         "type_" : "track"
+      },
+      {
+         "duration" : "5:35",
+         "position" : "B3",
+         "title" : "Blue Dress",
+         "type_" : "track"
+      },
+      {
+         "duration" : "5:28",
+         "position" : "B4",
+         "title" : "Clean",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/release/14590709-Depeche-Mode-Violator",
+   "videos" : [
+      {
+         "description" : "Depeche Mode's official music video for 'Enjoy The Silence'. Click to listen to Depeche Mode on Spotify: http://smarturl.it/DepMSpotify?IQid=DepMETS\n\nAs featured on Best of Depeche Mode, Vol. 1. Click to buy the track or album via iTunes: http://smarturl.",
+         "duration" : 280,
+         "embed" : true,
+         "title" : "Depeche Mode - Enjoy the Silence (Remastered)",
+         "uri" : "https://www.youtube.com/watch?v=aGSKrC7dGcY"
+      },
+      {
+         "description" : "Music video by Depeche Mode performing World in My Eyes (Official Video). (C) 1990 Venusnote Ltd. under exclusive license to Sony Music Entertainment International Ltd",
+         "duration" : 354,
+         "embed" : true,
+         "title" : "Depeche Mode - World in My Eyes (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=nhZdL4JlnxI"
+      },
+      {
+         "description" : "Depeche Mode - \"Clean\" (Official Video) directed by Anton Corbijn\nOriginal song from the 'Violator' album (Sire/Mute Records - 1990)\nBuy the 12” Singles Box Sets - https://depechemodeboxsets.com\nListen to more Depeche Mode - https://lnk.to/depeche_mode\n\nS",
+         "duration" : 356,
+         "embed" : true,
+         "title" : "Depeche Mode - Clean (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=h1mD-_DKHc0"
+      },
+      {
+         "description" : "Official video for ”Policy of Truth” by Depeche Mode\nListen to Depeche Mode: https://DepecheMode.lnk.to/listenYD\nWatch more videos by Depeche Mode: https://DepecheMode.lnk.to/listenYD/youtube\n \nSubscribe to the official Depeche Mode YouTube channel: https",
+         "duration" : 249,
+         "embed" : true,
+         "title" : "Depeche Mode - Policy of Truth (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=M2VBmHOYpV8"
+      },
+      {
+         "description" : "Music video by Depeche Mode performing Halo (Official Video). (C) 2004 The copyright in this sound recording is owned by Depeche Mode under exclusive licence to Mute Records Ltd",
+         "duration" : 270,
+         "embed" : true,
+         "title" : "Depeche Mode - Halo (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=iEH4eqtK8SU"
+      },
+      {
+         "description" : "Depeche Mode's official live video for 'Personal Jesus (Live On Letterman)'. Click to listen to Depeche Mode on Spotify: http://smarturl.it/DModeSpotify?IQid=JesusL\n\nAs featured on The Best Of Depeche Mode, Vol. 1. Click to buy the track or album via iTun",
+         "duration" : 226,
+         "embed" : true,
+         "title" : "Depeche Mode - Personal Jesus (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=u1xrNaTO1bI"
+      }
+   ],
+   "year" : 2016
+}
