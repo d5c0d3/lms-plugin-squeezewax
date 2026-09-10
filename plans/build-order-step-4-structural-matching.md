@@ -321,13 +321,13 @@ each one encodes a defect that reasoning alone did not predict:
 
 | Fixture | Encodes |
 |---|---|
-| Master 18080 (*Violator*) | Durations present; `community.have/want` |
+| Master 18080 (*Violator*) | ~~Durations present; `community.have/want`~~ — **defect found, 2026-09-07:** `community.have`/`community.want` do not appear on `/masters/{id}` at all — verified against the captured fixture (`scripts/fixtures/master-18080-violator.json`): no `community` key present anywhere in the payload. Those fields arrive on search-result entries only, per decisions §8's own text ("arrive free in search results"), which this row's original wording contradicted. Corrected: durations present. The `community.have/want` note moves to the search-result row below, where it belongs. |
 | Master 3855547 (*Escape The Chaos*) | Durations absent → candidate, not confirmed |
 | Release 14772 | `heading` entries; multi-disc `D-T` positions |
 | Release 2516 | `index` only, zero countable tracks → skip |
 | Release 9701013 | `master_id: null` in a release payload |
 | Collection page | `master_id: 0` sentinel — **two** masterless rows, because the failure is collision |
-| `type=master` search, Violator | 7 masters, 1 correct — title normalisation |
+| `type=master` search, Violator | 7 masters, 1 correct — title normalisation; `community.have`/`community.want` (search-result entries only, not the master detail payload — see the Master 18080 row's correction) |
 
 Write-path cases, extending `scripts/match-check.pl`:
 
