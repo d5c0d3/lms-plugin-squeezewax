@@ -1,6 +1,12 @@
 refs/
 tmp/
 
+# Secrets. scripts/fetch-fixtures.pl reads DISCOGS_TOKEN from the
+# environment only, never a file, but an .env is the obvious place someone
+# reaches for anyway - ignored before one can ever exist.
+.env
+.env.*
+
 *.swp
 *.swo
 *~
