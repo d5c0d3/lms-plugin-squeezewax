@@ -290,6 +290,12 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
 4. **`Structural.pm` — candidate enumeration.** `type=master` search, title
    normalisation, ranking by `community.have` then country/year/format. Never
    gate on format.
+   - Search artist + title. **On zero results, retry title-only** before
+     giving up. Decisions §11.
+   - The album artist for that search comes from
+     `Slim::Schema::Album::artists`, or the `albums.contributor` column it
+     builds on — **not** a hand-rolled `contributor_album` join by role.
+     Decisions §11.4.
 5. **`Structural.pm` — comparison.** Filter to `type_ == "track"` (allowlist),
    count equality, sorted duration vectors within margin. Duration parser must
    handle `M:SS` **and** `H:MM:SS`.
@@ -332,6 +338,13 @@ a defect or an open question that reasoning alone did not predict:
 | Release 33986376 (master 3855547's `main_release`) | Durations absent at **both** master and release level for the same object — fetching the release does not recover what the master lacks, confirmed at the release itself rather than inferred. |
 | Release 14590709 | A real pressing of master 18080 (*Violator*, 529 versions per decisions §8) — the concrete example behind the unbounded-versions finding. 9 tracks, all with durations; an unremarkable reissue otherwise. |
 | Release 132512 | **Defect found, 2026-09-10:** captured as "believed to have no master" — it has one, `master_id: 1861554`. Not every various-artists compilation is masterless; that belief was untested, not established. Multi-disc CD compilation, 13+12 tracks across two discs, all with durations, position format `D-TT` (zero-padded, e.g. `1-01`) rather than release 14772's `D-T` — a second, differing convention, confirming §8's "vinyl A1/B2 and other formats are unsurveyed" was the right caution. The release-level artist credit is a single DJ/compiler ("Nick Ashcroft", the mix's presenter), but every individual track carries its own, different artist — the various-artists character is real, it just doesn't show as a literal "Various" credit in this payload. See decisions §8 and TODO.md on what this means for search quality. |
+
+Candidate enumeration cases (decisions §11):
+
+- A zero-result artist+title search triggers exactly one title-only retry.
+- A non-zero artist+title search triggers no retry.
+- A zero-result title-only retry is not retried again — at most one retry
+  per search.
 
 Write-path cases, extending `scripts/match-check.pl`:
 
@@ -391,6 +404,9 @@ claim written as fact was falsified.
   lever and it is gone; the master-level flow replaces the per-album figures.
   Whether a hard per-album fetch cap is needed depends on measured N after title
   normalisation (§5 item 3).
+- **The zero-result retry (decisions §11) doubles search cost for albums
+  genuinely absent from Discogs** — a title-only retry on a truly absent album
+  also returns zero. Belongs in the §13 rewrite above, not a separate item.
 - **Decisions §3a's NULL-id invariant** was amended 2026-09-07 to accommodate
   edition-level matches. Verify the amendment holds under the implemented write
   path.
