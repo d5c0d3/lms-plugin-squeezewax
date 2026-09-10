@@ -258,23 +258,8 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
-- [ ] **2026-09-10: various-artists compilations are an open problem for
-      Structural, and UNDECIDED — blocks build-order item 4.** Decisions §8
-      states search quality depends on LMS's album artist being clean;
-      "Various Artists" (or similar) is the worst possible search input,
-      not merely a weak one — dropping `artist=` already returns 20 results
-      across 9 unrelated artists for a real artist name, per §8's own
-      Violator measurement, and a VA search has no real artist to search on
-      at all. Fixture `release-132512.json` (paired with the reference
-      library's albums.id 3359, discc=2, 25 local tracks — see
-      `scripts/api-check.pl`) encodes a real instance: a 2-disc VA
-      compilation, confirmed to have its own `master_id` (1861554) despite
-      being captured under the belief that VA compilations are typically
-      masterless. Whether Structural should skip VA albums entirely, search
-      by album title alone (accepting worse candidate quality), or route
-      them straight to the review queue is not decided. Needs deciding
-      before build-order item 4 (candidate enumeration) is designed, since
-      it changes what item 4 actually searches on for this case.
+- [x] **2026-09-10, RESOLVED: various-artists compilations are no longer an
+      open problem for Structural.** See `squeezewax-v1-decisions.md` §11.
 - [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
       question.** Landed — see `squeezewax-v1-decisions.md` §3a (amended)
       and §8.
@@ -524,6 +509,17 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-10: refs/ citation drift — decisions §§1-10 cite commit
+      `50e5b725`, §11 cites `a670a38c` (`public/9.1`, 2026-06-19).** Nothing
+      contradicted; recorded per working-agreement §6. Worth one pass to
+      confirm the earlier citations still hold at the newer commit before
+      step 5.
+- [ ] **2026-09-10: `Slim::Schema->variousArtistsObject` is NOT
+      side-effect-free — never call it from plugin code.** It creates a
+      contributor row when no `namesearch` matches (`Slim/Schema.pm:
+      2096-2100`) and renames an existing one when the stored name no
+      longer matches the resolved string (`:2105-2111`). The read-only
+      alternative is in decisions §11.3(d).
 - [ ] **2026-09-10: `_pluginVersion`'s scanner-vs-server branch is
       untestable within a single test process, by design of how
       `main::SCANNER` works — recorded so it isn't rediscovered.**
