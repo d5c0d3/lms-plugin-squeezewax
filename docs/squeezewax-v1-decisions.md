@@ -1556,6 +1556,182 @@ is measured in hours at 60 requests per minute (§9.2), not seconds.
 
 ---
 
+## 11. Structural does not detect various-artists albums
+
+**Decided 2026-09-10 (design chat).** Unblocks build-order item 4, which was
+blocked on a various-artists policy recorded in `TODO.md`.
+
+Structural searches artist plus title. **If that returns zero results, it
+retries title-only.** There is no various-artists detection, no signal to
+compute, and no threshold to tune.
+
+### 11.1 Why the problem looked hard
+
+Compilations are 12.4% of the reference library — 95 of 765 albums, measured
+2026-09-10. Not an edge case.
+
+The difficulty is that **LMS and Discogs catalogue compilations under different
+conventions, and neither is wrong.** For one real object:
+
+- LMS: album 3359, *Atmospheric Drum & Bass Volume 3*, `compilation = 1`,
+  album artist `Various`.
+- Discogs: release 132512, `artists_sort` `Nick Ashcroft` — the compiler, with
+  no "Various" anywhere in the payload.
+
+An artist-plus-title search for this album searches for the wrong artist against
+a catalogue that files it under a third name. Decisions §8 already records that
+Structural's search quality depends on LMS's album artist being clean; a
+compilation's is not clean, it is a placeholder.
+
+### 11.2 The decision
+
+```
+search type=master, artist + title
+  → 0 results?  retry: search type=master, title only
+  → rank, fetch, compare as normal
+```
+
+**Measured 2026-09-10**, on the album above:
+
+| Query | Result |
+|---|---|
+| `type=master&artist=Various&release_title=Atmospheric+Drum+%26+Bass+Volume+3` | `items: 0`, empty |
+| `type=master&release_title=Atmospheric+Drum+%26+Bass+Volume+3` | `items: 1`, master **1861554** |
+
+Master 1861554 is the same master id carried by the pinned fixture
+`scripts/fixtures/release-132512.json`, so both sides of the object agree.
+
+**The load-bearing property is that the failing search returns zero, not wrong
+results.** A placeholder artist that Discogs does not recognise yields nothing,
+which is a clean trigger. Had it returned confident garbage, the retry could
+never fire and this design would not work.
+
+Cost: one extra request, only for albums whose first search found nothing —
+compilations plus genuinely-absent albums. Bounded, and paid only where the
+alternative was no match at all.
+
+**No new confirmation rule is needed.** Decisions §8's confirm/candidate rule
+already applies: title agreement alone never confirms, the track-shape
+fingerprint decides. A title-only search that surfaces the wrong album fails the
+fingerprint exactly as an artist-plus-title search would.
+
+### 11.3 Four approaches rejected, and what killed each
+
+Recorded because each is plausible, each was proposed, and without this they
+will be proposed again.
+
+**(a) Match the album artist against the literal string "Various".**
+Dead on arrival: the reference library holds *two* Various-ish contributors —
+id 9597 "Various Artists" (79 albums) and id 10001 "Various" (23 albums). Any
+literal is already wrong on one of them, before considering that
+`Slim::Music::Info::variousArtistString` (`Slim/Music/Info.pm:1540-1543`) falls
+back to `string('VARIOUSARTISTS')`, which is localised — `strings.txt` carries
+translations for sixteen languages.
+
+**(b) Count distinct track artists per album.**
+Measured, and it separated cleanly with a real gap: normal albums stop at 3
+distinct role-1 contributors, compilations resume at 6, nothing at 4 or 5.
+
+Then it collapsed. **497 of 765 albums have no role-1 contributor row at all.**
+The cause is verified in source: `Slim/Schema.pm:3117-3132` **deletes**
+`ARTIST` and rewrites it as `TRACKARTIST` whenever a non-compilation track
+carries both `ARTIST` and `ALBUMARTIST`. Picard writes `ALBUMARTIST` on
+essentially every release, so Picard-tagged local albums lose their role-1 rows
+wholesale. A signal unavailable for two thirds of the library is not a signal.
+
+(The inverse held for online albums, which is how this was found: all 186
+online-library albums *do* have role-1 rows, because TIDAL's
+`Importer.pm:326-330` and Spotty's `Importer.pm:474-493` set `ARTIST` and never
+set `ALBUMARTIST`, so the transform's guard is false.)
+
+**(c) Route on `albums.compilation`.**
+Wrong in both directions, measured: 11 albums carry a Various-ish album artist
+but `compilation = 0`, and 4 albums are `compilation = 1` with a real, usable
+artist (Miles Davis, Yann Tiersen). Roughly 2% of the library misrouted, and
+the failures are not symmetrical — eleven albums would be searched as "Various",
+four would be denied a perfectly good artist.
+
+The `compilation = 0` cases are explained in source:
+`Slim/Schema.pm:2206-2294` (`mergeSingleVAAlbum`) auto-detects compilations by
+grouping **role-1** rows. An album whose role-1 rows were consumed by (b)'s
+transform has nothing to group, so detection is silently inert and
+`compilation = 0` is written *and cached*. **`compilation = 0` on a
+Picard-tagged local album means "not detected", not "not a compilation."**
+
+**(d) Compare the album's contributor id against the VA object.**
+This one nearly worked. The comparison is sound — every in-tree caller compares
+by numeric id, never by name (`Slim/Control/Queries.pm:367`, `:920`, `:1844`,
+`:3347`, `:6425`; `Slim/Control/Commands.pm:3499-3514`). And the object resolves
+correctly here: language is `EN`, `variousArtistsString` is unset, so the
+fallback string is "Various Artists", whose `ignoreCase` form `VARIOUS ARTISTS`
+matches contributor 9597's stored `namesearch` exactly.
+
+It fails on coverage and on safety.
+
+*Coverage:* contributor 10001 ("Various", `namesearch` `VARIOUS`) is an ordinary
+tag-derived contributor with no special status, and it carries 23 albums. An id
+comparison misses every one.
+
+*Safety:* **`Slim::Schema->variousArtistsObject` is not side-effect-free.**
+`Slim/Schema.pm:2096-2100` creates a contributor row when no `namesearch`
+matches, and `:2105-2111` renames an existing one when the stored name no longer
+matches the currently-resolved string. A plugin merely *asking* for the id would
+write to the user's library — on a library with no compilations, it would create
+a contributor that describes nothing.
+
+**This trap survives the decision and must not be forgotten.** Anyone later
+needing the VA object should use the read-only half of the same logic —
+`Slim::Music::Info::variousArtistString()` for the string, then
+`Slim::Schema->first('Contributor', { namesearch =>
+Slim::Utils::Text::ignoreCase($vaString, 1) })` — where no match simply means no
+VA object exists. Never `variousArtistsObject` itself.
+
+### 11.4 What Structural still needs from LMS
+
+An album artist for the first search. `Library.pm`'s iterator does not currently
+supply one.
+
+**Use `Slim::Schema::Album::artists` (`Slim/Schema/Album.pm:293-327`)**, or the
+`albums.contributor` column it builds on, rather than joining
+`contributor_album` by role. That accessor already encodes the priority order —
+`ALBUMARTIST`, then `BAND` if the `bandInArtists` pref is set, then `ARTIST`,
+then the various-artists object for compilations — and `albums.contributor` is
+assigned unconditionally by `_createOrUpdateAlbum` for every album. Role
+integers (`ARTIST` 1, `COMPOSER` 2, `CONDUCTOR` 3, `BAND` 4, `ALBUMARTIST` 5,
+`TRACKARTIST` 6 — `Slim/Schema/Contributor.pm:76-84`) are LMS's business, not
+ours.
+
+This means the first search will sometimes be `artist=Various Artists`. That is
+fine and is the design: it returns zero, and the retry fires.
+
+### 11.5 Consequences and open items
+
+- Build-order item 4 gains the zero-result retry. `plans/build-order-step-4-structural-matching.md`
+  §3 item 4 and §4's test coverage both need it.
+- **The retry doubles the search cost for albums that genuinely do not exist in
+  Discogs**, since a title-only retry on a truly absent album also returns zero.
+  This is the correct behaviour but it belongs in §13's request-budget rewrite,
+  which already awaits measured requests-per-album from the hardware pass.
+- **Unverified:** whether a placeholder artist *always* yields zero rather than
+  wrong results. One album was measured. A non-English install whose placeholder
+  is, say, "Verschiedene" has not been tested, and neither has a compilation
+  whose LMS album artist happens to be a real Discogs artist name. The
+  fingerprint is the backstop in both cases — a wrong search result fails the
+  comparison — so the risk is a missed match, not a wrong one.
+- **Unverified:** whether `type=master` search treats an unrecognised `artist=`
+  as a hard filter in all cases, or only where the term matches no artist entity
+  at all.
+
+### 11.6 Note on refs/ drift
+
+The source citations above were checked against `refs/slimserver` at commit
+`a670a38c2b14ad42b86a39884bcb842121b35571`, branch `public/9.1`, dated
+2026-06-19. Earlier records in this document cite `50e5b725`. Nothing found at
+`a670a38c` contradicts the earlier citations, but the drift is recorded per
+working-agreement §6.
+
+---
+
 ## Appendix — Open items
 
 **UNVERIFIED — needs a real server or a real answer:**
