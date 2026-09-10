@@ -258,6 +258,23 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **2026-09-10: various-artists compilations are an open problem for
+      Structural, and UNDECIDED — blocks build-order item 4.** Decisions §8
+      states search quality depends on LMS's album artist being clean;
+      "Various Artists" (or similar) is the worst possible search input,
+      not merely a weak one — dropping `artist=` already returns 20 results
+      across 9 unrelated artists for a real artist name, per §8's own
+      Violator measurement, and a VA search has no real artist to search on
+      at all. Fixture `release-132512.json` (paired with the reference
+      library's albums.id 3359, discc=2, 25 local tracks — see
+      `scripts/api-check.pl`) encodes a real instance: a 2-disc VA
+      compilation, confirmed to have its own `master_id` (1861554) despite
+      being captured under the belief that VA compilations are typically
+      masterless. Whether Structural should skip VA albums entirely, search
+      by album title alone (accepting worse candidate quality), or route
+      them straight to the review queue is not decided. Needs deciding
+      before build-order item 4 (candidate enumeration) is designed, since
+      it changes what item 4 actually searches on for this case.
 - [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
       question.** Landed — see `squeezewax-v1-decisions.md` §3a (amended)
       and §8.
@@ -507,6 +524,31 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-10: `_pluginVersion`'s scanner-vs-server branch is
+      untestable within a single test process, by design of how
+      `main::SCANNER` works — recorded so it isn't rediscovered.**
+      `Plugins::SqueezeWax::API::_pluginVersion` asks
+      `Slim::Utils::PluginManager->dataForPlugin` for a different module
+      name depending on `main::SCANNER` (the scanner never loads
+      `Plugin.pm`, so its entry is keyed by `Importer` instead — see
+      `SqueezeWax/API.pm`'s own comment on `_pluginVersion`). Tried
+      reassigning `*main::SCANNER` mid-file in `scripts/api-check.pl` to
+      cover both branches; it silently didn't take (Perl printed "Constant
+      subroutine main::SCANNER redefined" and the User-Agent kept the
+      first value) because `main::SCANNER` is a `()`-prototyped stub, the
+      same shape `use constant` produces, and gets constant-folded into
+      `API.pm` at compile time — the identical mechanism CLAUDE.md
+      documents for why `Match.pm`'s scanner branch of `_writeRefusal`
+      needed pulling out as a pure function in the first place. One test
+      process fixes `main::SCANNER` for its whole life. The approach that
+      works, when this needs covering: a second script, compiled with
+      `main::SCANNER` predefined `=> 1`, the same way
+      `scripts/syntax-check.sh` already runs every module in both `scanner`
+      and `server` mode via two separate `perl -e` invocations rather than
+      one process. Not blocking — `_pluginVersion`'s module selection is a
+      single ternary, not decision-shaped the way `_writeRefusal` is, and
+      wasn't in step 4 §4's minimum coverage list — but the next thing that
+      needs both branches covered shouldn't have to re-derive this.
 - [ ] **2026-09-07: `plans/` filenames are inconsistent.** Steps 2 and 3
       use invented verb-adjective-noun names
       (`build-order-step-2-read-effervescent-squirrel.md`,
