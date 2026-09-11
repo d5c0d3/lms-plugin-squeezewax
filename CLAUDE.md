@@ -135,3 +135,13 @@ write it.
 - Tick items off as part of the commit that completes them.
 - Don't restate the whole list back to me. Mention only what's relevant to
   what we're doing.
+
+## tmp/
+
+`tmp/` holds prompts and hand-off markdown served to Claude Code. It is
+git-ignored, so nothing there is versioned and nothing there survives a
+clean.
+
+Anything durable that starts life in `tmp/` must reach a tracked file in
+the same session — a plan appendix, a decision record, or `TODO.md`.
+Never commit files under `tmp/`.
