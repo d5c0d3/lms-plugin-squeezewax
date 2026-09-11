@@ -299,6 +299,8 @@ edit is invisible to `git archive HEAD` and therefore to the build, silently.
 5. **`Structural.pm` — comparison.** Filter to `type_ == "track"` (allowlist),
    count equality, sorted duration vectors within margin. Duration parser must
    handle `M:SS` **and** `H:MM:SS`.
+   The allowlist does not recurse into sub_tracks, and a NULL local
+   duration yields a candidate rather than a confirmation — decisions §12.
 
 **Item 5 writes nothing.** It is a pure function returning a verdict. All
 database writes are item 6, which touches `Match.pm` — the module §0 exists
@@ -342,7 +344,7 @@ a defect or an open question that reasoning alone did not predict:
 | Master 18080 (*Violator*) | ~~Durations present; `community.have/want`~~ — **defect found, 2026-09-07:** `community.have`/`community.want` do not appear on `/masters/{id}` at all — verified against the captured fixture (`scripts/fixtures/master-18080-violator.json`): no `community` key present anywhere in the payload. Those fields arrive on search-result entries only, per decisions §8's own text ("arrive free in search results"), which this row's original wording contradicted. Corrected: durations present. The `community.have/want` note moves to the search-result row below, where it belongs. |
 | Master 3855547 (*Escape The Chaos*) | Durations absent → candidate, not confirmed |
 | Release 14772 | `heading` entries; multi-disc `D-T` positions |
-| Release 2516 | `index` only, zero countable tracks → skip |
+| Release 2516 | `index` only, zero countable tracks → skip. The entry carries a sub_tracks array of five type_ "track" entries with durations; the allowlist deliberately does not descend into it — decisions §12.1. |
 | Release 9701013 | `master_id: null` in a release payload |
 | Collection page | `master_id: 0` sentinel — **two** masterless rows, because the failure is collision |
 | `type=master` search, Violator | 7 masters, 1 correct — title normalisation; `community.have`/`community.want` (search-result entries only, not the master detail payload — see the Master 18080 row's correction) |
@@ -398,6 +400,8 @@ claim written as fact was falsified.
    album** against §13 and the observed `X-Discogs-Ratelimit-Remaining`.
 4. Confirm/candidate split. Expected ~90/10 from the 40-release sample —
    **treat that as a prediction to falsify, not a target.**
+   Measure the split BY ROUTE, not as one ratio — five routes now feed the
+   queue and the ~90/10 figure was built from two of them. See TODO.md.
 5. Multi-disc albums match (LMS groups them; `discc = 6` sets carry all tracks
    in one row).
 6. Incompletely-ripped sets (*Akasha*, *Fourteen Pieces*) reach the review
