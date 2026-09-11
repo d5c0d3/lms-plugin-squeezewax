@@ -60,6 +60,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **2026-09-12: the review queue must not fill with albums the user does
+      not own (§13.4).** An album identified from a tag but absent from the
+      collection needs no human decision. Against a few-hundred-item
+      collection and a 764-album library most albums are unowned, so a
+      candidate predicate that catches them turns the queue into noise. This
+      is a constraint on step 5's predicate, not a preference.
 - [ ] **2026-09-11: plan §5 item 4 measures the confirm/candidate split as ONE
       ratio, but there are now five routes into the review queue** —
       durations absent Discogs-side (7.5% of 40), zero countable tracks (2.5%
@@ -105,6 +111,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       `/database/search`? Take it with the budget.~~ — **RESOLVED
       2026-09-07: `/database/search` with `type=master`. See the settled
       step-4 candidate-enumeration flow below.**
+      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
 - [ ] **2026-09-07, SETTLED DESIGN: step-4 candidate enumeration, ranking,
       comparison and write rule.** Superseded as the design record by
       `squeezewax-v1-decisions.md` §8 — see there for the full design
@@ -115,7 +122,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       pressing more decisively than durations can, so it is a possible
       future tag-based path alongside the Discogs release ID. Recorded,
       not designed; v2.
-- [ ] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
+- [x] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
       and must not assume duration format.** From a 40-release sample:
       entries have at least three `type_` values (`"track"`, `"heading"`,
       `"index"`) though the documentation shows only `"track"` — count and
@@ -142,6 +149,8 @@ Shared reminder list. Both I and Claude Code read and update this.
       master 3855547 (*Escape The Chaos*) and its main release 33986376 are
       both blank — fetching the release does not recover what the master
       lacks.
+      2026-09-12: superseded in operative part by §13 — no Discogs tracklist
+      is parsed in v1. The allowlist finding stands as evidence about the API.
 - [ ] **2026-09-07: `data_quality` is not usable as a pre-fetch ranking
       signal.** 40-release sample: 20 "Correct" (0 with missing durations),
       20 "Needs Vote" (3 with missing durations) — direction is real but
@@ -199,6 +208,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       library-sized to collection-sized, at zero request cost. Needs a
       conservative fallback for various-artists and album-artist
       mismatches.
+      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
 - [ ] **2026-09-07: mandatory Discogs attribution.** Both required notices
       are recorded in `squeezewax-v1-decisions.md` §9.6. Still open: **a
       grid badge has no natural place for the "Data provided by Discogs"
@@ -289,6 +299,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **2026-09-12: what `match_tier` value does a collection-derived match
+      carry?** The CHECK allows `strict`, `structural`, `fuzzy`, `manual`. A
+      title-plus-artist match against the collection is a genuinely different
+      ORIGIN, which is what `match_tier` records — so unlike §3a's conflict
+      case, a fifth value is defensible rather than expressing something
+      `state` already expresses. Against: a migration, an amendment to design
+      §3 and §10, and every future reader. DECIDE BEFORE MIGRATION 3.
+      See §13.8.
 - [x] **2026-09-11, RESOLVED: sub_tracks is an unrecorded tracklist shape, and
       the type_ allowlist does not recurse into it.** See
       squeezewax-v1-decisions.md §12.1. release-2516.json's single type_
@@ -383,6 +401,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       carries `checked_at` so step 4 can add a policy without a migration;
       the policy itself is undecided. A Discogs search that found nothing
       today may find something in six months.
+      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
 - [ ] **Step 4 must relax the `use` gate.** It is currently
       `scalar @{discogsTagNames}`, which would wrongly disable the importer for
       a user who wants Structural only — Structural needs no tag names. Becomes
@@ -528,6 +547,34 @@ Shared reminder list. Both I and Claude Code read and update this.
       have been dropped there. Scanner-fails-safely-on-missing-database check
       unreachable on real server (server recreates during startup); marked as
       untested-on-hardware, covered by offline suite.
+- [ ] **2026-09-12, HIGHEST VALUE MEASUREMENT: how often do LMS album titles
+      and Discogs `basic_information.title` agree well enough to match?**
+      Title-led matching against the collection is §13's entire foundation
+      and this has never been measured. §8 measured title normalisation
+      against SEARCH RESULTS, not against a collection. If real agreement is
+      60%, the design still works but the review queue is far larger than
+      anyone is picturing. Measurable now: `collection-page1.json` is
+      captured and the 764-album reference library is on hand. Do this
+      BEFORE the build order is rewritten. Recorded as §13.9's largest
+      unmeasured assumption.
+- [ ] **2026-09-12: what proportion of the 764 reference albums match the
+      collection at all?** Every cost estimate in §13.5 and §13.6 rests on
+      "a few hundred", which is the collection's size, not the measured
+      overlap.
+- [ ] **2026-09-12: confirm that a full rescan cannot recover a
+      newly-bought record's badge (§13.6).** Inferred from `_canSkip` and
+      `source_timestamp`'s definition, both read, but never observed. If
+      false, §13.6's reasoning needs revisiting — though the separate
+      ownership pass is right either way.
+- [ ] **2026-09-12: confirm that `https://www.discogs.com/release/{id}`
+      resolves without a title slug (§13.9).** The context-menu link is
+      constructed from the stored id because `basic_information` carries
+      only `resource_url` (`api.discogs.com`), which is not the web page
+      §9.6's attribution requirement names. `Tags.pm` documents
+      `/release/<id>` as canonical and accepts it, but `Tags.pm`'s own
+      header records that discogs.com returns 403 to automated fetches, so
+      it was never confirmed against the live site. One browser click
+      settles it.
 
 ## Waiting — external
 
