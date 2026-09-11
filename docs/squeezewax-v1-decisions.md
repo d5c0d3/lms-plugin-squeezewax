@@ -1018,8 +1018,12 @@ a track. Two of 40 sampled releases (5%) contain non-track entries, so
 
 **Position is not parsed.** Disc membership appears as `D-T` (`1-1` … `2-8`) on
 the one multi-disc release examined, but that is one sample and one convention —
-vinyl `A1`/`B2` and other formats are unsurveyed. Building a position parser on a
-single observation is the error this session made five times in other forms.
+~~vinyl `A1`/`B2` and other formats are unsurveyed~~ — **corrected 2026-09-12,
+Phase 0.** vinyl A1/B2 positions occur in four of eight fixtures (42 of 98
+tracks), the most common format in the corpus. What is unsurveyed is
+multi-record vinyl disc membership: both vinyl fixtures are
+`format_quantity: 1`. Building a position parser on a single observation is
+the error this session made five times in other forms.
 
 ### Multi-disc, without parsing position
 

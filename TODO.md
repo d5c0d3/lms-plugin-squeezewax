@@ -126,7 +126,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       boundaries (release 14772 has four headings spanning two per disc
       across two discs) — discarding headings loses no disc structure.
       Disc membership appears in `position` as `"D-T"` (`1-1` … `2-8`) on
-      that one sample; vinyl (A1/B2) and other formats are unsurveyed, and
+      that one sample; ~~vinyl (A1/B2) and other formats are unsurveyed~~ —
+      **corrected 2026-09-12, Phase 0:** vinyl A1/B2 positions occur in four
+      of eight fixtures (42 of 98 tracks), the most common format in the
+      corpus — what is unsurveyed is multi-record vinyl disc membership,
+      since both vinyl fixtures are `format_quantity: 1`; and
       position is not parsed regardless (see the settled comparison flow
       above). After filtering to tracks: 36 of 40 releases (90%) have
       complete durations, 3 (7.5%) have none at all, 1 (2.5%, release 2516)
