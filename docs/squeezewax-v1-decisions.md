@@ -1930,3 +1930,296 @@ inconvenience for an invisible wrong badge, which is the wrong direction. The
 correct response to a large queue is better queue tooling — bulk actions in
 step 5 — not a laxer matcher. Recorded in `TODO.md` so it is not invented under
 pressure after the hardware pass.
+
+---
+
+## 13. Collection-first identification, and what auto-confirmation means
+
+**Decided 2026-09-12 (design chat).** This record reverses the direction of v1's
+matching. It supersedes the flow in §8, narrows §11, makes most of §12
+inoperative, and amends §3's two-track read rule. Those consequences are set out
+in 13.8 rather than left to be discovered.
+
+The change came from re-reading what the plugin is for. Design §2's first core
+concept is **ownership awareness** — see which albums in LMS you own physically.
+§8 answered a harder question than that: *which Discogs release is this album*,
+searched against the whole Discogs database. Ownership only needs the narrower
+one, and the narrower one is answerable against a few hundred rows instead of
+seventeen million.
+
+### 13.1 The reversal: match against the collection, not against Discogs
+
+**Decided: identification for ownership purposes runs against the user's own
+Discogs collection, fetched by sync, not against `/database/search`.**
+
+| | §8 as written | This record |
+|---|---|---|
+| Question | which Discogs release is this album | do I own this album |
+| Search space | the Discogs database | the user's collection |
+| Requests | 1 search + 1–N fetches **per album** | `ceil(items/100)` **per sync** |
+| Scales with | library size | collection size |
+| Comparison | track counts and duration vectors | title, then artist to disambiguate |
+| Re-run cost | hours | seconds |
+
+Measured collection sync cost is already recorded in §9.4: **3 requests for a
+203-item collection.** Against a 764-album library, §8's flow was measured in
+hours at 60 requests per minute (§10.8).
+
+**What this costs.** §8's flow could identify albums the user does *not* own.
+This one cannot — an album absent from the collection gets no Discogs identity
+from this path. Design §2's other two core concepts, marketplace lookup and
+cross-browsing, need one.
+
+**That is recovered without a background sweep**, using §9.5's own rule:
+*request count bounded by user actions → live.* A marketplace lookup or a
+"view on Discogs" action on an unowned album is one context-menu click, so it
+searches live at that moment. The capability moves from scan time to on demand;
+it is not lost.
+
+### 13.2 Match during the sync; store conclusions, not Content
+
+**Decided: the sync holds each collection page in memory, matches it against LMS
+albums there, writes only the conclusion, and discards the payload.**
+
+No Discogs-owned data persists. This is §9.5's "store conclusions, not Content"
+applied directly, and it is why **TODO's 2026-09-07 ruling against a
+`discogs_collection` mirror stands** rather than being reversed by this record.
+An earlier draft of this session proposed storing the collection; that proposal
+was wrong and is recorded here so it is not re-proposed.
+
+`basic_information` carries `title` and `artists` — which is what the match
+consumes — plus `id`, `master_id`, `formats`, `labels`, `year`, `genres`. Held
+for one pass, dropped.
+
+**Consequence: matching must be deterministic.** The payload is gone, so a
+re-sync re-derives every conclusion. The same collection against the same
+library must produce the same answers, or badges will change between syncs with
+no visible cause. This is a requirement on the matching rule, not an
+implementation note.
+
+**The `snapshot_*` columns are LMS-side and stay.** `snapshot_artist` and
+`snapshot_album_title` hold the *local* album's identity for orphan recovery
+(§2), not Discogs' copy. **Inferred, not previously documented**, from three
+converging facts: §2 describes the orphan lookup as finding a snapshot that fits
+a *new local album*; the index is `(state, snapshot_track_count)`, commented in
+`Schema.pm::_migration_1` as "confirmed rows whose snapshot might fit a new
+album"; and `basic_information` carries **neither a track count nor durations**,
+so the Discogs side cannot populate `snapshot_track_count` or
+`snapshot_total_duration` at all. Stated explicitly here because it is the one
+place in the schema where stored text could plausibly have been Discogs Content,
+and nothing said otherwise.
+
+### 13.3 Identification and ownership are different columns
+
+**Decided: `discogs_release_id` continues to mean identity — which release this
+album *is*. Ownership is recorded separately and is never expressed by NULLing
+the release id.**
+
+The case that forces the split, and it is the common one: a file carries
+`DISCOGS_RELEASE_ID=123`, the collection holds release **456**, both resolve to
+master 50841. The user owns a version, not that pressing. Making
+`discogs_release_id` mean ownership would require NULLing 123 — destroying an
+identification the user supplied themselves.
+
+| Column | Question | Source |
+|---|---|---|
+| `discogs_release_id` | which release this album is | tag (Strict) |
+| `discogs_master_id` | which edition | tag, or the collection's `master_id` |
+| ownership label | what the user owns | collection sync |
+
+Ownership takes one of: **exact** (that release id is in the collection),
+**version** (a different release under the same master is), or absent.
+
+**No new schema surprise.** TODO, 2026-09-07 already specifies the ownership
+column landing in migration 3, "in the step that reads it". This record makes
+migration 3 the next schema step rather than a later one.
+
+**§3a's NULL-id invariant is untouched.** A NULL `discogs_release_id` still
+means either a strict conflict or an edition-level match, and neither is
+overloaded by this record.
+
+This closes the pressing-versus-edition conflation that TODO has carried as
+*Deferred by decision* since 2026-09-07, and settles §8's "an edition-level match
+has no pressing to show — product decision, recorded not taken."
+
+### 13.4 Only Strict auto-confirms, and only with collection agreement
+
+**Decided: `state = 'confirmed'` requires a Discogs release id read from the
+user's own tags AND that same release id present in the collection.**
+
+Everything else is a candidate. Nothing that *infers* identity ever
+auto-confirms.
+
+The principle, in the user's words: a real release is only identified for an
+album that was ripped, tagged, and added to Discogs by the user themselves. A
+tag is the user asserting identity — there is no inference to get wrong.
+Structural inferred identity from track shape, and §8 let it auto-confirm
+silently; that combination is what this record removes.
+
+**Rejected — Structural auto-confirming on a matching duration vector (§8).**
+Pressings of one edition share a tracklist (verified against master 3855547,
+whose LP variants are indistinguishable by track count or duration), so a
+matching vector never established a pressing. §8 already knew this and wrote
+`discogs_master_id` with a NULL release id because of it. This record goes
+further: an edition-level conclusion is not a confirmed pressing and should not
+be presented as one.
+
+**Required, and not optional: the review queue must not fill with albums the
+user does not own.** An album correctly identified from a tag but simply absent
+from the collection needs no human decision — there is nothing for the user to
+do about it. Against a few-hundred-item collection and a 764-album library, most
+albums are unowned; a candidate predicate that catches them turns the queue into
+noise and reproduces the "chore" §8 was trying to avoid. The queue holds albums
+where a human choice would change something.
+
+### 13.5 All tags are read — for collection-matched albums only
+
+**Decided: for an album that matched the collection, read the Discogs tag from
+every local track, not just the primary and fallback. For every other album, the
+existing two-track read stands.**
+
+This **amends §3's rule** and `Importer.pm::_examine`'s "never all", whose
+comment reads: *"A compilation assembled from per-track tagging is not a
+maintained collection and is not worth paying 12x the file reads to
+accommodate."* The reasoning was sound against the population it considered —
+every album in the library. Scoped to collection-matched albums only, the
+arithmetic inverts: 12x on a few hundred owned albums is **cheaper in absolute
+terms** than the rule it replaces was on 764.
+
+It also puts the expensive check where the stakes are. Tags disagreeing on an
+owned album means a badge is about to be wrong. On an unowned album, nothing
+depends on it.
+
+Tags disagreeing across an owned album's tracks → candidate, into the review
+queue, where the user retags or rejects. That is the queue doing real work on a
+small set.
+
+`Library.pm` currently caps `candidates` at two urls (`splice(@sorted, 2)`), so
+this needs a second accessor rather than a change to that one — the two-track
+path remains correct for its own case.
+
+### 13.6 Ownership is its own pass, and does not use the file-state skip
+
+**Decided: ownership determination runs as a pass triggered by a collection sync
+completing, not inline in the importer's per-album loop.**
+
+**The failure this avoids, which is not obvious from the importer's code.**
+`Importer.pm::_canSkip` returns true when the album's stored `source_timestamp`
+equals the current `MAX(tracks.timestamp)` over its local tracks. Buying a record
+and adding it to Discogs changes nothing on disk, so the album is skipped before
+anything examines it — and no badge appears.
+
+**A full rescan does not help either.** The skip key is derived from file
+mtimes; LMS rebuilds its database from the same files and writes back the same
+timestamps, so `album_key` and `source_timestamp` are unchanged and the album
+still skips. **Inferred** from the skip predicate and `source_timestamp`'s
+definition, both read; **not observed on a real server.** It is on the hardware
+list, and if it turns out false the reasoning here needs revisiting rather than
+the conclusion — the separate pass is right either way.
+
+So: **identification skips on file state, because tags only change when files
+change. Ownership does not skip, because ownership changes when the user buys a
+record.** For most albums the ownership pass is a local comparison between stored
+conclusions and the freshly-synced collection, costing no file reads at all;
+13.5's all-tags read touches only the matched subset.
+
+### 13.7 Sync triggers, and the rule that stops badges vanishing
+
+**Decided: three triggers — the start of a music scan, the interval pref, and a
+manual "Sync collection now" button.** The interval and the button were already
+specified in TODO, 2026-09-07; a scan is added because reaching for rescan when
+something has changed is what LMS users already do, and a plugin needing its own
+separate ritual is one users will forget.
+
+**Decided, and this is the important half: a failed or partial sync leaves the
+previous ownership conclusions untouched.** Ownership is recomputed only from a
+sync that completed. Anything else logs at `warn` and changes nothing.
+
+Without that rule, a network failure, a revoked token, a Discogs 500 or a
+rate-limit stall during a scan-triggered sync recomputes ownership against an
+empty or partial collection and **every badge silently disappears** — files
+unchanged, no error the user sees. This project's named worst outcome is a
+silently wrong badge; a silently vanished one is the same failure wearing a
+different coat, and it is *more* likely now that a sync rides along with every
+scan.
+
+Pair it with the last-synced timestamp on the settings page, already specified
+in TODO, so "the badges look wrong" has a visible first thing to check.
+
+Two consequences that follow rather than needing separate decisions: the sync
+must work from both the scanner and the server process, which `_writeOk` /
+`_writeRefusal` already govern; and an aborted scan commits rather than rolling
+back (§0.8), so "aborted mid-sync" is reachable and lands under the rule above.
+
+### 13.8 What this supersedes, and what survives
+
+**Superseded:**
+
+- **§8's candidate-enumeration and comparison flow**, in full — the
+  `type=master` search, ranking on `community.have`, the per-album fetch cap,
+  the duration-vector comparison as a *verdict*, and the 90/7.5/2.5 confirm
+  calibration built on it.
+- **§8's auto-confirmation**, per 13.4.
+- **§11's zero-result title-only retry**, which existed to make a
+  whole-database artist+title search work for compilations. There is no such
+  search now. §11's underlying finding — that LMS and Discogs catalogue
+  compilations under different conventions, and that an LMS compilation's album
+  artist is a placeholder rather than a name — **survives and still governs**
+  how the collection match handles them.
+- **§12.1 and §12.2 become inoperative**, one day after being recorded. Both
+  ruled on what yields `(structural, confirmed)` versus `(structural,
+  candidate)`. Nothing is structurally confirmed now. Their *reasoning* stands
+  and §12.3's principle is reaffirmed by this record; their operative clauses
+  have nothing to govern. Left in place rather than deleted — reading why a rule
+  existed is what stops it being reinvented.
+
+**Survives unchanged:**
+
+- §2 and §2a in full — keying, orphan recovery, the invariants, the narrow
+  delete predicate.
+- §3a, including the NULL-id invariant (13.3).
+- §3b's invalidation-on-settings-change.
+- §9 in full — auth, rate limits, pagination, caching policy, attribution.
+- §10's clear & rebuild.
+- Strict tier as built, extended by 13.4 and 13.5.
+
+**Open, and deliberately not decided here:**
+
+- **What `match_tier` value a collection-derived match carries.** The CHECK
+  allows `strict`, `structural`, `fuzzy`, `manual`. A title-plus-artist match
+  against the collection is a genuinely different *origin*, which is the thing
+  `match_tier` records — so unlike §3a's conflict case, a fifth value is
+  defensible here rather than expressing something `state` already expresses.
+  Against it: a new value means a migration, an amendment to design §3 and §10,
+  and every future reader. **Decide before migration 3.**
+- **Whether duration comparison survives as a disambiguator.** The candidate set
+  is now tiny, so it is rarely needed — but a collection holding two pressings of
+  one album is exactly where title and artist cannot separate them. The
+  comparison code from step 4 items 4–5 would serve, if written as a ranker
+  rather than a verdict. Not v1 unless the hardware pass shows the case is real.
+- **Whether the badge shows one state or two** — exact versus version as two
+  colours, or one badge with the distinction only in the context menu. Design §9
+  already has configurable badge colours for owned and wantlist; this would be a
+  third axis. UI decision, not a data one; the data supports either.
+
+### 13.9 Unverified, carried forward
+
+- **That a full rescan cannot recover a newly-bought record's badge** (13.6).
+  Inferred from source, not observed.
+- **That `https://www.discogs.com/release/{id}` resolves without a title slug.**
+  The context-menu link is constructed from the stored id rather than kept from
+  the payload, because `basic_information` carries only `resource_url`
+  (`api.discogs.com/...`), which is not the web page §9.6's attribution
+  requirement names. `Tags.pm`'s own parser documents `/release/<id>` as
+  canonical and accepts it, but `Tags.pm`'s header also records that discogs.com
+  returns 403 to automated fetches, so this was never confirmed against the live
+  site. One browser click settles it; it is on the hardware list.
+- **The proportion of the 764 reference albums that match the collection at
+  all.** Every cost estimate in 13.5 and 13.6 rests on "a few hundred", which is
+  the collection's size, not the measured overlap.
+- **Whether LMS album titles and Discogs `basic_information.title` agree often
+  enough for title-led matching to work**, and what normalisation is needed.
+  §8 recorded that title normalisation cut 7 search masters to 1–2; nothing
+  measures it against a collection. This is the single largest unmeasured
+  assumption in this record.
+
