@@ -60,6 +60,33 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **2026-09-11: plan §5 item 4 measures the confirm/candidate split as ONE
+      ratio, but there are now five routes into the review queue** —
+      durations absent Discogs-side (7.5% of 40), zero countable tracks (2.5%
+      of 40), NULL secs (unmeasured), incompletely-ripped sets (present in the
+      reference library, count unknown), and compilations whose title-only
+      retry surfaces a master the fingerprint correctly rejects (unmeasured).
+      decisions §8's ~10% expectation was built from the first two only.
+      Measure the split BY ROUTE. If the total lands materially above 10%, the
+      answer is bulk confirm actions in step 5's queue, NOT a laxer matcher —
+      see §12.3. Recorded, not designed.
+- [ ] **2026-09-11: Library.pm's iterator supplies neither per-track durations
+      nor an album artist.** The artist gap is recorded (decisions §11.4); the
+      duration gap was not recorded anywhere. Both items 4 and 5 depend on it,
+      and it touches a module with an existing suite
+      (scripts/library-check.pl). Sequencing, not a decision: it wants its own
+      commit ahead of item 4 rather than being folded into either.
+- [ ] **2026-09-11, verified: tracks.secs is a NULLABLE FLOAT, and a NULL local
+      duration yields (structural, candidate)** — see
+      squeezewax-v1-decisions.md §12.2. SQL/SQLite/schema_16_up.sql,
+      CREATE TABLE tracks, "secs float", no NOT NULL; no later migration
+      redefines the table. Reachable rather than theoretical:
+      Slim/Schema/Album.pm sub duration carries
+      "return if !defined $_->secs;". Unhandled, the failure is undef-as-0
+      falling inside the ±2–3 s margin of a short Discogs track — a spurious
+      match, and Structural auto-confirms silently. Checked against a fresh
+      slimserver clone at 4015c6a8 (public/9.1, 2026-09-07), which is NEWER
+      than refs/'s a670a38c — re-verify by symbol per working agreement §6.
 - [x] **2026-09-07, verified: step 4's master-only Structural row needs NO
       migration.** `discogs_match.discogs_release_id` is already nullable
       (`Schema.pm::_migration_1`: `discogs_release_id INTEGER`, no
@@ -258,6 +285,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [x] **2026-09-11, RESOLVED: sub_tracks is an unrecorded tracklist shape, and
+      the type_ allowlist does not recurse into it.** See
+      squeezewax-v1-decisions.md §12.1. release-2516.json's single type_
+      "index" entry carries sub_tracks with five type_ "track" entries, all
+      with durations; the string appeared nowhere in docs/, plans/ or TODO.md
+      before that record. Revisit trigger is v2 and is stated in §12.1.
 - [x] **2026-09-10, RESOLVED: various-artists compilations are no longer an
       open problem for Structural.** See `squeezewax-v1-decisions.md` §11.
 - [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
@@ -370,6 +403,9 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-11: measure how many of the 764 reference albums have any local
+      track with secs IS NULL.** Feeds the review-queue sizing item below; the
+      §12.2 rule is correct at any frequency, only its cost varies.
 - [x] **LMS multi-disc grouping, verified 2026-09-07.** LMS GROUPS
       multi-disc sets into one `albums` row. Verified three ways: (a)
       whole-set track counts — "Die 100 besten Ostsongs" `discc=6` with
@@ -491,7 +527,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — external
 
-- [ ] **2026-09-08: collection-page fixture not captured.** Six of the plan's
+- [x] **2026-09-08: collection-page fixture not captured.** Six of the plan's
       seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
       the seventh — a page of a real collection, needed to re-verify the
       `master_id: 0` sentinel and the two-masterless-rows collision — needs a
@@ -503,12 +539,24 @@ Shared reminder list. Both I and Claude Code read and update this.
       re-run. Not blocking build-order items 4-5 (out of scope this session
       regardless) but should land before Structural's comparison code is
       tested against it.
+      ANSWERED 2026-09-11: the fixture exists — scripts/fixtures/
+      collection-page1.json. This item was stale twice: the "six of seven"
+      count predates the three 2026-09-10 fixtures, and the token blocker is
+      resolved. Release 9701013 observed inside it carrying master_id: 0 and
+      master_url: null, the §8 sentinel. NOT confirmed: the plan §4 table's
+      claim of TWO masterless rows — one was observed.
 - [ ] **Lyrion forum question** about plugin-owned attached databases. Drafted;
       not posted. Not blocking — an own-file layout cannot collide with anything
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
 
+- [ ] **2026-09-11: tmp/ is where prompts and hand-off markdown are served to
+      Claude Code, and it is git-ignored.** Recorded in CLAUDE.md as of this
+      commit. Same class of undocumented convention as the plans/ filename
+      item above. Consequence worth keeping: anything durable that starts life
+      in tmp/ must reach a tracked file in the same session, or it exists only
+      in an ignored directory and a chat.
 - [ ] **2026-09-10: refs/ citation drift — decisions §§1-10 cite commit
       `50e5b725`, §11 cites `a670a38c` (`public/9.1`, 2026-06-19).** Nothing
       contradicted; recorded per working-agreement §6. Worth one pass to
