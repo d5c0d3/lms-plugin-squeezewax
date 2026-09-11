@@ -30,7 +30,7 @@ it has drifted. If Claude Code starts renegotiating scope, so has it.
 
 - `docs/squeezewax-design.md` — scope and behaviour. Wins over everything.
 - `docs/implementation-plan.md` — how v1 gets built, with cited APIs.
-- `docs/v1-decisions.md` — dated decision records. Reasoning and evidence,
+- `docs/squeezewax-v1-decisions.md` — dated decision records. Reasoning and evidence,
   not live spec; anything still contradicting the design doc is a bug to
   reconcile, not a second opinion.
 - `CLAUDE.md` — rules for Claude Code.

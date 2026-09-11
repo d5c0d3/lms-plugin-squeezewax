@@ -54,7 +54,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       reports while `dbFile()` is never canonicalised, and a raw comparison
       would have disabled the plugin on any symlinked prefs directory.
 - [x] `Schema.pm`: plugin-owned attached SQLite file, `postDBConnect`
-      registration, `PRAGMA user_version` migrations, per `docs/v1-decisions.md` §2.
+      registration, `PRAGMA user_version` migrations, per `docs/squeezewax-v1-decisions.md` §2.
 - [x] Configurable Discogs tag names + detection action (v1, per §3 of the
       decisions doc). Done 2026-09-03/04 (15d19e4, 939819b, fee0aac, 1b18e45).
 
@@ -695,9 +695,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       doesn't (`git log --all -- working-agreement.md` shows no root copy
       was ever committed). Stale; the file exists only at
       `docs/working-agreement.md`.
-- [ ] **`working-agreement.md` §2 names `docs/v1-decisions.md`;** the file is
+- [x] **`working-agreement.md` §2 names `docs/v1-decisions.md`;** the file is
       `docs/squeezewax-v1-decisions.md`. TODO's ticked step-2 line repeats
       the wrong name. Two documents disagreeing is a defect (§2's own rule).
+      Fixed 2026-09-12: both references corrected.
 - [ ] **`discogs_no_match` rows orphaned by an `album_key` change are not
       swept in v1.** Bounded by library churn; the table is regenerable and
       design §9's "clear & rebuild matches" action clears it. Revisit only if
