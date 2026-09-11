@@ -921,6 +921,16 @@ script, never from merging a branch's accumulated build output.
 
 ## 8. Structural matching targets the master, not the release
 
+**Superseded in operative part 2026-09-12 by §13.** The flow described
+here — type=master search, ranking, per-album fetch, duration-vector
+comparison as a verdict, and auto-confirmation — is not what v1 does.
+Identification now runs against the user's own collection (§13.1) and
+only Strict auto-confirms (§13.4). The findings below stand as
+evidence and several still govern: duration availability is a property
+of the Discogs entry; pressings of one edition share a tracklist; LMS
+groups multi-disc sets into one albums row; albums.disc equals the disc
+count, not an index.
+
 **Decided 2026-09-07 (design chat), during build-order step 4 planning. All API
 behaviour below was verified against a live Discogs account with a personal
 access token on that date; each measurement names its sample.**
@@ -1558,6 +1568,15 @@ is measured in hours at 60 requests per minute (§9.2), not seconds.
 
 ## 11. Structural does not detect various-artists albums
 
+**Narrowed 2026-09-12 by §13.** The zero-result title-only retry
+existed for a whole-database artist+title search, which v1 no longer
+performs (§13.1). The finding that LMS and Discogs catalogue
+compilations under different conventions — and that an LMS
+compilation's album artist is a placeholder rather than a name — still
+governs how the collection match handles them. §11.3's prohibition on
+calling variousArtistsObject and §11.4's rule that LMS owns contributor
+roles both stand unchanged.
+
 **Decided 2026-09-10 (design chat).** Unblocks build-order item 4, which was
 blocked on a various-artists policy recorded in `TODO.md`.
 
@@ -1765,6 +1784,15 @@ working-agreement §6.
 ---
 
 ## 12. Two rulings on evidence quality in the Structural comparison
+
+**Inoperative from 2026-09-12, one day after being recorded — see §13.**
+Both rulings governed the boundary between (structural, confirmed) and
+(structural, candidate). Nothing is structurally confirmed under §13.4,
+so neither clause has anything to govern. The reasoning stands and
+§12.3's principle — weak evidence goes to the review queue rather than
+being rescued by a laxer matcher — is reaffirmed by §13. Retained
+rather than deleted: reading why a rule existed is what stops it being
+reinvented.
 
 **Decided 2026-09-11 (design chat), during build-order step 4 items 4–5
 planning.** Both rulings concern what the track-shape comparison does when the
