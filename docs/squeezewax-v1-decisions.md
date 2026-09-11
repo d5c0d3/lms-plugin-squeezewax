@@ -1761,3 +1761,172 @@ working-agreement §6.
 
 - FX-rate source for the optional currency conversion (v3, not v1).
 - Multi-disc edge cases validated against real Discogs release data.
+
+---
+
+## 12. Two rulings on evidence quality in the Structural comparison
+
+**Decided 2026-09-11 (design chat), during build-order step 4 items 4–5
+planning.** Both rulings concern what the track-shape comparison does when the
+evidence on one side is incomplete. Neither introduces a new principle; each
+applies §8's existing confirm/candidate rule to a case §8 did not name.
+
+Source claims below were checked against a slimserver clone at
+`4015c6a826420cacedb7223a42da81c70b78c300` (`public/9.1`, 2026-09-07), which is
+**newer** than `refs/`'s pin `a670a38c` (2026-06-19). Per working agreement §6,
+Claude Code re-verifies by symbol against refs/'s actual pin. The refs/ citation
+drift already recorded in `TODO.md` now runs in both directions.
+
+### 12.1 The `type_` allowlist does not recurse into `sub_tracks`
+
+§8 specifies "filter Discogs tracklist entries to `type_ == "track"`". It does
+not say whether to descend into nested entries, because `sub_tracks` was not
+known when it was written.
+
+**Verified, from the pinned fixture.** `scripts/fixtures/release-2516.json`
+holds one top-level tracklist entry with `"type_" : "index"`, carrying a
+`sub_tracks` array of five entries, each `"type_" : "track"` and each with a
+non-empty duration (`10:50`, `3:15`, `7:11`, `5:12`, `3:54`). The string
+`sub_tracks` appears nowhere in `docs/`, `plans/` or `TODO.md` before this
+record.
+
+**Decided: count top-level entries only. Do not recurse.**
+
+Release 2516 therefore yields **zero countable tracks**, the candidate is
+skipped rather than compared (§8, "Confirm versus candidate"), and the album
+reaches the review queue if no other candidate survives.
+
+#### Why, and it is not the obvious reason
+
+The obvious argument — "an `index` entry is not a track" — is weak, because the
+nested entries genuinely are tracks and genuinely carry durations. Recursing
+would probably have produced a correct match for this album.
+
+The real argument is **calibration**. §8's confirm/candidate rule rests on a
+measurement over 40 releases: complete durations 36 (90%), none at all 3
+(7.5%), zero countable tracks 1 (2.5%). That measurement counted release 2516
+in the third bucket, which means it was taken **top-level-only**. An
+implementation that recurses moves albums between buckets that the measured
+split was drawn from, so §8's expected ~10% review-queue figure would no longer
+describe the code that produced it. Changing the counting rule silently
+invalidates the evidence base for the rule that consumes the count.
+
+#### Why this is safe to defer rather than solve
+
+The failure direction is benign. Not recursing costs 2.5% of albums (n=40) a
+trip through the review queue. It cannot produce a wrong badge — a skipped
+candidate is not a match. The review queue is precisely the mechanism for
+albums whose evidence does not support auto-confirmation, so this is the system
+behaving as designed, not degrading.
+
+This is the asymmetry that decides it: recursion buys a small number of
+automatic confirmations and risks miscalibrating a rule; not recursing costs a
+small number of manual confirmations and risks nothing.
+
+#### Revisit trigger, and what would count
+
+**v2.** Reopen if the step-4 hardware pass (plan §5) shows index-only releases
+materially above the measured 2.5% of the reference library. "Materially" is
+deliberately not given a threshold here — the 2.5% is n=1 of 40 and does not
+support one.
+
+**Unverified, carried forward:**
+
+- Whether `sub_tracks` occurs on any entry whose `type_` is something other
+  than `"index"`. One shape has been observed, on one release.
+- Whether a `sub_tracks` entry can itself nest further.
+- Whether any Discogs release expresses a *whole* album as sub-tracks such that
+  top-level counting yields a non-zero count that is wrong rather than zero.
+  This is the case that would make the ruling unsafe rather than merely
+  conservative, and it has not been looked for.
+
+### 12.2 A NULL local duration yields a candidate, never a confirmation
+
+§8 rules on durations being absent **Discogs-side**: `(structural, candidate)`
+for step 5's review queue. It is silent on the LMS side, because the LMS side
+was assumed complete. It is not.
+
+**Verified in source.** `SQL/SQLite/schema_16_up.sql`, inside
+`CREATE TABLE tracks`, declares `secs float` with no `NOT NULL`.
+`grep -rn "CREATE TABLE tracks" SQL/SQLite/` returns only `schema_1_up.sql` and
+`schema_16_up.sql`, so no later migration redefines the column.
+
+**Reachable, not merely nullable.** `Slim/Schema/Album.pm`, `sub duration`,
+contains `return if !defined $_->secs;` — LMS's own album-duration accessor
+abandons the whole computation if any single track's duration is undefined.
+That is LMS treating the case as ordinary, which is stronger evidence than the
+DDL alone.
+
+**Decided: if any local track of the album has a NULL `secs`, the verdict is
+`(structural, candidate)`. Count equality is still evaluated and can still
+reject; it is confirmation specifically that is withheld.**
+
+#### Why this is application of §8, not a new rule
+
+A NULL local duration puts us in the same epistemic position as a missing
+Discogs duration: the track count is known, the duration vector is not. §8
+already rules on that position. Deciding it differently depending on which side
+the gap is on would mean the tier's confidence depends on where the ignorance
+sits rather than on how much of it there is.
+
+#### The failure mode this prevents
+
+An unhandled NULL reaches the comparison one of two ways. Under `use warnings`
+a numeric comparison against `undef` warns and the sort order is unreliable —
+the same bug `Library.pm::_finish`'s timestamp loop already carries a comment
+about, for the same reason. Worse, an implementation that coerces `undef` to 0
+produces a duration of zero that falls **within the ±2–3 s margin of any
+sufficiently short Discogs track**, yielding a spurious element-wise match.
+Structural auto-confirms silently (§8), so that surfaces as a wrong badge with
+no trace of the disagreement that caused it — the outcome the tier design
+exists to prevent, and the one step 5's reject/dismiss was recorded three times
+over to recover from.
+
+A skipped confirmation is visible and recoverable. A wrong confirmation is
+neither.
+
+**Rejected — treat a NULL as "this track has no duration" and compare the
+remaining vector.** It changes the length of one side of a comparison whose
+first step is count equality, so it would either reject every affected album on
+count (indistinguishable from a genuine mismatch, and misleading in the queue)
+or require the count to be taken before the filter and the vector after, which
+is two different track counts in one comparison.
+
+**Rejected — fall back to count-and-title agreement.** §8 already names that as
+Fuzzy-grade evidence and refuses to ship it under Structural's auto-confirming
+behaviour. The argument is unchanged here.
+
+#### Consequences
+
+- **Float, not integer.** `secs` is a `float`; Discogs durations are integer
+  `M:SS`. The comparison is float-to-integer and the margin absorbs it. Stated
+  so it is not rediscovered as a defect.
+- **`Library.pm` must supply the durations at all.** Its iterator currently
+  does not — see `TODO.md` and plan §3. That is sequencing, not a decision, and
+  is tracked there.
+- **Frequency is unmeasured.** How many of the 764 reference albums carry any
+  NULL `secs` is unknown and needs the real server. It feeds the review-queue
+  sizing question in `TODO.md`, not this ruling — the rule is correct at any
+  frequency; only its cost varies.
+
+**Unverified, carried forward:**
+
+- Whether NULL `secs` correlates with a content type, an importer, or with
+  remote rows specifically. Nothing has been measured.
+- Whether `Slim::Schema::Album::duration`'s guard was written for NULL `secs`
+  on local tracks or for some other case. The guard's existence is verified;
+  its motivating case is inferred from its shape.
+
+### 12.3 What these two rulings share, recorded because it will recur
+
+Both cases are the same shape: **Structural's evidence quality varies per
+album, and v1's answer to weak evidence is always the review queue.** Neither
+ruling tries to rescue an album by finding additional evidence or by relaxing a
+threshold.
+
+That is deliberate and should stay the default. The instinct to shrink the
+queue by widening what counts as sufficient evidence trades a visible
+inconvenience for an invisible wrong badge, which is the wrong direction. The
+correct response to a large queue is better queue tooling — bulk actions in
+step 5 — not a laxer matcher. Recorded in `TODO.md` so it is not invented under
+pressure after the hardware pass.
