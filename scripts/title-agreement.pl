@@ -8,8 +8,20 @@
 # with different title conventions.
 #
 # What this proves: the agreement rate at each rung of a FIXED
-# normalisation ladder, the two collision directions, and the auto-badge
-# split, for one page of one collection against one library.
+# normalisation ladder, and - AT L2, the operative rung decided in
+# decisions 13.10.4 - the two collision directions, the auto-badge split,
+# the overlap figures and the example failures, for one page of one
+# collection against one library.
+#
+# Why L2: decisions 13.10.4 measured the full ladder below and found L3
+# (punctuation-stripping) net-negative - it gained one album and caused a
+# wrong badge (release 15775 Substrata vs album 2971 Substrata², which
+# collide once the superscript is stripped as punctuation) - and L4/L5
+# gained nothing at all. L2 (case-fold + whitespace collapse) is retained
+# as cheap defensive hygiene even though it too gained nothing on this
+# fixture. The ladder table below still runs L0-L5 in full: it is the
+# diagnostic that produced this decision, and truncating it would make
+# the measurement unrepeatable.
 #
 # What it CANNOT prove: anything about the rest of the collection. The
 # fixture is page 1 of 3 (100 of 203 items), sorted by label, so it is not
@@ -432,7 +444,18 @@ _report_prefs($prefsPath);
 _report_artist_divergence($albums);
 _report_non_english_articles( $albums, $entries );
 _report_ladder( $albums, $entries );
-_report_l5( $albums, $entries, \@withLocal, \@allRemote );
+
+print "-" x 74, "\n";
+print "ANALYSIS RUNG: L2 (decisions 13.10.4)\n";
+print "-" x 74, "\n\n";
+print "Everything below - collisions, overlap, the auto-badge split and the\n";
+print "example failures - runs at L2 (case-fold + whitespace collapse), not\n";
+print "L5. The ladder above shows why: L3 gained one album and caused a\n";
+print "wrong badge (Substrata / Substrata\x{b2}, decisions 13.10.4), and L4/L5\n";
+print "gained nothing at all. L2 is retained as cheap defensive hygiene\n";
+print "despite also gaining nothing on this fixture.\n\n";
+
+_report_l2( $albums, $entries, \@withLocal, \@allRemote );
 
 sub _report_prefs {
 	my ($path) = @_;
@@ -608,15 +631,15 @@ sub _match_counts_naive {
 	return ( $l, $c );
 }
 
-sub _report_l5 {
+sub _report_l2 {
 	my ( $albums, $entries, $withLocal, $allRemote ) = @_;
 
-	my $rung  = 5;
+	my $rung  = 2;
 	my $colBy = _index_by_key( $entries, $rung );
 	my $lmsBy = _index_by_key( $albums,  $rung );
 
 	print "-" x 74, "\n";
-	print "COLLISIONS AT L5 - two directions, reported separately, NEVER summed\n";
+	print "COLLISIONS AT L2 - two directions, reported separately, NEVER summed\n";
 	print "-" x 74, "\n\n";
 
 	# --- direction (a): one LMS album -> several collection entries ---
@@ -743,7 +766,7 @@ sub _report_l5 {
 
 	# --- overlap ---
 	print "-" x 74, "\n";
-	print "OVERLAP AT L5\n";
+	print "OVERLAP AT L2\n";
 	print "-" x 74, "\n\n";
 
 	my $matched = sub {
@@ -764,7 +787,7 @@ sub _report_l5 {
 
 	# --- auto-badge split ---
 	print "-" x 74, "\n";
-	print "AUTO-BADGE SPLIT AT L5 (badging rule decided 2026-09-12)\n";
+	print "AUTO-BADGE SPLIT AT L2 (badging rule decided 2026-09-12)\n";
 	print "-" x 74, "\n\n";
 
 	my %bucket = (
@@ -814,7 +837,7 @@ sub _report_l5 {
 	printf "  one candidate, Discogs artist absent: %4d   queue\n", $bucket{discogs_absent};
 	printf "  several candidates (direction (a))  : %4d   queue\n", $bucket{several};
 	printf "  %s\n", '-' x 52;
-	printf "  total L5 title matches              : %4d\n\n", $total;
+	printf "  total L2 title matches              : %4d\n\n", $total;
 
 	print "  The Various/Various Artists line is a FINDING, not a fix. LMS says\n";
 	print "  'Various Artists'; Discogs says 'Various'. An equivalence rule is\n";
@@ -834,12 +857,12 @@ sub _report_l5 {
 
 	# --- example failures ---
 	print "-" x 74, "\n";
-	print "TEN EXAMPLE FAILURES AT L5 - for reading, NOT for tuning\n";
+	print "TEN EXAMPLE FAILURES AT L2 - for reading, NOT for tuning\n";
 	print "-" x 74, "\n\n";
 
-	print "Selection rule: L5-unmatched LMS albums sorted by albums.id\n";
+	print "Selection rule: L2-unmatched LMS albums sorted by albums.id\n";
 	print "ascending, first ten. 'Nearest' = minimum Levenshtein distance on\n";
-	print "the L5-normalised strings, ties broken by lowest Discogs release id.\n\n";
+	print "the L2-normalised strings, ties broken by lowest Discogs release id.\n\n";
 
 	my @failures = grep {
 		my $k = _normalise( $_->{title}, $rung );
@@ -871,7 +894,7 @@ sub _report_l5 {
 			( defined $bestD ? $bestD : -1 );
 	}
 
-	printf "Total L5 failures: %d of %d LMS albums\n\n",
+	printf "Total L2 failures: %d of %d LMS albums\n\n",
 		scalar @failures, scalar @$albums;
 }
 
