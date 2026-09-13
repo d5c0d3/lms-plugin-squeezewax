@@ -921,7 +921,7 @@ script, never from merging a branch's accumulated build output.
 
 ## 8. Structural matching targets the master, not the release
 
-**Superseded in operative part 2026-09-12 by §13.** The flow described
+**Superseded in operative part 2026-09-12 by decisions §13.** The flow described
 here — type=master search, ranking, per-album fetch, duration-vector
 comparison as a verdict, and auto-confirmation — is not what v1 does.
 Identification now runs against the user's own collection (§13.1) and
@@ -1132,7 +1132,7 @@ predicate.
   before the fetch is paid for. Usable only as a tiebreaker between
   already-fetched candidates and as a confidence note in the review queue.
 - Whether the per-album fetch cap is needed given N is small after title
-  normalisation. §13's rewrite decides it.
+  normalisation. The design §13 rewrite decides it.
 
 ---
 

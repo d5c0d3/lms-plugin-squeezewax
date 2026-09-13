@@ -60,6 +60,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **2026-09-12: plans/build-order-step-4-structural-matching.md is stale in
+      its entirety** — it plans decisions §8's search-first flow, which
+      decisions §13.8 supersedes. Its §6 still calls for a "design §13 rewrite"
+      of a request budget that no longer has per-album searches to budget for.
+      Do not patch it; it is superseded by the build-order rewrite.
 - [ ] **2026-09-12: the review queue must not fill with albums the user does
       not own (§13.4).** An album identified from a tag but absent from the
       collection needs no human decision. Against a few-hundred-item
@@ -106,12 +111,14 @@ Shared reminder list. Both I and Claude Code read and update this.
       format, title. **A hard per-album fetch cap is REQUIRED** and is what
       makes the budget bounded now that the format gate is a ranking signal
       (see the falsified-claims item below), not a filter. Over-cap albums
-      go to the review queue rather than grinding. Blocks the §13 rewrite.
+      go to the review queue rather than grinding. Blocks the design §13
+      rewrite.
       ~~OPEN: enumerate candidates via `/masters/{id}/versions` or
       `/database/search`? Take it with the budget.~~ — **RESOLVED
       2026-09-07: `/database/search` with `type=master`. See the settled
       step-4 candidate-enumeration flow below.**
-      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
+      2026-09-12: superseded by decisions §13 — v1 performs no per-album
+      Discogs search.
 - [ ] **2026-09-07, SETTLED DESIGN: step-4 candidate enumeration, ranking,
       comparison and write rule.** Superseded as the design record by
       `squeezewax-v1-decisions.md` §8 — see there for the full design
@@ -602,6 +609,11 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-12: bare §N references are ambiguous across design, decisions
+      and the plans.** Convention recorded in working-agreement §2 as of this
+      commit; the two known collisions (§12, §13) are fixed. Older bare
+      references elsewhere are NOT swept — fix them when touched, not in a
+      sweep, since a sweep would rewrite text nobody is reading.
 - [ ] **2026-09-11: tmp/ is where prompts and hand-off markdown are served to
       Claude Code, and it is git-ignored.** Recorded in CLAUDE.md as of this
       commit. Same class of undocumented convention as the plans/ filename

@@ -40,6 +40,12 @@ it has drifted. If Claude Code starts renegotiating scope, so has it.
 One rule: when two documents disagree, that is a defect. Fix it in the same
 session it's noticed rather than picking one and moving on.
 
+Section references always name their document — `decisions §8`, `design §13`,
+`plan §4` — never a bare `§N`. Three documents number their own sections and
+two collisions already exist: design §12 versus decisions §12, and design §13
+versus decisions §13. A bare reference was unambiguous when only one document
+had that number, which is exactly why it stops being unambiguous later.
+
 ## 3. Model choice — by task shape, not by build step
 
 Pick by **where the expensive judgment sits**, not by which step of the build
