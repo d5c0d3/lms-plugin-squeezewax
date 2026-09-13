@@ -1,32 +1,87 @@
 # Design-reconciliation plan — how `docs/squeezewax-design.md` gets rewritten
 
-**Planned 2026-09-13 (design chat).** Successor to
+**Planned 2026-09-13 (design chat). Revised same day** after the rulings landed
+and the marker inventory was verified. Successor to
 `plans/design-reconciliation-survey.md`, which found the twenty contradictions
-and is not re-derived here. This file sorts them, records what each is replaced
-by, and fixes the order of the rewrite.
+and is not re-derived here.
 
-Rulings taken to unblock this plan are in `docs/squeezewax-v1-decisions.md` §14.
-Section references name their document, per `docs/working-agreement.md` §2.
+Rulings taken to unblock this plan are in `docs/squeezewax-v1-decisions.md` §14
+(`f9a7644`), with the `TODO.md` edits in `97c2251` and a follow-up correction in
+`9f27ac9`.
 
 **Scope, unchanged from the survey:** reconcile design only. Not the build
 order, not migration 3's implementation, not the pages 2–3 measurement. The
 survey's List 2 is binding — a section recorded as surviving untouched is not
 rewritten because it reads oddly beside a rewritten neighbour.
 
+**A local convention, and why.** `docs/working-agreement.md` §2 requires every
+section reference to name its document. In the tables below a bare `§N` means
+**decisions**, stated once here, because a table cell reading "decisions §13.1 /
+decisions §13.3 / decisions §13.10.2" is noise rather than clarity. Prose
+outside the tables names its document in full. Design sections are always
+written as "design §N", never bare, since that is the collision §2 exists to
+prevent.
+
 ---
 
-## Sync state at the time of planning
+## Sync and verification state
 
 Project knowledge verified current 2026-09-13 against five artifacts that
 postdate the prior session: the survey, decisions §13.10 ending at §13.10.6,
 design's reconciliation banner, `scripts/title-agreement.pl`, and
-working-agreement §2's section-reference paragraph. All five present.
+working-agreement §2's section-reference paragraph.
 
-**One partial:** the banner's claim of eleven section markers was not counted.
-Four were observed directly — design §3 (tier table), §9, §10, §13. Retrieval
-returns chunks, not files, so this was confirmation of currency rather than an
-inventory. **Claude Code must grep the marker count before removing them**, so
-step 6 below removes eleven and not four.
+**The eleven markers are verified**, counted by Claude Code against the file.
+Inventory below. The design chat had confirmed only four directly, because
+project-knowledge retrieval returns fragments rather than whole files.
+
+**One defect found and fixed during the rulings session, recorded because it is
+the same shape as the one this whole reconciliation exists to fix.** Decisions
+§13.8's "Open, and deliberately not decided here" list still named `match_tier`
+and the badge-state question as open after §14.1 and §14.5 had decided them —
+one document answering one question two ways, twenty pages apart, with the
+survey and `TODO.md` both pointing at the stale half. Corrected inline in
+`9f27ac9`.
+
+---
+
+## The eleven markers
+
+Keyed by section, **not by line** — line numbers drift the moment design §10 is
+rewritten, and this table has to survive that.
+
+| Section | Marker sits under |
+|---|---|
+| design §2 | Core Concept |
+| design §3 | Matching — main heading |
+| design §3 | "Three matching tiers" subsection (the tier table) |
+| design §4 | Badge (Ownership Indicator) |
+| design §5 | Collection Value & Statistics |
+| design §8 | Failure & Degradation Behavior |
+| design §9 | Settings |
+| design §10 | Data Model (Sketch) |
+| design §11 | v1 Scope & Roadmap |
+| design §12 | Open Questions / Follow-ups |
+| design §13 | Key Technical Constraints (Summary) |
+
+**Design §3 carries two.** Every other section carries exactly one. The
+document banner at the top is separate and is not one of the eleven.
+
+Cross-check: the rewrite sequence in step 5 below touches all eleven sections,
+so no marker is orphaned under a section this session was not going to open.
+
+### Step 6 removes these from this list, never from a pattern
+
+**This is a rule, not a preference, and it has evidence.** The design chat's
+suggested grep pattern — blockquotes beginning `> **Superseded`,
+`> **Partly superseded` or `> **Three claims here are stale` — matched **7 of
+11**. Four markers use phrasings it did not anticipate: "Largely superseded",
+"The sync description is superseded", "The multi-disc follow-up is superseded",
+"The scan-time budget is superseded".
+
+Had step 6 removed by pattern, four markers would have survived into a document
+whose banner had just been deleted, pointing at a precedence inversion that no
+longer existed. Stale scaffolding is worse than none.
 
 ---
 
@@ -40,7 +95,7 @@ resolved; the resolution is named.
 |---|---|---|---|
 | A | §2 "the owned pressing" | CORRECT | exact / version / absent (§13.3); version badges on title+artist (§13.10.2) |
 | B | §3 scan-time matching, stored tuple | CORRECT | ownership is its own pass off a completed sync (§13.6); three triggers (§13.7); ownership column (§13.3); `match_tier` per §14.1 |
-| C1 | §3 the cascade | CORRECT | collection-first identification (§13.1); §13.8 supersedes §8 whole |
+| C1 | §3 the cascade | CORRECT | collection-first identification (§13.1); §13.8 supersedes decisions §8 whole |
 | C2 | §3 Strict auto-confirm | CORRECT | narrowed by §13.4; exact confirmation intact per §13.10.2 |
 | C3 | §3 Structural auto-confirm | CORRECT | nothing structurally confirms (§13.4, §13.8) |
 | C4 | §3 `local_tracks == 0` gate | CORRECT | removed; all albums in scope (§13.10.1) |
@@ -75,7 +130,7 @@ Raised while sorting; all four resolved before the rewrite.
 |---|---|---|
 | U | A wrongly auto-badged album never enters the queue, so there is no way to reverse it | §14.4 — nothing built in v1; design §11 states the well-maintained-library assumption |
 | V | Both flowcharts end in a node that needs the exact-vs-version question answered | §14.5 — one badge state |
-| W | §4's context menu promises collection metadata via an unverified endpoint | §14.6 — dropped from v1 |
+| W | Design §4's context menu promises collection metadata via an unverified endpoint | §14.6 — dropped from v1 |
 | X | The rewritten budget has no row for on-demand cost | §14.7 — two-part table |
 
 ### Two corrections to the survey's own framing
@@ -106,19 +161,33 @@ Dependency order, not document order. Steps 1–4 are complete.
 1. ~~Decide `match_tier`~~ — done, §14.1.
 2. ~~Settle token revocation and the roadmap~~ — done, §14.2, §14.3.
 3. ~~Rule on U, V, W, X~~ — done, §14.4–§14.7.
-4. ~~Land the rulings and this sorted list~~ — done: decisions §14 and this file.
+4. ~~Land the rulings and this sorted list~~ — done: decisions §14 (`f9a7644`,
+   corrected `9f27ac9`), `TODO.md` (`97c2251`), and this file.
 5. **Rewrite, in this sequence:**
-   §10 → §3 → §4 → §5 → §8 → §9 → §11 → §12 → §13 → §2.
+   design §10 → §3 → §4 → §5 → §8 → §9 → §11 → §12 → §13 → §2.
    §10 first because §3 and §4 both reference the data model. §2 last because
    it is one paragraph summarising everything above it.
-6. **Remove the markers and the banner in a single final pass**, after the
-   prose is done. Section-by-section removal would leave the document in a
-   state where the precedence inversion is silently gone but the prose is still
-   stale — the exact condition the markers exist to prevent. Grep the count
-   first (see the sync note above).
+6. **Remove the eleven markers and the banner in a single final pass**, after
+   the prose is done, working from the inventory above. Section-by-section
+   removal would leave the document in a state where the precedence inversion
+   is silently gone but the prose is still stale — the exact condition the
+   markers exist to prevent.
 7. **Verify:** every List 2 section byte-identical; no `structural` or `fuzzy`
    outside a historical clause; no bare `§N` introduced (working-agreement §2);
-   the document still clean UTF-8 with no mojibake (survey's encoding note).
+   the document still clean UTF-8 with no mojibake (survey's encoding note);
+   zero remaining markers, checked against the inventory rather than a grep.
+
+## Two settled decisions the rewrite applies without re-arguing
+
+- **The ownership column is named `ownership`**, values `exact | version |
+  absent`, not nullable — every row has an ownership answer and `absent` is
+  that answer, not a missing one. `owned_state` was rejected for borrowing
+  `list_state`'s naming, which belonged to the `discogs_collection` table
+  §13.2 deleted.
+- **Design §10 stays a column-list sketch, not a `CREATE TABLE`.** Putting the
+  migration's exact DDL into design would give two documents the same DDL with
+  no rule about which wins — the defect that produced this session. The rebuild
+  obligations live in `TODO.md`, where the implementer looks.
 
 ## Swept during the rewrite, not separately
 
