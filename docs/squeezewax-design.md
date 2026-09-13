@@ -1,5 +1,16 @@
 # SqueezeWax — Design Reference
 
+> **Partly superseded, reconciliation pending — 2026-09-12.**
+> Decisions §13 and §13.10 replaced v1's matching design: identification
+> now runs against the user's own Discogs collection rather than a
+> per-album Discogs search, the `local_tracks == 0` gate is removed, only
+> Strict auto-confirms an exact release, and version ownership badges on
+> an unambiguous title-and-artist match. The sections marked below have
+> not yet been rewritten. Where this document and decisions §13 disagree,
+> **decisions §13 is current** — this is a temporary inversion of
+> working-agreement §2's precedence rule and is itself the defect being
+> tracked. These markers come out when the reconciliation lands.
+
 Design ideas and decisions for **SqueezeWax**, a Discogs plugin for Lyrion
 Music Server (LMS), collected from brainstorming sessions (August 2026).
 
@@ -129,6 +140,11 @@ suggest partnership or endorsement.
 
 ## 2. Core Concept
 
+> **Partly superseded (decisions §13.3, §13.10.2).** Ownership now comes in two
+> strengths — *exact* (the collection holds this release) and *version* (it
+> holds a different release under the same master) — so "the owned pressing"
+> in item 1 below is only the exact case. Items 2 and 3 are unaffected.
+
 The plugin connects a user's **physical record collection** (tracked on
 Discogs) with their LMS library (local rips + streaming services), in both
 directions:
@@ -148,6 +164,19 @@ browse, play elsewhere).
 
 ## 3. Matching: Linking LMS Albums to Discogs Releases
 
+> **Largely superseded (decisions §13).** Identification for ownership runs
+> against the user's own Discogs collection during its sync, not as a
+> per-album search at scan time, and ownership is its own pass that
+> deliberately does **not** use the file-state skip the re-match triggers
+> below assume — buying a record changes nothing on disk (decisions §13.1,
+> §13.6, §13.7). Stale below in consequence: the pipeline flowchart and
+> walkthroughs 2 and 4, the badge-derivation note under "Match states" (there
+> is no `discogs_collection` table to join — see §10), the multi-disc rule,
+> which has no Structural tier left to govern, and the route to the
+> reject/dismiss requirement, though that requirement itself stands.
+> `album_key`, the three states and Candidate's two Strict variants survive
+> untouched.
+
 Matching runs at **library scan time** via `Importer.pm` (synchronous, like
 Spotty). Each result is stored in a plugin-owned table:
 
@@ -164,6 +193,14 @@ still cached alongside for fast lookups, refreshed whenever a rescan
 completes, but is never treated as identity.
 
 ### Three matching tiers — a cascading pipeline
+
+> **Superseded (decisions §13.4, §13.8, §13.10.1).** Four claims in this table
+> no longer hold: the cascade itself, since Structural's search-and-fingerprint
+> flow is gone and Fuzzy has no whole-database search left to make; Strict's
+> auto-confirm, which now also requires the tagged release id to be present in
+> the collection; Structural's auto-confirm, since nothing is structurally
+> confirmed; and the `local_tracks == 0` gate named in the Structural row,
+> which is **removed** — all albums are in scope, including all-remote ones.
 
 The tiers run as a **cascade** per album: Strict is tried first; if it can't
 apply (no release ID in tags), Structural is tried; if that finds nothing,
@@ -308,6 +345,16 @@ rescans cheap under the rate limit).
 
 ## 4. Badge (Ownership Indicator)
 
+> **Partly superseded (decisions §13.3, §13.10.2, §13.10.3).** A badge no
+> longer requires a confirmed match: an unambiguous match against the
+> collection — exactly one entry agreeing on both title and artist — badges
+> version ownership with no tag and no local file, so both tests in the
+> derivation flowchart below are wrong, and the badge reads the ownership
+> label the sync wrote (exact, version, or absent) rather than a
+> `discogs_collection` join. The context menu's deferred product decision has
+> been taken: an edition-level match shows *version* ownership. Glyph, corner,
+> colours and per-edition granularity stand.
+
 - **Where**: corner overlay on album artwork, in
   - grid view while browsing, and
   - the Now Playing screen (smaller).
@@ -408,6 +455,11 @@ their mark.
 ---
 
 ## 5. Collection Value & Statistics
+
+> **The sync description is superseded (decisions §13.1, §13.2).** The
+> collection sync is three requests for a 203-item collection, not a slow
+> background job, and it caches nothing — each page is matched in memory and
+> discarded. The features below are unaffected.
 
 Requires a Discogs **personal access token** (`Settings/Auth.pm`); pulls the
 user's Collection (and optionally Wantlist) into a local cache via a slow
@@ -548,6 +600,14 @@ Explicitly **not** automatic/ambient — fires only when the user triggers it.
 
 ## 8. Failure & Degradation Behavior
 
+> **Three claims here are stale (decisions §13.1, §13.2, §13.6).** There is no
+> collection cache — badges render from the stored ownership label; ownership
+> does not use the already-matched skip, since it changes without any file
+> changing; and matching does **not** survive token revocation, because the
+> collection is where identification now happens. Decisions §13.7 adds the
+> rule this section is missing: a failed or partial sync leaves the previous
+> ownership conclusions untouched.
+
 The plugin must stay usable (and quiet) when Discogs is slow, rate-limited,
 or unreachable:
 
@@ -601,6 +661,14 @@ or unreachable:
 
 ## 9. Settings (`Settings.pm`)
 
+> **Partly superseded, and incomplete (decisions §13.4, §13.7, §13.8).** Under
+> Matching there is no tier cascade left to pick a maximum for, no Structural
+> duration margin to configure, and no tier for the multi-disc rule to
+> govern; the maintenance action and review-queue behaviour survive. Under
+> Collection / value, two settings are missing: a manual "Sync collection
+> now" action, and a visible last-synced timestamp — the first thing to
+> check when the badges look wrong.
+
 ### Authentication
 - Discogs personal access token (required for Collection/Wantlist
   features; token storage).
@@ -647,6 +715,20 @@ or unreachable:
 ---
 
 ## 10. Data Model (Sketch)
+
+> **Partly superseded (`TODO.md` 2026-09-07; decisions §13.2, §13.3).** v1
+> builds no `discogs_collection` table — a ruling that **predates decisions
+> §13**: it was taken on 2026-09-07 in `TODO.md` ("no `discogs_collection`
+> mirror in v1"), and decisions §13.2 reaffirms it rather than creating it.
+> That table, the regenerability argument resting on it, and its "roughly 20
+> requests" figure therefore describe something that will not exist;
+> ownership is instead a stored label (exact | version | absent) landing in
+> `discogs_match` at migration 3 (decisions §13.3). **The dual ownership test
+> closing this section has no branch at all for the title-and-artist route**
+> that decisions §13.10.2 and §13.10.3 make the main path — a missing
+> primary path, not merely stale prose. `album_key`, `source_timestamp`, the
+> `snapshot_*` columns and `discogs_no_match` are untouched (decisions
+> §13.8).
 
 ```
 discogs_match
@@ -751,6 +833,12 @@ This join never touches album identity — it is unaffected by the
 
 ## 11. v1 Scope & Roadmap
 
+> **Partly superseded (decisions §13.8, §13.10.1).** v1's matching is Strict
+> plus the collection match, not Strict plus Structural, and all-remote
+> albums are in v1 scope now rather than waiting for v2's Fuzzy tier.
+> ("OAuth" in the Collection-sync line is a separate, older defect — v1 uses
+> a personal access token, decisions §9.1.)
+
 **v1 (core value, smallest surface):**
 - Configurable Discogs tag names, ordered list, with detection (§3, §9).
 - Strict + Structural matching, review queue, manual re-match.
@@ -779,6 +867,10 @@ advantage there and no way to see the physical object.
 
 ## 12. Open Questions / Follow-ups
 
+> **The multi-disc follow-up is superseded (decisions §13.8).** Structural
+> does not run, so there is no duration-vector multi-disc rule left to
+> validate against real release data. The other follow-ups stand.
+
 All original open design questions have been resolved (see §3–§9 for the
 decisions and where they now live). Remaining follow-ups to verify during
 implementation, rather than open design questions:
@@ -805,6 +897,13 @@ implementation, rather than open design questions:
 ---
 
 ## 13. Key Technical Constraints (Summary)
+
+> **The scan-time budget is superseded (decisions §13.1).** There are no
+> per-album searches left to budget: identification costs `ceil(items/100)`
+> requests per collection sync — measured at 3 for 203 items — and scales
+> with the collection, not the library. The rewrite note below asks for
+> corrected per-album figures, which is itself now the wrong question. The
+> rate limit and the LMS threading constraint are unaffected.
 
 - **Discogs API rate limit: 60 requests/min, authenticated** — this is the
   one authoritative statement of this figure; §3 and CLAUDE.md point here
