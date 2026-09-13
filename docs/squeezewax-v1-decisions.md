@@ -2076,6 +2076,11 @@ has no pressing to show — product decision, recorded not taken."
 
 ### 13.4 Only Strict auto-confirms, and only with collection agreement
 
+**Corrected 2026-09-12 — see 13.10.2 and 13.10.3.** A title-and-artist
+match against the collection is sufficient to badge version ownership,
+with no tag and no local file. The rule below conflated identification
+with ownership, which 13.3 already separates.
+
 **Decided: `state = 'confirmed'` requires a Discogs release id read from the
 user's own tags AND that same release id present in the collection.**
 
@@ -2105,6 +2110,10 @@ noise and reproduces the "chore" §8 was trying to avoid. The queue holds albums
 where a human choice would change something.
 
 ### 13.5 All tags are read — for collection-matched albums only
+
+**Population amended 2026-09-12 — see 13.10.1.** The local_tracks == 0
+gate is removed; all albums are in scope. The cost arithmetic below was
+written against 579 local-bearing albums, not the full 765.
 
 **Decided: for an album that matched the collection, read the Discogs tag from
 every local track, not just the primary and fallback. For every other album, the
@@ -2235,6 +2244,10 @@ back (§0.8), so "aborted mid-sync" is reachable and lands under the rule above.
   third axis. UI decision, not a data one; the data supports either.
 
 ### 13.9 Unverified, carried forward
+
+**Partly answered 2026-09-12 by measurement — see 13.10.** Title
+agreement was the largest unmeasured assumption here; it was measured
+and it holds. 13.10.6 carries what remains unverified.
 
 - **That a full rescan cannot recover a newly-bought record's badge** (13.6).
   Inferred from source, not observed.
