@@ -2482,3 +2482,255 @@ LMS album — expected, and they generate no queue work.
 - **The library is 765 albums, not 764.** 13.5 and `TODO.md` both say 764.
   Measured 2026-09-12. Reconciling the cited figure is its own defect.
 
+---
+
+## 14. Rulings taken to unblock the design reconciliation
+
+**Decided 2026-09-13 (design chat).** Seven rulings, taken because
+`docs/squeezewax-design.md` could not be reconciled against §13 without them.
+Six close gaps the reconciliation survey found; one (14.1) was scheduled for
+migration 3 and was pulled forward because design §3 and §10 cannot be written
+around it.
+
+The survey is `plans/design-reconciliation-survey.md`. Section references name
+their document, per `docs/working-agreement.md` §2.
+
+### 14.1 `match_tier` carries no value for a collection-derived match
+
+**Decided: `match_tier` becomes nullable. NULL means "no identification was
+made". The CHECK narrows to `strict | manual`.**
+
+This settles §13.8's "Decide before migration 3" and `TODO.md`'s item of the
+same name.
+
+#### Why NULL rather than a fifth value
+
+`match_tier` records **how we know which Discogs release this album is** —
+provenance of an identification (design §3; build-order step 2, finding 9).
+A collection match establishes no identification. It establishes that the user
+owns a record with this title by this artist (§13.10.2), and never says which
+pressing. There is therefore no provenance to record, and the honest value is
+the absence of one.
+
+A fifth value such as `collection` was considered and rejected: it would put an
+**ownership** fact into an **identification** column, which is the precise
+confusion §13.3 exists to prevent. Reusing `strict` was also rejected — a
+`strict` row asserts that a tag in the user's own file named the release, and
+for a collection-derived row no tag exists. Both alternatives cost the same
+migration as NULL (see below), so neither buys anything for its dishonesty.
+
+**Rejected on a different ground: deriving the tier from other columns.**
+Nothing else in `discogs_match` records *who decided*. `strict` and `manual`
+rows are otherwise identical in shape — both set `discogs_release_id`, both may
+be `confirmed`, both carry the same snapshots. Re-reading file tags to infer it
+would need a file read at query time, which is exactly what `source_timestamp`'s
+skip contract exists to avoid; it is ambiguous when a user manually picks the
+release the tag already names; and the value is load-bearing in **write** logic
+before any file is opened — `manual` is never overwritten by any tier, and
+`invalidateStrict` NULLs `source_timestamp` only `WHERE match_tier = 'strict'`.
+Recorded because build-order step 2 killed a proposed `match_confidence` column
+on exactly this test and the test gives the opposite answer here.
+
+#### Why the CHECK narrows
+
+`structural` and `fuzzy` are no longer produced (§13.8). A schema permitting
+values nothing writes is a trap for the next reader, and a stray value degrades
+to a silently misclassified row rather than an error.
+
+#### What this costs, and it is not what §13.8 assumed
+
+**Verified, `sqlite.org/lang_altertable.html` (page dated 2026-06-04):** SQLite
+cannot modify an existing CHECK constraint. §8 of that page lists the only
+directly supported schema changes as rename table, rename column, add column and
+drop column, and names the 12-step create-copy-drop-rename procedure as the way
+to change a CHECK. §6 records that `ALTER TABLE ... ALTER COLUMN ... DROP NOT
+NULL` was added in SQLite 3.53.0 (2026-04-09) — that covers the nullability half
+only, not the CHECK.
+
+**Where the evidence is thin.** The syntax diagram on that same page shows
+`ADD CONSTRAINT <name> CHECK (expr)` and `DROP CONSTRAINT <name>`, neither of
+which the prose mentions and neither of which appears in §8's list. The diagram
+appears newer than the text. It does not change the outcome: our CHECK is
+written inline and unnamed, so there is nothing to `DROP CONSTRAINT`, and CHECK
+constraints combine conjunctively, so adding one narrows rather than widens.
+
+**Unverified:** which SQLite version is bundled with the DBD::SQLite in `refs/`.
+Not checked. It does not change the outcome either, since the CHECK forces the
+rebuild regardless of what `ALTER COLUMN` supports.
+
+**Consequence: migration 3 is a 12-step table rebuild of `discogs_match`, not an
+`ALTER TABLE ADD COLUMN`.** The ownership column (§13.3) rides along in the new
+CREATE TABLE. Deciding this now rather than later costs the same rebuild and
+runs it before any user has rows.
+
+#### Two obligations on the migration
+
+1. **Count `structural` and `fuzzy` rows before copying, and refuse loudly if
+   any exist.** The narrowed CHECK would otherwise fail mid-copy on the one
+   table that is not disposable. **Inferred, not verified:** none exist, because
+   build-order step 4 stopped after item 3 and the comparison code that writes
+   them was never built. Inference is not sufficient for a destructive
+   migration; the count is the check.
+2. **Assert in the offline suite that a NULL `match_tier` is accepted by the
+   narrowed CHECK.** Standard SQL treats a CHECK evaluating to NULL as not
+   violated, so `CHECK(match_tier IN ('strict','manual'))` should admit NULL
+   without an explicit `OR match_tier IS NULL`. **This is expected behaviour,
+   not verified here** — assert it rather than assume it, alongside the existing
+   assertions that the CHECK rejects `'Strict'` and accepts `'manual'`.
+
+### 14.2 Token revocation
+
+**Decided: revocation is surfaced, not survived silently.**
+
+- A sync failing because the token is rejected logs at **`error`**. Transient
+  sync failures — network, a Discogs 500, a rate-limit stall — continue to log
+  at **`warn`** per §13.7. Two levels, deliberately: a revoked token is not
+  transient and will not clear itself.
+- The settings page shows an **authentication-failure state beside the
+  last-synced timestamp**, which stops advancing. Both the timestamp and the
+  manual sync button are already specified (§13.7; `TODO.md` 2026-09-07), so
+  this adds a state, not a feature.
+- **On-demand actions fail with the re-enter-token prompt.** Nothing degrades to
+  cached data, because §13.2 leaves no cache.
+- Previous ownership conclusions are left untouched, per §13.7. Badges persist
+  unchanged until a sync completes.
+
+#### The reason the settings-page state is not optional
+
+Design §8 promised the user would notice. Under §13.7 they will not: existing
+badges stay, existing browsing works, and the only symptom is that a record
+bought *after* revocation never badges — an absence indistinguishable from a
+week in which nothing was bought. Logs are then the sole signal, which is the
+outcome §13.7 already argued against when it paired the rule with a visible
+timestamp.
+
+#### What is deliberately not promised
+
+`/database/search` returns 200 unauthenticated — **verified**, recorded in
+`TODO.md` 2026-09-07 as a falsification of the documentation. Read-only browsing
+could therefore keep working after revocation at the documented 25/min tier.
+v1 does not promise this. An unauthenticated code path at a different rate limit
+has not been designed or measured, and building one is v2 shape. Design §8's
+"matching and read-only browsing (which work with app-level auth) continue" is
+removed rather than half-rescued: there is no app-level auth in v1 (§9.1).
+
+### 14.3 The Fuzzy tier comes off the roadmap
+
+**Decided: Fuzzy is deleted from design §11's v2 list. Wantlist sync and the
+wantlist badge remain v2, unchanged.**
+
+Fuzzy was a batch matcher against the whole Discogs database, and §13.8 removed
+the search underneath it. What it existed for has two homes already: all-remote
+albums are v1 through the collection (§13.10.1), and identifying an album the
+user does *not* own is v1 through on-demand marketplace lookup (§1 item 10;
+§13.1, "moves from scan time to on demand; it is not lost"). Nothing is left for
+a tier to do.
+
+**Marketplace lookup stays in v1.** Design §7 is not rewritten by the
+reconciliation — the survey lists it as surviving untouched, and that list is
+binding. Scoping it to a minimum is recorded in `TODO.md` as a separate
+question.
+
+#### A clarification the reconciliation must not get wrong
+
+"Not in the collection means not owned" is correct and is the whole ownership
+rule. It does **not** follow that an unowned album records nothing. Three things
+are still recorded for it:
+
+- **its identification**, when a tag supplies one — `discogs_release_id` means
+  identity regardless of ownership (§13.3; §5's ripped-CD case);
+- **the ownership label `absent`**, which is one of three values, not an empty
+  row (§13.3);
+- **the negative**, in `discogs_no_match`, so the album is not re-examined every
+  scan.
+
+**Consequence: the review queue must not key on `state = 'candidate'`.** Under
+§13.4 a tagged, unowned album is a candidate, and most albums are unowned. The
+queue holds only §13.10.5's four contents. Already recorded as a constraint on
+step 5's predicate (`TODO.md` 2026-09-12); restated here because the
+reconciliation writes the prose that could reintroduce it.
+
+### 14.4 No recovery path for a wrong version badge in v1
+
+**Decided: v1 ships no "not my copy" action and no suppression column.**
+
+§13.10.2 auto-badges version ownership with no confirmation step, so a wrongly
+auto-badged album never enters the review queue and the user has no way to
+reverse it. `TODO.md`'s reject/dismiss item loses its ground (c), "a wrong
+Structural auto-confirm", with Structural itself — the failure shape moved to
+the title-and-artist route rather than disappearing.
+
+**Why nothing is built.** Measured zero wrong badges at L2 on page 1
+(§13.10.4). v1 assumes a well-tagged library and a maintained Discogs
+collection; a user whose collection does not reflect their shelves is outside
+what this plugin can help with. **That assumption is stated in design §11 as
+part of the reconciliation** rather than left implicit, so the next reader does
+not re-litigate every gap a messy library would open.
+
+**The bill being accepted, named.** Reusing manual re-match would not work —
+`match_tier = 'manual'` is about identification, and §13.3 puts ownership in a
+different column, so a manual identification would not clear a version-ownership
+label derived from title and artist. Any later fix needs the ownership recompute
+to honour an override, which is a rule and a column, i.e. a migration on
+`discogs_match`. This ruling also overrides build-order step 2's finding 8
+("don't add a column nothing reads yet") in the opposite direction from usual:
+finding 8 is honoured here, at the price of a later migration if the case turns
+out to be real.
+
+**Revisit trigger:** the pages 2–3 measurement (§13.10.6) producing any wrong
+badge, or the generic-title hazard recorded there materialising on the hardware
+pass.
+
+### 14.5 One badge state, not two
+
+**Decided: a single badge for owned. The exact-versus-version distinction
+appears only in the badge context menu.**
+
+§13.8 raised this as open and decided nothing, and both of design §3's and §4's
+flowcharts terminate in a node that cannot be drawn without an answer.
+
+Version ownership is now the main path, not an exception (§13.10.2), so two
+colours would teach the user a distinction that is almost always one value. The
+badge's claim — you own this record — is true either way. Design §9's
+configurable colours are untouched (survey, List 2); the wantlist colour remains
+v2's.
+
+**Revisit after the hardware pass.** This is a UI decision with no schema
+consequence; the data supports either rendering (§13.8).
+
+### 14.6 The badge context menu drops collection metadata in v1
+
+**Decided: date added, acquisition date and condition/grading are not shown in
+v1. The menu shows pressing details, credits, on-demand value and the Discogs
+link.**
+
+§13.2 persists nothing, so these would need a live fetch. **Unverified:**
+whether Discogs exposes a per-release lookup of the caller's own collection
+entry, as opposed to paging the collection. Not checked against the API
+documentation, and nothing in §9 covers it. Design does not assert a mechanism
+that has not been verified; the fields are dropped rather than promised.
+
+These fields feed collection value and statistics, which are v2 and v3 anyway.
+Recorded in `TODO.md` as an endpoint question to settle before they are wanted.
+
+### 14.7 The rewritten request budget has two parts
+
+**Decided: design §13's table is rewritten as two sections — per sync, and per
+user action.**
+
+- **Per sync:** `ceil(items / 100)` requests. **Measured 3 for a 203-item
+  collection** (§9.4, §13.1). This is the whole recurring budget.
+- **Per user action:** marketplace lookup and "view on Discogs" cost one search
+  or one fetch at the moment of the click, **deliberately unbudgeted** under
+  §9.5's rule that a request count bounded by user actions goes live.
+
+The Structural row, the "an album with eight pressings costs nine requests"
+note, and the "needs a full rewrite" note asking for corrected per-album figures
+all describe a flow that no longer runs (§13.8). The 60 req/min rate limit and
+the single-threaded async/sync rule above the table are untouched (survey,
+List 2).
+
+**Why the second part is not merely a footnote.** With only the sync figure, the
+next reader concludes the plugin's entire Discogs cost is three requests, which
+stops being true the first time anyone clicks "check availability".
+
