@@ -388,8 +388,8 @@ Write-path cases, extending `scripts/match-check.pl`:
 ## §5. Hardware verification
 
 Local LMS, same music sources, exactly one Additional Repositories entry.
-Reference library: 764 albums, ~8,700 local tracks across FLAC/MP3/OGG/WMA,
-plus ~2,980 Spotty tracks.
+Reference library: ~~764~~ — corrected 2026-09-12: 765 — albums, ~8,700 local
+tracks across FLAC/MP3/OGG/WMA, plus ~2,980 Spotty tracks.
 
 Record for each item: what was expected, what was observed, and whether any
 claim written as fact was falsified.
@@ -577,9 +577,10 @@ behaviour. The argument is unchanged here.
 - **`Library.pm` must supply the durations at all.** Its iterator currently
   does not — see `TODO.md` and plan §3. That is sequencing, not a decision, and
   is tracked there.
-- **Frequency is unmeasured.** How many of the 764 reference albums carry any
-  NULL `secs` is unknown and needs the real server. It feeds the review-queue
-  sizing question in `TODO.md`, not this ruling — the rule is correct at any
+- **Frequency is unmeasured.** How many of the ~~764~~ — corrected 2026-09-12:
+  765 — reference albums carry any NULL `secs` is unknown and needs the real
+  server. It feeds the review-queue sizing question in `TODO.md`, not this
+  ruling — the rule is correct at any
   frequency; only its cost varies.
 
 **Unverified, carried forward:**

@@ -1936,10 +1936,11 @@ behaviour. The argument is unchanged here.
 - **`Library.pm` must supply the durations at all.** Its iterator currently
   does not — see `TODO.md` and plan §3. That is sequencing, not a decision, and
   is tracked there.
-- **Frequency is unmeasured.** How many of the 764 reference albums carry any
-  NULL `secs` is unknown and needs the real server. It feeds the review-queue
-  sizing question in `TODO.md`, not this ruling — the rule is correct at any
-  frequency; only its cost varies.
+- **Frequency is unmeasured.** How many of the ~~764~~ — **corrected
+  2026-09-12: 765** — reference albums carry any NULL `secs` is unknown and
+  needs the real server. It feeds the review-queue sizing question in
+  `TODO.md`, not this ruling — the rule is correct at any frequency; only its
+  cost varies.
 
 **Unverified, carried forward:**
 
@@ -1994,8 +1995,9 @@ Discogs collection, fetched by sync, not against `/database/search`.**
 | Re-run cost | hours | seconds |
 
 Measured collection sync cost is already recorded in §9.4: **3 requests for a
-203-item collection.** Against a 764-album library, §8's flow was measured in
-hours at 60 requests per minute (§10.8).
+203-item collection.** Against a ~~764~~ — **corrected 2026-09-12: 765** —
+album library, §8's flow was measured in hours at 60 requests per minute
+(§10.8).
 
 **What this costs.** §8's flow could identify albums the user does *not* own.
 This one cannot — an album absent from the collection gets no Discogs identity
@@ -2104,8 +2106,9 @@ be presented as one.
 **Required, and not optional: the review queue must not fill with albums the
 user does not own.** An album correctly identified from a tag but simply absent
 from the collection needs no human decision — there is nothing for the user to
-do about it. Against a few-hundred-item collection and a 764-album library, most
-albums are unowned; a candidate predicate that catches them turns the queue into
+do about it. Against a few-hundred-item collection and a ~~764~~ — **corrected
+2026-09-12: 765** — album library, most albums are unowned; a candidate
+predicate that catches them turns the queue into
 noise and reproduces the "chore" §8 was trying to avoid. The queue holds albums
 where a human choice would change something.
 
@@ -2125,7 +2128,9 @@ maintained collection and is not worth paying 12x the file reads to
 accommodate."* The reasoning was sound against the population it considered —
 every album in the library. Scoped to collection-matched albums only, the
 arithmetic inverts: 12x on a few hundred owned albums is **cheaper in absolute
-terms** than the rule it replaces was on 764.
+terms** than the rule it replaces was on ~~764~~ — **corrected 2026-09-12:
+579** — since a two-track tag read needs local files, so the old rule's real
+population was local-bearing albums, not the library's full 765 (13.10.1).
 
 It also puts the expensive check where the stakes are. Tags disagreeing on an
 owned album means a badge is about to be wrong. On an unowned album, nothing
@@ -2259,9 +2264,10 @@ and it holds. 13.10.6 carries what remains unverified.
   canonical and accepts it, but `Tags.pm`'s header also records that discogs.com
   returns 403 to automated fetches, so this was never confirmed against the live
   site. One browser click settles it; it is on the hardware list.
-- **The proportion of the 764 reference albums that match the collection at
-  all.** Every cost estimate in 13.5 and 13.6 rests on "a few hundred", which is
-  the collection's size, not the measured overlap.
+- **The proportion of the ~~764~~ — corrected 2026-09-12: 765 — reference
+  albums that match the collection at all.** Every cost estimate in 13.5 and
+  13.6 rests on "a few hundred", which is the collection's size, not the
+  measured overlap.
 - **Whether LMS album titles and Discogs `basic_information.title` agree often
   enough for title-led matching to work**, and what normalisation is needed.
   §8 recorded that title normalisation cut 7 search masters to 1–2; nothing

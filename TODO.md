@@ -68,8 +68,9 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-12: the review queue must not fill with albums the user does
       not own (§13.4).** An album identified from a tag but absent from the
       collection needs no human decision. Against a few-hundred-item
-      collection and a 764-album library most albums are unowned, so a
-      candidate predicate that catches them turns the queue into noise. This
+      collection and a ~~764~~ — corrected 2026-09-12: 765 — album library,
+      most albums are unowned, so a candidate predicate that catches them
+      turns the queue into noise. This
       is a constraint on step 5's predicate, not a preference.
 - [ ] **2026-09-11: plan §5 item 4 measures the confirm/candidate split as ONE
       ratio, but there are now five routes into the review queue** —
@@ -433,9 +434,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-11: measure how many of the 764 reference albums have any local
-      track with secs IS NULL.** Feeds the review-queue sizing item below; the
-      §12.2 rule is correct at any frequency, only its cost varies.
+- [ ] **2026-09-11: measure how many of the ~~764~~ — corrected 2026-09-12:
+      765 — reference albums have any local track with secs IS NULL.** Feeds
+      the review-queue sizing item below; the §12.2 rule is correct at any
+      frequency, only its cost varies.
 - [x] **LMS multi-disc grouping, verified 2026-09-07.** LMS GROUPS
       multi-disc sets into one `albums` row. Verified three ways: (a)
       whole-set track counts — "Die 100 besten Ostsongs" `discc=6` with
@@ -561,13 +563,13 @@ Shared reminder list. Both I and Claude Code read and update this.
       against SEARCH RESULTS, not against a collection. If real agreement is
       60%, the design still works but the review queue is far larger than
       anyone is picturing. Measurable now: `collection-page1.json` is
-      captured and the 764-album reference library is on hand. Do this
-      BEFORE the build order is rewritten. Recorded as §13.9's largest
-      unmeasured assumption.
-- [ ] **2026-09-12: what proportion of the 764 reference albums match the
-      collection at all?** Every cost estimate in §13.5 and §13.6 rests on
-      "a few hundred", which is the collection's size, not the measured
-      overlap.
+      captured and the ~~764~~ — corrected 2026-09-12: 765 — album reference
+      library is on hand. Do this BEFORE the build order is rewritten.
+      Recorded as §13.9's largest unmeasured assumption.
+- [ ] **2026-09-12: what proportion of the ~~764~~ — corrected 2026-09-12:
+      765 — reference albums match the collection at all?** Every cost
+      estimate in §13.5 and §13.6 rests on "a few hundred", which is the
+      collection's size, not the measured overlap.
 - [ ] **2026-09-12: confirm that a full rescan cannot recover a
       newly-bought record's badge (§13.6).** Inferred from `_canSkip` and
       `source_timestamp`'s definition, both read, but never observed. If
