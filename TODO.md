@@ -60,6 +60,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
+      it now contradict decisions 13.10.1 and must be changed by the build
+      order. The gate came from Structural's duration fingerprint, which no
+      longer runs. It excluded 186 of 765 albums, 24%.
 - [ ] **2026-09-12: plans/build-order-step-4-structural-matching.md is stale in
       its entirety** — it plans decisions §8's search-first flow, which
       decisions §13.8 supersedes. Its §6 still calls for a "design §13 rewrite"
@@ -307,6 +311,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] 2026-09-12: examine the 8 artist disagreements individually. Eight
+      unrelated cases are noise the queue absorbs; one repeated pattern is a
+      data-format fact deserving a declared rule, like the Discogs ` (N)`
+      strip. Undetermined. See decisions 13.10.6.
 - [ ] **2026-09-12: what `match_tier` value does a collection-derived match
       carry?** The CHECK allows `strict`, `structural`, `fuzzy`, `manual`. A
       title-plus-artist match against the collection is a genuinely different
@@ -434,6 +442,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] 2026-09-12: measure collection pages 2 and 3. Page 1 is 100 of 203
+      items, sorted by label, not a random sample. Decisions 13.10.6 carries
+      the Various / Various Artists vocabulary risk as UNRESOLVED, not
+      absent: it measured zero on page 1 only because no compilation matched
+      there, and there are 95 LMS compilations. Pages 2-3 could move the
+      auto-badge rate materially. Needs a token and a live sync.
 - [ ] **2026-09-11: measure how many of the ~~764~~ — corrected 2026-09-12:
       765 — reference albums have any local track with secs IS NULL.** Feeds
       the review-queue sizing item below; the §12.2 rule is correct at any
