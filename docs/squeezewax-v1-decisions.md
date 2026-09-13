@@ -2351,12 +2351,21 @@ auto-badge rather than only breaking ties among collisions.
   artist). One album does not justify designing a tiebreak; the queue handles it.
 - **One collection entry → several LMS albums.** Legitimate and expected — a rip
   and a stream of one record are two albums for one owned item, and **both should
-  badge**. **Measured: 11**, of which 9 are exactly that shape. Removing the gate
+  badge**. ~~**Measured: 11**, of which 9 are exactly that shape.~~ —
+  **corrected 2026-09-12, re-measured at L2: 10, of which 9 are exactly that
+  shape.** The L5-era count of 11 included the Biosphere *Substrata* /
+  *Substrata²* pair, which only collided because L3's punctuation-stripping
+  destroyed the distinguishing superscript (13.10.4); at L2 it does not
+  collide and the pair is not in this direction at all. Removing the gate
   (13.10.1) increases this direction by construction, so a rise here is the
   expected consequence of that decision, not a regression.
 
-Measured auto-badge split at the time of the amendment: **88 of 97 matches
-auto-badge, 8 queue on artist disagreement, 1 queues as ambiguous.**
+~~Measured auto-badge split at the time of the amendment: **88 of 97 matches
+auto-badge, 8 queue on artist disagreement, 1 queues as ambiguous.**~~ —
+**corrected 2026-09-12, re-measured at L2: 87 of 96 matches auto-badge, 8
+queue on artist disagreement, 1 queues as ambiguous.** The one-match, one-badge
+difference from the L5-era figure is exactly the *Substrata²* mismatch
+(13.10.4); it stopped matching at all once L2 became the analysis rung.
 
 #### 13.10.4 The normalisation ladder stops at L2
 
@@ -2392,11 +2401,19 @@ are Biosphere. Both badge, one wrongly.
 Trading one missing badge for one wrong badge is a bad trade at 1:1 under this
 project's stated risk posture, and would remain bad at 10:1.
 
-**Inferred, needs a re-run to confirm:** dropping L3 should eliminate that wrong
-badge entirely, since *Substrata* and *Substrata²* differ at L0, L1 and L2. The
-exact recomputed match and auto-badge figures have **not** been re-measured;
-`scripts/title-agreement.pl` makes that cheap and it should be done before the
-build order fixes any number.
+**Measured 2026-09-12, confirmed:** re-running `scripts/title-agreement.pl`
+with the collision analysis, auto-badge split, overlap figures and example
+failures moved to run at L2 shows the *Substrata* wrong badge is gone.
+*Substrata* and *Substrata²* no longer share a
+normalised key at L2, so album 2971 does not match release 15775 at all — it
+drops out of the auto-badge split entirely rather than landing in a "wrong
+badge" bucket. The L0–L5 ladder table above is unchanged from the run that
+produced this decision, confirming the library and fixture did not change
+under us. Recomputed at L2: 96 title matches (down from 97 at L5 — the one
+match *Substrata²* only picked up via L3's punctuation-stripping), split 87
+auto-badge, 8 queue on artist disagreement, 1 queues as ambiguous. Direction
+(b)'s collision count drops from 11 to 10 correspondingly (13.10.3). Zero
+groups produce a wrong badge at L2.
 
 L4 and L5 are removed for gaining nothing. L2 is retained despite gaining nothing
 as cheap defensive hygiene against a leading or trailing space.
