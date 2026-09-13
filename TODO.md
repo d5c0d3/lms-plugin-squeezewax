@@ -60,6 +60,26 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
+      rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** Verified
+      against `sqlite.org/lang_altertable.html` (page dated 2026-06-04): SQLite
+      cannot modify an existing CHECK constraint; §8 names the
+      create-copy-drop-rename procedure as the only route. `ALTER COLUMN ...
+      DROP NOT NULL` exists as of SQLite 3.53.0 (2026-04-09) but covers the
+      nullability half only. The ownership column (§13.3) and the narrowed
+      `match_tier` CHECK (§14.1) therefore ride one rebuild. Two obligations,
+      both blocking:
+      (a) COUNT any `match_tier IN ('structural','fuzzy')` rows before copying
+          and REFUSE LOUDLY if any exist — the narrowed CHECK would otherwise
+          fail mid-copy on the one table that is not disposable. That none
+          exist is INFERRED (step 4 stopped after item 3), not verified.
+          Inference is not sufficient for a destructive migration.
+      (b) ASSERT in the offline suite that a NULL `match_tier` is accepted by
+          `CHECK(match_tier IN ('strict','manual'))`. Standard SQL treats a
+          CHECK evaluating to NULL as not violated, so no explicit
+          `OR match_tier IS NULL` should be needed — expected, NOT verified
+          here. Assert alongside the existing cases (rejects `'Strict'`,
+          accepts `'manual'`).
 - [ ] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
       superseded by decisions §13 and §13.10 and has NOT been reconciled.
       working-agreement §2 makes design win over everything and calls decisions
@@ -320,21 +340,52 @@ Shared reminder list. Both I and Claude Code read and update this.
       `Match.pm::_recordNoMatch`'s delete predicate clears automatically; and
       the edition-level context menu, which needs a version picker promoting
       to manual — refinement, not rejection.
+      2026-09-13: ground (c) is obsolete — Structural no longer exists
+      (decisions §13.8). The failure shape moved rather than vanished: a wrong
+      VERSION badge from the title-and-artist route auto-badges without ever
+      entering the queue, so there is nothing to reject. v1 ships no recovery
+      path for it by decision — decisions §14.4 — on the stated assumption of a
+      well-tagged library and a maintained Discogs collection. Grounds (a) and
+      (b) are unaffected and still require reject/dismiss.
 
 ## Open design questions
 
+- [x] **2026-09-13, RESOLVED: one badge state, not two.** Decisions §13.8 left
+      exact-versus-version open as a UI question; both design §3's and §4's
+      flowcharts terminate in a node that cannot be drawn without it. Version
+      ownership is the main path (§13.10.2), so two colours would teach a
+      distinction that is almost always one value. Distinction shows in the
+      badge context menu only. Revisit after the hardware pass. Decisions §14.5.
+- [ ] **2026-09-13: define the minimum scope for on-demand marketplace
+      lookup.** Marketplace lookup stays in v1 (decisions §1 item 10, §13.1,
+      §14.3), but "at a minimum" was the instruction and design §7 currently
+      specifies a compact summary line, an expandable full listing, and five
+      user-configurable filter/sort axes in Settings. Design §7 is on the
+      reconciliation survey's List 2 as surviving untouched, so the
+      reconciliation session must NOT trim it. Its own session. Candidate cut:
+      summary line plus link-out, no filters, filters to v2.
+- [ ] **2026-09-13: does Discogs expose a per-release lookup of the caller's
+      own collection entry?** UNVERIFIED — not checked against the API
+      documentation, and decisions §9 does not cover it. Needed only if the
+      badge context menu is ever to show date added, acquisition date or
+      condition/grading; decisions §14.6 drops those from v1 precisely because
+      the mechanism is unverified and §13.2 persists nothing. If the only route
+      is paging the whole collection, the feature is a sync-shaped cost wearing
+      a context-menu shape. Settle before collection value or statistics
+      (v2/v3) are designed.
 - [ ] 2026-09-12: examine the 8 artist disagreements individually. Eight
       unrelated cases are noise the queue absorbs; one repeated pattern is a
       data-format fact deserving a declared rule, like the Discogs ` (N)`
       strip. Undetermined. See decisions 13.10.6.
-- [ ] **2026-09-12: what `match_tier` value does a collection-derived match
-      carry?** The CHECK allows `strict`, `structural`, `fuzzy`, `manual`. A
-      title-plus-artist match against the collection is a genuinely different
-      ORIGIN, which is what `match_tier` records — so unlike §3a's conflict
-      case, a fifth value is defensible rather than expressing something
-      `state` already expresses. Against: a migration, an amendment to design
-      §3 and §10, and every future reader. DECIDE BEFORE MIGRATION 3.
-      See §13.8.
+- [x] **2026-09-12, RESOLVED 2026-09-13: what `match_tier` value does a
+      collection-derived match carry?** None. `match_tier` becomes NULLABLE,
+      NULL meaning "no identification was made", and the CHECK narrows to
+      `strict | manual`. A collection match establishes ownership, not
+      identity, so there is no provenance to record; a fifth value would put
+      an ownership fact in an identification column, which is what decisions
+      §13.3 exists to prevent. Decided BEFORE migration 3 rather than at it,
+      because design §3 and §10 could not be written around the hole. See
+      decisions §14.1.
 - [x] **2026-09-11, RESOLVED: sub_tracks is an unrecorded tracklist shape, and
       the type_ allowlist does not recurse into it.** See
       squeezewax-v1-decisions.md §12.1. release-2516.json's single type_
@@ -454,6 +505,17 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-13: the pages 2–3 measurement is now also the revisit trigger
+      for two decisions.** Already recorded above as its own item; noting the
+      dependants so they are not missed. Decisions §14.4 (no recovery path for
+      a wrong version badge) rests on zero wrong badges measured at L2 on page
+      1, and §13.10.6's generic-title hazard is the shape that would falsify
+      it. Any wrong badge on pages 2–3 reopens §14.4.
+- [ ] **2026-09-13: confirm the badge's single-state rendering after the
+      hardware pass.** Decisions §14.5 chose one badge on the reasoning that
+      version ownership is the common case. If the hardware pass shows exact
+      ownership is the common case instead, the trade-off inverts. Data
+      supports either (§13.8); no schema consequence.
 - [ ] 2026-09-12: measure collection pages 2 and 3. Page 1 is 100 of 203
       items, sorted by label, not a random sample. Decisions 13.10.6 carries
       the Various / Various Artists vocabulary risk as UNRESOLVED, not
@@ -637,6 +699,20 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-13: which SQLite version ships in the DBD::SQLite under
+      `refs/`?** UNVERIFIED — not checked. It did not change the §14.1
+      decision, since the CHECK forces a table rebuild whatever `ALTER COLUMN`
+      supports, but it will matter the next time a schema change looks cheap.
+      One grep by Claude Code.
+- [ ] **2026-09-13: `sqlite.org/lang_altertable.html`'s prose and its syntax
+      diagram disagree.** The diagram shows `ADD CONSTRAINT <name> CHECK
+      (expr)` and `DROP CONSTRAINT <name>`; the prose never mentions either and
+      §8's list of supported changes omits both. The diagram looks newer than
+      the text. Recorded because a future reader hitting the diagram will
+      conclude a CHECK can be altered in place. It could not have helped §14.1
+      regardless: our CHECK is inline and unnamed, so there is nothing to
+      `DROP CONSTRAINT`, and CHECKs combine conjunctively so adding one narrows
+      rather than widens.
 - [ ] 2026-09-12: decisions §13 and §13.10 were written into
       docs/squeezewax-v1-decisions.md, which working-agreement §2 defines as
       reasoning and evidence rather than live spec. The spec change went into
