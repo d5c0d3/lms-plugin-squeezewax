@@ -2237,7 +2237,16 @@ back (§0.8), so "aborted mid-sync" is reachable and lands under the rule above.
   `match_tier` records — so unlike §3a's conflict case, a fifth value is
   defensible here rather than expressing something `state` already expresses.
   Against it: a new value means a migration, an amendment to design §3 and §10,
-  and every future reader. **Decide before migration 3.**
+  and every future reader. ~~**Decide before migration 3.**~~ — **Decided 2026-09-13, see §14.1:
+  `match_tier` becomes nullable and NULL is what a collection-derived match
+  carries. Neither a fifth value nor an existing one — the column records the
+  provenance of an *identification*, and a collection match makes none.** The
+  reasoning above is preserved because one of its premises was wrong in a way
+  worth keeping: "a new value means a migration" treated a migration as the cost
+  of the fifth value specifically. It is not. SQLite cannot alter an existing
+  CHECK constraint at all (verified, `sqlite.org/lang_altertable.html`, the ALTER
+  TABLE page's §8), so **every** option here required the same 12-step table
+  rebuild, and the objection did not distinguish between them.
 - **Whether duration comparison survives as a disambiguator.** The candidate set
   is now tiny, so it is rarely needed — but a collection holding two pressings of
   one album is exactly where title and artist cannot separate them. The
@@ -2246,7 +2255,11 @@ back (§0.8), so "aborted mid-sync" is reachable and lands under the rule above.
 - **Whether the badge shows one state or two** — exact versus version as two
   colours, or one badge with the distinction only in the context menu. Design §9
   already has configurable badge colours for owned and wantlist; this would be a
-  third axis. UI decision, not a data one; the data supports either.
+  third axis. UI decision, not a data one; the data supports either. — **Decided 2026-09-13, see §14.5: one badge, with
+  the exact-versus-version distinction in the context menu only. Revisit after
+  the hardware pass.** The deciding argument is not in the text above: version
+  ownership is the *main* path under §13.10.2, not an exception, so two colours
+  would teach a distinction that is almost always one value.
 
 ### 13.9 Unverified, carried forward
 
@@ -2540,16 +2553,16 @@ to a silently misclassified row rather than an error.
 #### What this costs, and it is not what §13.8 assumed
 
 **Verified, `sqlite.org/lang_altertable.html` (page dated 2026-06-04):** SQLite
-cannot modify an existing CHECK constraint. §8 of that page lists the only
+cannot modify an existing CHECK constraint. the ALTER TABLE page's §8 lists the only
 directly supported schema changes as rename table, rename column, add column and
 drop column, and names the 12-step create-copy-drop-rename procedure as the way
-to change a CHECK. §6 records that `ALTER TABLE ... ALTER COLUMN ... DROP NOT
+to change a CHECK. that page's §6 records that `ALTER TABLE ... ALTER COLUMN ... DROP NOT
 NULL` was added in SQLite 3.53.0 (2026-04-09) — that covers the nullability half
 only, not the CHECK.
 
 **Where the evidence is thin.** The syntax diagram on that same page shows
 `ADD CONSTRAINT <name> CHECK (expr)` and `DROP CONSTRAINT <name>`, neither of
-which the prose mentions and neither of which appears in §8's list. The diagram
+which the prose mentions and neither of which appears in that §8 list. The diagram
 appears newer than the text. It does not change the outcome: our CHECK is
 written inline and unnamed, so there is nothing to `DROP CONSTRAINT`, and CHECK
 constraints combine conjunctively, so adding one narrows rather than widens.

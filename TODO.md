@@ -63,8 +63,8 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
       rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** Verified
       against `sqlite.org/lang_altertable.html` (page dated 2026-06-04): SQLite
-      cannot modify an existing CHECK constraint; §8 names the
-      create-copy-drop-rename procedure as the only route. `ALTER COLUMN ...
+      cannot modify an existing CHECK constraint; the ALTER TABLE page's §8
+      names the create-copy-drop-rename procedure as the only route. `ALTER COLUMN ...
       DROP NOT NULL` exists as of SQLite 3.53.0 (2026-04-09) but covers the
       nullability half only. The ownership column (§13.3) and the narrowed
       `match_tier` CHECK (§14.1) therefore ride one rebuild. Two obligations,
@@ -707,10 +707,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-13: `sqlite.org/lang_altertable.html`'s prose and its syntax
       diagram disagree.** The diagram shows `ADD CONSTRAINT <name> CHECK
       (expr)` and `DROP CONSTRAINT <name>`; the prose never mentions either and
-      §8's list of supported changes omits both. The diagram looks newer than
-      the text. Recorded because a future reader hitting the diagram will
-      conclude a CHECK can be altered in place. It could not have helped §14.1
-      regardless: our CHECK is inline and unnamed, so there is nothing to
+      that page's §8 list of supported changes omits both. The diagram looks
+      newer than the text. Recorded because a future reader hitting the diagram
+      will conclude a CHECK can be altered in place. It could not have helped
+      §14.1 regardless: our CHECK is inline and unnamed, so there is nothing to
       `DROP CONSTRAINT`, and CHECKs combine conjunctively so adding one narrows
       rather than widens.
 - [ ] 2026-09-12: decisions §13 and §13.10 were written into
