@@ -60,6 +60,18 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [ ] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
+      superseded by decisions §13 and §13.10 and has NOT been reconciled.
+      working-agreement §2 makes design win over everything and calls decisions
+      "not live spec", so the precedence rule currently points at the stale
+      document — a build session following the rule would build the
+      search-first Structural flow. Temporary markers are in place as of this
+      commit; they are scaffolding, not the fix. 20 contradicted places surveyed,
+      listed in plans/design-reconciliation-survey.md along with what survives
+      untouched. The reconciliation is a design-chat session: design gets
+      rewritten in its own voice around the collection-first flow, citing
+      decisions §13 for the reasoning, with no superseded prose retained (design
+      is live spec, not a record). Do the reconciliation BEFORE the build order.
 - [ ] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
       it now contradict decisions 13.10.1 and must be changed by the build
       order. The gate came from Structural's duration fingerprint, which no
@@ -625,6 +637,21 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] 2026-09-12: decisions §13 and §13.10 were written into
+      docs/squeezewax-v1-decisions.md, which working-agreement §2 defines as
+      reasoning and evidence rather than live spec. The spec change went into
+      the reasoning file, across several sessions, and nothing caught it until
+      the design doc was surveyed. Recorded so the pattern is visible: a
+      decision that changes WHAT the plugin does belongs in design, with
+      decisions carrying WHY. Worth a line in working-agreement §7.4, which
+      currently lists decision records as a design-chat output without saying
+      that a scope change also needs a design edit.
+- [ ] 2026-09-12: two defects in docs/squeezewax-design.md found during the §13
+      marker survey, outside §13's scope and not fixed. §10 cites "roughly 20
+      requests (§4)" — wrong figure, and §4 is the Badge section, not a
+      request-budget section. §11 says "OAuth + Collection sync", contradicted
+      by decisions §9.1. Both predate decisions §13. Sweep them up during the
+      reconciliation rather than separately.
 - [ ] **2026-09-12: bare §N references are ambiguous across design, decisions
       and the plans.** Convention recorded in working-agreement §2 as of this
       commit; the two known collisions (§12, §13) are fixed. Older bare
