@@ -2255,3 +2255,194 @@ back (§0.8), so "aborted mid-sync" is reachable and lands under the rule above.
   measures it against a collection. This is the single largest unmeasured
   assumption in this record.
 
+### 13.10 Amendments of 2026-09-12, after measurement
+
+**Five corrections to this section, taken together because they are one
+decision.** Four were decided in the design chat while specifying the title
+agreement measurement; the fifth follows from the measurement's results. The
+measurement is recorded in `plans/title-agreement-measurement.md` and its script
+is `scripts/title-agreement.pl`.
+
+The original text of 13.4, 13.5 and 13.9 is left standing. What was believed and
+why it was wrong is the useful part (working agreement §7.7).
+
+#### 13.10.1 The `local_tracks == 0` gate is removed
+
+**Decided: all albums are in scope, including all-remote ones.**
+
+The gate exists in `Importer.pm` and is stated in §8. Its reason was Structural's
+duration fingerprint: you cannot read durations from an album with no local
+files. 13.1 replaced that flow with title-and-artist matching against the
+collection, which needs no local file at all. The gate's rationale evaporated and
+nobody noticed, because it was inherited from a tier that no longer runs.
+
+On the reference library this excluded **186 of 765 albums, 24%** — measured
+2026-09-12. Streaming an album you own on vinyl is arguably where the badge is
+most useful: the record is on the shelf and you are streaming it because pulling
+it out is a faff.
+
+**Measured consequence:** removing the gate matched **10 additional owned
+records**. Modest in absolute terms, but 9 of the 11 direction-(b) groups are
+exactly those stream halves, so the gate was systematically dropping the second
+copy of records the user demonstrably owns.
+
+`Importer.pm`'s gate and the comment above it now contradict this record and
+must be changed by the build order.
+
+#### 13.10.2 Correction to 13.4 — a title match is sufficient to badge
+
+**13.4 as written was wrong.** It said only Strict auto-confirms. That was
+reasoned about *identification* — which release this album is — where inference
+genuinely is dangerous, because a duration vector cannot distinguish pressings.
+
+But the badge does not read identification. 13.3 put ownership in its own column
+precisely so it would not. The two claims are different sizes:
+
+- **Identification:** "this LMS album *is* Discogs release 456." Needs evidence
+  about the object.
+- **Version ownership:** "you own a record called *Violator* by Depeche Mode."
+  Needs only that title and artist agree.
+
+The collection is ground truth about what the user owns. There is no inference to
+get wrong in the way 13.4 was guarding against.
+
+**Decided: a title-and-artist match against the collection is sufficient to badge
+version ownership, with no Strict tag and no local file.** Strict-confirmed
+*exact* ownership is unchanged.
+
+As written, 13.4 also violated its own hard constraint. It required that the
+review queue not fill with items where no human choice changes anything — and
+then routed every all-remote album into it. On the reference library that was up
+to 186 unclearable items.
+
+This correction was surfaced by Claude Code reading 13.4 against the measurement
+population and asking what happens to albums that can never carry a tag. The
+question was better than the record it questioned.
+
+#### 13.10.3 The unambiguous-match guard
+
+A wrong version badge is still a wrong badge, so 13.10.2 needs a bound.
+
+**Decided: version ownership auto-badges only on an unambiguous match — exactly
+one collection entry agreeing on both title and artist.** Everything else is a
+review-queue item: several candidates, artist disagreeing, or artist absent on
+either side.
+
+**Consequence: artist is load-bearing, not decorative.** It gates every
+auto-badge rather than only breaking ties among collisions.
+
+**The two collision directions are different problems and must never be summed:**
+
+- **One LMS album → several collection entries.** Ambiguous. Queue.
+  **Measured: 1 of 765**, and artist did not resolve it (two pressings, same
+  artist). One album does not justify designing a tiebreak; the queue handles it.
+- **One collection entry → several LMS albums.** Legitimate and expected — a rip
+  and a stream of one record are two albums for one owned item, and **both should
+  badge**. **Measured: 11**, of which 9 are exactly that shape. Removing the gate
+  (13.10.1) increases this direction by construction, so a rise here is the
+  expected consequence of that decision, not a regression.
+
+Measured auto-badge split at the time of the amendment: **88 of 97 matches
+auto-badge, 8 queue on artist disagreement, 1 queues as ambiguous.**
+
+#### 13.10.4 The normalisation ladder stops at L2
+
+**Decided: normalise no further than case-folding and whitespace collapse.
+Punctuation-stripping, article-stripping and bracket-suffix-stripping are not
+used.**
+
+The measurement applied a fixed six-rung ladder and reported each rung. Across
+100 collection entries and 765 albums:
+
+| Rung | Rule | LMS gain | Collection gain |
+|---|---|---|---|
+| L0 | exact, after decode | 95 | 85 |
+| L1 | + case-folded | +1 | 0 |
+| L2 | + whitespace collapsed | 0 | 0 |
+| L3 | + punctuation removed | +1 | 0 |
+| L4 | + leading English article removed | 0 | 0 |
+| L5 | + trailing bracket suffix removed | 0 | 0 |
+
+**The entire ladder buys two albums and zero collection entries.** Titles already
+agree. §8's title-normalisation apparatus was measured against *search results*
+and does not transfer to this population — a finding about the corpus, not a
+failure of the ladder.
+
+**L3 is removed because it is net-negative, not merely useless.** It gained one
+album and caused one **wrong badge**: release 15775 *Substrata* (Biosphere)
+matched both album 2969 *Substrata* and album 2971 *Substrata²*, which are
+different records — the second is the sequel. The superscript `²` is Unicode
+category No and therefore not `\p{Alnum}`, so punctuation-stripping deletes it
+and collapses two distinct titles onto one key. Artist cannot separate them; both
+are Biosphere. Both badge, one wrongly.
+
+Trading one missing badge for one wrong badge is a bad trade at 1:1 under this
+project's stated risk posture, and would remain bad at 10:1.
+
+**Inferred, needs a re-run to confirm:** dropping L3 should eliminate that wrong
+badge entirely, since *Substrata* and *Substrata²* differ at L0, L1 and L2. The
+exact recomputed match and auto-badge figures have **not** been re-measured;
+`scripts/title-agreement.pl` makes that cheap and it should be done before the
+build order fixes any number.
+
+L4 and L5 are removed for gaining nothing. L2 is retained despite gaining nothing
+as cheap defensive hygiene against a leading or trailing space.
+
+A side effect worth recording: the measurement had to apply enabled rules
+bracket-strip-first rather than in table order, because L3 destroys the brackets
+L5 exists to strip and would have forced L5's gain to zero by construction. With
+L3 and L5 both gone, that ordering problem disappears.
+
+#### 13.10.5 The review-queue formula, corrected
+
+The design chat stated two formulas one message apart and they disagreed by 8
+items. Caught by Claude Code in the measurement report. The badging rule is
+correct; the formula omitted a route it had itself just specified.
+
+**The queue holds, and only holds:**
+
+- ambiguous matches — one LMS album, several collection entries (13.10.3)
+- matches where artist disagrees or is absent on either side (13.10.3)
+- tag disagreements across an owned album's tracks (13.5)
+- Strict conflicts (§3a)
+
+**It does not hold** one item per unowned album, nor one per streamed album.
+Measured: **9 items from one collection page**, scaling to roughly 18 across the
+collection against 765 albums — assuming pages 2 and 3 behave like page 1, which
+the label sort makes shaky. Tag disagreements and Strict conflicts are
+**unmeasured**; they need the importer and have not been estimated.
+
+15 of 100 collection entries matched nothing. Those are owned records with no
+LMS album — expected, and they generate no queue work.
+
+#### 13.10.6 Unverified, carried forward
+
+- **Pages 2 and 3 of the collection have not been measured.** The fixture is page
+  1 of 3, 100 of 203 items, sorted by label and therefore not a random sample.
+  Every figure in 13.10 is a one-page figure.
+- **The `Various` / `Various Artists` vocabulary difference is unresolved, not
+  absent.** LMS names compilation artists `Various Artists`; Discogs uses
+  `Various`. It measured **zero impact on page 1 only because no compilation
+  matched there** — with 95 LMS compilations and 7 `Various` entries on that page
+  alone, pages 2–3 could move the auto-badge rate materially. An equivalence rule
+  was deliberately not added mid-measurement. If it is added later it is a
+  **vocabulary mapping between two catalogues**, the same class as stripping
+  Discogs' trailing ` (N)` disambiguator, and must be justified on that ground
+  rather than on improving a number. §11's finding — that an LMS compilation's
+  album artist is a *placeholder* rather than a name — bears directly on whether
+  artist agreement carries real evidence for compilations at all.
+- **The 8 artist disagreements have not been examined individually.** Eight
+  unrelated cases are noise the queue absorbs; one repeated pattern would be a
+  data-format fact deserving a declared rule. The distinction is unmeasured.
+- **The artist figures rest on an SQL approximation** of
+  `Slim::Schema::Album::artists`, exact for 763 of 765 albums on this server
+  (`bandInArtists` off; `variousArtistAutoIdentification` on, so only
+  compilations without an ALBUMARTIST diverge — albums 3589 and 3596). Exact
+  *for this server's prefs*, not in general.
+- **Generic titles are a live hazard.** *Greatest Hits* (release 49747, Depeche
+  Mode) matched four LMS albums by four different artists. Artist correctly
+  eliminated all four, so no wrong badge — but it shows the failure shape, and
+  artist is the only thing standing between it and one.
+- **The library is 765 albums, not 764.** 13.5 and `TODO.md` both say 764.
+  Measured 2026-09-12. Reconciling the cited figure is its own defect.
+
