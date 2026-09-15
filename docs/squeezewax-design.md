@@ -429,16 +429,6 @@ manual button in Settings — set out in §9 and
 
 ## 4. Badge (Ownership Indicator)
 
-> **Partly superseded (decisions §13.3, §13.10.2, §13.10.3).** A badge no
-> longer requires a confirmed match: an unambiguous match against the
-> collection — exactly one entry agreeing on both title and artist — badges
-> version ownership with no tag and no local file, so both tests in the
-> derivation flowchart below are wrong, and the badge reads the ownership
-> label the sync wrote (exact, version, or absent) rather than a
-> `discogs_collection` join. The context menu's deferred product decision has
-> been taken: an edition-level match shows *version* ownership. Glyph, corner,
-> colours and per-edition granularity stand.
-
 - **Where**: corner overlay on album artwork, in
   - grid view while browsing, and
   - the Now Playing screen (smaller).
@@ -446,8 +436,13 @@ manual button in Settings — set out in §9 and
   the streaming-service badge (e.g. if Spotify/Deezer badge the
   bottom-right/top-right corner, Discogs occupies the left-side corner) —
   the two can coexist on the same tile without overlapping.
-- **When**: for albums in **confirmed** match state whose linked release is in
-  the user's Collection (owned) or — optionally — Wantlist (§9 derivation).
+- **When**: for albums whose `ownership` label is `exact` or `version` (§10).
+  The label is written by the ownership pass (§3); the badge does not compute
+  it, does not require a confirmed match, and does not require the album to
+  have a tag or a local file. An album owned only as a *version* — the user
+  owns the record, not that pressing — badges identically to an exact match;
+  the distinction appears in the context menu, not in the artwork
+  (`squeezewax-v1-decisions.md` §14.5).
 - **What**: a **vinyl-record glyph** (not the Discogs "D" logomark) — kept
   generic/iconographic rather than using Discogs' own brand mark, to sidestep
   branding-guideline questions the way the marketplace-linkout approach
@@ -475,6 +470,10 @@ manual button in Settings — set out in §9 and
 
 ### Owned vs. Wantlist — visual distinction (resolved)
 
+**This is a v2 concern (§11).** v1 has one badge state — owned — so the
+derivation above has one branch. The distinction below applies once the
+wantlist badge ships.
+
 - **Same vinyl glyph for both states, distinguished by color.**
 - Both the "owned" color and the "wantlist" color are **user-configurable in
   Settings** (see §8), rather than fixed.
@@ -483,22 +482,23 @@ manual button in Settings — set out in §9 and
 
 ```mermaid
 flowchart TD
-  A[Album tile to render] --> B{Confirmed match<br/>in discogs_match?}
-  B -- no --> C[No badge]
-  B -- yes --> D{Release in<br/>discogs_collection?}
-  D -- "list_state = owned" --> E[Vinyl glyph,<br/>owned color]
-  D -- "list_state = wantlist" --> F[Vinyl glyph,<br/>wantlist color]
-  D -- "not present" --> C
+  A[Album tile to render] --> B{ownership label<br/>in discogs_match}
+  B -- "exact" --> C[Vinyl glyph,<br/>owned color]
+  B -- "version" --> C
+  B -- "absent, or no row" --> D[No badge]
 ```
 
+One read of one column. There is no join, no collection table to consult, and
+nothing to decide at render time — the ownership pass decided when the sync
+completed (`squeezewax-v1-decisions.md` §13.2, §13.3).
+
 **Example walkthrough:** Grid view renders a tile for *Blue Train*. The match
-table says it's confirmed against release 123456. The collection cache says
-release 123456 has `list_state = owned` → the tile gets the vinyl glyph in
-the user's configured "owned" color, in the corner opposite the Spotify
-badge. A second edition of the same album (different LMS album entry, matched
-to a different pressing that's on the Wantlist) renders the same glyph in the
-wantlist color — two tiles, same album title, different badge colors, exactly
-the per-edition behavior observed with Spotify badging.
+row's `ownership` is `version` — the last sync found one collection entry
+agreeing on title and artist, though no tag names a pressing — so the tile gets
+the vinyl glyph in the user's configured "owned" color, in the corner opposite
+the Spotify badge. A rip and a stream of the same record are two LMS albums
+against one collection entry, and **both badge**: one owned record, two tiles,
+the same glyph on each (`squeezewax-v1-decisions.md` §13.10.3).
 
 ### Rendering note
 
@@ -520,13 +520,19 @@ badge would sit on Spotify-sourced art, this is a gray area to keep in mind.
 Tapping the badge / choosing the Discogs context-menu entry on an owned album
 reveals details of the **owned variant**:
 
-- **The list below applies to matches that resolve a pressing (Strict,
-  manual).** An edition-level (Structural) match has no resolved pressing
-  to show here — see TODO.md for what it shows instead, a product
-  decision not yet taken.
+- **Ownership and pressing.** Where `ownership` is `exact`, the menu names the
+  pressing the user owns. Where it is `version`, the menu says the user owns
+  the record but not which pressing. This is where the exact-versus-version
+  distinction surfaces, since the badge itself does not draw it
+  (`squeezewax-v1-decisions.md` §13.3, §14.5).
+- **Pressing details, credits, estimated value and the Discogs link-out need a
+  resolved pressing** — one supplied by a tag or by a manual link. An album
+  owned by *version* alone has none, and v1 does not retain the collection
+  entry's release id, so those four are **absent rather than empty** for it
+  (`squeezewax-v1-decisions.md` §13.2, §14.10). **"Re-match…" is always
+  available**, and is the action that resolves a pressing where none is known.
 - Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year
 - Credits (musicians, producers, engineers — a Discogs strength)
-- Collection data: date added/acquired, condition/grading if tracked
 - Current estimated value (fetched on demand)
 - "View on Discogs" link-out
 - **"Re-match…"** — manual re-match action (§3, re-match triggers)
