@@ -2499,11 +2499,15 @@ LMS album — expected, and they generate no queue work.
 
 ## 14. Rulings taken to unblock the design reconciliation
 
-**Decided 2026-09-13 (design chat).** Seven rulings, taken because
+**Decided 2026-09-13 (design chat).** ~~Seven~~ **Ten** rulings, taken because
 `docs/squeezewax-design.md` could not be reconciled against §13 without them.
 Six close gaps the reconciliation survey found; one (14.1) was scheduled for
 migration 3 and was pulled forward because design §3 and §10 cannot be written
-around it.
+around it. **Three more — §14.8, §14.9 and §14.10 — were added 2026-09-13
+during the rewrite itself.** None was findable by comparing two documents: each
+surfaced only when a sentence had to name a specific column value, a specific
+button's behaviour, or a specific screen's contents. A survey bounds the work it
+can see, and writing the replacement text is itself a second survey.
 
 The survey is `plans/design-reconciliation-survey.md`. Section references name
 their document, per `docs/working-agreement.md` §2.
@@ -2746,4 +2750,200 @@ List 2).
 **Why the second part is not merely a footnote.** With only the sync figure, the
 next reader concludes the plugin's entire Discogs cost is three requests, which
 stops being true the first time anyone clicks "check availability".
+
+### 14.8 `state` becomes nullable, for the same reason `match_tier` did
+
+**Decided 2026-09-13 (design chat), added after §14.1–§14.7.** Found while
+writing design §3's flowchart against the schema.
+
+**Decided: `state` becomes nullable. NULL means no identification was made. The
+`DEFAULT 'candidate'` is dropped. The CHECK is otherwise unchanged —
+`candidate | confirmed` remain the only non-NULL values.**
+
+#### The case that has no representation
+
+**Verified**, `SqueezeWax/Schema.pm::_migration_1`:
+
+```
+state TEXT NOT NULL DEFAULT 'candidate'
+      CHECK (state IN ('candidate','confirmed')),
+```
+
+§13.10.2's main path is an album with **no tag and no local file** that
+auto-badges version ownership from an unambiguous title-and-artist match. Its
+row carries `ownership = 'version'`, a NULL `discogs_release_id` and, per
+§14.1, a NULL `match_tier`. `state` then has to hold something, and neither
+permitted value is true:
+
+- `candidate` means awaiting user resolution in the review queue. This album
+  needs no decision — it badged without one.
+- `confirmed` means the album is linked to a specific Discogs release. Nothing
+  is linked.
+
+This is not an edge case. 87 of 96 matches auto-badged on page 1 (§13.10.4).
+
+#### Why NULL rather than an `unmatched` value
+
+The alternative was widening the CHECK to `candidate | confirmed | unmatched`,
+keeping NOT NULL. Its argument is readability: a reader seeing NULL may suspect
+an unset column rather than a deliberate absence.
+
+Rejected because it says one thing in two idioms. §14.1 has just established
+that a NULL in an identification column means "there is no identification".
+`match_tier` NULL beside `state = 'unmatched'` invites the reader to look for a
+distinction between them, and there is none — both columns describe an
+identification that was never made, and they are always empty together. The
+readability concern is answered by a comment, not by a second vocabulary.
+
+Keeping `candidate` was rejected outright: it would overload the one value whose
+meaning the review queue depends on, at the same time as `TODO.md`'s standing
+constraint that the queue must not key on `state = 'candidate'`.
+
+**This costs nothing extra.** Migration 3 is already a full table rebuild for
+§14.1, and this rides it.
+
+#### Three consequences
+
+1. **The `DEFAULT 'candidate'` must go.** With it retained, any insert omitting
+   `state` writes `candidate` instead of NULL and drops an auto-badged album
+   into the review queue — a silently wrong result rather than an error, which
+   is the failure mode this schema guards against everywhere else. **Assert in
+   the offline suite** that an insert omitting `state` yields NULL.
+2. **Design §3's "Unmatched" state is redefined.** It meant *no row*. It now
+   also covers a row that exists to carry ownership and identifies nothing —
+   NULL `state`, NULL `match_tier`, NULL `discogs_release_id`. Design §3 states
+   the new form.
+3. **A row must be worth its existence.** Since absence of a row already means
+   "nothing known", a row carrying NULL `state`, NULL `match_tier` and
+   `ownership = 'absent'` asserts nothing and must never be written. A row
+   exists only where there is an identification, or an ownership conclusion
+   other than `absent`. **This invariant is new here, not carried from §13** —
+   it follows from the columns but was never stated, and without it the
+   ownership pass would write a row per album in the library.
+
+#### Unverified
+
+The orphan-recovery index is `(state, snapshot_track_count)` and recovery
+selects `state = 'confirmed'`, so NULL rows should be excluded by the predicate
+and no index change should be needed. **Inferred from the predicate, not
+verified against the query plan.** Confirm when migration 3 is written.
+
+### 14.9 "Clear & rebuild matches" does not trigger a collection sync
+
+**Decided 2026-09-13 (design chat).**
+
+**Decided: the action warns that badges will be dark until the next sync, and
+does not trigger one.**
+
+#### The problem it answers
+
+The maintenance action clears `discogs_match` and `discogs_no_match` (§2a
+invariant 3). Under §13.3 the `ownership` column lives in `discogs_match`, so
+the action now clears **every badge in the library** — a consequence it did not
+have when that table held identifications only.
+
+Identification rebuilds on the next scan. Ownership rebuilds only when a sync
+completes, and §13.7's triggers are scan start, the configured interval, and the
+manual button. None of them is this action. A user with a long sync interval
+therefore loses every badge for an unbounded period, from a button whose name
+promises a rebuild.
+
+#### Why not make the action sync
+
+Two alternatives were considered: the action triggers a sync itself, or any
+clearing of the match table becomes a fourth sync trigger.
+
+Both were rejected for the same reason: they would make a maintenance action
+spend API requests, which nothing else in §9 does, and they would couple a
+local-database operation to network availability. An offline user clicking
+"clear & rebuild" would then get a failure rather than a rebuild.
+
+"Rebuild" already implies a wait. What was missing was not the sync but the
+warning — the user could not see how long the wait would be, or that it depended
+on something other than the rescan they were about to run.
+
+#### What this requires
+
+The action states, before it runs, that badges will be absent until a collection
+sync completes, and that a scan alone does not restore them. Design §9 carries
+the requirement.
+
+**The manual "sync collection now" button (§13.7) is the user's remedy**, and it
+is in the same settings page — so the wait is bounded by one click for anyone
+who reads the warning.
+
+### 14.10 v1 does not retain the release id of the owned collection entry
+
+**Decided 2026-09-13 (design chat).**
+
+**Decided: the sync stores the ownership label and nothing more. Context-menu
+items that need a resolved pressing are absent for an album owned by version
+alone.**
+
+#### What this costs, stated first
+
+Design §4's badge context menu offers pressing details, credits, current
+estimated value and a Discogs link-out. All four need a Discogs release id. An
+album owned by *version* with no tag has none — `ownership = 'version'`, NULL
+`discogs_release_id`, NULL `match_tier` (§14.8) — so its menu says the user owns
+the record, does not say which pressing, and offers nothing further.
+
+**That is the majority case.** 87 of 96 matches auto-badged on the measured
+page, most by title and artist with no tag (§13.10.2, §13.10.4). For most owned
+albums in v1, the badge is the whole feature and the menu behind it is one line.
+
+#### The information exists and is deliberately discarded
+
+`basic_information` carries `id` and `master_id` for every collection entry
+(`plans/title-agreement-measurement.md`), and the ownership conclusion is drawn
+by comparing against that entry. §13.2 then discards the payload. The release id
+that would populate the menu is in hand at the moment of the decision and thrown
+away one line later.
+
+Recovering it afterwards means paging the collection again — the same problem
+§14.6 declined to solve for date-added and condition.
+
+#### Why not store it
+
+The alternative was a new column holding *the release the user owns*, distinct
+from `discogs_release_id` holding *what this album is*. It is a good design. It
+was rejected on three grounds, none of which is that it would not work:
+
+1. **§9.5's permission was written about something else.** It calls
+   `discogs_match` "a decision plus a bare identifier… unconstrained; kept
+   indefinitely", reasoning about identifications. A second stored Discogs
+   identifier, retained for a different purpose, should be examined against that
+   reasoning rather than inheriting it by resemblance.
+2. **It reopens §13.2 by inference.** §13.2 ruled that the sync stores
+   conclusions and discards the payload. Whether an owned release id is part of
+   the conclusion or part of the payload is arguable — and an argument is not
+   what §13.2 says. Amending it deserves its own examination, not a corollary
+   drawn in the last section of a reconciliation.
+3. **It surfaced in the last section of the rewrite.** A new column proposed at
+   that point, in a session whose scope is reconciliation, is the drift this
+   session has otherwise held the line against.
+
+**Reusing `discogs_release_id` for the owned release was rejected outright**: it
+conflates ownership with identification, which is what §13.3 exists to prevent,
+and would make an album claim to *be* a pressing nothing identified it as.
+
+#### The bill
+
+A later fix is a migration on `discogs_match`, the one table this project treats
+as expensive to change — the same bill §14.4 accepted, for the same reason.
+Design §2 and §4 are written to promise only what v1 delivers.
+
+**Revisit in v2, alongside wantlist**, which needs collection-entry data of its
+own and will force the same question about what a sync may keep. Recorded in
+`TODO.md`.
+
+#### How this was missed until now
+
+Under the pre-§13 model every badged album was confirmed and therefore carried a
+release id, so the menu's contents were guaranteed. §13.10.2 severed the link
+between badging and identification, and nothing re-examined what had depended on
+it. The reconciliation survey did not flag it because the menu items are not
+contradicted by §13 — they are merely no longer reachable. Same shape as the
+token-revocation degradation path, and worth recording as a second instance: a
+removed guarantee leaves no trace at the sites that relied on it.
 
