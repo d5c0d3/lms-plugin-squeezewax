@@ -80,6 +80,55 @@ Shared reminder list. Both I and Claude Code read and update this.
           `OR match_tier IS NULL` should be needed — expected, NOT verified
           here. Assert alongside the existing cases (rejects `'Strict'`,
           accepts `'manual'`).
+      (c) DROP the `state` column's `DEFAULT 'candidate'`. Decisions §14.8
+          makes `state` nullable; with the default retained, any insert
+          omitting it writes `candidate` instead of NULL and drops an
+          auto-badged album into the review queue — silently wrong rather
+          than an error. ASSERT in the offline suite that an insert omitting
+          `state` yields NULL.
+      (d) CONFIRM the orphan-recovery index `(state, snapshot_track_count)`
+          needs no change. Recovery selects `state = 'confirmed'`, so NULL
+          rows should be excluded by the predicate — INFERRED from the
+          predicate, not verified against a query plan (decisions §14.8).
+- [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
+      `discogs_collection`, which v1 must not have.** VERIFIED in
+      `_migration_1`: the table plus an index on
+      `(discogs_release_id, list_state)` commented as "the badge-derivation
+      join in design §4" — a join decisions §13.3 replaced with a column
+      read. Migration 1 is shipped and hardware-verified, so the table exists
+      on the reference server. The ruling against it (`TODO.md` 2026-09-07,
+      reaffirmed decisions §13.2) postdates the code by days and nobody went
+      back for it. Design describes the intended model and omits the table.
+      **Migration 3 should drop it — but CONFIRM ZERO READERS AND WRITERS
+      FIRST.** Collection sync was never built so there are almost certainly
+      none, but that is INFERRED and a destructive migration should not run
+      on an inference. `discogs_price_snapshot` and `discogs_release_cache`
+      are NOT the same case: both are unwritten in v1 by plan, serve v2/v3,
+      and are named in design §10.
+- [ ] **2026-09-13: the ownership pass must not write a row per album.**
+      Decisions §14.8's invariant: absence of a row already means "nothing
+      known", so a row with NULL `state`, NULL `match_tier` and
+      `ownership = 'absent'` asserts nothing and must never be written. A row
+      exists only where there is an identification, or an ownership
+      conclusion other than `absent`. Without this the pass would write 765
+      rows on the reference library, most of them empty. The invariant is
+      NEW in §14.8 — it follows from the columns but was never stated.
+- [ ] **2026-09-13: is a master-id tag among the configurable tag names?**
+      UNVERIFIED — `SqueezeWax/Tags.pm` settles it. Design §3's flowchart
+      node F asks whether an album's master is in the collection, and it
+      fires only where the master is ALREADY known: from a configured tag, or
+      stored on the row. It must never look one up — a `GET /releases/{id}`
+      per tagged unowned album is exactly the per-album cost decisions §13.1
+      removed. If no master tag is configured by default, node F is near-dead
+      in v1 and essentially all version ownership comes from the
+      title-and-artist route. That does not make the flow wrong; it changes
+      which path is the main one.
+- [ ] **2026-09-13: confirm the no-master sentinel against a fixture.**
+      Design's ownership test guards against it, and the reconciliation
+      carried the guard forward without verifying it. Reported as `0` in
+      collection `basic_information` and `null` in the release payload —
+      RECALLED from the existing design text, NOT verified. One of the ten
+      captured fixtures should settle it.
 - [ ] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
       superseded by decisions §13 and §13.10 and has NOT been reconciled.
       working-agreement §2 makes design win over everything and calls decisions
@@ -350,6 +399,22 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **2026-09-13: what does a `version`-ownership context menu offer beyond
+      stating the fact?** A version picker promoting the choice to a manual
+      match is the candidate, recorded in the reject/dismiss item as
+      "refinement, not rejection" and never decided. Design §4 states what
+      the menu says and stops there, because design does not specify
+      mechanisms only a `TODO.md` note proposes.
+- [ ] **2026-09-13, v2: should the sync retain the release id of the owned
+      collection entry?** Decisions §14.10 rules NO for v1, so pressing
+      details, credits and value are ABSENT from the context menu for an
+      album owned by version alone — the majority case (87 of 96 auto-badged
+      on the measured page). The data is in hand at the moment of the
+      decision, in `basic_information.id`, and discarded one line later by
+      §13.2. Rejected for v1 on three grounds, all in §14.10; none of them is
+      that it would not work. **Revisit with wantlist**, which needs
+      collection-entry data of its own and forces the same question about
+      what a sync may keep. A later fix is a migration on `discogs_match`.
 - [x] **2026-09-13, RESOLVED: one badge state, not two.** Decisions §13.8 left
       exact-versus-version open as a UI question; both design §3's and §4's
       flowcharts terminate in a node that cannot be drawn without it. Version
@@ -516,6 +581,14 @@ Shared reminder list. Both I and Claude Code read and update this.
       version ownership is the common case. If the hardware pass shows exact
       ownership is the common case instead, the trade-off inverts. Data
       supports either (§13.8); no schema consequence.
+- [ ] **2026-09-13: observe a complete collection sync end to end.** Design
+      §13's budget says a 203-item collection is 3 requests. The per-page
+      mechanics are VERIFIED (decisions §9.4) and `ceil(203 / 100) = 3` is
+      ARITHMETIC — but a full three-request sync has NOT been run; the
+      title-agreement measurement worked from page 1 only. Design is worded
+      as the arithmetic it is rather than as "measured 3". The pages 2–3
+      measurement will produce a full sync anyway; record the observed count
+      when it does.
 - [ ] 2026-09-12: measure collection pages 2 and 3. Page 1 is 100 of 203
       items, sorted by label, not a random sample. Decisions 13.10.6 carries
       the Various / Various Artists vocabulary risk as UNRESOLVED, not
@@ -699,6 +772,37 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Housekeeping
 
+- [ ] **2026-09-13: grep design for definite references to a resolved
+      pressing.** Two findings this session — the token-revocation
+      degradation path and the empty `version` context menu — have the same
+      shape: decisions §13 removed a guarantee and the places relying on it
+      went on reading as though it held. A survey hunting CONTRADICTIONS
+      cannot find these, because nothing contradicts anything; a promise
+      simply became unreachable. If a third exists it is somewhere design
+      says "the release" or "the pressing" without asking whether one is
+      known. Check each against the version case. Cheap, and it is the one
+      defect class the reconciliation's method is structurally bad at
+      catching.
+- [ ] **2026-09-13: four stale passages left unswept by the reconciliation,
+      because the survey did not flag them.** Recorded rather than fixed, to
+      keep List 2 binding — rewriting unflagged prose because it reads oddly
+      beside rewritten prose is the drift that list prevents. Listed in the
+      order I would fix them:
+      (AC) design §9's Authentication bullet — "required for
+           Collection/Wantlist features" understates the dependency: under
+           collection-first there are no badges at all without a token, not
+           a reduced feature set. MATERIALLY MISLEADING, one line, the
+           strongest candidate.
+      (Z)  design §3's closing Constraints block — references "the tier
+           system" (removed, decisions §13.8) and says large-library scans
+           "must be batched/throttled" (matching now issues no requests at
+           all, decisions §13.1). Wrong twice over.
+      (AB) design §4's artist-level badge — "off by default to avoid the
+           extra API calls". There are none; owned artists come from the
+           same three-request sync. The default may still be right for other
+           reasons.
+      (AD) design §9's Badge section lists wantlist settings among v1
+           settings without the v2 scoping design §4 now carries.
 - [ ] **2026-09-13: which SQLite version ships in the DBD::SQLite under
       `refs/`?** UNVERIFIED — not checked. It did not change the §14.1
       decision, since the CHECK forces a table rebuild whatever `ALTER COLUMN`
