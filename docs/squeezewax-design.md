@@ -546,14 +546,14 @@ their mark.
 
 ## 5. Collection Value & Statistics
 
-> **The sync description is superseded (decisions §13.1, §13.2).** The
-> collection sync is three requests for a 203-item collection, not a slow
-> background job, and it caches nothing — each page is matched in memory and
-> discarded. The features below are unaffected.
-
-Requires a Discogs **personal access token** (`Settings/Auth.pm`); pulls the
-user's Collection (and optionally Wantlist) into a local cache via a slow
-background sync job (rate-limit-aware).
+Requires a Discogs **personal access token** (`Settings/Auth.pm`). The
+collection sync reads the user's Collection a page at a time —
+`ceil(items / 100)` requests, measured 3 for a 203-item collection — and takes
+seconds rather than running as a slow background job. Each page is matched
+against LMS albums in memory, the conclusion is written to the `ownership`
+column, and the payload is discarded: there is no local cache of the collection
+(§3, §10; `squeezewax-v1-decisions.md` §13.1, §13.2). Wantlist sync is v2
+(§11).
 
 ### Features
 
