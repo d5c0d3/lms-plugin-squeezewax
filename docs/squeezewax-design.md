@@ -716,20 +716,6 @@ or unreachable:
 
 ## 10. Data Model (Sketch)
 
-> **Partly superseded (`TODO.md` 2026-09-07; decisions §13.2, §13.3).** v1
-> builds no `discogs_collection` table — a ruling that **predates decisions
-> §13**: it was taken on 2026-09-07 in `TODO.md` ("no `discogs_collection`
-> mirror in v1"), and decisions §13.2 reaffirms it rather than creating it.
-> That table, the regenerability argument resting on it, and its "roughly 20
-> requests" figure therefore describe something that will not exist;
-> ownership is instead a stored label (exact | version | absent) landing in
-> `discogs_match` at migration 3 (decisions §13.3). **The dual ownership test
-> closing this section has no branch at all for the title-and-artist route**
-> that decisions §13.10.2 and §13.10.3 make the main path — a missing
-> primary path, not merely stale prose. `album_key`, `source_timestamp`, the
-> `snapshot_*` columns and `discogs_no_match` are untouched (decisions
-> §13.8).
-
 ```
 discogs_match
   album_key           (PK — hash over the album's tracks' urlmd5, sorted;
@@ -738,11 +724,21 @@ discogs_match
                        resolution path)
   lms_album_id        (denormalised cache column, refreshed whenever a
                        rescan completes; never trusted as identity)
-  discogs_release_id
-  discogs_master_id
-  match_tier          (strict | structural | fuzzy | manual — provenance,
-                       not just which cascade tier ran; see §3)
-  state               (candidate | confirmed)
+  discogs_release_id  (which release this album IS. Identity, never
+                       ownership. NULL for a conflict row or an
+                       edition-level match — see §3 and
+                       squeezewax-v1-decisions.md §3a)
+  discogs_master_id   (which edition. From a tag, or from the collection
+                       entry's master_id)
+  ownership           (exact | version | absent — what the user OWNS.
+                       Written by the collection sync; never NULL, since
+                       "absent" is an answer rather than a missing one)
+  match_tier          (strict | manual, or NULL — provenance of the
+                       identification. NULL where there is none)
+  state               (candidate | confirmed, or NULL — as match_tier,
+                       NULL where no identification was made. No default:
+                       an omitted state must not silently become
+                       "candidate")
   matched_at
   source_timestamp    (MAX(tracks.timestamp) over the album's local tracks at
                        match time; the skip key for a rescan. NULL forces
@@ -762,16 +758,12 @@ discogs_no_match
 
 discogs_release_cache
   discogs_release_id  (PK)
-  -- cached release payload: tracklist, format, year, country, etc.
+  discogs_master_id
+  payload             (cached release payload: tracklist, format, year,
+                       country. Not written in v1; retention is constrained
+                       by the Discogs API Terms of Use, not by usefulness —
+                       see squeezewax-v1-decisions.md §9.5)
   fetched_at
-
-discogs_collection
-  instance_id         (PK — Discogs collection instance; the same release
-                       can be owned in multiple copies, each its own instance)
-  discogs_release_id
-  format, catalog_no, label, country, year
-  condition, added_at, notes
-  list_state          (owned | wantlist)
 
 discogs_price_snapshot
   discogs_release_id
@@ -783,51 +775,66 @@ discogs_price_snapshot
 `albums.id` (`INTEGER PRIMARY KEY AUTOINCREMENT`) does not survive a
 `library.db` wipe, while `urlmd5` does — see §3 and
 `squeezewax-v1-decisions.md` §2 for the full finding, including the
-orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
-~~makes relinks and completeness checks (v2) cost no API calls once a release
-has been fetched once~~ — **superseded 2026-09-07: the Discogs API Terms of
-Use (API Use and Restrictions item 5) forbid caching Content longer than
-necessary, so "cost no API calls once fetched" cannot stand as written. See
-`squeezewax-v1-decisions.md` §9.5 for the retention policy.**
+orphan-recovery flow the snapshot columns above support.
 
-**`discogs_no_match` is entirely regenerable**, like `discogs_collection` and
-unlike `discogs_match`. It exists so a rescan does not re-read one or two files
-for every unmatched album forever — LMS reads no audio files at all on a
-no-change rescan, so without it we would be adding a cost where there is none.
-Dropping it costs re-reads, never a match. Two rules follow, both in decisions
-§2a: **orphan recovery must never read it** (it answers "which local album does
-this existing match belong to", and a no-match row is not a match), and the
-"clear & rebuild matches" action (§9) must clear it.
+**Identification and ownership are separate columns, and neither substitutes
+for the other.** `discogs_release_id` answers *which release this album is*;
+`ownership` answers *what the user owns*. The case that forces the split is the
+common one: a file tagged `DISCOGS_RELEASE_ID=123` while the collection holds
+release 456, both under the same master. The user owns a version, not that
+pressing. Expressing ownership by NULLing the release id would destroy an
+identification the user supplied themselves. Reasoning in
+`squeezewax-v1-decisions.md` §13.3.
 
-**`discogs_collection` is entirely regenerable, and that is a design property
-worth relying on.** It caches Discogs' own data and holds nothing the user
-entered here — §5 rules out a local "owned" flag deliberately, so there is no
-second source of truth to lose. Rebuilding it costs `DROP TABLE`, recreate,
-and a collection re-sync of roughly 20 requests (§4). Two consequences:
+**`match_tier` is NULL for an album identified by nothing.** The column records
+the provenance of an *identification* — a tag, or the user. A collection match
+makes no identification: it establishes that the user owns a record with this
+title by this artist, and never says which pressing. There is no provenance to
+record, so the column is empty rather than carrying an invented value. `strict`
+and `manual` are the only values written; `structural` and `fuzzy` are gone with
+the tier that produced them. Reasoning in `squeezewax-v1-decisions.md` §14.1,
+which also records why this makes the migration a table rebuild rather than an
+added column.
 
-- Schema changes to this table are cheap at any time, unlike `discogs_match`.
-  The known one is `instance_id` as primary key: a Discogs *wantlist* entry
-  has no instance id, so `list_state = wantlist` rows do not fit the current
-  key. v1 writes owned rows only, so this is deferred rather than urgent.
-- **Orphan recovery must never depend on this table.** The identity snapshot
-  lives in `discogs_match` precisely so that recovering a match survives the
-  collection being wiped and re-synced.
+`state` is NULL for the same reason and in the same rows. The two columns are
+always empty together: they describe an identification, and either there is one
+or there is not. It follows that **a row must be worth its existence** — absence
+of a row already means "nothing known", so a row identifying nothing and owning
+nothing asserts nothing and is never written. A row exists where there is an
+identification, or an ownership conclusion other than `absent`
+(`squeezewax-v1-decisions.md` §14.8).
 
-**Badge derivation** (see §4 flowchart): ~~badge presence and color are
-computed by joining `discogs_match` (state = confirmed) with
-`discogs_collection` on `discogs_release_id` and reading `list_state`.~~ —
-**defect found 2026-09-07: a Structural-confirmed row carries a NULL
-`discogs_release_id` and a set `discogs_master_id` (settled step-4 design,
-see TODO.md), so this join silently yields no badge for the entire
-Structural population — a missing badge, indistinguishable from "not
-matched." Corrected to the dual test already recorded in TODO.md:**
-`release_id in owned_releases` **OR** (`master_id` present and not the
-no-master sentinel **AND** `master_id in owned_masters`) — **note the
-sentinel is endpoint-dependent (`0` in collection `basic_information`,
-`null` in the release payload); see the TODO entry. `owned_releases` and
-`owned_masters` are the collection sync's output, not designed here.**
-This join never touches album identity — it is unaffected by the
-`album_key` change above. Ownership is never stored in the match table.
+**v1 stores no Discogs Content.** There is no collection table. The sync holds
+each page of the user's collection in memory, matches it against LMS albums
+there, writes the conclusion into `ownership`, and discards the payload
+(`squeezewax-v1-decisions.md` §13.2, applying §9.5's "store conclusions, not
+Content"). One consequence is a requirement rather than a note: **matching must
+be deterministic**, because the payload is gone and a re-sync re-derives every
+conclusion from scratch. The same collection against the same library must
+produce the same answers, or badges change between syncs with no visible cause.
+
+**The `snapshot_*` columns are LMS-side and stay.** `snapshot_artist` and
+`snapshot_album_title` hold the *local* album's identity for orphan recovery
+(`squeezewax-v1-decisions.md` §2), not Discogs' copy of it. They are the one
+place in the schema where stored text could be mistaken for Discogs Content and
+is not.
+
+**`discogs_no_match` is entirely regenerable**, unlike `discogs_match`. It
+exists so a rescan does not re-read one or two files for every unmatched album
+forever — LMS reads no audio files at all on a no-change rescan, so without it
+we would be adding a cost where there is none. Dropping it costs re-reads, never
+a match. Two rules follow, both in decisions §2a: **orphan recovery must never
+read it** (it answers "which local album does this existing match belong to",
+and a no-match row is not a match), and the "clear & rebuild matches" action
+(§9) must clear it.
+
+**Badge derivation** (see §4): the badge reads the `ownership` column directly.
+There is no join and no render-time test — the sync has already decided, and a
+badge paints for `exact` or `version` alike. Confirmation is not required: an
+unambiguous title-and-artist match against the collection badges version
+ownership with no tag, no confirmed state and no local file
+(`squeezewax-v1-decisions.md` §13.10.2 and §13.10.3). Request cost is in §13,
+which budgets the sync rather than the render.
 
 ---
 
