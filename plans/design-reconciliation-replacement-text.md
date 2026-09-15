@@ -83,8 +83,11 @@ discogs_price_snapshot
   price_low, price_median, price_high, currency
 ```
 
-[RETAINED VERBATIM — the `album_key` identity paragraph currently following the
-code block is unchanged. Do not re-type it.]
+`album_key` replaces `lms_album_id` as the match table's identity because
+`albums.id` (`INTEGER PRIMARY KEY AUTOINCREMENT`) does not survive a
+`library.db` wipe, while `urlmd5` does — see §3 and
+`squeezewax-v1-decisions.md` §2 for the full finding, including the
+orphan-recovery flow the snapshot columns above support.
 
 **Identification and ownership are separate columns, and neither substitutes
 for the other.** `discogs_release_id` answers *which release this album is*;
@@ -157,6 +160,18 @@ inline strikethrough corrections (release-cache caching, badge-derivation join).
 Replaces the section from its heading to the end of "Re-match triggers",
 including **both** markers. The closing "Constraints" block is **retained
 verbatim** — see `TODO.md` finding Z.
+
+**Two headings change, and nothing else about the section's structure does:**
+
+| Current | Becomes | Why |
+|---|---|---|
+| `### Three matching tiers — a cascading pipeline` | `### Two routes, and they conclude different things` | There is no cascade and there are not three tiers (`squeezewax-v1-decisions.md` §13.8) |
+| `### Multi-disc releases & box sets (resolved)` | `### Multi-disc releases & box sets` | "(resolved)" referred to the duration-vector rule, which §13.8 removed; nothing is resolved because nothing is asked |
+
+The remaining headings — `### Matching pipeline (flowchart)`,
+`### Match states per album`, `### Confirmation & feedback loops`,
+`### Re-match triggers` and `### Constraints` — keep their exact current text.
+The walkthroughs have no heading and gain none.
 
 ````
 ## 3. Matching: Linking LMS Albums to Discogs Releases
@@ -273,8 +288,6 @@ identifying nothing and owning nothing is not recorded
 the sync (§10), so a re-sync re-derives every conclusion from scratch. The same
 collection against the same library must reach the same answers, or badges
 change between syncs with no visible cause.
-
-### Example walkthroughs
 
 1. *Tagged, and owned.* A ripped CD tagged `DISCOGS_RELEASE_ID=1234567`. The
    scanner reads the tag; the sync finds 1234567 in the collection →
