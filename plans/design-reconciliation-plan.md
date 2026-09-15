@@ -7,7 +7,10 @@ and is not re-derived here.
 
 Rulings taken to unblock this plan are in `docs/squeezewax-v1-decisions.md` §14
 (`f9a7644`), with the `TODO.md` edits in `97c2251` and a follow-up correction in
-`9f27ac9`.
+`9f27ac9`. Three further rulings — §14.8, §14.9 and §14.10 — were taken during
+the rewrite itself, as sections turned up gaps the survey could not have seen.
+§14's opening paragraph says seven rulings and is corrected in place rather than
+renumbered.
 
 **Scope, unchanged from the survey:** reconcile design only. Not the build
 order, not migration 3's implementation, not the pages 2–3 measurement. The
@@ -83,6 +86,18 @@ Had step 6 removed by pattern, four markers would have survived into a document
 whose banner had just been deleted, pointing at a precedence inversion that no
 longer existed. Stale scaffolding is worse than none.
 
+**Correction, 2026-09-13: markers do not come out in a single final pass.**
+A rewritten section cannot carry a marker reading "not yet rewritten" — the
+claim is false the moment the prose lands. Each marker is removed **in the same
+edit that rewrites its section**, never separately and never before. The banner
+comes out last and alone, after all ten section rewrites.
+
+The original concern stands and is what the rule now says precisely: a marker
+removed while its prose stays stale is the failure. A marker removed *as part
+of* the rewrite is exactly when it should go. The inventory above remains the
+authority for what must be gone at the end — verification counts against the
+list, not a grep.
+
 ---
 
 ## List 1 sorted
@@ -132,6 +147,13 @@ Raised while sorting; all four resolved before the rewrite.
 | V | Both flowcharts end in a node that needs the exact-vs-version question answered | §14.5 — one badge state |
 | W | Design §4's context menu promises collection metadata via an unverified endpoint | §14.6 — dropped from v1 |
 | X | The rewritten budget has no row for on-demand cost | §14.7 — two-part table |
+| Y | `state` is `NOT NULL CHECK (candidate\|confirmed)`, and neither value is true of an owned album that was never identified | §14.8 — nullable, `DEFAULT` dropped |
+| Z | Design §3's Constraints block references the tier system and a throttling requirement | Recorded, not swept — `TODO.md` |
+| AA | Design §4's wantlist subsection contradicted the rewritten one-branch flowchart | **Swept** — §4 gains a v2 scoping sentence, because this session's own edit created the inconsistency |
+| AB | Design §4's artist-level badge is off by default "to avoid the extra API calls"; there are none | Recorded, not swept — `TODO.md` |
+| AC | Design §9's Authentication bullet understates the token dependency to the point of misleading | Recorded, not swept — `TODO.md`, ranked first for a future sweep |
+| AD | Design §9 lists wantlist settings among v1 settings without the v2 scoping §4 now carries | Recorded, not swept — `TODO.md` |
+| AE | Pressing details, credits and value all need a release id, which a version-owned album does not have | §14.10 — absent rather than empty; revisit in v2 |
 
 ### Two corrections to the survey's own framing
 
@@ -163,19 +185,28 @@ Dependency order, not document order. Steps 1–4 are complete.
 3. ~~Rule on U, V, W, X~~ — done, §14.4–§14.7.
 4. ~~Land the rulings and this sorted list~~ — done: decisions §14 (`f9a7644`,
    corrected `9f27ac9`), `TODO.md` (`97c2251`), and this file.
+
+**One deliberate List 2 exception.** Design §9's "clear & rebuild matches"
+bullet is on the survey's List 2 as surviving untouched, and step 5 edits it
+anyway: `squeezewax-v1-decisions.md` §14.9 requires the action to warn that
+badges go dark until the next sync, and a warning design does not carry is a
+warning that does not exist. This is a change forced by a ruling, not the drift
+List 2 guards against — but it is the only List 2 text this session touches and
+it is recorded rather than left to be discovered.
+
 5. **Rewrite, in this sequence:**
    design §10 → §3 → §4 → §5 → §8 → §9 → §11 → §12 → §13 → §2.
    §10 first because §3 and §4 both reference the data model. §2 last because
    it is one paragraph summarising everything above it.
-6. **Remove the eleven markers and the banner in a single final pass**, after
-   the prose is done, working from the inventory above. Section-by-section
-   removal would leave the document in a state where the precedence inversion
-   is silently gone but the prose is still stale — the exact condition the
-   markers exist to prevent.
+6. **Remove the document banner**, last and alone. The eleven markers come out
+   with their own sections during step 5 (see the correction above); the banner
+   is the only scaffolding left by then, and removing it is what ends the
+   temporary precedence inversion.
 7. **Verify:** every List 2 section byte-identical; no `structural` or `fuzzy`
    outside a historical clause; no bare `§N` introduced (working-agreement §2);
    the document still clean UTF-8 with no mojibake (survey's encoding note);
-   zero remaining markers, checked against the inventory rather than a grep.
+   zero remaining markers and no banner, checked against the inventory rather than
+   a grep.
 
 ## Two settled decisions the rewrite applies without re-arguing
 
