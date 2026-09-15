@@ -690,20 +690,14 @@ Explicitly **not** automatic/ambient — fires only when the user triggers it.
 
 ## 8. Failure & Degradation Behavior
 
-> **Three claims here are stale (decisions §13.1, §13.2, §13.6).** There is no
-> collection cache — badges render from the stored ownership label; ownership
-> does not use the already-matched skip, since it changes without any file
-> changing; and matching does **not** survive token revocation, because the
-> collection is where identification now happens. Decisions §13.7 adds the
-> rule this section is missing: a failed or partial sync leaves the previous
-> ownership conclusions untouched.
-
 The plugin must stay usable (and quiet) when Discogs is slow, rate-limited,
 or unreachable:
 
-- **Badges** render entirely from the **local cache** (match table +
-  collection cache) — no network calls at render time, so badges never
-  disappear or stall the UI when Discogs is down.
+- **Badges** render from the stored `ownership` label in `discogs_match` (§10)
+  — one column read, no join, and no network call at render time, so badges
+  never disappear or stall the UI when Discogs is down. There is no collection
+  cache to fall back to, because there is no collection cache at all
+  (`squeezewax-v1-decisions.md` §13.2).
 - **Scan-time writes ride LMS's own transaction.** The scanner sets
   `AutoCommit = 0` once (`scanner.pl:295`) and commits at intervals, so our
   writes are enclosed by it and `Slim::Schema->forceCommit` commits both files.
@@ -732,20 +726,34 @@ or unreachable:
 - **Marketplace lookup / value fetch** (on-demand actions) fail gracefully
   with a short message ("Discogs not reachable — try again later") and never
   block navigation.
-- **Collection/Wantlist sync** and **price snapshots** are background jobs:
-  on failure they log, back off, and retry at the next scheduled interval —
-  no user-facing errors, stale data simply persists until the next
-  successful sync.
-- **Scan-time matching**: if the rate limit or a network failure interrupts a
-  scan, matching is **resumable** — already-matched albums are skipped
-  (cached), and unprocessed albums are picked up by the next scan or a manual
-  "continue matching" action. A partial scan must never corrupt or discard
-  existing confirmed matches.
-- **Token revocation**: a personal access token does not expire, but the
-  user can revoke it from their Discogs account at any time. Collection-
-  dependent features degrade to cached data and Settings shows a
-  "re-enter token" prompt; matching and read-only browsing (which work
-  with app-level auth) continue.
+- **Collection sync** and **price snapshots** are background jobs: on failure
+  they log at `warn`, back off, and retry at the next scheduled interval. **A
+  failed or partial sync leaves the previous ownership conclusions untouched**
+  — it never clears a badge it could not reconfirm. A badge that silently
+  vanishes is the same class of failure as one that is silently wrong, and the
+  visible signal is the last-synced timestamp in §9, which simply stops
+  advancing (`squeezewax-v1-decisions.md` §13.7).
+- **Scan-time identification** is **resumable**: albums already examined are
+  skipped on `source_timestamp`, and the rest are picked up by the next scan. A
+  partial scan must never corrupt or discard existing confirmed matches.
+  Identification makes no Discogs request — it reads tags — so the rate limit
+  does not bear on it at all.
+- **Ownership is not resumable, and does not need to be.** It does not use the
+  file-state skip, because buying a record changes nothing on disk
+  (`squeezewax-v1-decisions.md` §13.6). Every completed sync re-derives every
+  conclusion from scratch, which at `ceil(items / 100)` requests is cheaper
+  than tracking which conclusions could have moved. An interrupted sync
+  therefore has nothing to resume: it simply did not happen, and the previous
+  conclusions stand.
+- **Token revocation**: a personal access token does not expire, but the user
+  can revoke it from their Discogs account at any time. Every sync then fails,
+  and this logs at **`error`** rather than `warn` — a revoked token is not
+  transient and will not clear itself. Settings shows an authentication-failure
+  state beside a last-synced timestamp that has stopped advancing, and the
+  "re-enter token" prompt. Nothing degrades to cached data, because there is
+  none: existing badges persist unchanged, no new ownership is determined, and
+  on-demand actions fail with the same prompt. **v1 promises nothing that keeps
+  working without a valid token** (`squeezewax-v1-decisions.md` §14.2).
 
 ---
 
