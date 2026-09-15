@@ -140,17 +140,16 @@ suggest partnership or endorsement.
 
 ## 2. Core Concept
 
-> **Partly superseded (decisions §13.3, §13.10.2).** Ownership now comes in two
-> strengths — *exact* (the collection holds this release) and *version* (it
-> holds a different release under the same master) — so "the owned pressing"
-> in item 1 below is only the exact case. Items 2 and 3 are unaffected.
-
 The plugin connects a user's **physical record collection** (tracked on
 Discogs) with their LMS library (local rips + streaming services), in both
 directions:
 
 1. **Ownership awareness** — see at a glance which albums in LMS you own
-   physically; inspect details and value of the owned pressing.
+   physically. Ownership comes in two strengths: *exact*, where the collection
+   holds the very release the album is identified as, and *version*, where it
+   holds the record but not that pressing. Both paint the same badge (§4);
+   where a pressing is known, its details and current value are one tap away
+   (`squeezewax-v1-decisions.md` §13.3, §13.10.2).
 2. **Marketplace lookup** — on demand, check availability and price range of a
    release on the Discogs marketplace.
 3. **Cross-browsing** — jump from a streaming album to its physical editions on
