@@ -489,10 +489,12 @@ below applies to matches that resolve a pressing") with **two** bullets:
   the record but not which pressing. This is where the exact-versus-version
   distinction surfaces, since the badge itself does not draw it
   (`squeezewax-v1-decisions.md` §13.3, §14.5).
-- **The items below need a resolved pressing** — one supplied by a tag or by a
-  manual link. An album owned by *version* alone has none, and v1 does not
-  retain the collection entry's release id, so these items are **absent rather
-  than empty** for it (`squeezewax-v1-decisions.md` §13.2, §14.10).
+- **Pressing details, credits, estimated value and the Discogs link-out need a
+  resolved pressing** — one supplied by a tag or by a manual link. An album
+  owned by *version* alone has none, and v1 does not retain the collection
+  entry's release id, so those four are **absent rather than empty** for it
+  (`squeezewax-v1-decisions.md` §13.2, §14.10). **"Re-match…" is always
+  available**, and is the action that resolves a pressing where none is known.
 ```
 
 Delete the "Collection data: date added/acquired, condition/grading if tracked"
@@ -708,11 +710,11 @@ endpoint (snapshot locally)." with:
   one authoritative statement of this figure; §3 and CLAUDE.md point here
   rather than repeating it. Confirmed 2026-09-07 via the
   `x-discogs-ratelimit` response header using a personal access token
-  ([discogs.com/developers](https://www.discogs.com/developers/)). The
-  unauthenticated tier is documented at 25/min but not confirmed by header —
-  see TODO.md. v1 authenticates with a **user-supplied personal access token**,
-  not OAuth (`squeezewax-v1-decisions.md` §9.1). No historical price endpoint
-  (snapshot locally).
+  ([discogs.com/developers](https://www.discogs.com/developers/)).
+  Unauthenticated tier is documented at 25/min but not yet confirmed by
+  header — see TODO.md. v1 uses a user-supplied personal access token, not
+  OAuth 1.0a (`squeezewax-v1-decisions.md` §9.1, CLAUDE.md,
+  `implementation-plan.md`). No historical price endpoint (snapshot locally).
 - **Paged endpoints need an explicit stable sort.** The collection listing
   defaults to `sort=label&sort_order=asc`, and paging over a mutable,
   non-unique sort key can shift rows between pages and silently drop or
