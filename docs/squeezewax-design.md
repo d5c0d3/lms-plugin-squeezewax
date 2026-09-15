@@ -759,25 +759,18 @@ or unreachable:
 
 ## 9. Settings (`Settings.pm`)
 
-> **Partly superseded, and incomplete (decisions §13.4, §13.7, §13.8).** Under
-> Matching there is no tier cascade left to pick a maximum for, no Structural
-> duration margin to configure, and no tier for the multi-disc rule to
-> govern; the maintenance action and review-queue behaviour survive. Under
-> Collection / value, two settings are missing: a manual "Sync collection
-> now" action, and a visible last-synced timestamp — the first thing to
-> check when the badges look wrong.
-
 ### Authentication
 - Discogs personal access token (required for Collection/Wantlist
   features; token storage).
 
 ### Matching
-- Maximum matching tier enabled: **Strict / Structural / Fuzzy** — the
-  cascade always starts at Strict and stops at the selected tier (see §3).
-- Duration margin for structural matching (default ±2–3 s).
-- Multi-disc releases require **all discs** to match for auto-confirmation
-  (no separate setting — this is the fixed behavior; partial matches always
-  fall to the review queue).
+Matching itself is not configurable. Which tag names are read is a setting
+(§3), but the comparison is not: title normalisation is fixed at whitespace
+collapse and case-folding, and artist agreement is required rather than
+weighted. Both were chosen by measurement rather than taste, and exposing them
+would let a user opt into wrong badges
+(`squeezewax-v1-decisions.md` §13.10.3, §13.10.4).
+
 - Review-queue behavior (auto-open after scan? notification?).
 - Maintenance: **"clear & rebuild matches"** action (§3, re-match triggers).
   **It must clear `discogs_no_match` as well as `discogs_match`** — decisions
@@ -786,6 +779,11 @@ or unreachable:
   what the action promises. It is also the escape hatch for two states nothing
   else clears: `discogs_no_match` rows orphaned by an `album_key` change, and a
   demoted candidate whose tags have since been removed (§3).
+  **The action clears ownership as well as identification**, since both live in
+  `discogs_match` (§10) — so every badge in the library goes dark until a
+  collection sync completes. The action does not itself trigger one; it must
+  say so before it runs, because "rebuild" implies a wait but not an unbounded
+  one (`squeezewax-v1-decisions.md` §14.9).
 
 ### Badge
 - Enable/disable badge in grid view.
@@ -805,7 +803,14 @@ or unreachable:
   (e.g. amount available first, then price range).
 
 ### Collection / value
-- Sync interval for Collection/Wantlist.
+- **Collection sync interval.** Wantlist sync is v2 (§11).
+- **"Sync collection now"** — a manual trigger, alongside the two automatic
+  ones in §3 (`squeezewax-v1-decisions.md` §13.7).
+- **Last-synced timestamp**, displayed. When the badges look wrong this is the
+  first thing to check, and a timestamp that has stopped advancing is the only
+  visible sign of a sync that keeps failing. If the failure is an authentication
+  one, an **authentication-failure state** is shown beside it with the
+  "re-enter token" prompt (§8; `squeezewax-v1-decisions.md` §13.7, §14.2).
 - Price-snapshot interval (for the value-history chart).
 - **Display currency**: default = Discogs' native currency per item; optional
   override to recalculate a normalized total into a chosen display currency.
