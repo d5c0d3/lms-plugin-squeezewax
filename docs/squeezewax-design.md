@@ -1,16 +1,5 @@
 # SqueezeWax — Design Reference
 
-> **Partly superseded, reconciliation pending — 2026-09-12.**
-> Decisions §13 and §13.10 replaced v1's matching design: identification
-> now runs against the user's own Discogs collection rather than a
-> per-album Discogs search, the `local_tracks == 0` gate is removed, only
-> Strict auto-confirms an exact release, and version ownership badges on
-> an unambiguous title-and-artist match. The sections marked below have
-> not yet been rewritten. Where this document and decisions §13 disagree,
-> **decisions §13 is current** — this is a temporary inversion of
-> working-agreement §2's precedence rule and is itself the defect being
-> tracked. These markers come out when the reconciliation lands.
-
 Design ideas and decisions for **SqueezeWax**, a Discogs plugin for Lyrion
 Music Server (LMS), collected from brainstorming sessions (August 2026).
 
