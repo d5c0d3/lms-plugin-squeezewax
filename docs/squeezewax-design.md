@@ -1004,49 +1004,55 @@ implementation, rather than open design questions:
 
 ## 13. Key Technical Constraints (Summary)
 
-> **The scan-time budget is superseded (decisions §13.1).** There are no
-> per-album searches left to budget: identification costs `ceil(items/100)`
-> requests per collection sync — measured at 3 for 203 items — and scales
-> with the collection, not the library. The rewrite note below asks for
-> corrected per-album figures, which is itself now the wrong question. The
-> rate limit and the LMS threading constraint are unaffected.
-
 - **Discogs API rate limit: 60 requests/min, authenticated** — this is the
   one authoritative statement of this figure; §3 and CLAUDE.md point here
   rather than repeating it. Confirmed 2026-09-07 via the
   `x-discogs-ratelimit` response header using a personal access token
   ([discogs.com/developers](https://www.discogs.com/developers/)).
   Unauthenticated tier is documented at 25/min but not yet confirmed by
-  header — see TODO.md. ~~OAuth for user data~~ — **corrected 2026-09-07: v1
-  uses a user-supplied personal access token, not OAuth 1.0a (see CLAUDE.md
-  and `implementation-plan.md`).** No historical price endpoint (snapshot
-  locally).
+  header — see TODO.md. v1 uses a user-supplied personal access token, not
+  OAuth 1.0a (`squeezewax-v1-decisions.md` §9.1, CLAUDE.md,
+  `implementation-plan.md`). No historical price endpoint (snapshot locally).
+- **Paged endpoints need an explicit stable sort.** The collection listing
+  defaults to `sort=label&sort_order=asc`, and paging over a mutable,
+  non-unique sort key can shift rows between pages and silently drop or
+  duplicate them. A dropped row is a missing badge; a duplicated one is
+  wasted work (`squeezewax-v1-decisions.md` §9.4).
 
-  **Scan-time budget** (corrected from an earlier flat "1–2 requests per
-  album" estimate — see `squeezewax-v1-decisions.md` §4):
+  **Request budget.** Two parts, because the two costs scale with different
+  things and only one of them recurs.
 
-  **This table's per-album figures need a full rewrite, not an adjustment —
-  tracked in TODO.md.** Two of its premises no longer hold: the
-  format/year/country pre-filter it assumes is now a ranking signal, not an
-  exclusion gate (§3), so Structural has more candidates to fetch per album
-  than this table counts; and the Strict-match row's "0 requests" describes
-  identifying the release, not answering ownership, which needs the
-  collection sync separately. Pending that rewrite, the table and the
-  disk-bound claim below are unverified.
+  **Per collection sync** — the whole recurring cost:
 
   | Operation | Cost |
   |---|---|
-  | Strict match | 0 requests to identify the release — the tag names it. Answering *ownership* is a separate cost not counted here; see the note above. |
-  | Owned badge | ~~~20 requests per collection sync (100 items/page)~~ — **corrected 2026-09-07: `ceil(items / 100)` requests. Measured 3 requests for a 203-item collection.** |
-  | Structural match | ~~1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3)~~ — **falsified 2026-09-07: the pre-filter is a ranking signal only, never a gate (decisions §8) — candidate count per album is higher than this figure assumes. No replacement figure given; it depends on measured requests-per-album from step 4's hardware pass — see the §13-rewrite note above.** |
-  | Completeness check (v2) | 1 release fetch per matched album, ~~cacheable forever~~ — **superseded 2026-09-07: the Discogs API Terms of Use (item 5) forbid caching Content longer than necessary. See `squeezewax-v1-decisions.md` §9.5 for the retention policy.** |
+  | Collection sync | `ceil(items / 100)` requests. A 203-item collection is 3. |
+  | Identification (Strict) | **0** — it reads tags from files the scanner is already opening. |
+  | Ownership | **0** beyond the sync itself; the comparison runs in memory. |
+  | Badge render | **0** — one column read (§10). |
 
-  ~~For a well-tagged, Strict-dominant library, cold matching is
-  **disk-bound, not rate-limit-bound**.~~ — **Unverified pending the rewrite
-  above (2026-09-07).** Structural-heavy libraries can still
-  be expensive — an album with eight pressings on Discogs costs nine
-  requests, not two — so matching must still be incremental, resumable
-  (§8), and cached so it only ever runs cold once.
+  This scales with the **collection**, not the library. A library of 765
+  albums and a library of 20,000 cost the same three requests, because
+  nothing is fetched per album.
+
+  **Per user action** — deliberately not budgeted, under the rule that a
+  request count bounded by user actions goes live rather than being
+  pre-fetched (`squeezewax-v1-decisions.md` §9.5):
+
+  | Action | Cost |
+  |---|---|
+  | Marketplace lookup / "check availability" (§7) | 1 lookup per invocation |
+  | Value fetch in the badge context menu (§4) | 1 fetch per invocation |
+  | Review-queue search (§3) | 1 search **per query sent**, not per keystroke — see below |
+  | "View on Discogs" link-out | 0 — a URL, not a request |
+
+  **Search-as-you-type must send queries on a debounce, not on input.** It is
+  the one user action whose cost is bounded by typing rather than by
+  deciding, and at 60 requests/min an undebounced field can exhaust the
+  budget from a single review-queue session.
+
+  Matching is **disk-bound, not rate-limit-bound** — now trivially so, since
+  it makes no requests at all.
 - **LMS**: single-threaded — server-side calls must be async
   (`Slim::Networking::SimpleAsyncHTTP`), scanner-side calls synchronous
   (`Slim::Networking::SimpleSyncHTTP`); Perl plugin architecture per the
