@@ -943,22 +943,27 @@ which budgets the sync rather than the render.
 
 ## 11. v1 Scope & Roadmap
 
-> **Partly superseded (decisions §13.8, §13.10.1).** v1's matching is Strict
-> plus the collection match, not Strict plus Structural, and all-remote
-> albums are in v1 scope now rather than waiting for v2's Fuzzy tier.
-> ("OAuth" in the Collection-sync line is a separate, older defect — v1 uses
-> a personal access token, decisions §9.1.)
+v1 assumes a **well-tagged library and a maintained Discogs collection**. It
+draws its conclusions from what the user has already curated in both places and
+adds no machinery for reconciling them when they disagree — a wrongly badged
+album is fixed by correcting the collection or the tags, not in the plugin
+(`squeezewax-v1-decisions.md` §14.4). A user whose Discogs collection does not
+reflect their shelves is outside what this plugin can usefully do for them.
 
 **v1 (core value, smallest surface):**
 - Configurable Discogs tag names, ordered list, with detection (§3, §9).
-- Strict + Structural matching, review queue, manual re-match.
+- Strict identification from tags, plus collection matching for ownership,
+  review queue, manual re-match (§3). **Every album is in scope**, including
+  albums with no local files at all (`squeezewax-v1-decisions.md` §13.10.1).
 - Owned badge (grid + Now Playing) with badge context menu (pressing details,
   credits, on-demand value, Discogs link-out).
-- OAuth + Collection sync (needed for the owned badge).
+- Personal access token + collection sync (`squeezewax-v1-decisions.md` §9.1).
+  Not merely "needed for the owned badge" — the collection is where ownership
+  is determined, so without a valid token there are no badges at all (§8).
 - On-demand marketplace lookup.
 
 **v2:**
-- Fuzzy tier (streaming-album matching) + Wantlist sync & wantlist badge.
+- Wantlist sync & wantlist badge.
 - Triage / library-health page (problem releases only).
 - Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
