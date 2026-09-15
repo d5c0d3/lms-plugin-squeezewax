@@ -982,10 +982,6 @@ advantage there and no way to see the physical object.
 
 ## 12. Open Questions / Follow-ups
 
-> **The multi-disc follow-up is superseded (decisions §13.8).** Structural
-> does not run, so there is no duration-vector multi-disc rule left to
-> validate against real release data. The other follow-ups stand.
-
 All original open design questions have been resolved (see §3–§9 for the
 decisions and where they now live). Remaining follow-ups to verify during
 implementation, rather than open design questions:
@@ -996,18 +992,14 @@ implementation, rather than open design questions:
   than assuming.
 - Choose and verify an actual FX-rate source for the optional currency
   conversion feature (§5/§9) — not yet selected.
-- Multi-disc matching (§3) is defined for standard multi-CD/LP releases;
-  edge cases (e.g. bonus-disc-only mismatches, box sets with non-audio discs)
-  should be validated against real Discogs release data once implementation
-  starts.
-- ~~Verify how LMS's rescan flags changed files~~ — **Not "Resolved" (2026-09-08) as
-  stated below: see `squeezewax-v1-decisions.md` §6 for the corrected hook,
-  and TODO.md's open `lms_album_id` refresh item for what's still
-  unimplemented.** `Slim::Utils::Scanner::API` provides `onNewTrack` /
-  `onChangedTrack` / `onDeletedTrack` / `onFinished` hooks, confirmed
-  against `refs/slimserver` `public/9.1`. `Importer.pm` registers
-  `onChangedTrack` (and `onNewTrack`/`onDeletedTrack`) to accumulate
-  affected album ids per track event. See `implementation-plan.md` §4.6.
+- **How LMS's rescan flags changed files is settled; what remains is
+  unimplemented, not unknown.** `Slim::Utils::Scanner::API` provides
+  `onNewTrack` / `onChangedTrack` / `onDeletedTrack` / `onFinished`, confirmed
+  against `refs/slimserver` `public/9.1`, and `Importer.pm` registers them to
+  accumulate affected album ids per track event
+  (`implementation-plan.md` §4.6). The corrected hook is in
+  `squeezewax-v1-decisions.md` §6; the outstanding `lms_album_id` refresh is an
+  open item in `TODO.md`.
 
 ---
 
