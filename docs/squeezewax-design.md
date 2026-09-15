@@ -164,25 +164,29 @@ browse, play elsewhere).
 
 ## 3. Matching: Linking LMS Albums to Discogs Releases
 
-> **Largely superseded (decisions §13).** Identification for ownership runs
-> against the user's own Discogs collection during its sync, not as a
-> per-album search at scan time, and ownership is its own pass that
-> deliberately does **not** use the file-state skip the re-match triggers
-> below assume — buying a record changes nothing on disk (decisions §13.1,
-> §13.6, §13.7). Stale below in consequence: the pipeline flowchart and
-> walkthroughs 2 and 4, the badge-derivation note under "Match states" (there
-> is no `discogs_collection` table to join — see §10), the multi-disc rule,
-> which has no Structural tier left to govern, and the route to the
-> reject/dismiss requirement, though that requirement itself stands.
-> `album_key`, the three states and Candidate's two Strict variants survive
-> untouched.
+Matching answers two questions that are not the same question, in two passes
+that run at different times.
 
-Matching runs at **library scan time** via `Importer.pm` (synchronous, like
-Spotty). Each result is stored in a plugin-owned table:
+**Identification** — *which Discogs release is this album?* Runs at library scan
+time, per album, inside `Importer.pm`, from the album's own file tags. It skips
+an album whose files have not changed since the last attempt, keyed on
+`source_timestamp` (§10).
 
-```
-album_key → discogs_release_id, match_tier, state, matched_at
-```
+**Ownership** — *does the user own this record?* Runs as a separate pass,
+triggered by a completed collection sync rather than by a scan. It **does not**
+use the file-state skip: buying a record changes nothing on disk, so an album
+whose files are untouched is exactly the album whose ownership may have changed.
+A rescan alone never recovers a badge; a sync does. The sync's own triggers are
+in §9.
+
+The two passes write into one row, and the conclusion is the tuple
+
+`album_key → discogs_release_id, discogs_master_id, ownership, match_tier,
+state, matched_at`
+
+with the ownership label and the identification kept in separate columns because
+they answer separate questions. See §10 for the columns and
+`squeezewax-v1-decisions.md` §13.3 for why conflating them fails.
 
 `album_key` — a hash over the album's tracks' `urlmd5`, sorted — is the
 match's identity, not `lms_album_id`. LMS's own `albums.id` is
@@ -192,146 +196,226 @@ wipe; `urlmd5` is LMS's own cross-wipe key (see §10, and
 still cached alongside for fast lookups, refreshed whenever a rescan
 completes, but is never treated as identity.
 
-### Three matching tiers — a cascading pipeline
+### Two routes, and they conclude different things
 
-> **Superseded (decisions §13.4, §13.8, §13.10.1).** Four claims in this table
-> no longer hold: the cascade itself, since Structural's search-and-fingerprint
-> flow is gone and Fuzzy has no whole-database search left to make; Strict's
-> auto-confirm, which now also requires the tagged release id to be present in
-> the collection; Structural's auto-confirm, since nothing is structurally
-> confirmed; and the `local_tracks == 0` gate named in the Structural row,
-> which is **removed** — all albums are in scope, including all-remote ones.
+The v1 flow is collection-first: the user's own Discogs collection is synced,
+and LMS albums are matched against it. There is no per-album search of the
+Discogs database. Reasoning, and the measurement that produced it, in
+`squeezewax-v1-decisions.md` §13.1 and §13.10.
 
-The tiers run as a **cascade** per album: Strict is tried first; if it can't
-apply (no release ID in tags), Structural is tried; if that finds nothing,
-Fuzzy is tried. The Settings option (§8) selects the **maximum tier enabled**
-(e.g. "Structural" = try Strict then Structural, never Fuzzy) — it is not a
-single-mode picker.
-
-| Tier | Signal | Behavior |
+| Route | What it reads | What it concludes |
 |---|---|---|
-| **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm **when the configured tags agree** — the ideal case for rips tagged with Discogs, which is most of a tagged library. When two configured tags name different releases, or a configured tag's value will not parse, there *is* ambiguity and the album goes to the review queue as a candidate instead. See `squeezewax-v1-decisions.md` §3a. |
-| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. ~~Strong enough to disambiguate near-identical pressings/reissues.~~ — **falsified 2026-09-07, same failure as walkthrough 2 below: Structural disambiguates EDITIONS (masters) — e.g. *Violator* from *Violator Live* from *Violator 2000* — on track count, not pressings, which share a tracklist within one edition.** ~~Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget.~~ — **Falsified 2026-09-07: format cannot be an exclusion gate. Digital releases (FLAC/ALAC/download), USB-delivered concert recordings, and unofficial releases are all objects a user can own. Format, country, released and title are now ranking signals only. The only gate that holds is `local_tracks == 0` (no local files, no evidence about a physical object). Removing the format gate increases candidates per album fetched, which is the main reason §13's budget needs a rewrite — tracked in TODO.md.** |
-| **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
+| **Strict** | A configured tag on the album's files naming a Discogs release id | An **identification**. Ownership only if that same id, or its master, is in the collection |
+| **Collection** | The synced collection, by title then artist | An **ownership** conclusion. Never an identification — it does not say which pressing |
 
-These three are the *cascade's* tiers. The stored `match_tier` records
-**provenance**, so it has a fourth value the cascade never produces:
-`manual`, written when the user establishes the link themselves from the
-review queue or the "re-match" action. That case genuinely is none of the
-three — leaving `strict` would claim a file tag names the release the user
-just overrode, and writing `fuzzy` would claim a search produced it and make
-a resolved row indistinguishable from an unresolved candidate.
+Neither route searches Discogs, and neither reads track durations. Structural
+and Fuzzy matching are gone: both were narrowings of a whole-database search
+that no longer runs (`squeezewax-v1-decisions.md` §13.8).
+
+**Every album is in scope**, including albums with no local files at all. The
+old `local_tracks == 0` gate came from duration fingerprinting, which needed
+files to read durations from; a title comparison needs none. On the reference
+library the gate excluded 186 of 765 albums, and removing it matched 10
+additional owned records (`squeezewax-v1-decisions.md` §13.10.1).
+
+**Title comparison normalises no further than case-folding and whitespace
+collapse.** Both sides are decoded to character strings first; then leading and
+trailing whitespace is trimmed and internal runs collapsed to one space; then
+case is folded. Punctuation-stripping, article-stripping and bracket-suffix
+removal are **not** used — measured, punctuation-stripping gained one album and
+produced one wrong badge, which is a bad trade at 1:1
+(`squeezewax-v1-decisions.md` §13.10.4).
+
+**Artist gates every auto-badge and is not a tiebreak.** An ownership conclusion
+from the collection route requires exactly one collection entry agreeing on both
+title *and* artist. Several candidates, artist disagreeing, or artist absent on
+either side: the album goes to the review queue instead of badging
+(`squeezewax-v1-decisions.md` §13.10.3).
 
 ### Matching pipeline (flowchart)
 
 ```mermaid
 flowchart TD
-  A[LMS album at scan time] --> B{Strict:<br/>release ID in tags?}
-  B -- "yes, release exists" --> C[Confirmed]
-  B -- no --> D{Structural:<br/>track shape matches?}
-  D -- "all discs match" --> C
-  D -- "partial multi-disc match" --> E[Review queue<br/>candidate]
-  D -- "no match" --> F{Fuzzy:<br/>artist + title candidate?}
-  F -- "candidate found" --> E
-  F -- none --> G[Unmatched]
-  E -- "user confirms" --> C
-  C --> H[Badge painted<br/>color from Collection list state]
+    A[Collection sync completes] --> B[For each LMS album]
+
+    B --> C{Tag names a<br/>Discogs release id?}
+
+    C -- yes --> D{That release id<br/>in the collection?}
+    D -- yes --> E["ownership = exact<br/>state = confirmed"]
+
+    D -- no --> F{"A master we already know,<br/>and it is in the collection?<br/>(no lookup — tag or stored value only)"}
+    F -- yes --> G["ownership = version<br/>identification kept, state = candidate"]
+
+    C -- no --> H
+    F -- no --> H{"Collection entries whose<br/>normalised title matches?"}
+
+    H -- "exactly one,<br/>artist agrees" --> I["ownership = version<br/>no identification"]
+    H -- "several, or artist<br/>disagrees or is absent" --> J["review queue<br/>ownership = absent"]
+    H -- none --> K["ownership = absent"]
+
+    E --> L[Badge painted]
+    G --> L
+    I --> L
 ```
 
-**Example walkthroughs:**
+The tests are ordered, and the order is the point: a tag the user supplied
+themselves outranks a title comparison. An album that reaches **H** carrying a
+tag keeps its identification — `discogs_release_id` and `match_tier = 'strict'`
+stay as they are, and only `ownership` is written by the collection route.
 
-1. *Strict:* A rip of *Kind of Blue* carries a Discogs release ID in its file
-   tags (written by the tagger at rip time). The scanner looks up that ID
-   directly → **Confirmed** without any search. This is the expected path for
-   most of the user's ripped library.
-2. *Structural:* An untagged-by-ID rip of a 1994 CD reissue: artist + title
-   search yields six pressings; only one has the same 12 tracks with all
-   durations within ±3 s → **Confirmed** automatically, and ~~it identified
-   the *specific pressing*, not just the album~~ — **falsified 2026-09-07:
-   pressings of one edition share a tracklist, so track shape cannot tell
-   them apart. Verified against master 3855547 (*Escape The Chaos*), whose
-   15 versions include LP variants for Worldwide, UK & Germany, Europe,
-   White Label and Numbered — indistinguishable by track count or
-   durations. Structural identifies the *edition* (the master), not the
-   pressing.**
+**No step in this flow makes a Discogs request.** Identification reads tags from
+files the scanner is already opening; ownership reads the collection the sync
+has already fetched. Node **F** uses a master id only where one is already known
+— from a configured master tag, or stored on the row from an earlier match — and
+never looks one up, because a per-album lookup is the cost
+`squeezewax-v1-decisions.md` §13.1 removed.
 
-   Precision by tier: **Strict** knows the pressing, because the tag names
-   it. **Structural** knows the edition. **Manual** is whatever the user
-   chose.
-3. *Partial multi-disc:* A 2-CD deluxe edition where disc 1 matches perfectly
-   but disc 2 (bonus disc) has an extra track → **not** auto-confirmed; lands
-   in the **review queue** for the user to resolve (maybe they own the
-   standard edition, maybe Discogs' tracklist differs).
-4. *Fuzzy:* A Spotify album (no local files, no durations to fingerprint
-   reliably against a pressing): artist + title search finds a master release
-   → **candidate** in the review queue; the user picks the pressing they own,
-   promoting it to Confirmed.
+**A badge does not require a confirmed state, a tag, or a local file.** Path
+**I** is the common one: 87 of 96 matches on the measured page auto-badged, most
+of them by this route (`squeezewax-v1-decisions.md` §13.10.2, §13.10.4).
+
+**K writes no row.** Absence of a row already means "nothing known", so an album
+identifying nothing and owning nothing is not recorded
+(`squeezewax-v1-decisions.md` §14.8).
+
+**The pass must be deterministic.** The collection payload is discarded after
+the sync (§10), so a re-sync re-derives every conclusion from scratch. The same
+collection against the same library must reach the same answers, or badges
+change between syncs with no visible cause.
+
+1. *Tagged, and owned.* A ripped CD tagged `DISCOGS_RELEASE_ID=1234567`. The
+   scanner reads the tag; the sync finds 1234567 in the collection →
+   **ownership `exact`, state `confirmed`**, badge painted. The expected path
+   for a well-tagged rip of a record the user owns.
+
+2. *Tagged, and owned in a different pressing.* The tag names release 123; the
+   collection holds release 456, a different pressing of the same master. The
+   user owns the record, not that pressing → **ownership `version`**, with the
+   identification left alone: `discogs_release_id` stays 123, `match_tier`
+   stays `strict`, state stays `candidate`. Badge painted. NULLing the release
+   id here would destroy an identification the user supplied
+   (`squeezewax-v1-decisions.md` §13.3).
+
+3. *No tag, no local files, and owned.* A streaming-only album. Exactly one
+   collection entry agrees on normalised title and on artist → **ownership
+   `version`, no identification at all**: NULL release id, NULL `match_tier`,
+   NULL state. Badge painted. This whole population was excluded from matching
+   before `squeezewax-v1-decisions.md` §13.10.1 removed the `local_tracks == 0`
+   gate — 186 of 765 albums on the reference library, of which 10 turned out to
+   be owned.
+
+4. *One record, two albums.* A rip and a stream of the same record are two LMS
+   albums matching one collection entry. **Both badge.** This is the expected
+   shape, not a collision to resolve — measured 9 of 10 cases in that direction
+   (`squeezewax-v1-decisions.md` §13.10.3). The ambiguous direction is the other
+   one: one LMS album matching several collection entries, measured once in 765,
+   which goes to the queue.
+
+5. *Title agrees, artist does not.* A collection entry and an LMS album share a
+   title, but the artists disagree or one side has no artist at all. **No badge
+   — review queue.** Measured 8 of 96 matches. Artist gates every auto-badge
+   rather than only breaking ties (`squeezewax-v1-decisions.md` §13.10.3).
+
+   The stricter behaviour is deliberate. *Substrata* and *Substrata²* are
+   different Biosphere records, and artist cannot separate them; the
+   normalisation rung was chosen so that they do not share a key and the second
+   simply does not match. A missing badge is preferred to a wrong one
+   (`squeezewax-v1-decisions.md` §13.10.4).
 
 ### Match states per album
 
-1. **Unmatched** — no link attempted or no candidate found.
-2. **Candidate** — match awaiting user resolution (review queue). Reached from
-   every tier, not only Fuzzy and partial Structural:
-   - **Strict**, when the configured tags disagree or one will not parse. Two
-     variants, distinguished by `discogs_release_id` — NULL means "we examined
-     this and could not decide", non-NULL means "we propose this, confirm it".
-     The second arises when a conflict demotes a previously *confirmed* row: the
-     adjudicated id is kept, because a decision survives (decisions §2a), while
-     the demotion to Candidate stops the badge immediately.
-   - **Structural**, on a partial multi-disc match.
-   - **Fuzzy**, always.
-3. **Confirmed** — the album is linked to a specific Discogs release.
+`state` describes the **identification** only. Ownership is a separate column
+and is not encoded here (§10).
 
-**Note:** the match state records only *that* a link exists and how sure we
-are of it. Whether the badge paints as "owned" or "wantlist" (and its color)
-is **derived at render time** by joining the confirmed release against
-`discogs_collection.list_state` (§9) — ownership is a property of the user's
-Collection, not of the match itself. (An earlier draft called the state
-"confirmed owned"; that conflated the two.)
+1. **Unmatched** — no identification was made. Either there is no row at all,
+   or there is a row carrying only an ownership conclusion, with NULL `state`,
+   NULL `match_tier` and NULL `discogs_release_id`. Walkthrough 3 is the second
+   form (`squeezewax-v1-decisions.md` §14.8).
+2. **Candidate** — an identification exists that the collection has not
+   corroborated. Reached by every tagged album whose release id is not in the
+   collection, which is most of a library. Two Strict variants remain,
+   distinguished by `discogs_release_id`: NULL means "we examined this and could
+   not decide" — a tag conflict — and non-NULL means "we propose this". The
+   second arises when a conflict demotes a previously confirmed row: the
+   adjudicated id is kept, because a decision survives
+   (`squeezewax-v1-decisions.md` §2a), while the demotion stops the badge
+   immediately.
+3. **Confirmed** — the tagged release id is present in the collection, or the
+   user linked the album by hand (`squeezewax-v1-decisions.md` §13.4).
+
+**`candidate` does not mean "in the review queue".** Most candidates are simply
+albums the user does not own, and nothing needs deciding about them. The queue's
+contents are enumerated in `squeezewax-v1-decisions.md` §13.10.5 and are a much
+smaller set. Anything selecting queue items on `state = 'candidate'` is wrong.
+
+**Badge derivation** (see §4): the badge reads the `ownership` column. There is
+no join and no render-time test — the ownership pass has already decided, and a
+badge paints for `exact` and `version` alike. Confirmation is not required.
 
 ### Confirmation & feedback loops
 
-- The review queue offers search-as-you-type against Discogs to manually link
-  an album to a specific pressing; confirming promotes candidate → confirmed and
-  writes `match_tier = 'manual'`.
-- **The queue must also offer reject / dismiss, not only confirm.** One state the
-  importer can create is otherwise terminal: a confirmed match demoted to
+- The review queue offers search-as-you-type against Discogs to link an album to
+  a specific pressing by hand; confirming writes `match_tier = 'manual'` and
+  `state = 'confirmed'`. A manual link is the user's own decision and is not
+  subject to the collection cross-check that governs Strict.
+- **The queue must also offer reject / dismiss, not only confirm.** One state
+  the importer can create is otherwise terminal: a confirmed match demoted to
   candidate by a tag conflict keeps its adjudicated `discogs_release_id` and its
-  snapshots (decisions §3a), and if the user then removes the tags altogether the
-  importer may not delete it — the row carries a decision, and §2a forbids that.
-  It is skipped by Structural because a `discogs_match` row exists, so with a
-  confirm-only queue the album would propose a release with no tag behind it
-  forever. A human has to be able to say no.
+  snapshots (`squeezewax-v1-decisions.md` §3a), and if the user then removes the
+  tags altogether the importer may not delete it — the row carries a decision,
+  and §2a forbids that. Nothing else will clear it, so with a confirm-only queue
+  the album would propose a release with no tag behind it forever. A human has
+  to be able to say no.
+- **A wrongly auto-badged album has no recovery path in v1.** Ownership `version`
+  is written without a confirmation step, so such an album never reaches the
+  queue and there is nothing to reject. v1 assumes a well-tagged library and a
+  maintained Discogs collection; the fix is to correct the collection or the
+  tags. Measured zero wrong badges at the chosen normalisation rung
+  (`squeezewax-v1-decisions.md` §14.4, §13.10.4).
 - A successful manual "Find on Spotify" (see §6) can retroactively backfill /
   promote the original scan-time match.
 
-### Multi-disc releases & box sets (resolved)
+### Multi-disc releases & box sets
 
-- **Decision: strict per-release matching — all discs must match.**
-  A multi-disc release/box set is only promoted to Structural-tier
-  confirmation if **every disc** in the set matches (track count +
-  per-track duration margin) against the corresponding LMS discs. A partial
-  match (e.g. disc 1 of 2 matches, disc 2 doesn't) does **not** auto-confirm —
-  it falls back to the review queue as a candidate, same as a Fuzzy-tier
-  match, so the user can resolve the discrepancy manually.
+No special rule. A multi-disc release or box set is matched by title and artist
+like any other album, and its ownership is a collection fact rather than a
+property of its discs.
+
+The former rule — a box set confirmed only if every disc matched on track count
+and per-track duration — belonged to Structural matching, which no longer exists
+(`squeezewax-v1-decisions.md` §13.4, §13.8). Whether duration comparison returns
+later as a *ranker* among candidates, rather than as a verdict, is open and is
+not v1 (`squeezewax-v1-decisions.md` §13.8).
 
 ### Re-match triggers
 
-An album is (re-)matched when:
+The two passes are triggered separately, and the difference matters.
 
-- it is **new** at scan time (no `discogs_match` row);
-- its **tags changed** since the last scan (detected via LMS's own
-  changed-file handling during rescan) — the old match row is invalidated and
-  the cascade runs again;
-- the user triggers a **manual "re-match"** action from the album's Discogs
-  context menu (e.g. after fixing tags or learning the auto-match picked the
-  wrong pressing);
-- a full **"clear & rebuild matches"** maintenance action in Settings wipes
-  the match table and re-runs the cascade for the whole library.
+**Identification** re-runs when:
 
-Confirmed matches are otherwise **stable across rescans** — a routine rescan
-does not re-run searches for already-confirmed albums (this is what keeps
-rescans cheap under the rate limit).
+- the album is **new** at scan time (no `discogs_match` row);
+- its **tags changed** since the last scan, detected via LMS's own changed-file
+  handling during rescan — the old identification is invalidated and Strict runs
+  again;
+- the user triggers a **manual "re-match"** from the album's Discogs context
+  menu;
+- a **"clear & rebuild matches"** maintenance action in §9 wipes the match table
+  and re-runs from scratch.
+
+Confirmed identifications are otherwise **stable across rescans**: a routine
+rescan does not re-examine an album whose files have not changed.
+
+**Ownership** re-runs whenever a collection sync completes, for every album —
+**there is no file-state skip**. Buying a record changes nothing on disk, so an
+album whose files are untouched is precisely the album whose ownership may have
+changed; skipping it would mean a badge that never appears until the user edits
+a tag (`squeezewax-v1-decisions.md` §13.6). A sync is three requests for a
+203-item collection and takes seconds, so re-deriving every conclusion is
+cheaper than tracking which ones could have moved.
+
+The sync itself has three triggers — scan start, a configurable interval, and a
+manual button in Settings — set out in §9 and
+`squeezewax-v1-decisions.md` §13.7.
 
 ### Constraints
 
