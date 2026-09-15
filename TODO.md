@@ -399,6 +399,27 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Open design questions
 
+- [ ] **2026-09-13: v1's configurable tag names are promised twice and
+      specified nowhere.** Design §11 lists "Configurable Discogs tag names"
+      as v1 and cross-references "(§3, §9)"; §3 describes an ordered list of
+      tag names being read; §9 has never carried a bullet for it, before or
+      after the reconciliation. A v1 setting with no specification of its
+      default order, its UI, or which tags are in the default set.
+      Surfaced by the post-reconciliation read: the rewritten §9 says
+      "Which tag names are read is a setting (§3)", which points at the gap
+      more directly than the old text did. Related and still open: whether a
+      MASTER-ID tag is among them, which bounds design §3's flowchart node F.
+      Settle both together — they are one question about the same list.
+- [ ] **2026-09-13: design §3's "Find on Spotify" backfill bullet is
+      orphaned.** It says a successful manual "Find on Spotify" (§6) can
+      retroactively backfill or promote the original scan-time match. Nothing
+      in design explains how a Discogs-to-streaming cross-browse action would
+      backfill a Discogs IDENTIFICATION — and under collection-first it is
+      harder to see, since identification comes from a tag and ownership from
+      the collection, neither of which a Spotify lookup touches. It was
+      already unclear before decisions §13 and the reconciliation carried it
+      verbatim rather than inventing a meaning for it. Either work out what it
+      means and say so, or delete it.
 - [ ] **2026-09-13: what does a `version`-ownership context menu offer beyond
       stating the fact?** A version picker promoting the choice to a manual
       match is the candidate, recorded in the reject/dismiss item as
@@ -798,9 +819,12 @@ Shared reminder list. Both I and Claude Code read and update this.
            "must be batched/throttled" (matching now issues no requests at
            all, decisions §13.1). Wrong twice over.
       (AB) design §4's artist-level badge — "off by default to avoid the
-           extra API calls". There are none; owned artists come from the
-           same three-request sync. The default may still be right for other
-           reasons.
+           extra API calls". There are none, and the reason is stronger than
+           first recorded: artist ownership is a LOCAL JOIN over the already
+           written ownership column, not a cheap API call. No Discogs request
+           of any kind is involved. The default may still be right for other
+           reasons — a per-artist badge is visual noise some users will not
+           want — but the stated justification is simply false.
       (AD) design §9's Badge section lists wantlist settings among v1
            settings without the v2 scoping design §4 now carries.
 - [ ] **2026-09-13: which SQLite version ships in the DBD::SQLite under
