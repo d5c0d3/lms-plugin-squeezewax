@@ -2171,6 +2171,10 @@ conclusions and the freshly-synced collection, costing no file reads at all;
 
 ### 13.7 Sync triggers, and the rule that stops badges vanishing
 
+**Corrected 2026-09-15 — see 15.2.** The scan trigger fires when a scan
+completes, in the server, not at scan start. The completed-sync rule below is
+unchanged.
+
 **Decided: three triggers — the start of a music scan, the interval pref, and a
 manual "Sync collection now" button.** The interval and the button were already
 specified in TODO, 2026-09-07; a scan is added because reaching for rescan when
@@ -2947,3 +2951,113 @@ contradicted by §13 — they are merely no longer reachable. Same shape as the
 token-revocation degradation path, and worth recording as a second instance: a
 removed guarantee leaves no trace at the sites that relied on it.
 
+---
+
+## 15. Build-order rewrite rulings
+
+Rulings taken while rewriting the build order from step 4 onward, after design
+was reconciled against §13 and §14.
+
+### 15.1 Master-id tag keys stay a fixed list
+
+**Decided 2026-09-15 (design chat).**
+
+**Decided: the master-id keys remain the fixed conventional list in `Tags.pm`
+(`@MASTER_KEYS`). They are not added to `discogsTagNames` and get no Settings
+list of their own.**
+
+#### What was found
+
+Read from `SqueezeWax/Tags.pm` and `scripts/tags-check.pl`, not observed
+running:
+
+- `discogsTagNames` defaults to `[]`, set at file scope, per §3's choice of
+  detection over guessed defaults. Order and precedence are specified in §3,
+  invalidation in §3b. The detection action is built in `Settings.pm` over
+  `Tags::candidateKeys` (build-order step 3).
+- Master keys are `DISCOGS_MASTER_ID`, `DISCOGS MASTER ID` and
+  `DISCOGS_MASTER_RELEASE_ID`. They are matched case-insensitively with no
+  separator folding, read by `_masterId` only on `decide()`'s clean-hit path,
+  and written by `Match::_recordMatch` into `discogs_master_id`.
+- Design §3 describes flowchart node F's master as coming "from a configured
+  master tag". None exists. That wording is a defect in design, not a behaviour
+  to build.
+
+#### Why not make them configurable
+
+§3 refused guessed defaults for release ids because a silent miss there loses an
+identification. A silent miss on a master key costs much less: the album drops
+from node F to node H (title and artist), which usually still badges it. Making
+the keys configurable would reopen hardware-verified step-3 code — the UI, the
+detection action and §3b invalidation — for a benefit nobody has measured.
+
+#### What this does not settle
+
+- Node F's reach is **unmeasured**. Custom tags never reach `library.db` (§3),
+  so measuring it needs file reads on a real server. See `TODO.md`.
+- `Tags.pm`'s stated reason for fixed keys, "no user-visible effect", no longer
+  holds: node F makes master tags affect badges. The comment is corrected when
+  that file is next touched. The decision stands on the cost-of-miss argument
+  above, not on that comment.
+
+**Revisit** if the node F measurement shows tagged albums that node H fails to
+badge but node F would.
+
+### 15.2 The collection sync and the ownership pass run in the server, after a scan
+
+**Decided 2026-09-15 (design chat).** Corrects §13.7's first trigger.
+
+**Decided: all three sync triggers run the sync and the ownership pass in the
+server process, over asynchronous HTTP. The scan trigger fires on
+`['rescan','done']`, debounced, not at scan start.**
+
+#### What was verified
+
+Checked against slimserver `a670a38c2b14ad42b86a39884bcb842121b35571`
+(`public/9.1`, 2026-06-19), the same pin as `refs/`:
+
+- `Slim/Networking/SimpleSyncHTTP.pm` `new` logs a backtrace outside the
+  scanner: "DO NOT USE SYNCHRONOUS CALLS IN THE SERVER! Use SimpleAsyncHTTP
+  instead!"
+- `runScanPostProcessing`'s only live caller is `scanner.pl`. Single-directory
+  rescans driven inside the server never reach it.
+- `['rescan','done']` fires at six sites: `Slim/Utils/SQLiteHelper.pm`
+  `_notifyFromScanner` on scanner exit, clean or aborted; three in
+  `Slim/Utils/Scanner/Local.pm`, each inside `!main::SCANNER`;
+  `Slim/Music/Import.pm` `stillScanning`'s crash cleanup; and
+  `Slim/Music/Import.pm` `abortScan`. Five follow `setIsScanning(0)`.
+  `abortScan` clears it only when no external scanner is running.
+- No plugin-facing scan-start notification was found by grepping for
+  `notifyFromArray` with `'rescan'`. Other event mechanisms were not searched.
+
+#### Why not at scan start
+
+The server cannot write while a scan runs (build-order step 3, finding 2b;
+`Match::_writeRefusal`). A pass run at scan start would also read
+identifications the scan has not yet refreshed. §13.7's reason for adding a scan
+trigger — users already rescan when something changes — holds equally for the
+end of a scan.
+
+#### Why not in the scanner
+
+- The interval and manual triggers have no scanner process, so the server needs
+  its own sync anyway. Doing it in the scanner too means two sync
+  implementations under a rule (design §3) that the pass be deterministic.
+- In-server rescans never reach the importer.
+- A Discogs stall would stall the scan: `API.pm` allows three 60-second
+  backoffs per request.
+- The importer's `use` gate is tied to tag names.
+
+#### Obligations
+
+1. A pass whose write is refused stays pending for the next notification. It is
+   never dropped, and debouncing must not suppress the retry. Otherwise an
+   aborted scan silently skips a sync.
+2. Tag reads in the pass (§13.5) use a Scheduler task, as `Settings.pm`'s
+   detection does, not a blocking loop.
+3. The rate-limit wait is non-blocking. `API.pm`'s pure functions are reused;
+   its `sleep`-based `get` is not.
+
+**Unverified:** that a later `['rescan','done']` always follows an aborted
+external scan. Inferred from `_notifyFromScanner`'s `exit` branch in
+`Slim/Utils/SQLiteHelper.pm`, not observed. On the hardware list in `TODO.md`.
