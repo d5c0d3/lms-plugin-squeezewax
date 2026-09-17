@@ -102,6 +102,18 @@ Shared reminder list. Both I and Claude Code read and update this.
           (`match_tier`, `snapshot_track_count`) instead of
           `(state, snapshot_track_count)`. Verify with EXPLAIN QUERY PLAN
           that the recovery lookup uses it, per obligation (d)'s standard.
+      (h) NARROW `discogs_no_match.tier` to `CHECK (tier IN ('strict'))`
+          (decisions §15.6), by `DROP TABLE IF EXISTS` and recreate — NOT by
+          copying, so surviving `'structural'` rows are discarded rather than
+          failing the copy. Three sub-obligations:
+          - GREP first and confirm nothing writes `'structural'` to this
+            table. §15.6 records that as inferred, not verified.
+          - UPDATE `scripts/schema-check.pl`: `'structural'` must now be
+            REJECTED, and the "same album_key takes a second row under a
+            different tier" case has no second valid tier in v1, so it
+            changes shape rather than being deleted.
+          - The drop costs one rescan's worth of re-reads for untagged
+            albums. Expected, not a defect.
 - [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
       `discogs_collection`, which v1 must not have.** VERIFIED in
       `_migration_1`: the table plus an index on
@@ -446,7 +458,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       8 review queue and manual re-match (decisions §13.10.5, §14.9);
       9 owned badge and context menu (design §4, decisions §14.5, §14.10);
       10 on-demand marketplace lookup (design §7).
-      Open questions blocking it:
+      Open questions blocking it. CONVENTION: an open one ends with
+      "Not decided."; a settled one carries a "RESOLVED <date>" line naming
+      the decision record. Grep for "Not decided." to list what is still
+      open — two design-chat reports were wrong about this because the
+      marker had not been applied consistently.
       Q1 — existing `strict`/`confirmed` rows: migration 3 demotes them all
         and the first ownership pass re-promotes owned ones, or the ownership
         pass demotes the unowned ones. Demoting first removes them from
@@ -459,6 +475,9 @@ Shared reminder list. Both I and Claude Code read and update this.
         it narrow in migration 3? The table is regenerable, so it could be
         dropped and recreated rather than rebuilt. Not in migration 3's
         recorded obligations as far as the design chat read.
+        RESOLVED 2026-09-15 — decisions §15.6: it narrows to `strict`, by
+        DROP and recreate inside migration 3, keeping the `tier` column and
+        the composite PK. Now obligation (h) on the migration item.
       Q3 — RESOLVED, decisions §15.2.
       Q4 — does the ownership pass treat "Various" and "Various Artists" as
         the same artist? Discogs uses the former, LMS the latter (7 of 100
