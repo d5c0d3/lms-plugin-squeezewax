@@ -113,7 +113,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       conclusion other than `absent`. Without this the pass would write 765
       rows on the reference library, most of them empty. The invariant is
       NEW in §14.8 — it follows from the columns but was never stated.
-- [ ] **2026-09-13: is a master-id tag among the configurable tag names?**
+- [x] **2026-09-13: is a master-id tag among the configurable tag names?**
       UNVERIFIED — `SqueezeWax/Tags.pm` settles it. Design §3's flowchart
       node F asks whether an album's master is in the collection, and it
       fires only where the master is ALREADY known: from a configured tag, or
@@ -123,6 +123,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       in v1 and essentially all version ownership comes from the
       title-and-artist route. That does not make the flow wrong; it changes
       which path is the main one.
+      2026-09-15, RESOLVED — decisions §15.1. No master tag is configurable:
+      `Tags.pm`'s `@MASTER_KEYS` is a fixed list of three spellings, read only
+      on `decide()`'s clean-hit path. The "near-dead if not configured by
+      default" reasoning above was built on the wrong premise — node F is
+      live for those spellings, and its real reach is unmeasured (see the
+      node F measurement item).
 - [ ] **2026-09-13: confirm the no-master sentinel against a fixture.**
       Design's ownership test guards against it, and the reconciliation
       carried the guard forward without verifying it. Reported as `0` in
@@ -396,20 +402,82 @@ Shared reminder list. Both I and Claude Code read and update this.
       path for it by decision — decisions §14.4 — on the stated assumption of a
       well-tagged library and a maintained Discogs collection. Grounds (a) and
       (b) are unaffected and still require reject/dismiss.
+- [ ] **2026-09-15, BUILD ORDER MUST HANDLE: `Match::_recordMatch` writes
+      `state = 'confirmed'` on every clean tag hit, with no collection
+      check.** VERIFIED: the SQL literal is `'strict','confirmed'`, and
+      `match-check.pl` asserts "a clean hit auto-confirms". Design §3 node E
+      and decisions §13.4 confirm only when the tagged id is in the
+      collection. INFERRED, not observed in the database: reference-server
+      rows are therefore confirmed regardless of ownership. Knock-ons: existing strict rows need their state re-derived
+      (Q1 in the build-order rewrite item below); `hasAnyStrictMatch`
+      keys on strict+confirmed, so the anomaly warning changes meaning
+      (INFERRED); snapshots are captured at confirm time, which moves if
+      confirmation moves to the server-side pass; comments saying "the badge
+      join is state='confirmed'" are stale.
+- [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
+      owned and tagged). It now runs server-side in a Scheduler task
+      (decisions §15.2), so its size bounds how long the ownership pass takes.
+      Unmeasured.
+- [ ] **2026-09-15: build-order rewrite from step 4 — in progress, NOT
+      decided.** The design chat has proposed a sequence; no plan file exists
+      yet. Recorded so it is not re-derived from scratch, not as a ruling.
+      Proposed, in order:
+      4 identification rework (importer stops writing `confirmed`; drop the
+        `local_tracks == 0` gate; detection bare-master fix; stale comments;
+        `hasAnyStrictMatch` semantics);
+      5 migration 3 (its obligations as already recorded in this file);
+      6 collection sync (server-side, async — decisions §15.2);
+      7 ownership pass (design §3 nodes C–K, decisions §14.8, §13.5);
+      8 review queue and manual re-match (decisions §13.10.5, §14.9);
+      9 owned badge and context menu (design §4, decisions §14.5, §14.10);
+      10 on-demand marketplace lookup (design §7).
+      Open questions blocking it:
+      Q1 — existing `strict`/`confirmed` rows: migration 3 demotes them all
+        and the first ownership pass re-promotes owned ones, or the ownership
+        pass demotes the unowned ones. Demoting first removes them from
+        orphan recovery (`state = 'confirmed'`) until a sync completes.
+        Leaning: the pass does it, now that §15.2 runs it after identification.
+        Not decided.
+      Q2 — `discogs_no_match.tier`'s CHECK still allows `'structural'`. Does
+        it narrow in migration 3? The table is regenerable, so it could be
+        dropped and recreated rather than rebuilt. Not in migration 3's
+        recorded obligations as far as the design chat read.
+      Q3 — RESOLVED, decisions §15.2.
+      Q4 — does the ownership pass treat "Various" and "Various Artists" as
+        the same artist? Discogs uses the former, LMS the latter (7 of 100
+        fixture entries, against 95 compilations). Under the badging rule an
+        artist disagreement sends the album to the review queue, so without a
+        rule most matched compilations queue for a lexical reason. The
+        title-agreement measurement reports the bucket split both ways and
+        deliberately does not add the equivalence. Recorded 2026-09-15: the
+        question is open and blocks step 7. Not decided.
+      Dependencies the design chat believes are already in TODO.md, not
+      verified by it: (i) Various/Various Artists: FOUND at line 613
+      (ii) version-menu picker: FOUND at lines 370, 423, 533
+      (iii) marketplace minimum scope: FOUND at line 445
+      (iv) migration 3 obligations: FOUND at lines 63, 292, 937
+      (i) matched only the pages 2-3 measurement item, not a decision item.
 
 ## Open design questions
 
-- [ ] **2026-09-13: v1's configurable tag names are promised twice and
+- [x] **2026-09-13: v1's configurable tag names are promised twice and
       specified nowhere.** Design §11 lists "Configurable Discogs tag names"
       as v1 and cross-references "(§3, §9)"; §3 describes an ordered list of
       tag names being read; §9 has never carried a bullet for it, before or
-      after the reconciliation. A v1 setting with no specification of its
-      default order, its UI, or which tags are in the default set.
+      after the reconciliation. ~~A v1 setting with no specification of its
+      default order, its UI, or which tags are in the default set.~~
       Surfaced by the post-reconciliation read: the rewritten §9 says
       "Which tag names are read is a setting (§3)", which points at the gap
       more directly than the old text did. Related and still open: whether a
       MASTER-ID tag is among them, which bounds design §3's flowchart node F.
       Settle both together — they are one question about the same list.
+      2026-09-15, CORRECTED — the premise was false. Default and order are
+      specified in decisions §3, invalidation in §3b, and all of it is built
+      in step 3: pref `discogsTagNames`, default `[]` (`Tags.pm` file-scope
+      init), user-set order, detection action (`Settings.pm` over
+      `Tags::candidateKeys`). The residual is design text only: design
+      carries none of it. Design-fix pass, not the build order. The
+      master-id half is decisions §15.1.
 - [ ] **2026-09-13: design §3's "Find on Spotify" backfill bullet is
       orphaned.** It says a successful manual "Find on Spotify" (§6) can
       retroactively backfill or promote the original scan-time match. Nothing
@@ -588,6 +656,36 @@ Shared reminder list. Both I and Claude Code read and update this.
       mirror at all (see the "Next — build-order steps 3–5" item above);
       ownership is a derived per-album label, not a synced table. Revisit
       if/when a collection mirror is actually built.
+- [ ] **2026-09-15: design-fix pass — wording defects recorded, not fixed,
+      during the build-order rewrite.** The rewrite session was scoped away
+      from design, so these wait for a bounded pass of their own
+      (working-agreement §2 wants same-session fixes; the session brief
+      overrode it deliberately).
+      (a) Design §3, node F: "from a configured master tag". None exists —
+          decisions §15.1.
+      (b) Design §5: "Each page is matched against LMS albums in memory, the
+          conclusion is written to the ownership column". Per-page writes
+          break decisions §13.7 (recompute only from a completed sync) and
+          §13.10.3 ("exactly one collection entry" needs the whole
+          collection). The pass needs a whole-sync in-memory index, no writes
+          until the last page, discarded after. INFERRED from reading.
+      (c) Design's wording of the sync's scan trigger, if it places it at
+          scan start: decisions §15.2 moves it to scan completion, in the
+          server. Locations: design §3.
+      (d) Design carries none of decisions §3's tag-name specification (see
+          the ticked tag-names item).
+- [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
+      candidate.** `Tags::candidateKeys` corroborates a bare integer when the
+      key matches `/DISCOG/i`, and bare digits parse through
+      `_parseReleaseId`, so `DISCOGS_MASTER_ID=999` would be listed as a
+      corroborated release-id key. A user who ticks it alone stores master ids
+      as release ids. INFERRED from reading, untested — `tags-check.pl`
+      covers only the master-URL form. Step-3 code; schedule in the build
+      order.
+- [ ] **2026-09-15, recorded not acted on: `API.pm`'s synchronous `get` has no
+      v1 caller** once Structural is gone and the sync is server-side
+      (decisions §15.2). Keep it, or record why it stays, when the sync step
+      is planned.
 
 ## Waiting — needs a real server
 
@@ -766,6 +864,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       header records that discogs.com returns 403 to automated fetches, so
       it was never confirmed against the live site. One browser click
       settles it.
+- [ ] **2026-09-15, NEEDS A REAL SERVER: node F's reach.** Custom tags are not
+      in `library.db` (decisions §3), so count from files: albums with a clean
+      release tag AND a master key (`Tags.pm` `@MASTER_KEYS`) AND release id
+      not in the collection AND master in the collection; of those, how many
+      node H would NOT badge. Decisions §15.1's revisit trigger.
+- [ ] **2026-09-15, NEEDS A REAL SERVER: abort a scan mid-run** and confirm a
+      second `['rescan','done']` arrives after the scanner exits, and that a
+      pending ownership pass then completes. Decisions §15.2 obligation 1
+      rests on this; inferred from `_notifyFromScanner`'s `exit` branch,
+      not observed.
 
 ## Waiting — external
 
