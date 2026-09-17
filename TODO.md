@@ -445,7 +445,9 @@ Shared reminder list. Both I and Claude Code read and update this.
         pass demotes the unowned ones. Demoting first removes them from
         orphan recovery (`state = 'confirmed'`) until a sync completes.
         Leaning: the pass does it, now that §15.2 runs it after identification.
-        Not decided.
+        RESOLVED 2026-09-15 — decisions §15.3, as the leaning above: the pass
+        promotes and demotes; migration 3 copies `state` unchanged
+        (obligation (e) on the migration item).
       Q2 — `discogs_no_match.tier`'s CHECK still allows `'structural'`. Does
         it narrow in migration 3? The table is regenerable, so it could be
         dropped and recreated rather than rebuilt. Not in migration 3's
@@ -472,8 +474,10 @@ Shared reminder list. Both I and Claude Code read and update this.
         capturing a snapshot on a CONFLICT row would make that delete
         unreachable and leave phantom conflict rows in the queue forever.
         Whatever is decided must leave conflict rows without a snapshot.
-        Design §10's comment is a wording defect either way — add to the
-        design-fix item when Q6 is ruled. Not decided.
+        RESOLVED 2026-09-15 — decisions §15.4: capture stays at
+        identification, conflict rows never carry a snapshot, and the pass
+        neither captures nor refreshes. No code change; the residual is
+        design §10's wording, now item (e) of the design-fix list.
       Q7 — which step owns orphan recovery? It is NOT built: its `TODO.md`
         item ("writes an UPDATE, not an INSERT") is unticked and `Match.pm`
         has no relink path. The step-2 plan deferred it to "step 3/4" and
@@ -702,6 +706,10 @@ Shared reminder list. Both I and Claude Code read and update this.
           server. Locations: design §3.
       (d) Design carries none of decisions §3's tag-name specification (see
           the ticked tag-names item).
+      (e) Design §10: the `snapshot_*` comment says "captured at confirm
+          time". Decisions §15.4 puts capture at identification, which is
+          where the code has always put it; confirm time is now a different
+          moment in a different process (§15.2, §15.3).
 - [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
       candidate.** `Tags::candidateKeys` corroborates a bare integer when the
       key matches `/DISCOG/i`, and bare digits parse through
