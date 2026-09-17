@@ -90,6 +90,11 @@ Shared reminder list. Both I and Claude Code read and update this.
           needs no change. Recovery selects `state = 'confirmed'`, so NULL
           rows should be excluded by the predicate — INFERRED from the
           predicate, not verified against a query plan (decisions §14.8).
+      (e) COPY `state` AND `match_tier` FORWARD UNCHANGED, and set
+          `ownership = 'absent'` on every copied row (decisions §15.3). COUNT
+          rows before and after the rebuild and assert equal; assert that no
+          row's `state` differs from its pre-migration value. The ownership
+          pass, not the migration, re-derives `state`.
 - [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
       `discogs_collection`, which v1 must not have.** VERIFIED in
       `_migration_1`: the table plus an index on
@@ -454,6 +459,26 @@ Shared reminder list. Both I and Claude Code read and update this.
         title-agreement measurement reports the bucket split both ways and
         deliberately does not add the equivalence. Recorded 2026-09-15: the
         question is open and blocks step 7. Not decided.
+      Q5 — RECORDED as its own item under "Open design questions": orphan
+        recovery's reach shrinks under decisions §13.4. Blocks step 8.
+      Q6 — when is the orphan-recovery snapshot captured? Design §10 says
+        "at confirm time", which was the same instant as identification while
+        `_recordMatch` confirmed. Decisions §15.2 and §15.3 split them across
+        two processes. Leaning: capture at identification, since the scanner
+        has the LMS album data in hand and the pass would otherwise re-read it
+        per promotion. CONSTRAINT, verified in `Match.pm::_recordNoMatch`: the
+        one permitted deletion requires `state = 'candidate' AND
+        discogs_release_id IS NULL AND snapshot_track_count IS NULL`, so
+        capturing a snapshot on a CONFLICT row would make that delete
+        unreachable and leave phantom conflict rows in the queue forever.
+        Whatever is decided must leave conflict rows without a snapshot.
+        Design §10's comment is a wording defect either way — add to the
+        design-fix item when Q6 is ruled. Not decided.
+      Q7 — which step owns orphan recovery? It is NOT built: its `TODO.md`
+        item ("writes an UPDATE, not an INSERT") is unticked and `Match.pm`
+        has no relink path. The step-2 plan deferred it to "step 3/4" and
+        step 3 did not take it. The proposed sequence above does not name it.
+        Not decided.
       Dependencies the design chat believes are already in TODO.md, not
       verified by it: (i) Various/Various Artists: FOUND at line 613
       (ii) version-menu picker: FOUND at lines 370, 423, 533
@@ -689,6 +714,22 @@ Shared reminder list. Both I and Claude Code read and update this.
       v1 caller** once Structural is gone and the sync is server-side
       (decisions §15.2). Keep it, or record why it stays, when the sync step
       is planned.
+- [ ] **2026-09-15: orphan recovery's reach shrinks under decisions §13.4, and
+      it can lose user work.** Recovery selects `state = 'confirmed'`
+      (§14.8, inferred from the predicate; the index is commented "confirmed
+      rows whose snapshot might fit a new album" in
+      `Schema.pm::_migration_1`). Under §13.4 only OWNED albums reach
+      `confirmed`, so two classes now sit permanently outside recovery: a
+      tagged-but-unowned album, and — the one that matters — **a MANUAL match
+      on an unowned album**, which is work the user typed. When `album_key`
+      changes (files moved, retagged, library rebuilt) those rows orphan with
+      no relink path and the manual choice is gone, silently.
+      Recovery may need to key on "has an identification"
+      (`match_tier IS NOT NULL`) rather than on `state`, or `manual` rows may
+      need their own clause. This is a consequence of §13.4 that predates the
+      build-order rewrite and was never followed through. Recovery is not yet
+      built (see Q7), so deciding it now costs nothing but a ruling. Blocks
+      the review-queue/manual-re-match step.
 
 ## Waiting — needs a real server
 
