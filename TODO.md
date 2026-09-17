@@ -135,7 +135,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       collection `basic_information` and `null` in the release payload —
       RECALLED from the existing design text, NOT verified. One of the ten
       captured fixtures should settle it.
-- [ ] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
+- [x] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
       superseded by decisions §13 and §13.10 and has NOT been reconciled.
       working-agreement §2 makes design win over everything and calls decisions
       "not live spec", so the precedence rule currently points at the stale
@@ -147,6 +147,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       rewritten in its own voice around the collection-first flow, citing
       decisions §13 for the reasoning, with no superseded prose retained (design
       is live spec, not a record). Do the reconciliation BEFORE the build order.
+      2026-09-15: done. Reconciled 2026-09-13, f9a7644..32a6504; rulings in
+      decisions §14; banner removed. Ticked late — the reconciliation session
+      did not close this item.
 - [ ] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
       it now contradict decisions 13.10.1 and must be changed by the build
       order. The gate came from Structural's duration fingerprint, which no
