@@ -3147,7 +3147,10 @@ moments and the code follows neither by design — it follows identification,
 because that is where it always was.
 
 **Verified by reading, not observed running:** `Match.pm::_recordMatch` writes
-the `snapshot_*` columns in the same upsert as the identification.
+~~the `snapshot_*` columns~~ — **corrected 2026-09-15: `snapshot_album_title`
+and `snapshot_track_count` only. Nothing in the code writes `snapshot_artist`
+or `snapshot_total_duration`; see §15.5** — in the same upsert as the
+identification.
 `_recordConflict` names only `album_key`, `lms_album_id`, `discogs_release_id`,
 `match_tier`, `state`, `matched_at` and `source_timestamp` — no snapshot
 columns.
@@ -3192,3 +3195,112 @@ instead, and it is not decided here.
 
 **Design §10's "captured at confirm time" is a wording defect**, recorded in
 `TODO.md`'s design-fix item.
+
+### 15.5 Orphan recovery: what it is for, what it compares, and which rows it sees
+
+**Decided 2026-09-15 (design chat).** Settles Q5, Q7 and the snapshot-column
+question of the build-order rewrite, and writes down the fit predicate §2 left
+as a phrase.
+
+**Decided, in four parts:**
+
+1. **Columns.** `snapshot_artist`, `snapshot_album_title` and
+   `snapshot_track_count` are written and kept. `snapshot_total_duration` is
+   dropped in migration 3.
+2. **The fit predicate.** Exact equality on artist, album title and track
+   count, with no normalisation. One fit relinks. Zero fits falls through to
+   identification. Two or more goes to the review queue, pre-filled (§2).
+3. **Reach.** Recovery considers any orphaned row that has an identification
+   and a snapshot — `match_tier IS NOT NULL AND snapshot_track_count IS NOT
+   NULL` — not rows selected on `state`.
+4. **Ownership.** Recovery belongs to the identification step: it runs in the
+   scanner, on a key miss, before the tag read. The unambiguous relink is built
+   there; the ambiguous branch is an obligation on the review-queue step.
+
+#### Why: recovery exists for manual rows
+
+Design §3 states v1's premise: a well-tagged library and a maintained Discogs
+collection. Under that premise, **a well-tagged album does not need recovery at
+all.** Files move, `album_key` changes, no row matches, identification runs
+again, reads the same tag, produces the same release id; ownership re-derives at
+the next sync (§13.4). The match rebuilds itself, and recovery is at most an
+optimisation that saves re-reading two files.
+
+**A manual row is the case that genuinely loses work.** The user chose that
+release precisely because the tags were absent, wrong or contradictory, so
+re-identification produces nothing and the choice is gone. A conflict-demoted
+row is the same shape: it keeps its adjudicated `discogs_release_id` and its
+snapshots (§3a) while dropping to `candidate`, and current tags cannot reproduce
+it.
+
+That reordering is what settles the other three parts.
+
+#### Why these three columns
+
+- **`snapshot_artist` is needed and is never written.** Nothing in the code
+  writes it: one grep hit, the DDL in `Schema.pm::_migration_1` (verified
+  2026-09-15 by Claude Code). Recovery as designed therefore cannot work today.
+  This is a defect, not a column question, and it is recorded in `TODO.md`
+  against the identification step.
+- **`snapshot_album_title` and `snapshot_track_count`** are written by
+  `Match.pm::_recordMatch` and are the pair that identifies a local album
+  cheaply; the orphan index is built on the count.
+- **`snapshot_total_duration` loses its only stated justification.** §2 admits
+  it under "the same confidence bar Structural already auto-confirms on", and
+  that bar was track count plus per-track durations. Structural is gone
+  (§13.4, §13.8).
+
+  The design chat first defended it as a tiebreak between two local copies of
+  the same album — an original and a remaster with the same artist, title and
+  track count. **That argument was wrong and is recorded so it is not
+  re-proposed:** under v1's well-tagged premise those are different releases
+  carrying different tags, so identification separates them without recovery;
+  and where they are *not* tagged that way, the library is the badly-tagged one
+  v1 does not serve (§14.4). Nothing that remains in v1 reads the column.
+
+  Migration 3 is a full table rebuild already (§14.1), so dropping it now is
+  free. Dropping it later costs another rebuild of the one table that is not
+  disposable.
+
+#### Why exact equality, and no normalisation
+
+Both sides of this comparison are LMS strings: the snapshot was taken from an
+LMS album, and the candidate is an LMS album. L2 normalisation exists for
+comparing Discogs' text against LMS's (§13.10.4) and has no work to do here.
+Exact equality also keeps the predicate deterministic and cheap, which matters
+because it runs on every key miss during a scan.
+
+**Failing safe:** ambiguity goes to the queue, never to a guess. Zero fits costs
+nothing beyond the re-identification that would have happened anyway.
+
+#### Why reach is keyed on identification, not on `state`
+
+Selecting on `state = 'confirmed'` would skip conflict-demoted rows, which are
+exactly the rows whose tags can no longer reproduce their identification.
+Including `strict` `candidate` rows is harmless: a relink is cheaper than
+re-reading files and produces the same release id, and where it would not,
+identification overwrites it in the same scan.
+
+**This changes the orphan index** from `(state, snapshot_track_count)` to a form
+matching the new predicate. Migration 3 can do that for nothing.
+
+#### Why the identification step owns it
+
+Recovery runs on a key miss, in the scanner, before tags are read — §2's own
+placement. It has nothing to do with ownership or with the sync, so it does not
+belong to the pass (§15.2). The ambiguous branch needs a review queue that does
+not exist until the queue step, so until then an ambiguous orphan stays
+orphaned: no loss, no automatic relink.
+
+#### What this does not settle, and one hole worth naming
+
+- **A retagged album title defeats recovery.** If the user changes the album
+  title, no snapshot fits, and a manual row's work is lost even though recovery
+  ran. Tagged albums self-heal through identification; manual ones do not.
+  Recorded in `TODO.md` rather than solved: the alternatives (two-of-three
+  matching, or normalising the comparison) both trade a fail-safe predicate for
+  a guess.
+- **The premise is stated, not measured.** "Well-tagged library, maintained
+  collection" is design §3's assumption about this user's library, not a
+  measurement of it. If it proves optimistic, what degrades is recovery's
+  coverage of tagged albums, and §14.4's answer applies: fix the tags.
