@@ -467,7 +467,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       "Not decided."; a settled one carries a "RESOLVED <date>" line naming
       the decision record. Grep for "Not decided." to list what is still
       open — two design-chat reports were wrong about this because the
-      marker had not been applied consistently.
+      marker had not been applied consistently. The two occurrences of the
+      phrase inside THIS note are expected hits; count from the Q lines
+      below, not from a raw grep total.
       Q1 — existing `strict`/`confirmed` rows: migration 3 demotes them all
         and the first ownership pass re-promotes owned ones, or the ownership
         pass demotes the unowned ones. Demoting first removes them from
@@ -491,7 +493,14 @@ Shared reminder list. Both I and Claude Code read and update this.
         rule most matched compilations queue for a lexical reason. The
         title-agreement measurement reports the bucket split both ways and
         deliberately does not add the equivalence. Recorded 2026-09-15: the
-        question is open and blocks step 7. Not decided.
+        question is open and blocks step 7.
+        RESOLVED 2026-09-15 — decisions §15.7: they agree. The LMS side is
+        `Slim::Music::Info::variousArtistString()`, never a literal; the
+        Discogs side is `Various` or `Various Artists` after the ` (N)`
+        strip, both case-folded. `albums.compilation` is deliberately not
+        sufficient on its own. GATED: the ownership pass must not auto-badge
+        a `compilation = 1` album on this equivalence until the pages 2–3
+        measurement reports — see that item's four added questions, and Q9.
       Q5 — RESOLVED 2026-09-15 — decisions §15.5: recovery considers any
         orphaned row with an identification and a snapshot
         (`match_tier IS NOT NULL AND snapshot_track_count IS NOT NULL`),
@@ -881,6 +890,27 @@ Shared reminder list. Both I and Claude Code read and update this.
       absent: it measured zero on page 1 only because no compilation matched
       there, and there are 95 LMS compilations. Pages 2-3 could move the
       auto-badge rate materially. Needs a token and a live sync.
+      2026-09-15, SCOPE ADDED — decisions §15.7 gates compilation
+      auto-badging on this measurement. Four questions it must answer, all
+      answerable from the same fixture plus pages 2 and 3, at no extra
+      request cost:
+      (i)   how many LMS albums with `compilation = 1` match a collection
+            entry at L2 — page 1 measured ZERO, so §15.7's premise that
+            most matched compilations would queue is a projection;
+      (ii)  whether any two collection entries, or a collection entry and a
+            DIFFERENT LMS album, share a normalised compilation title —
+            this is the wrong-badge exposure §15.7 accepts;
+      (iii) for each matched compilation, whether `albums.year` equals the
+            Discogs `basic_information.year` — is year usable as a
+            confirmation test at all (Q9);
+      (iv)  whether `albums.label` is populated on the reference server, and
+            whether the files carry a LABEL or ORGANIZATION tag. VERIFIED in
+            slimserver `a670a38c2b14` that nothing in 9.1 writes the column;
+            (iv) checks that empirically and asks what a file read would
+            cost to get it (Q9).
+      Add no rule mid-run: report the numbers, decide afterwards. That is
+      the same trap warning this measurement's first run honoured over the
+      `Various` equivalence itself.
 - [ ] **2026-09-11: measure how many of the ~~764~~ — corrected 2026-09-12:
       765 — reference albums have any local track with secs IS NULL.** Feeds
       the review-queue sizing item below; the §12.2 rule is correct at any
