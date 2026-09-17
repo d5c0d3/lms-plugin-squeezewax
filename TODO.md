@@ -95,6 +95,13 @@ Shared reminder list. Both I and Claude Code read and update this.
           rows before and after the rebuild and assert equal; assert that no
           row's `state` differs from its pre-migration value. The ownership
           pass, not the migration, re-derives `state`.
+      (f) DROP `snapshot_total_duration` (decisions §15.5). Nothing in v1
+          reads or writes it; the rebuild makes dropping it free. COUNT the
+          columns of the rebuilt table and assert the expected set.
+      (g) REBUILD the orphan index to match §15.5's predicate
+          (`match_tier`, `snapshot_track_count`) instead of
+          `(state, snapshot_track_count)`. Verify with EXPLAIN QUERY PLAN
+          that the recovery lookup uses it, per obligation (d)'s standard.
 - [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
       `discogs_collection`, which v1 must not have.** VERIFIED in
       `_migration_1`: the table plus an index on
@@ -461,8 +468,11 @@ Shared reminder list. Both I and Claude Code read and update this.
         title-agreement measurement reports the bucket split both ways and
         deliberately does not add the equivalence. Recorded 2026-09-15: the
         question is open and blocks step 7. Not decided.
-      Q5 — RECORDED as its own item under "Open design questions": orphan
-        recovery's reach shrinks under decisions §13.4. Blocks step 8.
+      Q5 — RESOLVED 2026-09-15 — decisions §15.5: recovery considers any
+        orphaned row with an identification and a snapshot
+        (`match_tier IS NOT NULL AND snapshot_track_count IS NOT NULL`),
+        not rows selected on `state`. The premise of the original item was
+        partly wrong; see its own item, now ticked.
       Q6 — when is the orphan-recovery snapshot captured? Design §10 says
         "at confirm time", which was the same instant as identification while
         `_recordMatch` confirmed. Decisions §15.2 and §15.3 split them across
@@ -482,13 +492,24 @@ Shared reminder list. Both I and Claude Code read and update this.
         item ("writes an UPDATE, not an INSERT") is unticked and `Match.pm`
         has no relink path. The step-2 plan deferred it to "step 3/4" and
         step 3 did not take it. The proposed sequence above does not name it.
-        Not decided.
+        RESOLVED 2026-09-15 — decisions §15.5: recovery belongs to the
+        identification step (step 4), which builds the unambiguous relink.
+        The ambiguous branch is an obligation on the review-queue step.
       Dependencies the design chat believes are already in TODO.md, not
       verified by it: (i) Various/Various Artists: FOUND at line 613
       (ii) version-menu picker: FOUND at lines 370, 423, 533
       (iii) marketplace minimum scope: FOUND at line 445
       (iv) migration 3 obligations: FOUND at lines 63, 292, 937
       (i) matched only the pages 2-3 measurement item, not a decision item.
+- [ ] **2026-09-15: nothing writes `snapshot_artist`, so orphan recovery
+      cannot work.** VERIFIED 2026-09-15: one grep hit, the DDL in
+      `Schema.pm::_migration_1`. `Match.pm::_recordMatch` writes
+      `snapshot_album_title` and `snapshot_track_count` only. Decisions §15.5
+      makes artist part of the fit predicate, so the identification step
+      (step 4) must start writing it. Conflict rows still carry no snapshot
+      (§15.4). Offline assertions to add: a clean hit writes all three
+      snapshot columns; a conflict row's snapshot columns are NULL; the
+      narrow delete still fires on a conflict row whose tags were removed.
 
 ## Open design questions
 
@@ -710,6 +731,12 @@ Shared reminder list. Both I and Claude Code read and update this.
           time". Decisions §15.4 puts capture at identification, which is
           where the code has always put it; confirm time is now a different
           moment in a different process (§15.2, §15.3).
+      (f) Design §10 lists `snapshot_total_duration`; decisions §15.5 drops
+          it in migration 3. Design §10's snapshot comment also still names
+          four columns.
+      (g) Design §10's orphan index is `(state, snapshot_track_count)`;
+          decisions §15.5 keys recovery on having an identification, and
+          migration 3 rebuilds the index accordingly (obligation (g)).
 - [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
       candidate.** `Tags::candidateKeys` corroborates a bare integer when the
       key matches `/DISCOG/i`, and bare digits parse through
@@ -722,14 +749,14 @@ Shared reminder list. Both I and Claude Code read and update this.
       v1 caller** once Structural is gone and the sync is server-side
       (decisions §15.2). Keep it, or record why it stays, when the sync step
       is planned.
-- [ ] **2026-09-15: orphan recovery's reach shrinks under decisions §13.4, and
+- [x] **2026-09-15: orphan recovery's reach shrinks under decisions §13.4, and
       it can lose user work.** Recovery selects `state = 'confirmed'`
       (§14.8, inferred from the predicate; the index is commented "confirmed
       rows whose snapshot might fit a new album" in
-      `Schema.pm::_migration_1`). Under §13.4 only OWNED albums reach
+      `Schema.pm::_migration_1`). ~~Under §13.4 only OWNED albums reach
       `confirmed`, so two classes now sit permanently outside recovery: a
       tagged-but-unowned album, and — the one that matters — **a MANUAL match
-      on an unowned album**, which is work the user typed. When `album_key`
+      on an unowned album**, which is work the user typed.~~ When `album_key`
       changes (files moved, retagged, library rebuilt) those rows orphan with
       no relink path and the manual choice is gone, silently.
       Recovery may need to key on "has an identification"
@@ -738,6 +765,24 @@ Shared reminder list. Both I and Claude Code read and update this.
       build-order rewrite and was never followed through. Recovery is not yet
       built (see Q7), so deciding it now costs nothing but a ruling. Blocks
       the review-queue/manual-re-match step.
+      2026-09-15, CORRECTED AND RESOLVED — decisions §15.5. The struck claim
+      was wrong: design §3 says confirming a manual link writes
+      `match_tier = 'manual'` and `state = 'confirmed'`, and a manual link is
+      explicitly exempt from the collection cross-check that governs Strict.
+      So manual rows DO reach `confirmed` and were never outside a
+      `state`-keyed predicate. What was right: `state` is the wrong key.
+      Conflict-demoted rows keep an adjudicated id and their snapshots (§3a)
+      while sitting at `candidate`, and they are the rows whose tags can no
+      longer reproduce their identification. §15.5 keys reach on having an
+      identification instead.
+- [ ] **2026-09-15: a retagged album title defeats orphan recovery, and a
+      manual row's work is lost.** Decisions §15.5's predicate is exact
+      equality on artist, album title and track count. Change the title tag
+      and nothing fits, so the row stays orphaned — for a tagged album
+      identification re-derives the match anyway, but a MANUAL row's choice
+      is gone with no notice. Recorded rather than solved: two-of-three
+      matching and normalised comparison both trade a fail-safe predicate for
+      a guess. Revisit if it happens on hardware.
 
 ## Waiting — needs a real server
 
