@@ -79,7 +79,12 @@ Shared reminder list. Both I and Claude Code read and update this.
           CHECK evaluating to NULL as not violated, so no explicit
           `OR match_tier IS NULL` should be needed — expected, NOT verified
           here. Assert alongside the existing cases (rejects `'Strict'`,
-          accepts `'manual'`).
+          accepts `'manual'`). ALSO FLIP the existing cases that assert
+          `match_tier` ACCEPTS `'structural'` and `'fuzzy'`
+          (`scripts/schema-check.pl`, the `for my $tier (qw(strict
+          structural fuzzy))` loop): after the narrowing both must be
+          REJECTED. Added 2026-09-15 — obligation (h) carried this for
+          `discogs_no_match.tier` and (b) did not for `match_tier`.
       (c) DROP the `state` column's `DEFAULT 'candidate'`. Decisions §14.8
           makes `state` nullable; with the default retained, any insert
           omitting it writes `candidate` instead of NULL and drops an
@@ -514,6 +519,38 @@ Shared reminder list. Both I and Claude Code read and update this.
         RESOLVED 2026-09-15 — decisions §15.5: recovery belongs to the
         identification step (step 4), which builds the unambiguous relink.
         The ambiguous branch is an obligation on the review-queue step.
+      Q8 — what happens to the `discogsMaxTier` pref? VERIFIED 2026-09-15:
+        `Settings.pm` initialises it to `'strict'` and lists it in `sub
+        prefs`, and `HTML/EN/plugins/SqueezeWax/settings.html` offers a
+        `structural` option. Structural and Fuzzy do not exist (§13.8,
+        §14.3), so the settings page lets a user select a tier that cannot
+        run, and picking it does nothing at all — no error, no log line.
+        Four things touch it: the importer's `use` gate (the stale step-4
+        plan wanted `@discogsTagNames || ($maxTier ne 'strict' && $token)`),
+        decisions §10.2 which lists "tier selector" among the prefs that
+        survive clear & rebuild, design §9's settings list, and §3b's
+        per-pref invalidation clauses. Design-chat leaning: REMOVE the pref —
+        a selector with one valid value is a control that can only be set
+        wrong. Against: it is shipped and hardware-verified, so removal needs
+        a prefs migration or an accepted orphan key. Blocks step 4, because
+        the `use` gate is part of the identification rework. Not decided.
+        (The snapshot-column question informally numbered Q8 in chat is
+        settled by §15.5; this is the only Q8 in the record.)
+      Q9 — should the badging rule gain a CONFIRMATION TEST on the
+        single-candidate path: label, catalogue number or year checked
+        against the one remaining collection entry? Raised 2026-09-15 by
+        §15.7: once `Various` agrees with the LMS label, artist carries no
+        information for compilations (§11's placeholder finding), so title
+        uniqueness alone bounds a compilation badge — and §14.4 gives a
+        wrong version badge no recovery path. VERIFIED against slimserver
+        `a670a38c2b14`: `albums.label` exists (`schema_23_up.sql`) but
+        nothing in 9.1 writes or reads it and `Slim/Schema/Album.pm` does
+        not declare it, so label means a per-album file read; and
+        `albums.year` is the file's YEAR tag (often the original year) while
+        Discogs' `year` is the pressing's. This AMENDS §13.10.3, so it is a
+        decisions change, not build order. Decide from the pages 2–3
+        measurement's four added questions, not from these two facts alone.
+        Not decided.
       Dependencies the design chat believes are already in TODO.md, not
       verified by it: (i) Various/Various Artists: FOUND at line 613
       (ii) version-menu picker: FOUND at lines 370, 423, 533
@@ -658,18 +695,28 @@ Shared reminder list. Both I and Claude Code read and update this.
       one decision it informs.
 - [x] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
       ANSWERED 2026-09-07 — see `squeezewax-v1-decisions.md` §10.
-- [ ] **2026-09-07: `discogs_no_match` tier `'structural'` skip predicate.**
+- [x] **2026-09-07: `discogs_no_match` tier `'structural'` skip predicate.**
       Two-part, unlike Strict's one-part: `source_timestamp` unchanged AND
       `checked_at` within TTL. Proposed TTL 30 days as a pref — not
       TOU-constrained, a UX/freshness choice. The clear & rebuild decision is
       no longer blocking (decisions §10); its implementation is tracked in
       the step-4 build order (build-order-step-4-structural-matching.md §3
       item 9).
-- [ ] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
+      2026-09-15, SUPERSEDED — Structural does not exist (§13.8), so there
+      is no `'structural'` no-match row to expire and no TTL to set.
+      Decisions §15.6 removes the value from the CHECK entirely. Closed by
+      the build-order rewrite, not implemented.
+- [x] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
       keyed on the duration-margin pref** — §3b's own "Step 4 note" trigger
       has fired. The clear & rebuild decision is no longer blocking
       (decisions §10); its implementation is tracked in the step-4 build
       order (build-order-step-4-structural-matching.md §3 item 9).
+      2026-09-15, SUPERSEDED — the duration margin pref it keys on belongs
+      to Structural, which does not exist (§13.8). §3b's "a pref-derived
+      tier needs its own clause" note still stands for any future tier; it
+      has no v1 subject. Closed by the build-order rewrite, not implemented.
+      NOTE: §3b's note now applies to `discogsMaxTier` instead, if that pref
+      survives Q8.
 - [ ] **2026-09-07, recorded not designed: an edition-level (Structural)
       match has no pressing to show in design §4's badge context menu.**
       Proposed shape — show master-level info plus a version picker ("you
@@ -756,6 +803,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       (g) Design §10's orphan index is `(state, snapshot_track_count)`;
           decisions §15.5 keys recovery on having an identification, and
           migration 3 rebuilds the index accordingly (obligation (g)).
+      (h) Design §3's artist gate says nothing about the `Various`
+          equivalence decided in §15.7, and design §9's settings list may
+          still carry the tier selector (Q8). Check both when the
+          design-fix pass runs.
 - [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
       candidate.** `Tags::candidateKeys` corroborates a bare integer when the
       key matches `/DISCOG/i`, and bare digits parse through
