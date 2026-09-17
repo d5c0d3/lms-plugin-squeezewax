@@ -3061,3 +3061,71 @@ end of a scan.
 **Unverified:** that a later `['rescan','done']` always follows an aborted
 external scan. Inferred from `_notifyFromScanner`'s `exit` branch in
 `Slim/Utils/SQLiteHelper.pm`, not observed. On the hardware list in `TODO.md`.
+
+### 15.3 Existing identifications keep their state; the ownership pass is the only writer of `state`
+
+**Decided 2026-09-15 (design chat).** Settles Q1 of the build-order rewrite.
+
+**Decided: migration 3 copies `state` and `match_tier` forward unchanged, and
+sets `ownership = 'absent'` on every copied row. The ownership pass is the sole
+writer of `state` after identification: it promotes to `confirmed` where the
+tagged release id is in the collection (design §3 node E), and demotes to
+`candidate` where it is not.**
+
+#### What was verified
+
+From `SqueezeWax/Schema.pm::_migration_1` and `SqueezeWax/Match.pm`, read, not
+observed running:
+
+- `state` is `TEXT NOT NULL DEFAULT 'candidate' CHECK (state IN
+  ('candidate','confirmed'))`. Obligation (c) on migration 3 already drops the
+  default.
+- `_recordMatch` writes `'strict','confirmed'` on any clean tag hit, with no
+  collection check — the gap recorded in `TODO.md` 2026-09-15. Existing rows on
+  the reference server are therefore `confirmed` regardless of ownership.
+  **Inferred**, not observed in the database.
+- The orphan-recovery index is commented "confirmed rows whose snapshot might
+  fit a new album", and recovery selects `state = 'confirmed'` (§14.8,
+  inferred from the predicate).
+
+#### Why the pass rather than the migration
+
+1. **The pass needs demotion logic anyway.** A user who sells a record must see
+   that row leave `confirmed` at the next sync. Demoting in the migration adds a
+   second mechanism for a job the pass already does.
+2. **One writer.** Identification writes `candidate`; the pass alone promotes
+   and demotes. Two writers of one column, on different triggers in different
+   processes, is the shape that produces states nobody can account for.
+3. **Demoting in the migration would empty orphan recovery** until a sync
+   completes, since recovery selects `state = 'confirmed'`. A library
+   reorganised in that window changes `album_key` and the matches become
+   unrecoverable. It is the only irreversible loss available in this choice.
+4. **Nothing user-visible turns on `state` in the window.** The badge reads
+   `ownership` directly (design §4, §10) — no join, no render-time test — and
+   `ownership` is `absent` until the first sync under either option.
+
+#### Why `ownership = 'absent'` for copied rows
+
+`ownership` is NOT NULL and `absent` is an answer rather than a missing one
+(§13.3). No sync has run, so strictly the value is unknown rather than absent,
+and `absent` overstates it for one sync interval. The alternative is a fourth
+value for "not yet synced", which would have to be handled at every read site
+forever to buy accuracy in a window that closes by itself. §14.9 already accepts
+this exact shape: badges are dark until the next sync completes.
+
+#### The cost, recorded rather than hidden
+
+Steps 4 and 5 of the build order land before the sync exists at step 6. In that
+window `discogs_match` holds old rows saying `confirmed` under the pre-§13.4
+rule and new rows saying `candidate` under the current one, and nothing can
+reconcile them until step 7 runs. This is accepted because the affected database
+is the reference server's, "Clear & rebuild matches" is an escape hatch, and no
+badge derives from `state`. **If builds from this branch reach other users
+before step 7, this ruling should be revisited** in favour of demoting in the
+migration.
+
+#### What this does not settle
+
+- Orphan recovery's reach under §13.4 (`TODO.md`, its own item).
+- When the recovery snapshot is captured, now that confirmation and
+  identification happen in different processes (`TODO.md`, Q6).
