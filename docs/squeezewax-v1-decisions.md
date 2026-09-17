@@ -3376,3 +3376,130 @@ step 4 having stopped after item 3, the same inference migration 3 obligation
 
 v2's fuzzy negatives are noted and not designed: widening the CHECK then is this
 same DROP and recreate.
+
+### 15.7 `Various` and the LMS various-artists label are the same artist
+
+**Decided 2026-09-15 (design chat).** Settles Q4 of the build-order rewrite, and
+the `Various` / `Various Artists` item carried forward unresolved in §13.10.6.
+
+**Decided: the ownership pass treats Discogs' various-artists name and LMS's
+various-artists label as agreeing. The Discogs side is `Various` or `Various
+Artists`, case-folded, after the ` (N)` disambiguator strip. The LMS side is
+whatever `Slim::Music::Info::variousArtistString()` returns, case-folded — never
+a hardcoded English string.**
+
+#### Why this is a vocabulary mapping and not a number
+
+§13.10.6 sets the test: an equivalence added later "is a **vocabulary mapping
+between two catalogues**, the same class as stripping Discogs' trailing ` (N)`
+disambiguator, and must be justified on that ground rather than on improving a
+number."
+
+It passes that test, and it visibly does not improve a number. **Measured on
+page 1: zero impact**, because no compilation matched there (§13.10.6). The two
+catalogues simply name the same entity differently — Discogs calls it `Various`,
+LMS calls it by its own configurable label — and neither name is evidence about
+which record the user owns.
+
+The exposure it removes is on pages 2 and 3: **7 of 100 page-1 collection
+entries are `Various`, against 95 LMS albums with `compilation = 1`**. Without
+the equivalence, a matched compilation queues for a purely lexical reason.
+
+#### The LMS side is not a literal string
+
+**Verified in slimserver `a670a38c2b14ad42b86a39884bcb842121b35571`
+(`public/9.1`, 2026-06-19):** `Slim::Music::Info::variousArtistString` returns
+the `variousArtistsString` server pref, which defaults to `undef`, falling back
+to the localized string `VARIOUSARTISTS`. The pref is user-editable
+(`Slim/Web/Settings/Server/Behavior.pm`), and core itself compares through this
+accessor (`Slim/Schema.pm`, `Slim/Schema/Album.pm`,
+`Slim/Schema/Contributor.pm`).
+
+**So `'Various Artists'` must never appear as a literal in the comparison.** A
+hardcoded English string fails silently on a translated or customised install —
+the album queues, no error, nothing in the log. This is the whole reason the
+ruling names an accessor rather than a value.
+
+The measurement script's own use of a literal was correct in its context: a
+standalone script cannot call LMS accessors (§11.4), and it reported its
+divergence set rather than hiding it — 5 of 765 albums, 2 actually diverging.
+
+#### `albums.compilation = 1` is deliberately NOT sufficient
+
+Treating the flag alone as agreement would let an LMS album with a specific
+album artist agree with a Discogs `Various` entry on title alone. Combined with
+§13.10.6's generic-title hazard — "Greatest Hits" and its kind — that is a route
+to a wrong badge, which §14.4 says has no recovery path in v1.
+
+The flag is not needed anyway: `Slim::Schema::Album::artists` already falls
+through to the various-artists object for a compilation with no ALBUMARTIST when
+`variousArtistAutoIdentification` is on (measured on: `server.prefs:642`), so the
+pass sees the label without consulting the flag.
+
+#### What carries the weight instead, and the risk this raises
+
+§11's finding is that an LMS compilation's album artist is a **placeholder
+rather than a name**. So for compilations, artist agreement carries almost no
+evidence either way once this equivalence is in place: nearly every compilation
+on both sides reads "various". What actually bounds a compilation badge is
+§13.10.3's requirement of exactly one collection entry agreeing on title.
+
+**That is a real increase in exposure to §13.10.6's generic-title hazard**, and
+it is accepted here rather than hidden: two different compilations sharing a
+normalised title now differ only in a field that says "various" on both sides.
+The bound is unchanged — several candidates still queue — but the *class* of
+album that reaches the single-candidate path has grown.
+
+**Revisit trigger:** the pages 2–3 measurement. Any wrong badge on a compilation
+reopens this record together with §14.4.
+
+#### The gate: compilation auto-badging waits for the pages 2–3 measurement
+
+**This equivalence lands now; auto-badging a compilation on it does not ship
+until the pages 2–3 measurement reports.** The identification and ownership work
+proceeds; the ownership pass must not auto-badge an album with
+`albums.compilation = 1` on a title-plus-various match until that measurement
+answers four questions, listed against it in `TODO.md`: how many compilations
+match at all, whether any normalised compilation title collides, whether
+`albums.year` agrees with Discogs' `year` on the matches, and whether
+`albums.label` or a LABEL tag is reachable without a per-album file read.
+
+Until then a matched compilation queues, which is the behaviour before this
+record — so the gate costs nothing that was not already being paid.
+
+**Why a gate rather than confidence.** §13.10.4 fixed this project's posture:
+"trading one missing badge for one wrong badge is a bad trade at 1:1 … and would
+remain bad at 10:1." A queued compilation is not a lost badge — the user
+confirms it and it badges. So this equivalence buys convenience and pays in
+wrong-badge exposure on the one class §14.4 gives no recovery path. Both sides of
+that trade are unmeasured: page 1 showed **zero** compilations matching, so even
+the queue-flood it was meant to prevent is a projection.
+
+#### What is not designed here
+
+Adding a **confirmation test** — label, catalogue number or year checked against
+the single remaining candidate — would catch the wrong-compilation case this
+record exposes. It is not designed here, and it is not a build-order matter: it
+adds a field to the badging rule and therefore amends §13.10.3.
+
+Two findings bound it, both verified against slimserver
+`a670a38c2b14ad42b86a39884bcb842121b35571`:
+
+- **`albums.label` exists and is dead.** `SQL/SQLite/schema_23_up.sql` adds it;
+  a repo-wide grep finds nothing in 9.1 that writes or reads it, no LABEL or
+  ORGANIZATION tag mapping, and `Slim/Schema/Album.pm` does not declare the
+  column, so DBIC cannot reach it. Comparing label therefore means a per-album
+  file read — the cost §13.1 removed and §15.2 keeps out of the server.
+- **`albums.year` and Discogs' `year` are different facts.** The LMS value comes
+  from the file's YEAR tag, commonly the original release year; Discogs' is that
+  pressing's year. Requiring agreement would queue matches for a reason as
+  incidental as the vocabulary difference this record removes.
+
+Recorded as a question in `TODO.md`, to be decided from the measurement rather
+than from either of these guesses.
+
+#### Scope
+
+No general synonym table, and no user-editable mapping. This is one fixed
+equivalence between two catalogues' names for one entity. A second such mapping
+needs its own record and its own justification on §13.10.6's ground.
