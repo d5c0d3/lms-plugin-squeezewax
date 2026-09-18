@@ -1472,8 +1472,11 @@ Not affected:
 - **`discogs_release_cache`** — not written in v1 (§9.5). Nothing to clear.
 - **`discogs_collection`** — v1 holds no collection mirror. Ownership is derived
   and refreshed on its own trigger, which this action does not touch.
-- **Preferences** — tag names, margin, TTL, tier selector. This action clears
-  results, not configuration.
+- **Preferences** — tag names, ~~margin, TTL, tier selector~~ — **corrected
+  2026-09-18: the duration margin and the no-match TTL belonged to Structural
+  and were never built; the tier selector is removed by §15.8. What survives is
+  the tag-name list and the access token** — this action clears results, not
+  configuration.
 
 ### 10.3 Manual rows survive intact, including their cheap columns
 
@@ -3503,3 +3506,94 @@ than from either of these guesses.
 No general synonym table, and no user-editable mapping. This is one fixed
 equivalence between two catalogues' names for one entity. A second such mapping
 needs its own record and its own justification on §13.10.6's ground.
+
+### 15.8 The `discogsMaxTier` pref is removed; design already required it
+
+**Decided 2026-09-18 (design chat).** Settles Q8 of the build-order rewrite.
+
+**Decided: `discogsMaxTier` is removed — the pref, its entry in `sub prefs`, and
+the selector in the settings template — by a `$prefs->migrate` step in the
+identification rework. The importer's `use` gate is left exactly as it is.**
+
+#### This is compliance, not a choice
+
+Design §9, live spec since the reconciliation, reads: *"Matching itself is not
+configurable. Which tag names are read is a setting (§3), but the comparison is
+not."* The reconciliation deleted the maximum-tier bullet along with the
+duration margin and the multi-disc auto-confirmation bullet.
+
+`Settings.pm` still initialises `discogsMaxTier` and lists it in `sub prefs`,
+and `HTML/EN/plugins/SqueezeWax/settings.html` still offers a `structural`
+option. **The code contradicts the live spec**, and `docs/working-agreement.md`
+§2 makes design win. Removing the pref brings code into line; keeping it would
+need a change to design.
+
+The question was framed in `TODO.md` as a choice with a cost on the removal
+side. That framing was wrong, and is recorded here rather than quietly
+abandoned: the cost is real but small (below), and it is the price of compliance
+rather than of a preference.
+
+#### The failure mode in user terms, which is the stronger argument
+
+With the pref left in place, a v1 user opens Settings, selects Structural, saves,
+and **nothing happens** — no matching changes, no error, no log line. They have
+configured a tier that does not exist. The likely next step is a bug report
+about a plugin that ignores its own settings.
+
+§14.1 refused to leave a schema permitting values nothing writes, on the ground
+that it is "a trap for the next reader". A settings control that can only be set
+wrong is the same trap, pointed at the user instead of the maintainer.
+
+#### The mechanism, verified
+
+Read at slimserver `a670a38c2b14ad42b86a39884bcb842121b35571` (`public/9.1`,
+2026-06-19), the same pin as `refs/`. Not observed running.
+
+- **`Slim::Utils::Prefs::Base::remove( list )`** deletes each named key and its
+  `_ts_`-prefixed timestamp twin, then saves the namespace.
+- **`Slim::Utils::Prefs::Namespace::migrate( $version, $callback )`** runs the
+  callback when the namespace's `_version` is below `$version`, and sets
+  `_version` to `$version` if the callback returns true. This is the in-tree
+  house pattern, not an improvisation: `$prefs->migrate(1, sub {…})` appears in
+  Podcast, DateTime, CLI, iTunes, xPL, PreventStandby, FullTextSearch, Rescan,
+  AudioScrobbler and RandomPlay.
+- **The edge case that would otherwise have surfaced on hardware.**
+  `Namespace::new` sets `_version => 0` **only when the prefs file does not
+  exist**. On the reference server `squeezewax.prefs` does exist and was written
+  before this plugin ever called `migrate`, so the key is *absent* rather than
+  zero. `$version > undef` evaluates true, which is the behaviour wanted, and
+  `Slim/Utils/Prefs/Namespace.pm` carries `use strict` **without** `use
+  warnings`, so it is silent. The migration therefore runs correctly on a fresh
+  install and on the reference server alike.
+
+#### The `use` gate does not change, and that is a finding
+
+The importer's `use` gate is `scalar @{discogsTagNames}`. Identification is
+tag-driven and nothing else runs in the importer, so gating on tag names is
+exactly right and needs no revision.
+
+`plans/build-order-step-4-structural-matching.md` §0.7 prescribed
+`@discogsTagNames || ($maxTier ne 'strict' && $token)`, and `TODO.md` carried an
+item saying the current gate "becomes wrong the moment step 4 lands". Both exist
+to let a user with no tag names run Structural. There is no Structural, so the
+gate is correct as written. That `TODO.md` item is closed as superseded by this
+record, and the work it described is removed from the identification step's
+scope.
+
+#### What goes with it
+
+- `HTML/EN/plugins/SqueezeWax/settings.html`: the selector and its options.
+- `Settings.pm`: the `$prefs->init` entry and the `discogsMaxTier` element of
+  `sub prefs`, which becomes `discogsToken` alone.
+- §10.2's list of preferences that survive "clear & rebuild matches" names a
+  "tier selector"; corrected in place.
+- §3b's note that "a pref-derived tier needs its own invalidation clause" had
+  been provisionally pointed at `discogsMaxTier` when the two obsolete
+  Structural items were closed. The pref does not survive, so that note has no
+  v1 subject at all.
+
+#### Scope
+
+If a tier concept ever returns in v2, the pref name is free to reuse. A user's
+prefs file will simply not carry it, which is the normal state for a new pref
+and needs no further handling.
