@@ -91,10 +91,17 @@ Shared reminder list. Both I and Claude Code read and update this.
           auto-badged album into the review queue — silently wrong rather
           than an error. ASSERT in the offline suite that an insert omitting
           `state` yields NULL.
-      (d) CONFIRM the orphan-recovery index `(state, snapshot_track_count)`
+      (d) ~~CONFIRM the orphan-recovery index `(state, snapshot_track_count)`
           needs no change. Recovery selects `state = 'confirmed'`, so NULL
           rows should be excluded by the predicate — INFERRED from the
-          predicate, not verified against a query plan (decisions §14.8).
+          predicate, not verified against a query plan (decisions §14.8).~~
+          **CORRECTED 2026-09-18 (decisions §15.9): SUPERSEDED BY (g).** This
+          was written under §14.8, when recovery keyed on `state =
+          'confirmed'`. §15.5 moved the predicate off `state` and (g) rebuilds
+          the index accordingly. Do (g); do not "confirm no change" here.
+          The struck text is kept because the reasoning it carries — that a
+          predicate-based exclusion is inferred rather than verified against a
+          query plan — still applies, and (g) inherits it.
       (e) COPY `state` AND `match_tier` FORWARD UNCHANGED, and set
           `ownership = 'absent'` on every copied row (decisions §15.3). COUNT
           rows before and after the rebuild and assert equal; assert that no
@@ -455,10 +462,17 @@ Shared reminder list. Both I and Claude Code read and update this.
       yet. Recorded so it is not re-derived from scratch, not as a ruling.
       Proposed, in order:
       4 identification rework (importer stops writing `confirmed`; drop the
-        `local_tracks == 0` gate; detection bare-master fix; stale comments;
-        `hasAnyStrictMatch` semantics);
-      5 migration 3 (its obligations as already recorded in this file);
-      6 collection sync (server-side, async — decisions §15.2);
+        `local_tracks == 0` gate; write `snapshot_artist`, §15.5; build the
+        unambiguous orphan relink, §15.5; remove `discogsMaxTier`, §15.8;
+        detection bare-master fix; stale comments; `hasAnyStrictMatch`
+        semantics. The `use` gate does NOT change, §15.8);
+      5 collection sync (server-side, async — decisions §15.2). Testable on
+        its own: three requests, last-synced timestamp advances, nothing
+        written to `discogs_match`;
+      6 migration 3 (its obligations as already recorded in this file).
+        REORDERED 2026-09-18 by decisions §15.9, and it SHIPS WITH step 7 —
+        reviewable as its own step, not merged ahead of the code that
+        exercises it;
       7 ownership pass (design §3 nodes C–K, decisions §14.8, §13.5);
       8 review queue and manual re-match (decisions §13.10.5, §14.9);
       9 owned badge and context menu (design §4, decisions §14.5, §14.10);
