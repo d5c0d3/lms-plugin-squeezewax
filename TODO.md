@@ -889,6 +889,21 @@ Shared reminder list. Both I and Claude Code read and update this.
       is gone with no notice. Recorded rather than solved: two-of-three
       matching and normalised comparison both trade a fail-safe predicate for
       a guess. Revisit if it happens on hardware.
+- [ ] **2026-09-18: `docs/implementation-plan.md` needs its own
+      survey-then-reconcile session.** Same shape as the design
+      reconciliation, and deliberately NOT done during the build-order
+      rewrite — that session's scope was the build order, and reopening a
+      second document because a plan found it convenient is how a boundary
+      erodes. §1 is fixed (it now points at `CLAUDE.md` and decisions §15.9).
+      Known-stale entries, not a complete survey:
+      (i)   §2's file-skeleton table describes `Importer.pm` as the
+            "Scan-time matching cascade (Strict → Structural → Fuzzy)";
+      (ii)  §4.3 and §4.6 are declared superseded by decisions' own header;
+      (iii) anything else in §2-§4 written against the per-album Discogs
+            search (§13.1) or the `discogs_collection` mirror (§13.2).
+      Working-agreement §2 makes this a defect to reconcile, so it should not
+      sit indefinitely. Survey first, as the design reconciliation did, so
+      the session starts from a list rather than deriving one.
 
 ## Waiting — needs a real server
 

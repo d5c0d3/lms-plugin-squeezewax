@@ -68,19 +68,41 @@ plugin without Spotty's helper-binary complexity.
 
 ## Build order
 
-**v1 only** (spec §11), in this order:
+**v1 only** (design §11), in this order. Steps 1-3 are done and
+hardware-verified on Lyrion 9.1.1. The sequence from step 4 is
+`docs/squeezewax-v1-decisions.md` §15.9, which also records why migration 3
+sits where it does.
 
-1. Plugin skeleton + `install.xml` that LMS actually loads
-2. SQLite schema per spec §10 (`discogs_match`, `discogs_collection`,
-   `discogs_price_snapshot`, `discogs_release_cache`, `discogs_no_match`)
-3. Strict-tier matching (release ID already in file tags)
-4. Structural-tier matching (track count + per-track durations)
-5. Review queue + manual re-match
+1. Plugin skeleton + `install.xml` that LMS actually loads — **done**
+2. SQLite schema, migrations 1 and 2 — the tables in design §10 — **done**
+3. Strict identification from file tags — **done**
+4. **Identification rework** — stop writing `state = 'confirmed'` without a
+   collection check (decisions §13.4, design §3 node E); drop the
+   `local_tracks == 0` gate (§13.10.1); write `snapshot_artist` and build the
+   unambiguous orphan relink (§15.5); remove the `discogsMaxTier` pref
+   (§15.8). The importer's `use` gate does **not** change (§15.8)
+5. **Collection sync** — server-side, asynchronous, on `['rescan','done']`
+   plus an interval and a manual button (§15.2, §13.7)
+6. **Migration 3** — the `discogs_match` rebuild. Reviewable on its own,
+   but **ships with step 7 and is never merged ahead of it** (§15.9)
+7. **Ownership pass** — design §3's flow, writing the `ownership` column
+8. **Review queue + manual re-match**
+9. **Owned badge + badge context menu**
+10. **On-demand marketplace lookup**
 
-Do not start OAuth, badges, marketplace lookup, or anything in v2/v3 until
-matching works end to end. **This still forbids OAuth**: v1 auth is a
-user-supplied Discogs personal access token (decided 2026-09-07), not
-OAuth, and is in scope for step 4.
+**There is no Structural tier and no Fuzzy tier.** Decisions §13.8 replaced the
+per-album Discogs search with collection-first ownership, and §14.3 deleted
+Fuzzy from the roadmap. `plans/build-order-step-4-structural-matching.md` is
+stale in its entirety: do not patch it, do not use it as a template, do not
+mine it for shape.
+
+**`discogs_collection` is not a v1 table.** Migration 1 creates it and
+migration 3 drops it (§13.2, and `TODO.md` 2026-09-07). Nothing may read or
+write it. Ownership is a column on `discogs_match`, not a mirrored collection.
+
+v1 auth is a user-supplied Discogs personal access token (§9.1), never OAuth.
+Token handling, request construction and rate-limit accounting are already
+built; they serve the collection sync at step 5.
 
 ## Workflow split
 

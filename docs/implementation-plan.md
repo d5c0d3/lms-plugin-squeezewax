@@ -12,17 +12,21 @@ invented APIs).
 
 ## 1. Build order
 
-Per `CLAUDE.md` / spec §11, v1 only, in this order:
+**The build order lives in `CLAUDE.md`, and the sequence from step 4 is
+`docs/squeezewax-v1-decisions.md` §15.9.** It is not restated here.
 
-1. Plugin skeleton + `install.xml` that LMS actually loads
-2. SQLite schema per spec §10 (`discogs_match`, `discogs_collection`,
-   `discogs_price_snapshot`, `discogs_release_cache`, `discogs_no_match`)
-3. Strict-tier matching (release ID already in file tags)
-4. Structural-tier matching (track count + per-track durations)
-5. Review queue + manual re-match
+Both documents carried the same five-step list until 2026-09-18, and both went
+stale together when decisions §13.8 removed the Structural tier — which is the
+duplication `docs/working-agreement.md` §2 calls a defect rather than a
+convenience. One statement, in the document Claude Code loads at the start of
+every session.
 
-OAuth, badges beyond the skeleton, marketplace lookup, and anything in
-v2/v3 do not start until matching works end to end.
+**What this section's neighbours still assume.** The file skeleton in §2 and
+parts of §4 were written against the Strict → Structural → Fuzzy cascade and
+have not been reconciled; decisions' own header already declares §4.3 and §4.6
+superseded. Treat this document as a record of how v1 was planned to be built,
+not as live instructions, until that reconciliation happens. It is tracked in
+`TODO.md`.
 
 ---
 
