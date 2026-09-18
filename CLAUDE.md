@@ -74,7 +74,10 @@ hardware-verified on Lyrion 9.1.1. The sequence from step 4 is
 sits where it does.
 
 1. Plugin skeleton + `install.xml` that LMS actually loads — **done**
-2. SQLite schema, migrations 1 and 2 — the tables in design §10 — **done**
+2. SQLite schema, migrations 1 and 2 — **done**. v1's tables are
+   `discogs_match`, `discogs_no_match`, `discogs_release_cache` and
+   `discogs_price_snapshot` (design §10). Migration 1 also creates
+   `discogs_collection`, which v1 must not have — see below
 3. Strict identification from file tags — **done**
 4. **Identification rework** — stop writing `state = 'confirmed'` without a
    collection check (decisions §13.4, design §3 node E); drop the
