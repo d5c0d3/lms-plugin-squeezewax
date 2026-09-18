@@ -1,5 +1,18 @@
 # Build order step 4 — Structural matching
 
+> **STALE IN ITS ENTIRETY — 2026-09-18. Do not patch, do not use as a
+> template, do not mine for shape.** This plans the Strict → Structural →
+> Fuzzy cascade against a per-album Discogs search. Decisions §13.8 replaced
+> that with collection-first ownership and §14.3 deleted Fuzzy from the
+> roadmap, so there is no Structural tier for this to plan. The build order
+> from step 4 is in `CLAUDE.md` and `docs/squeezewax-v1-decisions.md` §15.9.
+>
+> Kept as a record of what was planned, in the same spirit as the
+> reconciliation scaffolding in this directory. Its §0 — "what step 3
+> established that step 4 must honour" — is the one part whose *shape* is
+> still worth copying, because `TODO.md` requires the new step-4 plan to open
+> the same way; its *contents* are about Structural and do not carry over.
+
 **Planned 2026-09-07 (design chat). Branch `v1-buildout`.**
 
 Design authority: `docs/squeezewax-design.md` §3 (tiers), §4 (derivation), §9

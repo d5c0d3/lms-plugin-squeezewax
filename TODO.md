@@ -126,6 +126,17 @@ Shared reminder list. Both I and Claude Code read and update this.
             changes shape rather than being deleted.
           - The drop costs one rescan's worth of re-reads for untagged
             albums. Expected, not a defect.
+      (i) DROP `discogs_collection` and its index `discogs_collection_release`
+          (decisions §15.10). A plain `DROP TABLE IF EXISTS` — the table is
+          entirely regenerable and carries no decision, unlike
+          `discogs_match`. Two sub-obligations:
+          - CONFIRM FIRST that nothing in `SqueezeWax/` reads or writes it.
+            The 2026-09-13 item requires this and it still stands.
+            ALREADY KNOWN, so do not report "zero": `scripts/schema-check.pl`
+            inserts into the table at two sites (verified 2026-09-18).
+          - UPDATE `scripts/schema-check.pl` in the same change: the
+            `list_state` CHECK assertions and both inserts go, since the
+            table they exercise will not exist.
 - [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
       `discogs_collection`, which v1 must not have.** VERIFIED in
       `_migration_1`: the table plus an index on
