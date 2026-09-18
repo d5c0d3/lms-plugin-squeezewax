@@ -542,7 +542,13 @@ Shared reminder list. Both I and Claude Code read and update this.
         a selector with one valid value is a control that can only be set
         wrong. Against: it is shipped and hardware-verified, so removal needs
         a prefs migration or an accepted orphan key. Blocks step 4, because
-        the `use` gate is part of the identification rework. Not decided.
+        the `use` gate is part of the identification rework.
+        RESOLVED 2026-09-18 — decisions §15.8: the pref is REMOVED, by a
+        `$prefs->migrate` step in the identification rework. Design §9 already
+        says matching is not configurable, so this is compliance rather than a
+        choice, and the code was the thing out of line. The `use` gate does NOT
+        change — it stays `scalar @{discogsTagNames}`, which is correct for
+        tag-driven identification.
         (The snapshot-column question informally numbered Q8 in chat is
         settled by §15.5; this is the only Q8 in the record.)
       Q9 — should the badging rule gain a CONFIRMATION TEST on the
@@ -763,10 +769,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       the policy itself is undecided. A Discogs search that found nothing
       today may find something in six months.
       2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
-- [ ] **Step 4 must relax the `use` gate.** It is currently
+- [x] **Step 4 must relax the `use` gate.** It is currently
       `scalar @{discogsTagNames}`, which would wrongly disable the importer for
       a user who wants Structural only — Structural needs no tag names. Becomes
       wrong the moment step 4 lands.
+      2026-09-18, SUPERSEDED — decisions §15.8. The replacement gate existed
+      to let a user with no tag names run Structural; Structural does not
+      exist (§13.8). `scalar @{discogsTagNames}` is correct for tag-driven
+      identification and is left alone. Closed by the build-order rewrite,
+      not implemented.
 - [ ] **v2 triage page must distinguish "unparseable tag" from "tags
       disagree".** Both write `(strict, candidate, NULL)` in v1, which is
       correct for v1 — neither is a match — but they are different user actions
@@ -813,9 +824,11 @@ Shared reminder list. Both I and Claude Code read and update this.
           decisions §15.5 keys recovery on having an identification, and
           migration 3 rebuilds the index accordingly (obligation (g)).
       (h) Design §3's artist gate says nothing about the `Various`
-          equivalence decided in §15.7, and design §9's settings list may
-          still carry the tier selector (Q8). Check both when the
-          design-fix pass runs.
+          equivalence decided in §15.7 — check that when the design-fix pass
+          runs. The other half of this item is ANSWERED and needs no pass:
+          design §9 does NOT carry the tier selector, because the
+          reconciliation deleted it. That is precisely why decisions §15.8
+          rules the pref out of the code rather than out of design.
 - [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
       candidate.** `Tags::candidateKeys` corroborates a bare integer when the
       key matches `/DISCOG/i`, and bare digits parse through
