@@ -3702,3 +3702,59 @@ the index at (d) and rebuild it at (g).
 as the §13.8 defect corrected in `9f27ac9`, and worth recording as a second
 instance: **a superseding obligation added at the end of a list does not by
 itself retire the one it supersedes.**
+
+### 15.10 Migration 3 drops `discogs_collection`
+
+**Decided 2026-09-18 (design chat).** Promotes a "should" recorded in `TODO.md`
+on 2026-09-13 to a ruling, and puts it where migration 3's implementer will
+find it.
+
+**Decided: migration 3 drops the `discogs_collection` table and its index. The
+drop is an obligation on the migration, not a neighbouring note. It is
+conditional on confirming that nothing in `SqueezeWax/` reads or writes the
+table, and it carries the offline-suite edit with it.**
+
+#### Why this is a ruling rather than a restatement
+
+§13.2 forbids a collection mirror in v1, reaffirming `TODO.md`'s 2026-09-07
+position. `TODO.md` then recorded on 2026-09-13 that "migration 3 should drop
+it — but CONFIRM ZERO READERS AND WRITERS FIRST", **as its own item, not as an
+obligation on the migration**. Migration 3's obligation list runs (a) to (h) and
+does not mention the table.
+
+`CLAUDE.md` now states the drop as fact. Two documents, one of them loaded at
+the start of every session, describing a step the migration's own checklist does
+not contain — the defect shape §15.9 recorded for obligations (d) and (g), one
+document further out.
+
+#### Why a plain DROP, and not the treatment `discogs_match` gets
+
+`discogs_collection` caches Discogs' own data and holds nothing the user
+entered; design §10 and `Schema.pm`'s own comment both call it entirely
+regenerable. There is nothing to copy forward and nothing to preserve. This is
+the opposite of `discogs_match`, where §14.1's 12-step rebuild exists precisely
+because the table carries decisions.
+
+The index `discogs_collection_release` goes with it. Its comment names "the
+badge-derivation join in design §4" — a join §13.3 replaced with a column read,
+so it has had no purpose since that record.
+
+#### The confirmation is not optional, and it is already partly answered
+
+`TODO.md`'s 2026-09-13 item requires confirming zero readers and writers before
+a destructive migration, because "collection sync was never built so there are
+almost certainly none" is an inference. That requirement stands.
+
+**One writer is already known: `scripts/schema-check.pl` inserts into the table**
+(verified 2026-09-18 by Claude Code, two insert sites). It is a test rather than
+plugin code, so it does not block the drop — but it does mean the suite fails
+the moment the table is gone unless the same edit removes those assertions.
+Recorded so the confirmation step is not reported as "zero found" when the
+answer is "zero in `SqueezeWax/`, two in the suite".
+
+#### Scope
+
+Wantlist (v2) will need collection-entry storage of some kind, and `TODO.md`
+carries a struck v2 item about rekeying this table. Dropping it now does not
+prejudge that: a v2 table would be designed against v2's requirements rather
+than inheriting an `instance_id` primary key that cannot hold wants.
