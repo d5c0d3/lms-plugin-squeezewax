@@ -4,8 +4,10 @@ use strict;
 
 use base qw(Slim::Plugin::Base);
 
+use Slim::Control::Request;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
+use Slim::Utils::Timers;
 
 use Plugins::SqueezeWax::Schema;
 
@@ -66,6 +68,18 @@ $prefs->init({
 # value is refused and the previous one kept.
 $prefs->setValidate({ validator => 'intlimit', low => 3600 }, 'discogsSyncInterval');
 
+# Not at startup. initPlugin runs while the server is still coming up, and a
+# sync there would compete with it for no reason - the collection is not going
+# anywhere. Long enough to be clear of startup, short enough that a server which
+# is only ever up briefly still syncs. Same reasoning, and the same ballpark, as
+# Slim/Plugin/OnlineLibrary/Plugin.pm's DELAY_FIRST_POLL.
+use constant DELAY_FIRST_SYNC => 300;
+
+# Long enough to absorb a duplicate ['rescan','done'] and let LMS settle after a
+# scan, short enough that a user who rescans to pick up a new record does not
+# wait noticeably for the badge. Not a measured figure.
+use constant DEBOUNCE_AFTER_RESCAN => 60;
+
 sub initPlugin {
 	my $class = shift;
 
@@ -74,6 +88,8 @@ sub initPlugin {
 		&& $log->info( 'Plugin loaded (' . ( main::SCANNER ? 'scanner' : 'server' ) . ' process)' );
 
 	Plugins::SqueezeWax::Schema->init();
+
+	_initSync();
 
 	# Only the server has a web UI; the scanner never loads this file anyway
 	# (Slim/Utils/PluginManager.pm:204). Guarded and required lazily as
@@ -84,6 +100,130 @@ sub initPlugin {
 	}
 
 	$class->SUPER::initPlugin(@_);
+}
+
+# Two of §13.7's three triggers. The third is the settings-page button, which
+# lives in Settings.pm because that is the only one with a user attached; these
+# two are here because they have to run on a headless server, which never loads
+# Settings.pm (decisions §15.12 part 3).
+#
+# Neither of them decides whether to sync. API/Async.pm's guard does, so a
+# rescan finishing three seconds after an interval tick costs one sync, not two.
+sub _initSync {
+	# Keyed by the stringified coderef (refs/slimserver/Slim/Control/Request.pm:
+	# 788-809, %listeners), so subscribing the same named sub twice replaces its
+	# own entry rather than adding a second. A re-initPlugin cannot double this
+	# up - unlike the timer below, which needs a kill first.
+	#
+	# [['rescan'], ['done']] is the in-tree arg shape, used by seven core
+	# subscribers including Slim/Music/Import.pm:789 and
+	# Slim/Utils/AutoRescan.pm:112. Completion, not start: decisions §15.2
+	# corrects §13.7 on this - there is nothing to compare a collection against
+	# until the library scan has finished writing it.
+	Slim::Control::Request::subscribe( \&_rescanDone, [ ['rescan'], ['done'] ] );
+
+	_scheduleSync(DELAY_FIRST_SYNC);
+
+	return;
+}
+
+# The debounce. A scan can emit ['rescan','done'] more than once - Import.pm
+# notifies from two places (:238 and :741), and the external-scanner cleanup
+# path can fire one of its own - and each arrival restarts the wait rather than
+# stacking a second sync behind the first.
+#
+# The wait also exists for its own sake: a sync immediately after a scan would
+# contend with LMS still settling, and nothing about the answer is urgent.
+sub _rescanDone {
+	main::INFOLOG && $log->is_info
+		&& $log->info('library scan finished; scheduling a collection sync');
+
+	_scheduleSync(DEBOUNCE_AFTER_RESCAN);
+
+	return;
+}
+
+# Arm the next sync, replacing any already armed.
+#
+# killTimers first, every time: Slim::Utils::Timers keys pending timers by
+# ($coderef, $obj) and setTimer appends rather than replaces
+# (refs/slimserver/Slim/Utils/Timers.pm:66-120), so arming without killing is
+# how a self-rescheduling timer silently doubles its own frequency. This is the
+# idiom Slim/Plugin/OnlineLibrary/Plugin.pm:122-138 uses for the same job - an
+# interval poll in a plugin - where _pollOnlineLibraries' first statement is a
+# killTimers of itself. $obj is undef because no client is involved, which is
+# also what makes the kill able to find it.
+sub _scheduleSync {
+	my ($delay) = @_;
+
+	Slim::Utils::Timers::killTimers( undef, \&_syncTick );
+	Slim::Utils::Timers::setTimer( undef, time() + $delay, \&_syncTick );
+
+	return;
+}
+
+sub _syncTick {
+	# Re-armed first, on every path out of here, so that a sync which fails -
+	# or is refused because one is already running, or because the token is
+	# missing - does not silently end automatic syncing for the life of the
+	# server. §14.2: a failure is reported and retried on the interval, never
+	# terminal.
+	_scheduleSync( $prefs->get('discogsSyncInterval') || 86400 );
+
+	my $token = $prefs->get('discogsToken');
+
+	if ( !defined $token || $token eq '' ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('no Discogs token configured; skipping collection sync');
+
+		return;
+	}
+
+	# Deferred, not refused: the button refuses during a scan because a user is
+	# waiting for an answer, but an interval tick has all the time in the world
+	# and the next rescan-done will bring it back anyway.
+	if ( Slim::Music::Import->stillScanning ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('library scan in progress; deferring collection sync');
+
+		return;
+	}
+
+	require Plugins::SqueezeWax::API::Async;
+
+	Plugins::SqueezeWax::API::Async->sync( $token, \&_syncDone );
+
+	return;
+}
+
+# §14.2's three levels, decided here because this is the caller that knows the
+# sync was unattended: a rejected token is an error that will not fix itself and
+# that every future tick will hit; anything else is transient and gets a warning;
+# "already running" is not a failure at all, just a trigger that lost the race.
+sub _syncDone {
+	my ($result) = @_;
+
+	if ( $result->{ok} ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info( "collection sync complete: $result->{items} items in "
+				. "$result->{requests} requests" );
+
+		return;
+	}
+
+	my $error = $result->{error} || 'unknown';
+
+	return if $error eq 'already_running';
+
+	if ( $error eq 'unauthorized' ) {
+		$log->error('collection sync failed: Discogs rejected the token');
+
+		return;
+	}
+
+	$log->warn("collection sync failed: $error");
+
+	return;
 }
 
 1;

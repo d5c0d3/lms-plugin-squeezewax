@@ -188,10 +188,26 @@ for scanner in 0 1; do
 
 		case "$m" in
 			Plugin)
-				# Plugin.pm calls preferences()->migrate at file scope, so it needs
-				# TAGS_STUB's StubPrefs as well as the base class stub.
-				prelude="$STUB$TAGS_STUB"
-				note=" (Slim::Plugin::Base, Slim::Utils::Prefs stubbed)"
+				# Plugin.pm calls preferences()->migrate, ->init and ->setValidate at
+				# file scope, so it needs TAGS_STUB's StubPrefs as well as the base
+				# class stub, and Slim::Music::Import->stillScanning at runtime, hence
+				# IMPORT_STUB.
+				#
+				# Its two sync triggers add two more: Slim::Control::Request, which
+				# reaches most of the server through the dispatch table, and
+				# Slim::Utils::Timers, which needs the same bare Slim::Utils::Misc
+				# marker API::Async's case documents. subscribe and setTimer/killTimers
+				# are both runtime calls, so markers are enough - which does mean, as
+				# with every stub here, that this proves the module loads and not that
+				# those names are spelled right. They were read from refs/ instead:
+				# Slim/Control/Request.pm:788 and Slim/Utils/Timers.pm:66-120.
+				prelude="$STUB$TAGS_STUB$IMPORT_STUB"'
+BEGIN {
+	$INC{q(Slim/Control/Request.pm)} = 1;
+	$INC{q(Slim/Utils/Timers.pm)}    = 1;
+	$INC{q(Slim/Utils/Misc.pm)}      = 1;
+}'
+				note=" (Slim::Plugin::Base, Slim::Utils::Prefs, Slim::Control::Request, Slim::Utils::Timers stubbed)"
 				;;
 			Library)
 				prelude="$SCHEMA_STUB"
