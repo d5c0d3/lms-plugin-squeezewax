@@ -23,13 +23,6 @@ use Plugins::SqueezeWax::Tags;
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
 
-# Step 4 §0.7: a single max-tier selector, not a second boolean pref. Default
-# is 'strict', decided 2026-09-07 - a fresh install matches only tag-carrying
-# albums, spends zero Discogs requests, and needs no token.
-$prefs->init({
-	discogsMaxTier => 'strict',
-});
-
 use constant SAMPLE_PER_FORMAT => 25;
 
 # A run that has not finished in this long is treated as dead, so a wedged
@@ -49,13 +42,12 @@ sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html')
 # form fields assembled by the plugin's own handler, which is how core edits
 # mediadirs (Slim/Web/Settings/Server/Basic.pm:88-121).
 #
-# discogsToken and discogsMaxTier ARE scalars, so unlike discogsTagNames they
-# go through this generic path (Slim/Web/Settings.pm:135-176): the base
-# handler saves pref_discogsToken/pref_discogsMaxTier on saveSettings and
-# populates params.prefs.pref_discogsToken/pref_discogsMaxTier for the
-# template, same as core's own password/select fields (HTML/EN/settings/
+# discogsToken IS a scalar, so unlike discogsTagNames it goes through this
+# generic path (Slim/Web/Settings.pm:135-176): the base handler saves
+# pref_discogsToken on saveSettings and populates params.prefs.pref_discogsToken
+# for the template, same as core's own password field (HTML/EN/settings/
 # server/security.html).
-sub prefs { return ($prefs, qw(discogsToken discogsMaxTier)) }
+sub prefs { return ($prefs, qw(discogsToken)) }
 
 sub handler {
 	my ( $class, $client, $params, $callback, @args ) = @_;

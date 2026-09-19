@@ -5,6 +5,7 @@ use strict;
 use base qw(Slim::Plugin::Base);
 
 use Slim::Utils::Log;
+use Slim::Utils::Prefs;
 
 use Plugins::SqueezeWax::Schema;
 
@@ -22,6 +23,17 @@ my $log = Slim::Utils::Log->addLogCategory({
 	description  => 'PLUGIN_SQUEEZEWAX_NAME',
 	defaultLevel => 'WARN',
 });
+
+my $prefs = preferences('plugin.squeezewax');
+
+# discogsMaxTier is gone (decisions §15.8); drop it from existing prefs files.
+# File scope, not initPlugin and not under main::WEBUI: the WEBUI block below is
+# the only place Settings.pm is loaded, so a migration there would never run on
+# a headless server (decisions §15.12 part 3). The scanner never loads this file
+# (Slim/Utils/PluginManager.pm:204), so one process writes the prefs file. Same
+# pattern as Slim/Plugin/Podcast/Plugin.pm:34-40. `remove` also drops the
+# _ts_discogsMaxTier twin and saves (Slim/Utils/Prefs/Base.pm:242-258).
+$prefs->migrate(1, sub { $_[0]->remove('discogsMaxTier'); 1 });
 
 sub initPlugin {
 	my $class = shift;

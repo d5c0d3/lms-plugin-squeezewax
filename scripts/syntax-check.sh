@@ -102,6 +102,7 @@ TAGS_STUB='BEGIN {
 	sub init { 1 }
 	sub get  { [] }
 	sub set  { 1 }
+	sub migrate { 1 }
 }'
 
 # Settings.pm inherits Slim::Web::Settings, which reaches the same web stack
@@ -176,8 +177,10 @@ for scanner in 0 1; do
 
 		case "$m" in
 			Plugin)
-				prelude="$STUB"
-				note=" (Slim::Plugin::Base stubbed)"
+				# Plugin.pm calls preferences()->migrate at file scope, so it needs
+				# TAGS_STUB's StubPrefs as well as the base class stub.
+				prelude="$STUB$TAGS_STUB"
+				note=" (Slim::Plugin::Base, Slim::Utils::Prefs stubbed)"
 				;;
 			Library)
 				prelude="$SCHEMA_STUB"

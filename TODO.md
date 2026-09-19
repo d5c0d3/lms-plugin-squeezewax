@@ -805,6 +805,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       has no v1 subject. Closed by the build-order rewrite, not implemented.
       NOTE: §3b's note now applies to `discogsMaxTier` instead, if that pref
       survives Q8.
+      2026-09-19: moot — the pref is removed in step 4 commit 2.
 - [ ] **2026-09-07, recorded not designed: an edition-level (Structural)
       match has no pressing to show in design §4's badge context menu.**
       Proposed shape — show master-level info plus a version picker ("you
@@ -1175,6 +1176,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       pending ownership pass then completes. Decisions §15.2 obligation 1
       rests on this; inferred from `_notifyFromScanner`'s `exit` branch,
       not observed.
+- [ ] **2026-09-19, NEEDS A REAL SERVER: step 4 commit 2's pref migration.**
+      After upgrading, `squeezewax.prefs` no longer carries `discogsMaxTier`
+      and `_version` is 1; the settings page has no tier selector. Plan §6
+      check 1.
 
 ## Waiting — external
 

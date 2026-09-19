@@ -25,15 +25,6 @@
 	[% END %]
 [% END %]
 
-[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_MAXTIER" desc="PLUGIN_SQUEEZEWAX_MAXTIER_DESC" %]
-	<select class="stdedit" name="pref_discogsMaxTier">
-		<option value="strict" [% IF prefs.pref_discogsMaxTier == "strict" %]selected[% END %]>
-			[% "PLUGIN_SQUEEZEWAX_MAXTIER_STRICT" | string %]</option>
-		<option value="structural" [% IF prefs.pref_discogsMaxTier == "structural" %]selected[% END %]>
-			[% "PLUGIN_SQUEEZEWAX_MAXTIER_STRUCTURAL" | string %]</option>
-	</select>
-[% END %]
-
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
 	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
 	    variables inside FOREACH, so an outer counter reverts to 0 after the

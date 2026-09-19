@@ -109,14 +109,3 @@ PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
 	EN	Token test failed (HTTP %s).
 
-PLUGIN_SQUEEZEWAX_MAXTIER
-	EN	Matching tiers to use
-
-PLUGIN_SQUEEZEWAX_MAXTIER_DESC
-	EN	The cascade always starts at Strict and stops at the tier chosen here. Structural spends Discogs API requests; Strict does not.
-
-PLUGIN_SQUEEZEWAX_MAXTIER_STRICT
-	EN	Strict only (tag-based, no Discogs requests)
-
-PLUGIN_SQUEEZEWAX_MAXTIER_STRUCTURAL
-	EN	Strict, then Structural (uses the token above)
