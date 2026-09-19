@@ -1017,10 +1017,18 @@ Shared reminder list. Both I and Claude Code read and update this.
       and `snapshot_artist`. This is §15.3's accepted consequence, recorded
       because it is the first time it was seen on real rows.
 - [ ] **2026-09-19: `unrelinked orphans` is the absolute count, not a per-scan
-      figure.** It is 3 on the reference server after the test data was removed
-      (the two Isolar rows for the joined album, and one more not identified).
-      Nothing sweeps them in v1 (§2a invariant 4); make sure the step 8 review
-      queue shows them rather than growing them silently.
+      figure.** It is 3 on the reference server after the test data was removed,
+      all three identified by recomputing every current `album_key` from
+      `library.db` and diffing against `discogs_match` (481 rows, 764 current
+      albums): the manual row for Isolar (release 888888, 18 tracks) and the
+      strict row for "Isolar: Unidentified Explorers" (999999, 12 tracks) —
+      both taken when the local `Amorph` folder joined the NAS copy — and the
+      strict row for "ZZ SqueezeWax Test v2" (77777, 12 tracks, album 3633 no
+      longer exists) — its local folder was deleted. All three are pre-existing
+      rows from 6–7 Sep with fake release ids, not check 6's row; check 6's
+      three rows were deleted with the other test data. Nothing sweeps orphans
+      in v1 (§2a invariant 4); make sure the step 8 review queue shows them
+      rather than growing them silently.
 - [ ] **2026-09-19: test albums for future hardware checks.** The local
       `Music/` folder is now empty. A repeatable setup is documented by
       what worked here: copy albums off the read-only NAS with `cp`, retag the
@@ -1037,7 +1045,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       `snapshot_artist`; AFTER 479 with it, `backfilled 479`, `unrelinked
       orphans 2` (479 + 2 = 481). The two without are stale "Isolar" rows whose
       album grew from 9/6 to 18/12 tracks when the NAS copy joined the local one
-      (inferred from the track counts and the newer rows, not observed). Every
+      (inferred at the time from the track counts and the newer rows; later observed:
+      when the local `Amorph` folder was removed, those two keys became current
+      again and were re-examined). Every
       other column of all 481 rows was identical to the pre-scan copy. 44 rows
       hold non-ASCII artists, stored as single-encoded UTF-8 bytes.
 - [x] **2026-09-19: step 4 commit 5, plan §6 check 4.** "Move one tagged
@@ -1047,8 +1057,13 @@ Shared reminder list. Both I and Claude Code read and update this.
       **Done 2026-09-19.** Folder renamed with `mv` (mtime unchanged), changes-
       rescan: `examined 0, … relinked 1, unrelinked orphans 2`. Same release id,
       tier, state, `matched_at`, `source_timestamp` and snapshot; new
-      `album_key` and `lms_album_id`; row counts unchanged (483 / 101), so no
-      `discogs_no_match` row appeared.
+      `album_key` and `lms_album_id`. Row counts (`discogs_match` / `discogs_no_match`)
+      were 483 / 101 immediately before this scan (copy taken right after the
+      scan that first identified the two test albums) and 483 / 101 after, so no
+      row was added and no `discogs_no_match` row appeared. The 481 → 483 seen
+      since check 3 came from two earlier scans: the untagged test album (+1
+      `discogs_no_match`, 100 → 101, `no tag 1`), then the tagged test albums
+      first matched (+2 `discogs_match`, 481 → 483, `identified 2`).
 - [x] **2026-09-19: step 4 commit 5, plan §6 check 5.** "The same with a
       **manual** row. None exist until step 8, so insert one with `sqlite3`
       on a copy of `squeezewax.db`." Plan §6 check 7 asks for checks 4 and 5
@@ -1094,7 +1109,6 @@ Shared reminder list. Both I and Claude Code read and update this.
       `$count{identified} == 0 && !hasAnyStrictMatch`, and
       `hasAnyStrictMatch` no longer reads `state`. Offline coverage proves
       the predicate; only a real library proves the warning stays quiet.
-
       **Done 2026-09-19.** The first scan (`examined 0`) could not exercise the
       warning, so a proper case was built: one untagged album added to a library
       with strict matches gave `examined 1, identified 0, no tag 1` logged at
@@ -1314,13 +1328,17 @@ Shared reminder list. Both I and Claude Code read and update this.
       After upgrading, `squeezewax.prefs` no longer carries `discogsMaxTier`
       and `_version` is 1; the settings page has no tier selector. Plan §6
       check 1.
+      **PARTIAL 2026-09-19, left open.** Proven: `_version` went 0 to 1 (BEFORE
+      copy `_version: 0`, live file after the 0.0.0.2 install `_version: 1`),
+      and the settings page (`GET /plugins/SqueezeWax/settings.html`) has no
+      tier selector (0 matches for "tier"; token and tag-name fields render).
+      NOT PROVEN: that the migration removes `discogsMaxTier` and
+      `_ts_discogsMaxTier` — the live prefs file never contained either key, so
+      the removal code did not run on anything. Closed by the separate item
+      "prove the `discogsMaxTier` removal on a real prefs file" above.
 
 ## Waiting — external
 
-      **Partly done 2026-09-19.** `_version` went 0 to 1 and the settings page
-      (`GET /plugins/SqueezeWax/settings.html`) has no tier selector. The
-      removal of `discogsMaxTier` itself is NOT PROVEN: the live prefs file had
-      never contained the key. See the open item below.
 - [x] **2026-09-08: collection-page fixture not captured.** Six of the plan's
       seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
       the seventh — a page of a real collection, needed to re-verify the
