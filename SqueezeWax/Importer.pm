@@ -164,9 +164,26 @@ sub startScan { if (main::SCANNER) {
 	# value governs durability rather than visibility.
 	Slim::Schema->forceCommit;
 
+	# The pre-pass, before the main loop and after the progress row exists.
+	#
+	# After Progress->new deliberately: the pre-pass is a second full walk that
+	# issues no update(), so if it ran first the scan UI would show nothing at
+	# all for its duration. After the visibility forceCommit above, the row is
+	# at least present at 0 while it runs.
+	#
+	# It cannot be aborted. update() is the entire abort mechanism in this
+	# process - it reaches SQLiteHelper::updateProgress, which exits outright
+	# when the server answers "abort" (:443-460) - and the pre-pass makes no
+	# such call. Adding update() calls to buy an abort point would mean
+	# reporting progress against a total we do not have, so this is recorded in
+	# TODO.md with its wall time to be measured rather than worked around.
+	my $pre = _prePass();
+
 	my %count = (
 		examined => 0, identified => 0, candidate => 0, none => 0,
-		manual   => 0, kept      => 0, skipped   => 0,
+		manual   => 0, kept       => 0, skipped   => 0,
+		relinked => $pre->{relinked}, orphaned => $pre->{orphaned},
+		backfilled => $pre->{backfilled},
 	);
 	my $since = 0;
 
@@ -232,7 +249,8 @@ sub startScan { if (main::SCANNER) {
 	my $summary = "Discogs matching finished: examined $count{examined}, "
 		. "identified $count{identified}, conflicts $count{candidate}, "
 		. "no tag $count{none}, manual $count{manual}, kept $count{kept}, "
-		. "skipped $count{skipped}";
+		. "skipped $count{skipped}, relinked $count{relinked}, "
+		. "unrelinked orphans $count{orphaned}, backfilled $count{backfilled}";
 
 	# Escalated to warn in the one case LMS's own start/complete pair cannot
 	# report: a mistyped tag name produces "examined 4,800, identified 0" and
@@ -272,6 +290,104 @@ sub startScan { if (main::SCANNER) {
 	# kind of thing the XXX comment at :403 exists because of.
 	return $count{identified};
 } }
+
+# One walk over the library before the main loop, for the two things that cannot
+# be decided one album at a time. Returns the three counts for the summary.
+#
+# No file reads and no per-album query against LMS: our own two tables are
+# loaded whole first (they hold one row per matched album), and everything else
+# comes from the iterator's own record. The cost is a second streaming pass over
+# tracks, which is why TODO.md carries an item to time it.
+#
+# Sequential with the main walk, never nested - Library::eachAlbum holds one
+# statement handle from prepare_cached, and a second walk started inside the
+# first would take the handle out from under it (plan §0.11).
+sub _prePass {
+	my %count = ( relinked => 0, orphaned => 0, backfilled => 0 );
+
+	my $rows    = Plugins::SqueezeWax::Match->snapshotRows;
+	my $noMatch = Plugins::SqueezeWax::Match->noMatchKeys;
+
+	my %match = map { $_->{album_key} => $_ } @$rows;
+
+	my ( %current, @backfill, @misses );
+
+	Plugins::SqueezeWax::Library->eachAlbum( sub {
+		my $album = shift;
+		my $key   = $album->{album_key};
+
+		$current{$key} = 1;
+
+		my $row = $match{$key};
+
+		if ( !$row ) {
+			# A key miss is "no row in EITHER table" (plan §0.4). An album with
+			# a no-match row has been examined and produced nothing, so it is
+			# not a relink candidate - and relinking onto it would put a match
+			# row and a no-match row on one album_key, which is the invariant 1
+			# violation strictState exists to catch.
+			push @misses, {
+				album_key    => $key,
+				album_id     => $album->{album_id},
+				artist       => $album->{artist},
+				title        => $album->{title},
+				local_tracks => $album->{local_tracks},
+			} if !$noMatch->{$key};
+
+			return 1;
+		}
+
+		# Has a snapshot but no artist: written before step 4 (§15.12 part 1).
+		if ( defined $row->{snapshot_track_count} && !defined $row->{snapshot_artist} ) {
+			push @backfill, [ $key, $album->{artist} ];
+		}
+
+		return 1;
+	} );
+
+	# An orphan is a row whose album_key is no longer in the library, carrying
+	# an identification and a snapshot (§15.5 part 3). Keyed on the presence of
+	# an identification, NOT on state: a conflict-demoted row is exactly the
+	# kind whose tags can no longer reproduce it, so it is the kind recovery is
+	# for. match_tier is NOT NULL before migration 3, so that clause is
+	# currently redundant; it is written out because §15.5 states the predicate
+	# that way and migration 3 is what makes it bite.
+	my @orphans = grep {
+		!$current{ $_->{album_key} }
+			&& defined $_->{match_tier}
+			&& defined $_->{snapshot_track_count}
+	} @$rows;
+
+	$count{orphaned} = scalar @orphans;
+
+	# Resolve everything before writing anything. An abort mid-write commits
+	# what it has (see COMMIT_EVERY above), so deciding first means whatever
+	# landed is a set of individually correct pairs rather than a prefix of a
+	# decision that was still being made.
+	#
+	# A plain function, called as one: it takes no class name (CLAUDE.md's
+	# calling convention). It lives in Match.pm because the offline suite cannot
+	# reach anything inside startScan's main::SCANNER block.
+	my $pairs = Plugins::SqueezeWax::Match::_resolveRelinks( \@orphans, \@misses );
+
+	for my $b (@backfill) {
+		$count{backfilled} += Plugins::SqueezeWax::Match->backfillArtist(@$b);
+	}
+
+	for my $pair (@$pairs) {
+		next unless Plugins::SqueezeWax::Match->relinkOrphan(
+			$pair->{old_key}, $pair->{new_key}, $pair->{album_id} );
+
+		$count{relinked}++;
+		$count{orphaned}--;
+	}
+
+	# One commit for the pre-pass, outside COMMIT_EVERY, which governs the main
+	# loop's durability rather than this.
+	Slim::Schema->forceCommit;
+
+	return \%count;
+}
 
 # Skip when what we already recorded still describes the files on disk.
 #

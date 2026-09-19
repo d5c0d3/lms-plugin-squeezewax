@@ -228,6 +228,250 @@ sub strictState {
 	return $rows->[0];
 }
 
+# --- The identification pre-pass ------------------------------------------
+#
+# Two things cannot be decided one album at a time, so they happen in a walk of
+# their own before the main loop (decisions §15.12 part 2, plan §2.6).
+#
+# The relink is the reason. §15.5's fit is "exactly one" across the WHOLE
+# library, in both directions. Inside the per-album loop it would be decided
+# greedily - the first new album to fit an orphan would claim it before a second
+# candidate was ever seen - so the answer would depend on scan order, which is
+# the one thing a recovery mechanism must not do.
+#
+# The backfill rides along because it needs the same walk: an existing row's
+# artist comes from the current album with that album_key, and there is nowhere
+# else to read it from without a second pass over LMS's tables.
+#
+# The reads below load our two tables whole. They are small - one row per
+# matched album - and loading them is what keeps the walk a single streaming
+# pass with no per-album query against LMS.
+
+=head2 snapshotRows()
+
+Every C<discogs_match> row, with the columns the pre-pass needs: identity
+(C<album_key>, C<lms_album_id>, C<match_tier>) and the snapshot.
+
+Returns an arrayref of hashrefs, empty when there are none.
+
+=cut
+
+sub snapshotRows {
+	my $class = shift;
+
+	return Slim::Schema->dbh->selectall_arrayref(
+		q{SELECT album_key, lms_album_id, match_tier,
+		         snapshot_artist, snapshot_album_title, snapshot_track_count
+		    FROM squeezewax.discogs_match},
+		{ Slice => {} }
+	) || [];
+}
+
+=head2 noMatchKeys()
+
+The C<album_key>s carrying a strict C<discogs_no_match> row, as a hashref.
+
+The pre-pass needs both tables to identify a key miss: an album with a
+no-match row has been examined and produced nothing, so it is not a candidate
+for a relink. Testing C<discogs_match> alone would offer it one, and the
+relink would then put a match row on an C<album_key> that already has a
+no-match row - breaking §2a invariant 1 (plan §0.4).
+
+=cut
+
+sub noMatchKeys {
+	my $class = shift;
+
+	my $keys = Slim::Schema->dbh->selectcol_arrayref(
+		q{SELECT album_key FROM squeezewax.discogs_no_match WHERE tier = 'strict'}
+	) || [];
+
+	return { map { $_ => 1 } @$keys };
+}
+
+# The fit key: the three snapshot columns rendered as one string, so that
+# "fits" becomes "has the same key" and the one-to-one test is two hash counts
+# rather than a quadratic comparison.
+#
+# Exact equality, no normalisation (§15.5). Both sides are LMS's own strings -
+# the snapshot was taken from an LMS album and the candidate is an LMS album -
+# so L2 normalisation, which exists for comparing Discogs' text with LMS's, has
+# no work to do here.
+#
+# BYTES on both sides. DBD::SQLite returns bytes (no sqlite_unicode anywhere in
+# slimserver's Slim/) and the iterator passes contributors.name through
+# untouched, so both sides are the same bytes for the same name. Decoding one
+# side would make every non-ASCII artist silently fail to fit (§2.3).
+#
+# undef anywhere means no key at all, so the row fits nothing - which is what
+# makes a pre-step-4 row with a NULL snapshot_artist unrelinkable until the
+# backfill fills it, and what the backfill exists for (§15.12 part 1).
+#
+# Length-prefixed rather than joined on a separator: a separator that can occur
+# inside a title would let ("A", "B|C") and ("A|B", "C") collide, and an album
+# title is exactly the kind of field that contains punctuation. The track count
+# is numified so that 5 and "5" agree, which is the == the predicate asks for.
+sub _fitKey {
+	my ( $artist, $title, $trackCount ) = @_;
+
+	return undef unless defined $artist && defined $title && defined $trackCount;
+
+	return join( "\x00",
+		length($artist), $artist, length($title), $title, $trackCount + 0 );
+}
+
+# Pair orphaned rows with key-miss albums, where the pairing is unambiguous.
+#
+# A plain function, and pure: no database handle, no logging, no Slim::* call.
+# That is what lets the offline suite exercise it directly, and it is why the
+# resolver lives here rather than in Importer.pm, whose startScan body is inside
+# `if (main::SCANNER)` and is constant-folded away in any test process.
+#
+# Unique in BOTH directions (§15.12 part 2): the orphan must fit exactly one
+# miss AND that miss must fit exactly one orphan. Requiring it on the orphan
+# side only would let two new albums contend for one orphan, with scan order
+# deciding; requiring it on the miss side only would let one album claim two
+# orphans. Everything else is left exactly as it was and counted unresolved -
+# the ambiguous branch needs the review queue, which is step 8 (§15.5 part 4).
+#
+# Because the fit is exact equality, "fits exactly one" is "exactly one row has
+# this key", so both tests are counts on the same hash key.
+sub _resolveRelinks {
+	my ( $orphans, $misses ) = @_;
+
+	my ( %missByFit, %missCount );
+
+	for my $miss ( @{ $misses || [] } ) {
+		my $fit = _fitKey( $miss->{artist}, $miss->{title}, $miss->{local_tracks} );
+		next unless defined $fit;
+
+		$missCount{$fit}++;
+		$missByFit{$fit} = $miss;
+	}
+
+	my ( %orphanByFit, %orphanCount );
+
+	for my $orphan ( @{ $orphans || [] } ) {
+		my $fit = _fitKey( $orphan->{snapshot_artist}, $orphan->{snapshot_album_title},
+			$orphan->{snapshot_track_count} );
+		next unless defined $fit;
+
+		$orphanCount{$fit}++;
+		$orphanByFit{$fit} = $orphan;
+	}
+
+	my @pairs;
+
+	# Sorted so the order of the writes is a property of the data rather than of
+	# hash ordering: an abort part-way through then leaves a reproducible state.
+	for my $fit ( sort keys %orphanCount ) {
+		next unless $orphanCount{$fit} == 1;
+		next unless ( $missCount{$fit} || 0 ) == 1;
+
+		push @pairs, {
+			old_key  => $orphanByFit{$fit}->{album_key},
+			new_key  => $missByFit{$fit}->{album_key},
+			album_id => $missByFit{$fit}->{album_id},
+		};
+	}
+
+	return \@pairs;
+}
+
+=head2 backfillArtist( $albumKey, $artist )
+
+Fill a NULL C<snapshot_artist> on an existing snapshot, from the current
+album's artist. Returns 1 if a row was written, 0 otherwise.
+
+Nothing wrote C<snapshot_artist> before step 4, so every snapshot taken before
+it has NULL there - and §15.5's fit is exact equality, which NULL never
+satisfies. The skip contract means an unchanged album is never re-examined, so
+the normal write path would never fill them in either: without this, recovery
+would cover nothing that exists on the reference server today (§15.12 part 1).
+
+That column only. No state, no timestamp, no other snapshot column, and no file
+read - this is LMS's own data for the same C<album_key>. Manual rows are
+included, and they are the rows recovery exists for. Conflict rows are excluded
+for free, because they carry no C<snapshot_track_count> (§15.4).
+
+Idempotent: the C<IS NULL> guard is in the statement as well as in the caller's
+selection, so a second run writes nothing even if the caller's list is stale.
+
+=cut
+
+sub backfillArtist {
+	my ( $class, $albumKey, $artist ) = @_;
+
+	return 0 unless $class->_writeOk;
+	return 0 unless defined $artist;
+
+	# prepare_cached: the first scan after this ships backfills EVERY row
+	# identified before step 4, which on a real library is hundreds or
+	# thousands. One prepare for the lot.
+	my $sth = Slim::Schema->dbh->prepare_cached(
+		q{UPDATE squeezewax.discogs_match
+		     SET snapshot_artist = ?
+		   WHERE album_key = ?
+		     AND snapshot_artist IS NULL
+		     AND snapshot_track_count IS NOT NULL}
+	);
+
+	my $rows = $sth->execute( $artist, $albumKey );
+	$sth->finish;
+
+	return ( $rows && $rows > 0 ) ? 1 : 0;
+}
+
+=head2 relinkOrphan( $oldKey, $newKey, $albumId )
+
+Move an orphaned match onto the album it now describes. Returns 1 on success,
+0 otherwise.
+
+An UPDATE of C<album_key> and C<lms_album_id>, and nothing else. A relink
+re-identifies which local album a match belongs to; it does not re-decide which
+release it is - so C<discogs_release_id>, C<discogs_master_id>, C<match_tier>,
+C<state>, C<matched_at>, C<source_timestamp> and the whole snapshot are carried
+forward untouched.
+
+Never an INSERT and never a DELETE. An INSERT-plus-DELETE would be the same
+result by a route that can lose the row if it fails between the two, on the one
+table that is not regenerable (§2a).
+
+C<source_timestamp> riding along unchanged is what makes the main loop skip the
+album afterwards: its files moved but did not change, so there is nothing to
+re-read (plan §0.5). One that was moved AND retagged does not skip, and
+identification overwrites the relink in the same scan.
+
+=cut
+
+sub relinkOrphan {
+	my ( $class, $oldKey, $newKey, $albumId ) = @_;
+
+	return 0 unless $class->_writeOk;
+
+	my $sth = Slim::Schema->dbh->prepare_cached(
+		q{UPDATE squeezewax.discogs_match
+		     SET album_key = ?, lms_album_id = ?
+		   WHERE album_key = ?}
+	);
+
+	my $rows = $sth->execute( $newKey, $albumId, $oldKey );
+	$sth->finish;
+
+	# Exactly one row, or we did not do what we think we did. album_key is the
+	# PRIMARY KEY, so more than one is impossible and zero means the orphan went
+	# away between the read and the write. Either way the caller must not count
+	# it as a relink, because the summary is the only place a user sees that
+	# recovery ran at all.
+	if ( !$rows || $rows != 1 ) {
+		$log->error( "relinking $oldKey to $newKey changed "
+			. ( defined $rows ? $rows : 'no' ) . ' rows, expected exactly 1' );
+		return 0;
+	}
+
+	return 1;
+}
+
 =head2 recordStrict( \%album, \%decision )
 
 Write the outcome of the Strict pass for one album. C<%decision> is what

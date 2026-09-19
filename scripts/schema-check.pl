@@ -274,7 +274,7 @@ ok( !$insertMatch->( album_key => 'b' x 32, state => 'Confirmed' ),
 ok( !$insertMatch->( album_key => 'b' x 32, match_tier => 'Strict' ),
 	"match_tier CHECK rejects 'Strict'" );
 
-# 'manual' is the value the review queue will write in build-order step 5;
+# 'manual' is the value the review queue will write in build-order step 8;
 # if the CHECK rejected it we would only find out then.
 ok( $insertMatch->( album_key => 'c' x 32, match_tier => 'manual' ),
 	"match_tier CHECK accepts 'manual'" );

@@ -397,12 +397,20 @@ Shared reminder list. Both I and Claude Code read and update this.
       `md5_hex`. **Zero qualifying tracks must yield `undef`, never
       `md5_hex('')`** — that is one constant every empty album would collide
       on. Reachable because `Album->rescan` counts unfiltered while we filter.
-- [ ] **Orphan recovery writes an UPDATE, not an INSERT.** Relink by updating
+- [x] **Orphan recovery writes an UPDATE, not an INSERT.** Relink by updating
       the orphaned row's `album_key`, `lms_album_id` and snapshot, carrying
       `discogs_release_id`, `match_tier`, `state` and `matched_at` forward:
       relinking re-identifies which local album the match belongs to, it does
       not re-decide which release it is. An INSERT would need a provenance
       value nothing re-evaluated.
+      — done in step 4 commit 5. `Match->relinkOrphan` is an UPDATE of
+      `album_key` and `lms_album_id` only, asserting exactly one row changed.
+      **One correction to this item's own wording:** the snapshot is NOT
+      updated, it is carried. §15.4 captures the snapshot at identification,
+      and a relink is not one — it re-identifies the album, not the release,
+      so there is nothing to re-snapshot. `source_timestamp` is carried too,
+      which is what makes the moved album skip on the same scan (plan §0.5).
+      The ambiguous branch is step 8's (§15.5 part 4).
 - [ ] **`lms_album_id` refresh** on `['rescan','done']`, debounced — *not*
       `Slim::Utils::Scanner::API->onFinished`. Reasoning in decisions §6.
 - [x] **`Slim::Music::Import->addImporter`** registration, which step 2
@@ -657,6 +665,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       sync, so step 5 rewrites this string), Tags.pm:126, API.pm:4, :48,
       :266, tags-check.pl:114, title-agreement.pl:227, api-check.pl:388.
       Comment-only except strings.txt:68. Sweep in step 5's first commit.
+- [ ] **2026-09-19: the orphan relink runs only in the importer, which runs
+      only when tag names are configured** (`Importer.pm`'s `use` gate, kept
+      by §15.8). A user with manual matches and no tag names gets no relink.
+      INFERRED from reading. Step 8 must place the relink so manual-only
+      users are covered, or record why not.
 - [ ] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
       Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
       one-to-one fits. An orphan fitting several new albums, or a new album
@@ -987,6 +1000,35 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-19: step 4 commit 5, plan §6 check 3.** "After the first scan
+      on commit 5, count rows with a non-NULL `snapshot_track_count` and a
+      NULL `snapshot_artist`: expect zero among rows whose album is current."
+- [ ] **2026-09-19: step 4 commit 5, plan §6 check 4.** "Move one tagged
+      album's folder, rescan: its row is relinked (new `album_key`, same
+      release id), no `discogs_no_match` row appears for it, and the summary
+      counts one relink."
+- [ ] **2026-09-19: step 4 commit 5, plan §6 check 5.** "The same with a
+      **manual** row. None exist until step 8, so insert one with `sqlite3`
+      on a copy of `squeezewax.db`." Plan §6 check 7 asks for checks 4 and 5
+      repeated with a non-ASCII artist name; do that at the same time, since
+      the byte-level comparison is only proven offline.
+- [ ] **2026-09-19: step 4 commit 5, plan §6 check 6.** "Copy one album folder
+      so that two new albums fit a single orphan: neither is relinked, and the
+      summary counts it unresolved."
+- [ ] **2026-09-19: time the pre-pass on the reference library, and time the
+      FIRST post-upgrade scan specifically.** It adds a second full walk over
+      `tracks` before the main loop. The first scan after this ships is the
+      expensive one: every row identified before step 4 has a NULL
+      `snapshot_artist`, so that scan backfills all of them — hundreds or
+      thousands of UPDATEs, not a handful. Later scans backfill nothing.
+      **The pre-pass cannot be aborted.** VERIFIED by reading, not observed:
+      `$progress->update` is the entire abort mechanism in the scanner — it
+      reaches `Slim::Utils::SQLiteHelper::updateProgress`, which POSTs to the
+      server and calls `exit` when the answer matches `/abort/`
+      (`Slim/Utils/SQLiteHelper.pm:443-458`, called from
+      `Slim/Utils/Progress.pm:244`) — and the pre-pass makes no such call.
+      Deliberately not worked around with synthetic `update` calls. If the
+      measurement comes back long, that is its own decision.
 - [ ] **2026-09-19: step 4 commit 4 — a rescan of a healthy library shows no
       "check the configured tag names" warning, and the summary reads
       "identified N".** Plan §6 check 2. The warning's condition is now
