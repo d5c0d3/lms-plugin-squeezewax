@@ -142,11 +142,7 @@ PROGRESS_STUB='BEGIN {
 	$INC{q(Slim/Utils/Progress.pm)} = 1;
 }'
 
-# API.pm reaches the same JSON::XS/Unicode/OSDetect problem two more ways:
-# Slim::Networking::SimpleSyncHTTP -> SimpleHTTP::Base -> Slim::Utils::Cache
-# and Slim::Utils::Prefs (Base's own `my $prefs = preferences('server')` at
-# file scope needs the real preferences() symbol, hence reusing TAGS_STUB's
-# StubPrefs rather than a bare %INC marker); and separately
+# API.pm reaches the same JSON::XS/Unicode/OSDetect problem through
 # Slim::Utils::PluginManager -> Slim::Utils::Misc -> Slim::Music::Info ->
 # ... -> Slim::Utils::DateTime -> Slim::Utils::Unicode, the same chain
 # IMPORT_STUB stops one hop earlier for Slim::Music::Import. Only
@@ -154,9 +150,14 @@ PROGRESS_STUB='BEGIN {
 # returning {} is enough for the compile check - as always, this cannot
 # prove the real dataForPlugin behaves as API.pm assumes, only that the
 # module loads.
-API_STUB="$TAGS_STUB"'
+#
+# It used to reach it two more ways, via Slim::Networking::SimpleSyncHTTP ->
+# SimpleHTTP::Base -> Slim::Utils::Cache and Slim::Utils::Prefs, which is why
+# this stub also carried a Cache marker and reused TAGS_STUB's StubPrefs.
+# Build-order step 5 deleted API.pm's synchronous transport, and with it that
+# whole chain; both were verified unnecessary by removing them and re-running.
+API_STUB='
 BEGIN {
-	$INC{q(Slim/Utils/Cache.pm)} = 1;
 	$INC{q(Slim/Utils/PluginManager.pm)} = 1;
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
@@ -196,7 +197,7 @@ for scanner in 0 1; do
 				;;
 			API)
 				prelude="$API_STUB"
-				note=" (Slim::Utils::Cache, Slim::Utils::Prefs, Slim::Utils::PluginManager stubbed)"
+				note=" (Slim::Utils::PluginManager stubbed)"
 				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"

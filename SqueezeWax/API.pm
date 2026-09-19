@@ -1,39 +1,34 @@
 package Plugins::SqueezeWax::API;
 
-# Discogs API client, synchronous path (build-order step 4 §1 scope:
-# "Identification runs in the scanner... API/Async.pm is server-side and belongs
-# to steps 5/6"). Shape mirrored from refs/lms-plugin-tidal/API/Sync.pm
-# (commit 8df3d452, 2026-07-26): a thin _get wrapping
-# Slim::Networking::SimpleSyncHTTP, JSON decode, error handling by response
-# code. Built out incrementally over build-order step 4 items 1-3 (token
-# auth, request construction, rate limiting).
+# Discogs API request construction, response classification and rate-limit
+# accounting. Pure functions only - this module performs no I/O and owns no
+# transport. Built out over build-order step 4 items 1-3 (token auth, request
+# construction, rate limiting); the synchronous transport it originally
+# carried (sub get, sub _request, wrapping Slim::Networking::SimpleSyncHTTP,
+# shape mirrored from refs/lms-plugin-tidal/API/Sync.pm commit 8df3d452) was
+# deleted at build-order step 5, having never acquired a v1 caller: decisions
+# §13.8 removed the per-album scanner search it was written for, and the
+# collection sync that replaced it is server-side and therefore async.
 #
-# Request construction and response classification are pure class methods of
-# their inputs. SimpleSyncHTTP::new logs a backtrace if !main::SCANNER
-# (refs/slimserver/Slim/Networking/SimpleSyncHTTP.pm:58), and main::SCANNER
-# is a `use constant`, so the transport itself cannot be exercised in the
-# test process. Match.pm's _writeRefusal solved the same shape of problem the
-# same way: pull the decision out of the shim so it is testable without the
-# shim. _request() below is that shim - no logic beyond wiring the pure
-# functions to SimpleSyncHTTP.
+# Two callers, both supplying their own transport:
 #
-# Server-side callers (Settings.pm's token test) need the request/response
-# pure functions but must use Slim::Networking::SimpleAsyncHTTP instead of
-# _request() - CLAUDE.md: "Server-side HTTP -> SimpleAsyncHTTP (async)".
-# Settings.pm therefore calls buildRequest/classifyResponse directly and
-# wires its own async transport. A full async client (API/Async.pm) is out
-# of scope for this step (plan §1).
+#   - the scanner's Strict identification (steps 3/4) calls buildRequest and
+#     classifyResponse directly;
+#   - API/Async.pm (step 5) wires these same functions, plus accountRequest,
+#     backoffFor and _parseRateHeaders, to Slim::Networking::SimpleAsyncHTTP
+#     and Slim::Utils::Timers - CLAUDE.md: "Server-side HTTP -> SimpleAsyncHTTP
+#     (async)". Settings.pm's token test predates it and wires its own.
+#
+# Keeping the decisions out of the shims is what makes them testable:
+# scripts/api-check.pl covers every function here without constructing a
+# transport object, the same division Match.pm's _writeRefusal uses.
 
 use strict;
 
 use Data::URIEncode qw(complex_to_query);
 use JSON::XS qw(decode_json);
 
-use Slim::Networking::SimpleSyncHTTP;
-use Slim::Utils::Log;
 use Slim::Utils::PluginManager;
-
-my $log = logger('plugin.squeezewax');
 
 use constant BASE_URL => 'https://api.discogs.com';
 use constant REPO_URL => 'https://github.com/d5c0d3/lms-plugin-squeezewax';
@@ -238,67 +233,6 @@ sub _parseRateHeaders {
 		used      => scalar $headers->header('X-Discogs-Ratelimit-Used'),
 		remaining => scalar $headers->header('X-Discogs-Ratelimit-Remaining'),
 	};
-}
-
-# ---------------------------------------------------------------------------
-# The transport shims. Scanner-only (see the header note and CLAUDE.md). Not
-# exercised by scripts/api-check.pl for the reason stated there and in the
-# header above - SimpleSyncHTTP itself refuses to run outside the scanner.
-# ---------------------------------------------------------------------------
-
-sub _request {
-	my ( $path, $params, $token ) = @_;
-
-	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest( $path, $params, $token );
-
-	my $response = Slim::Networking::SimpleSyncHTTP->new( { timeout => 15 } )
-		->get( $url, @headers );
-
-	my $result = Plugins::SqueezeWax::API->classifyResponse( $response->code, $response->content );
-
-	return ( $result, _parseRateHeaders( $response->headers ) );
-}
-
-# This process's rate-limit state. Deliberately module-level rather than
-# threaded through every caller: one Discogs token has one real budget
-# regardless of which album Structural is currently on, and the scanner is a
-# single long-lived process for the duration of one scan (CLAUDE.md: LMS is
-# single-threaded), so there is exactly one of these to track.
-my $rateState;
-my $rateWait = 0;
-
-# Public entry point for a rate-limited, retried request. No logic beyond
-# sleeping and calling accountRequest/backoffFor (§3.1/§3.2) around
-# _request - the retry loop's shape is wiring, not a decision; every decision
-# it makes (how long to wait, whether to give up) comes from a pure function
-# above.
-sub get {
-	my ( $class, $path, $params, $token ) = @_;
-
-	my $attempt = 0;
-
-	while (1) {
-		sleep($rateWait) if $rateWait;
-
-		my ( $result, $rateHeaders ) = _request( $path, $params, $token );
-
-		my ( $newState, $wait ) = $class->accountRequest( $rateHeaders, time(), $rateState );
-		$rateState = $newState;
-		$rateWait  = $wait;
-
-		return $result unless $result->{error} && $result->{error} eq 'rate_limited';
-
-		my $retryWait = $class->backoffFor($attempt);
-
-		return $result unless defined $retryWait;
-
-		main::INFOLOG && $log->is_info
-			&& $log->info("rate limited on $path, retrying in ${retryWait}s (attempt $attempt)");
-
-		sleep($retryWait);
-
-		$attempt++;
-	}
 }
 
 1;

@@ -4,14 +4,13 @@
 # construction, response classification, and rate-limit accounting.
 #
 # What this cannot prove: that Discogs actually behaves as documented, or
-# that Slim::Networking::SimpleSyncHTTP/SimpleAsyncHTTP behave as read from
-# refs/. SimpleSyncHTTP::new refuses to run outside the scanner
-# (logBacktrace if !main::SCANNER, refs/slimserver/Slim/Networking/
-# SimpleSyncHTTP.pm:58), so the transport itself - _request() and get() in
-# API.pm - is not exercised here at all. Everything decision-shaped was
-# deliberately pulled out of the transport into the pure functions this file
-# does cover, the same split Match.pm's _writeRefusal uses for the same
-# reason.
+# that Slim::Networking::SimpleAsyncHTTP behaves as read from refs/. As of
+# build-order step 5 API.pm owns no transport at all - its synchronous one
+# was deleted unused - so there is nothing here left to stub a transport for;
+# the async transport lives in API/Async.pm and is covered, to the same
+# partial extent, by scripts/sync-check.pl. Everything decision-shaped was
+# deliberately kept out of the transports and in the pure functions this file
+# covers, the same split Match.pm's _writeRefusal uses for the same reason.
 #
 # Usage: scripts/api-check.pl
 
@@ -48,13 +47,14 @@ BEGIN {
 		$libPath,
 	);
 
-	# API.pm's own LMS dependencies: the logger (as every suite stubs it),
-	# Slim::Networking::SimpleSyncHTTP (pulls in the Cache/Prefs/JSON::XS
-	# chain syntax-check.sh's API_STUB documents, and is never called from
-	# here - see the header above), and Slim::Utils::PluginManager
-	# (_pluginVersion's dataForPlugin, made controllable per test below).
+	# API.pm's own LMS dependencies: the logger (as every suite stubs it,
+	# and as the Log::import stub below needs regardless of whether API.pm
+	# itself still logs) and Slim::Utils::PluginManager (_pluginVersion's
+	# dataForPlugin, made controllable per test below). The
+	# Slim::Networking::SimpleSyncHTTP stub that stood here went with the
+	# synchronous transport in build-order step 5 - API.pm no longer pulls
+	# in the Cache/Prefs/JSON::XS chain syntax-check.sh's API_STUB documents.
 	$INC{'Slim/Utils/Log.pm'}                     = 1;
-	$INC{'Slim/Networking/SimpleSyncHTTP.pm'}     = 1;
 	$INC{'Slim/Utils/PluginManager.pm'}           = 1;
 
 	no strict 'refs';

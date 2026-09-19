@@ -173,10 +173,10 @@ sub _setChanged {
 }
 
 # GET /oauth/identity (decisions §9.7's "Token sanity check"). Server-side, so
-# SimpleAsyncHTTP per CLAUDE.md, not Plugins::SqueezeWax::API->get - that shim
-# is scanner-only (API.pm's own header note; SimpleSyncHTTP::new logs a
-# backtrace outside the scanner). Request construction and response
-# classification are still API.pm's job; only the transport differs here.
+# SimpleAsyncHTTP per CLAUDE.md. Request construction and response
+# classification are API.pm's job - it owns no transport of its own - and only
+# the wiring differs between here and API/Async.pm, which does the same thing
+# for the collection sync with retry and rate-limit accounting on top.
 sub _testToken {
 	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
 
