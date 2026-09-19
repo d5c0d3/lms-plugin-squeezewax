@@ -80,15 +80,18 @@ sits where it does.
    `discogs_collection`, which v1 must not have — see below
 3. Strict identification from file tags — **done**
 4. **Identification rework** — stop writing `state = 'confirmed'` without a
-   collection check (decisions §13.4, design §3 node E); drop the
-   `local_tracks == 0` gate (§13.10.1); write `snapshot_artist` and build the
+   collection check (decisions §13.4, design §3 node E); write
+   `snapshot_artist` from `albums.contributor` (§11.4) and build the
    unambiguous orphan relink (§15.5); remove the `discogsMaxTier` pref
-   (§15.8). The importer's `use` gate does **not** change (§15.8)
+   (§15.8). The importer's `use` gate does **not** change (§15.8), and
+   neither does its `local_tracks` gate — there is nothing to read tags from
+   in an all-remote album (§15.11)
 5. **Collection sync** — server-side, asynchronous, on `['rescan','done']`
    plus an interval and a manual button (§15.2, §13.7)
 6. **Migration 3** — the `discogs_match` rebuild. Reviewable on its own,
    but **ships with step 7 and is never merged ahead of it** (§15.9)
-7. **Ownership pass** — design §3's flow, writing the `ownership` column
+7. **Ownership pass** — design §3's flow, writing the `ownership` column.
+   Covers **every** album, all-remote ones included (§13.10.1, §15.11)
 8. **Review queue + manual re-match**
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**

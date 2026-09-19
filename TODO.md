@@ -201,10 +201,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       2026-09-15: done. Reconciled 2026-09-13, f9a7644..32a6504; rulings in
       decisions §14; banner removed. Ticked late — the reconciliation session
       did not close this item.
-- [ ] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
+- [x] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
       it now contradict decisions 13.10.1 and must be changed by the build
-      order. The gate came from Structural's duration fingerprint, which no
-      longer runs. It excluded 186 of 765 albums, 24%.
+      order. ~~The gate came from Structural's duration fingerprint, which no
+      longer runs.~~ It excluded 186 of 765 albums, 24%.
+      2026-09-19, CORRECTED AND CLOSED — decisions §15.11. The struck reason
+      belongs to decisions §8's Structural gate, a different gate. The
+      importer's own comment gives its reason as "nothing to read tags from",
+      which still holds: all-remote albums have no local candidates. The gate
+      STAYS in the importer; §13.10.1's all-albums scope is carried by the
+      ownership pass (step 7). Closed without a code change.
 - [ ] **2026-09-12: plans/build-order-step-4-structural-matching.md is stale in
       its entirety** — it plans decisions §8's search-first flow, which
       decisions §13.8 supersedes. Its §6 still calls for a "design §13 rewrite"
@@ -476,11 +482,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       decided.** The design chat has proposed a sequence; no plan file exists
       yet. Recorded so it is not re-derived from scratch, not as a ruling.
       Proposed, in order:
-      4 identification rework (importer stops writing `confirmed`; drop the
-        `local_tracks == 0` gate; write `snapshot_artist`, §15.5; build the
-        unambiguous orphan relink, §15.5; remove `discogsMaxTier`, §15.8;
+      4 identification rework (importer stops writing `confirmed`; write
+        `snapshot_artist` from `albums.contributor`, §11.4 and §15.5; build
+        the unambiguous orphan relink, §15.5; remove `discogsMaxTier`, §15.8;
         detection bare-master fix; stale comments; `hasAnyStrictMatch`
-        semantics. The `use` gate does NOT change, §15.8);
+        semantics. Neither the `use` gate nor the `local_tracks` gate
+        changes, §15.8 and §15.11);
       5 collection sync (server-side, async — decisions §15.2). Testable on
         its own: three requests, last-synced timestamp advances, nothing
         written to `discogs_match`;
@@ -488,7 +495,9 @@ Shared reminder list. Both I and Claude Code read and update this.
         REORDERED 2026-09-18 by decisions §15.9, and it SHIPS WITH step 7 —
         reviewable as its own step, not merged ahead of the code that
         exercises it;
-      7 ownership pass (design §3 nodes C–K, decisions §14.8, §13.5);
+      7 ownership pass (design §3 nodes C–K, decisions §14.8, §13.5).
+        Iterates EVERY album, all-remote included — this is where §13.10.1
+        lands, not in the importer (§15.11);
       8 review queue and manual re-match (decisions §13.10.5, §14.9);
       9 owned badge and context menu (design §4, decisions §14.5, §14.10);
       10 on-demand marketplace lookup (design §7).
@@ -528,8 +537,11 @@ Shared reminder list. Both I and Claude Code read and update this.
         Discogs side is `Various` or `Various Artists` after the ` (N)`
         strip, both case-folded. `albums.compilation` is deliberately not
         sufficient on its own. GATED: the ownership pass must not auto-badge
-        a `compilation = 1` album on this equivalence until the pages 2–3
-        measurement reports — see that item's four added questions, and Q9.
+        an album whose artist agreement is reached only through this
+        equivalence until the pages 2–3 measurement reports — see that item's
+        four added questions, and Q9. Corrected 2026-09-19 (§15.11): the gate
+        first keyed on `compilation = 1`, which §11.3(c) measured as wrong for
+        11 Various-ish albums.
       Q5 — RESOLVED 2026-09-15 — decisions §15.5: recovery considers any
         orphaned row with an identification and a snapshot
         (`match_tier IS NOT NULL AND snapshot_track_count IS NOT NULL`),
@@ -951,9 +963,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       auto-badging on this measurement. Four questions it must answer, all
       answerable from the same fixture plus pages 2 and 3, at no extra
       request cost:
-      (i)   how many LMS albums with `compilation = 1` match a collection
-            entry at L2 — page 1 measured ZERO, so §15.7's premise that
-            most matched compilations would queue is a projection;
+      (i)   how many LMS albums match a collection entry at L2 with artist
+            agreement reached only through the `Various` equivalence —
+            counted separately from `compilation = 1`, which §11.3(c)
+            measured as unreliable (corrected 2026-09-19, §15.11). Page 1
+            measured ZERO compilations matching, so §15.7's premise that most
+            matched compilations would queue is a projection;
       (ii)  whether any two collection entries, or a collection entry and a
             DIFFERENT LMS album, share a normalised compilation title —
             this is the wrong-badge exposure §15.7 accepts;
