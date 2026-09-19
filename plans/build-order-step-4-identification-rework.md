@@ -1,6 +1,6 @@
 # Build order step 4 — Identification rework
 
-**Code complete 2026-09-19 at `a50c9d0` (commits f0ff368, cf995f4, b4f307e, 31a4289, a50c9d0). Hardware checks (§6) open in TODO.md.**
+**Code complete 2026-09-19 at `a50c9d0` (commits f0ff368, cf995f4, b4f307e, 31a4289, a50c9d0). Hardware checks (§6) run 2026-09-19 on build 0.0.0.2: checks 2-7 pass, check 1 partial; see TODO.md.**
 
 **Planned 2026-09-19 (design chat). Branch `v1-buildout`, at `a9b71b6`.**
 Source read in full at that commit: `SqueezeWax/Importer.pm`, `Match.pm`,
