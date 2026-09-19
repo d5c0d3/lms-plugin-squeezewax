@@ -1475,8 +1475,8 @@ Shared reminder list. Both I and Claude Code read and update this.
       needs both branches covered shouldn't have to re-derive this.
 - [x] **2026-09-07: `plans/` filenames are inconsistent.** Steps 2 and 3
       use invented verb-adjective-noun names
-      (`build-order-step-2-importer-schema.md`,
-      `build-order-step-3-strict-identification.md`); step 4 uses a descriptive
+      (`build-order-step-2-read-effervescent-squirrel.md`,
+      `build-order-step-3-tag-jolly-minsky.md`); step 4 uses a descriptive
       one (`build-order-step-4-structural-matching.md`). Descriptive is the
       convention going forward. Renaming 2 and 3 requires a `grep -rn`
       reference sweep across `docs/`, `plans/`, `CLAUDE.md` and `TODO.md`;
