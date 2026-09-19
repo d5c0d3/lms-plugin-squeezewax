@@ -85,7 +85,8 @@ sits where it does.
    unambiguous orphan relink (§15.5); remove the `discogsMaxTier` pref
    (§15.8). The importer's `use` gate does **not** change (§15.8), and
    neither does its `local_tracks` gate — there is nothing to read tags from
-   in an all-remote album (§15.11)
+   in an all-remote album (§15.11) — **code complete** (`a50c9d0`); the plan §6
+   hardware checks are open in `TODO.md`
 5. **Collection sync** — server-side, asynchronous, on `['rescan','done']`
    plus an interval and a manual button (§15.2, §13.7)
 6. **Migration 3** — the `discogs_match` rebuild. Reviewable on its own,

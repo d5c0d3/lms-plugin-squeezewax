@@ -500,6 +500,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       `plans/build-order-step-4-identification-rework.md`. The item stays
       open for Q9 and Q10.** Recorded so it is not re-derived from scratch,
       not as a ruling.
+      2026-09-19: step 4 code complete at a50c9d0; hardware checks open below.
       Proposed, in order:
       4 identification rework (importer stops writing `confirmed`; write
         `snapshot_artist` from `albums.contributor`, §11.4 and §15.5; build
@@ -665,6 +666,8 @@ Shared reminder list. Both I and Claude Code read and update this.
       sync, so step 5 rewrites this string), Tags.pm:126, API.pm:4, :48,
       :266, tags-check.pl:114, title-agreement.pl:227, api-check.pl:388.
       Comment-only except strings.txt:68. Sweep in step 5's first commit.
+      Also: Importer.pm _prePass uses `my $b` as a loop variable, which masks
+      sort's $b in that scope — rename in the same commit.
 - [ ] **2026-09-19: the orphan relink runs only in the importer, which runs
       only when tag names are configured** (`Importer.pm`'s `use` gate, kept
       by §15.8). A user with manual matches and no tag names gets no relink.
