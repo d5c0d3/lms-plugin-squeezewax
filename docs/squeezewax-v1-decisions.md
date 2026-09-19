@@ -2325,8 +2325,13 @@ records**. Modest in absolute terms, but 9 of the 11 direction-(b) groups are
 exactly those stream halves, so the gate was systematically dropping the second
 copy of records the user demonstrably owns.
 
-`Importer.pm`'s gate and the comment above it now contradict this record and
-must be changed by the build order.
+~~`Importer.pm`'s gate and the comment above it now contradict this record and
+must be changed by the build order.~~ — **corrected 2026-09-19 by §15.11: the
+decision above stands and is carried by the ownership pass, which must iterate
+every album. `Importer.pm`'s gate is a different gate with a different reason —
+"nothing to read tags from", in its own comment since `cec7a46` — and it stays.
+This record merged it with §8's Structural gate; the reasoning here is right
+about that one only.**
 
 #### 13.10.2 Correction to 13.4 — a title match is sufficient to badge
 
@@ -3462,8 +3467,10 @@ reopens this record together with §14.4.
 
 **This equivalence lands now; auto-badging a compilation on it does not ship
 until the pages 2–3 measurement reports.** The identification and ownership work
-proceeds; the ownership pass must not auto-badge an album with
-`albums.compilation = 1` on a title-plus-various match until that measurement
+proceeds; the ownership pass must not auto-badge an album ~~with
+`albums.compilation = 1` on a title-plus-various match~~ **whose artist agreement
+is reached only through this equivalence — corrected 2026-09-19 by §15.11, since
+§11.3(c) measured the flag as wrong for 11 Various-ish albums** until that measurement
 answers four questions, listed against it in `TODO.md`: how many compilations
 match at all, whether any normalised compilation title collides, whether
 `albums.year` agrees with Discogs' `year` on the matches, and whether
@@ -3661,9 +3668,10 @@ Checked item by item against the schema as `Schema.pm::_migration_1` and
   rows it would additionally admit under the new schema, collection-derived rows
   with a NULL `match_tier`, do not exist until the ownership pass. **Identical
   behaviour, not merely compatible.**
-- Removing `discogsMaxTier` (§15.8), removing the `local_tracks == 0` gate
-  (§13.10.1), redefining `hasAnyStrictMatch`, and the detection bare-master fix
-  — none touches the schema.
+- Removing `discogsMaxTier` (§15.8), ~~removing the `local_tracks == 0` gate
+  (§13.10.1),~~ redefining `hasAnyStrictMatch`, and the detection bare-master
+  fix — none touches the schema. **Corrected 2026-09-19: the gate is not
+  removed; see §15.11.**
 
 **The one cost:** the relink runs against the old `(state, snapshot_track_count)`
 index until migration 3 rebuilds it. That path fires only on an `album_key`
@@ -3746,10 +3754,12 @@ a destructive migration, because "collection sync was never built so there are
 almost certainly none" is an inference. That requirement stands.
 
 **One writer is already known: `scripts/schema-check.pl` inserts into the table**
-~~(verified 2026-09-18 by Claude Code, two insert sites)~~ — **corrected
-2026-09-18: three sites, not two. Two inserts plus the "expected tables exist"
-loop. The count was taken from a summary that named two of the three as "the
-insert sites", rather than from the grep that had already listed all three.** It is a test rather than
+(verified 2026-09-18 by Claude Code, two insert sites) — **note 2026-09-19: a
+2026-09-18 edit struck "two insert sites" as wrong and replaced it with "three
+sites". That correction was itself wrong. This sentence counts writers, and there
+are two: the inserts. The suite's third reference, the "expected tables exist"
+loop, writes nothing — it asserts presence — and belongs in obligation (i)'s
+update list, where it now is, not in a count of writers.** It is a test rather than
 plugin code, so it does not block the drop — but it does mean the suite fails
 the moment the table is gone unless the same edit removes those assertions.
 Recorded so the confirmation step is not reported as "zero found" when the
@@ -3761,3 +3771,90 @@ Wantlist (v2) will need collection-entry storage of some kind, and `TODO.md`
 carries a struck v2 item about rekeying this table. Dropping it now does not
 prejudge that: a v2 table would be designed against v2's requirements rather
 than inheriting an `instance_id` primary key that cannot hold wants.
+
+### 15.11 The importer keeps its `local_tracks` gate; §13.10.1 lands on the ownership pass
+
+**Decided 2026-09-19 (design chat).** Corrects where §13.10.1 applies, not what
+it decided. Also corrects the gate in §15.7.
+
+**Decided, in two parts:**
+
+1. **The `local_tracks` gate in `Importer.pm` stays.** §13.10.1's decision —
+   all albums, all-remote ones included, are in scope — is unchanged and is
+   carried by the **ownership pass** (build-order step 7), which must iterate
+   every album. It is not carried by the importer, which since §15.2 does
+   identification only.
+2. **§15.7's gate keys on the equivalence having fired, not on
+   `albums.compilation`.** An album whose artist agreement is reached only
+   through the `Various` mapping does not auto-badge until the pages 2–3
+   measurement reports, whatever its compilation flag says.
+
+#### Part 1 — two gates were merged into one
+
+Decisions §8 stated a gate for Structural: "The only gate that holds is
+`local_tracks == 0` — no local files means no evidence about a physical object.
+It is Structural's own rule, not inherited from Strict." `Importer.pm` has
+carried a *different* gate since `cec7a46` (2026-09-04), with a different
+reason, in its own comment: **"Nothing to read tags from."**
+
+§13.10.1 treated these as one: "The gate exists in `Importer.pm` and is stated in
+§8. Its reason was Structural's duration fingerprint." Its reasoning is right
+about §8's gate and wrong about the importer's. Structural's reason went with
+Structural; the importer's reason is a property of Strict and still holds.
+
+**Verified by reading, at `285e312`, not observed running:**
+
+- `Library::_finish` builds `candidates` from local tracks only, and takes
+  `source_timestamp` as the maximum over local tracks only.
+- So with the gate removed, an all-remote album reaches `_examine` with no
+  candidates, gets `{}` back, and is recorded by `_recordNoMatch` as a
+  `discogs_no_match` row with a NULL `source_timestamp`.
+- `Importer::_canSkip` never skips a NULL, so that row is rewritten on every
+  scan — 186 albums on the reference library, every scan, reading nothing,
+  recording a "no tag found" for an album that has no files to carry one.
+
+**Where §13.10.1's measured gain actually comes from.** "Removing the gate
+matched 10 additional owned records" was measured by
+`scripts/title-agreement.pl` — title-and-artist matching against the
+collection, which is **ownership**. §15.2 moved ownership out of the importer
+into a server-side pass, and that pass walks `Library::eachAlbum`, which already
+does not filter remote tracks. Its own comment anticipated this split: "remote is
+selected, not filtered on … The Strict caller decides, not the iterator."
+
+So the obligation moves to step 7, where it does what §13.10.1 measured, and the
+importer keeps a gate that is correct for what the importer now does.
+
+**This was caught by reading the code, after the wrong instruction had already
+been written into `CLAUDE.md`, `TODO.md` and §15.9 by this same session.** It is
+the pattern the session's calibration note names: a step treated as
+transcription — carrying §13.10.1's instruction forward — rather than checked
+against the artifact it instructs about.
+
+#### Part 2 — the compilation flag cannot carry the gate
+
+§11.3(c) measured `albums.compilation` as wrong in both directions: **11 albums
+carry a Various-ish album artist with `compilation = 0`**, and 4 are
+`compilation = 1` with a real artist. The cause is in source —
+`Slim::Schema::mergeSingleVAAlbum` groups role-1 rows, and Picard-tagged albums
+lose theirs — so `compilation = 0` on such an album means "not detected", not
+"not a compilation".
+
+§15.7 already says the flag is "deliberately not sufficient on its own" for
+artist agreement, then used the flag to define the gate. Keyed on the flag, the
+gate would let those 11 albums auto-badge through the `Various` equivalence
+ungated — the exposure the gate exists to hold back.
+
+**The gate keys on the mechanism, not on a proxy for it:** an album whose artist
+agreement depends on the `Various` mapping is gated; one whose artists agree by
+ordinary case-folded equality is not. On the reference library the second group
+includes the 23 albums whose LMS album artist is literally `Various` (§11.3(a),
+contributor 10001), which agree with Discogs' `Various` without the mapping.
+
+#### What changes
+
+- `CLAUDE.md` step 4 no longer says to drop the gate; step 7 carries the
+  all-albums obligation. Same in `TODO.md`'s sequence.
+- `TODO.md`'s 2026-09-12 gate item is closed as corrected, not as done.
+- §13.10.1, §15.7 and §15.9 are corrected in place.
+- The pages 2–3 measurement's question (i) is widened to count albums matched
+  through the equivalence, not only `compilation = 1` albums.
