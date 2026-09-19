@@ -162,7 +162,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match API Importer Settings Plugin"
+MODULES="Schema Library Tags Match API API::Async Importer Settings Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -172,7 +172,10 @@ for scanner in 0 1; do
 		# Plugin.pm is the server's entry point and the scanner never loads it
 		# (Slim/Utils/PluginManager.pm:204). Settings.pm is required only from
 		# Plugin.pm under main::WEBUI, so it never reaches the scanner either.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ]; }; then
+		# API/Async.pm is the server-side Discogs client - the scanner has no
+		# event loop to run SimpleAsyncHTTP on, which is the entire reason it
+		# exists separately from API.pm.
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "API::Async" ]; }; then
 			continue
 		fi
 
@@ -198,6 +201,35 @@ for scanner in 0 1; do
 			API)
 				prelude="$API_STUB"
 				note=" (Slim::Utils::PluginManager stubbed)"
+				;;
+			API::Async)
+				# Async.pm pulls API.pm in, hence API_STUB. Its own two LMS
+				# dependencies are the transport and the timers, and both reach
+				# the JSON::XS/Unicode/OSDetect chain the other stubs here exist
+				# to cut - by different routes.
+				#
+				# Slim::Networking::SimpleAsyncHTTP is stubbed rather than loaded:
+				# it goes Slim::Networking::Async -> Async::DNS -> Slim::Utils::Misc
+				# -> Slim::Music::Info -> ... -> Slim::Utils::Unicode, which needs a
+				# real Slim::Utils::OSDetect and dies at Unicode.pm:100 without one.
+				# That is the same trade scripts/api-check.pl documents for the
+				# synchronous transport it used to stub: a compile check cannot
+				# exercise a transport anyway, and the cost is that this does not
+				# prove the class name is spelled right.
+				#
+				# Slim::Utils::Timers is loaded for real, so setTimer and killTimers
+				# are genuinely resolved against refs/ rather than assumed. It needs
+				# one cut of its own: `use Slim::Utils::Misc` at Timers.pm:42 reaches
+				# Slim::Utils::Prefs -> Prefs::Namespace -> the same Unicode. Timers
+				# calls nothing in Misc (grepped: no Slim::Utils::Misc:: references
+				# anywhere in the file), so a bare %INC marker is enough, and
+				# TAGS_STUB supplies the preferences() symbol Prefs would export.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Slim::Utils::Misc, Slim::Utils::Prefs stubbed; Timers real)"
 				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
