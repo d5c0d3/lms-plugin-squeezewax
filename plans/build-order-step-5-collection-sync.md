@@ -290,6 +290,53 @@ existing offline coverage rather than re-deriving it. Does not and cannot
 prove the real `Timers`/`SimpleAsyncHTTP` interaction — that is a hardware-list
 item, same as `API.pm`'s own transport already is.
 
+### Amendment, 2026-09-19 — three corrections from the build session
+
+Recorded here rather than edited into the sections above, per §15.9's
+"corrected in place, not silently": a plan that quietly stops matching what
+shipped invites the next session to re-litigate what was already decided. The
+original text stands; these three points override it.
+
+1. **Commit 2's deletion boundary is `API.pm:243-303`, not `243-304`**
+   (`3ea03e3`). The figure above was computed pre-commit-1 and is wrong at the
+   end, not only shifted: line 304 is the file's `1;`. Counted at the real
+   post-commit-1 HEAD, 243 opens the "transport shims" banner and 303 is the
+   blank line after `sub get`'s closing brace.
+
+2. **The sync-state guard lives in `API/Async.pm`, not `Settings.pm`**
+   (`568d4a8`). Commit 4 above placed it in `Settings.pm`, mirroring
+   `%detection`. That cannot work: `Settings.pm` is loaded only under
+   `main::WEBUI` (`Plugin.pm`'s `initPlugin`), and two of the three triggers
+   the guard exists to serialise - the interval timer and `['rescan','done']` -
+   are server-wide and must run on a headless server, which never loads it.
+   The plan's placement would have left both unguarded in exactly the
+   configuration where nobody is watching. Same trap decisions §15.12 part 3
+   records, and that `Plugin.pm`'s own `$prefs->migrate` comment already cites.
+
+3. **The pinned sort is `sort=added&sort_order=asc`, and it does not close
+   §9.4's hazard** (`3eede31`). Commit 3 above left the key open pending a
+   documentation read; that read (Wayback snapshot `20251226151912` of
+   `discogs.com/developers`, "Collection Items By Folder" - the live page is
+   behind a Cloudflare interstitial) found the complete sort list to be
+   `label, artist, title, catno, format, rating, added, year` and **no
+   id-based key**, so no sort Discogs offers is guaranteed unique and §9.4's
+   "pin an explicit stable sort" cannot be satisfied outright. `added` is the
+   best available - it is the only key that is not contributor-editable
+   metadata or user-mutable - and ties inside one bulk add may still reorder.
+   Near-theoretical for this step, which reports only a count; load-bearing for
+   step 7. Recorded in `TODO.md` and in `_collectionParams`' own comment.
+
+Two further notes, not corrections to the plan's instructions:
+
+- Commit 2 also deleted `use Slim::Networking::SimpleSyncHTTP`, `my $log` and
+  `use Slim::Utils::Log` from `API.pm` (dead once `sub get`'s `INFOLOG` line
+  went), and updated `scripts/api-check.pl`'s header and stub - which the plan
+  predicted would not need it, but which did name `_request()` and `get()` and
+  did stub `SimpleSyncHTTP.pm`. `syntax-check.sh`'s `API_STUB` lost its
+  `Cache`/`Prefs` half for the same reason, verified by removing it and
+  re-running.
+- `discogsSyncInterval`'s 86400 default was taken as proposed, unchanged.
+
 ## §3. Verification (hardware, `TODO.md`)
 
 Not blocking the build or the review of these commits; blocking "this step is
