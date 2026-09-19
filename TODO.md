@@ -1003,6 +1003,35 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-19: build-order step 5's hardware checks (collection sync).**
+      Plan `plans/build-order-step-5-collection-sync.md` §3. Code complete and
+      offline-verified; none of these can be checked without a real server and
+      a real Discogs account.
+      (a) A sync produces exactly `ceil(items/100) + 1` requests — the pages
+          plus the `/oauth/identity` lookup — and `discogsLastSynced` advances.
+          `discogs_match` row count unchanged before and after. The offline
+          suite asserts the arithmetic and the request sequence against a stub
+          transport (`scripts/sync-check.pl`, 67 assertions); what it cannot
+          assert is that the real transport issues them.
+      (b) The manual button, the interval timer and a rescan's
+          `['rescan','done']` do not start overlapping syncs. Exercise the
+          guard, or say explicitly that it simply was not hit in practice.
+      (c) A revoked token produces the `error`-level log line and
+          `discogsLastSynced` stops advancing; a simulated transient failure
+          (kill the network mid-sync) produces `warn` and leaves prior state
+          untouched.
+      (d) The existing "abort a scan mid-run" check below becomes load-bearing
+          for the first time here — decisions §15.2 obligation 1 rests on an
+          inference from `SQLiteHelper`'s `_notifyFromScanner` exit branch that
+          has never been observed. Run it: abort an external scan mid-run,
+          confirm a second `['rescan','done']` arrives, and confirm a pending
+          sync then completes.
+      (e) Not covered offline at all, and the reason (a)-(d) are here: nothing
+          in `scripts/sync-check.pl` touches a real event loop. Both its stubs
+          are synchronous — a stubbed request calls back before `->get`
+          returns, a stubbed timer fires before `setTimer` returns. The real
+          `Slim::Utils::Timers` / `SimpleAsyncHTTP` interaction is unproven.
+
 - [ ] **2026-09-19: prove the `discogsMaxTier` removal on a real prefs file.**
       Check 1 could not, because this server's `squeezewax.prefs` never had the
       key (it predates the pref). Stop LMS, put `discogsMaxTier: 2` and
@@ -1362,6 +1391,52 @@ Shared reminder list. Both I and Claude Code read and update this.
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
+
+- [ ] **2026-09-19: `decisions §9.4` / `design §9` state a documented default
+      for the collection listing that the documentation does not state.** Both
+      say the endpoint "defaults to `sort=label&sort_order=asc`". The API
+      documentation states no default for this endpoint at all — the figure is
+      an observation from this repo's own fixture,
+      `scripts/fixtures/collection-page1.json`, whose `pagination.urls.next`
+      carries those two parameters. The hazard §9.4 draws from it is real and
+      unaffected; the provenance is what is wrong, and a decision record that
+      presents an observation as documentation is the kind of thing a later
+      session will build on. Design-chat's to fix, not Claude Code's.
+      Read 2026-09-19 from the Wayback snapshot `20251226151912` of
+      `discogs.com/developers` (the live page is behind a Cloudflare
+      interstitial and returns 403 to any non-browser client).
+- [ ] **2026-09-19: the Discogs collection-listing pagination read, recorded so
+      it is not re-derived.** Same source as above, section "Collection Items
+      By Folder".
+      - `page` and `per_page` confirmed, "up to 100" confirmed as the
+        documented maximum. This is what `ceil(items/100)` rests on.
+      - Valid `sort` keys, complete: `label`, `artist`, `title`, `catno`,
+        `format`, `rating`, `added`, `year`. `sort_order` is `asc` or `desc`.
+      - **There is no id-based sort key** — neither `id` nor `instance_id` is
+        offered — so no sort Discogs provides is guaranteed unique, and §9.4's
+        "pin an explicit stable sort" cannot be satisfied outright. Decided:
+        pin `sort=added&sort_order=asc`. Every other key but `rating` is
+        release metadata any contributor can edit mid-sync and `rating` is
+        user-mutable, while the time an instance entered a collection is not
+        editable at all. Residual risk, documented rather than dropped: a bulk
+        add gives many instances the same timestamp and ties may reorder
+        between requests. Near-theoretical for step 5, which reports only a
+        count; load-bearing for step 7, which consumes the rows.
+      - Nothing is documented about pagination stability or snapshot
+        consistency. There is no cursor.
+- [ ] **2026-09-19: `discogsSyncInterval`'s 86400s (24h) default is a product
+      call, not a sourced figure.** Made in step 5's plan; no prior decision
+      sets one, and nothing measured it. The 3600s floor on the field is
+      likewise a judgement call, as are `DELAY_FIRST_SYNC` (300) and
+      `DEBOUNCE_AFTER_RESCAN` (60) in `Plugin.pm`. Recorded so a later reader
+      does not mistake any of the four for measured or specified.
+- [ ] **2026-09-19: a shared `['rescan','done']` debounce helper, if a third
+      caller ever appears.** Step 5 built one in `Plugin.pm` (`_scheduleSync`,
+      kill-then-arm). The `lms_album_id` refresh hook found in build-order
+      step 2 still needs its own `['rescan','done']` subscription and is still
+      unbuilt; when it lands, the two debounces could be one helper. Flagged as
+      scope creep and deliberately not done in step 5 — two callers is not yet
+      a pattern.
 
 - [ ] **2026-09-13: grep design for definite references to a resolved
       pressing.** Two findings this session — the token-revocation
