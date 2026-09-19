@@ -1003,22 +1003,73 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-19: step 4 commit 5, plan §6 check 3.** "After the first scan
+- [ ] **2026-09-19: prove the `discogsMaxTier` removal on a real prefs file.**
+      Check 1 could not, because this server's `squeezewax.prefs` never had the
+      key (it predates the pref). Stop LMS, put `discogsMaxTier: 2` and
+      `_ts_discogsMaxTier: 1` and `_version: 0` into a copy of the file, start,
+      and confirm both keys are gone and `_version` is 1. Read but not observed:
+      `Namespace.pm:355-377`, `Base.pm:242-258`.
+- [ ] **2026-09-19: the pre-step-4 rows with a NULL `source_timestamp` are
+      re-examined once, and a `confirmed` one is demoted to `candidate`.**
+      Observed after `Amorph` was removed from the local folder: two old
+      "Isolar" rows (`state = 'confirmed'`, NULL `source_timestamp`) became
+      current again, were examined, and came out `candidate` with a timestamp
+      and `snapshot_artist`. This is §15.3's accepted consequence, recorded
+      because it is the first time it was seen on real rows.
+- [ ] **2026-09-19: `unrelinked orphans` is the absolute count, not a per-scan
+      figure.** It is 3 on the reference server after the test data was removed
+      (the two Isolar rows for the joined album, and one more not identified).
+      Nothing sweeps them in v1 (§2a invariant 4); make sure the step 8 review
+      queue shows them rather than growing them silently.
+- [ ] **2026-09-19: test albums for future hardware checks.** The local
+      `Music/` folder is now empty. A repeatable setup is documented by
+      what worked here: copy albums off the read-only NAS with `cp`, retag the
+      album title with mutagen so LMS does not join them to the originals, keep
+      the release-id tag, and rescan with the JSON-RPC `rescan` command (the
+      changes-rescan; `rescan album|track` runs in-process and skips our
+      importer, `Commands.pm:2676-2790`). `scanner.log` is rewritten per scan.
+
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 3.** "After the first scan
       on commit 5, count rows with a non-NULL `snapshot_track_count` and a
       NULL `snapshot_artist`: expect zero among rows whose album is current."
-- [ ] **2026-09-19: step 4 commit 5, plan §6 check 4.** "Move one tagged
+      **Done 2026-09-19 on 0.0.0.2 (package-build 835920a).** First scan on the
+      new code, changes-rescan: BEFORE 481 rows with a snapshot and 0 with
+      `snapshot_artist`; AFTER 479 with it, `backfilled 479`, `unrelinked
+      orphans 2` (479 + 2 = 481). The two without are stale "Isolar" rows whose
+      album grew from 9/6 to 18/12 tracks when the NAS copy joined the local one
+      (inferred from the track counts and the newer rows, not observed). Every
+      other column of all 481 rows was identical to the pre-scan copy. 44 rows
+      hold non-ASCII artists, stored as single-encoded UTF-8 bytes.
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 4.** "Move one tagged
       album's folder, rescan: its row is relinked (new `album_key`, same
       release id), no `discogs_no_match` row appears for it, and the summary
       counts one relink."
-- [ ] **2026-09-19: step 4 commit 5, plan §6 check 5.** "The same with a
+      **Done 2026-09-19.** Folder renamed with `mv` (mtime unchanged), changes-
+      rescan: `examined 0, … relinked 1, unrelinked orphans 2`. Same release id,
+      tier, state, `matched_at`, `source_timestamp` and snapshot; new
+      `album_key` and `lms_album_id`; row counts unchanged (483 / 101), so no
+      `discogs_no_match` row appeared.
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 5.** "The same with a
       **manual** row. None exist until step 8, so insert one with `sqlite3`
       on a copy of `squeezewax.db`." Plan §6 check 7 asks for checks 4 and 5
       repeated with a non-ASCII artist name; do that at the same time, since
       the byte-level comparison is only proven offline.
-- [ ] **2026-09-19: step 4 commit 5, plan §6 check 6.** "Copy one album folder
+      **Done 2026-09-19, checks 5 and 7 both.** A row hand-set to `manual`
+      (ASCII artist) and one with a non-ASCII artist (`Blüchel & Von Deylen`,
+      bytes `42 C3 BC 63…` identical before and after) were relinked in one scan:
+      `relinked 2`, both still `manual`. The non-ASCII artist also relinked as
+      `strict` (check 7 part 1). The db edit needed
+      `sudo -u squeezeboxserver sqlite3` because `squeezewax.db` is owned by the
+      server user. The test rows were deleted afterwards.
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 6.** "Copy one album folder
       so that two new albums fit a single orphan: neither is relinked, and the
       summary counts it unresolved."
-- [ ] **2026-09-19: time the pre-pass on the reference library, and time the
+      **Done 2026-09-19.** `mv` plus `cp -a` gave two separate LMS albums (no
+      DISC tag, so the same-folder rule in `Slim/Schema.pm` keeps them apart):
+      `relinked 0, unrelinked orphans 3` (baseline 2). The original row was
+      untouched. Note the two new albums each got fresh rows from their tags in
+      the same scan, so the orphan stays an orphan.
+- [x] **2026-09-19: time the pre-pass on the reference library, and time the
       FIRST post-upgrade scan specifically.** It adds a second full walk over
       `tracks` before the main loop. The first scan after this ships is the
       expensive one: every row identified before step 4 has a NULL
@@ -1032,13 +1083,24 @@ Shared reminder list. Both I and Claude Code read and update this.
       `Slim/Utils/Progress.pm:244`) — and the pre-pass makes no such call.
       Deliberately not worked around with synthetic `update` calls. If the
       measurement comes back long, that is its own decision.
-- [ ] **2026-09-19: step 4 commit 4 — a rescan of a healthy library shows no
+      **Measured 2026-09-19:** the whole importer took 0.093 s on the first
+      scan (765 albums, 8,693 file tracks, 479 UPDATEs); 0.08 s on every later
+      scan. The scan's ~4 minutes were ContributorPictureScan (199 s), not ours.
+      The "cannot be aborted" property is real but costs nothing at this size.
+      Re-measure only if the library grows by an order of magnitude.
+- [x] **2026-09-19: step 4 commit 4 — a rescan of a healthy library shows no
       "check the configured tag names" warning, and the summary reads
       "identified N".** Plan §6 check 2. The warning's condition is now
       `$count{identified} == 0 && !hasAnyStrictMatch`, and
       `hasAnyStrictMatch` no longer reads `state`. Offline coverage proves
       the predicate; only a real library proves the warning stays quiet.
 
+      **Done 2026-09-19.** The first scan (`examined 0`) could not exercise the
+      warning, so a proper case was built: one untagged album added to a library
+      with strict matches gave `examined 1, identified 0, no tag 1` logged at
+      INFO with no "check the configured tag names" line, which is the case the
+      old `state = 'confirmed'` predicate would have warned on. Summary reads
+      "identified N" throughout.
 - [ ] **2026-09-13: the pages 2–3 measurement is now also the revisit trigger
       for two decisions.** Already recorded above as its own item; noting the
       dependants so they are not missed. Decisions §14.4 (no recovery path for
@@ -1255,6 +1317,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — external
 
+      **Partly done 2026-09-19.** `_version` went 0 to 1 and the settings page
+      (`GET /plugins/SqueezeWax/settings.html`) has no tier selector. The
+      removal of `discogsMaxTier` itself is NOT PROVEN: the live prefs file had
+      never contained the key. See the open item below.
 - [x] **2026-09-08: collection-page fixture not captured.** Six of the plan's
       seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
       the seventh — a page of a real collection, needed to re-verify the
