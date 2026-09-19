@@ -52,14 +52,28 @@ END {
 # (SQL/SQLite/schema_16_up.sql:42), so it sorts BINARY and LMS's ICU collation
 # machinery (Slim/Utils/SQLiteHelper.pm:165-207) never applies.
 #
-# remote is selected, not filtered on. v2's Fuzzy tier is precisely for
-# streaming albums with no local file (design §3, walkthrough 4); filtering here
-# would have to be undone then. The Strict caller decides, not the iterator.
+# remote is selected, not filtered on. An all-remote album has no local file to
+# read tags from, so the importer's local_tracks gate skips it, but the ownership
+# pass covers every album, all-remote ones included (decisions §11.3, §15.11);
+# filtering here would have to be undone then. The caller decides, not the
+# iterator.
+#
+# c.name is the album artist, from albums.contributor (decisions §11.4, as
+# corrected by §15.12: Album::artists does not read that column and can write to
+# the library). It is returned as DBD::SQLite hands it over - bytes, no decoding,
+# trimming or case folding. Nothing under Slim/ sets sqlite_unicode or
+# sqlite_string_mode (grep, slimserver a670a38), contributors.name is a blob
+# (SQL/SQLite/schema_1_up.sql:154), and LMS decodes by hand where it needs
+# characters (Slim/Schema/Album.pm:239). The snapshot stores and compares the
+# artist the same way, so decoding here would make every non-ASCII artist fail
+# to fit. LEFT JOINs: a NULL or dangling albums.contributor yields undef, never
+# a dropped row.
 my $ALBUM_TRACKS_SQL = q{
 	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote,
-	       t.content_type, a.title
+	       t.content_type, a.title, c.name
 	  FROM tracks t
 	  LEFT JOIN albums a ON a.id = t.album
+	  LEFT JOIN contributors c ON c.id = a.contributor
 	 WHERE t.album IS NOT NULL
 	   AND t.audio = 1
 	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
@@ -90,6 +104,8 @@ Call $callback once per album with a hashref:
   candidates        up to two local track urls, in (disc, tracknum, url) order
   content_type      the primary candidate's content type, or undef
   title             album title for display only - may be undef
+  artist            albums.contributor's name, bytes as stored; may be undef;
+                    last track written wins (decisions §15.12)
 
 Returns the number of albums seen. A callback returning false stops the walk.
 
@@ -111,10 +127,10 @@ sub eachAlbum {
 	$activeSth = $sth;
 
 	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
-		$contentType, $title );
+		$contentType, $title, $artist );
 	$sth->bind_columns(
 		\( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
-			$contentType, $title )
+			$contentType, $title, $artist )
 	);
 
 	my $seen    = 0;
@@ -148,6 +164,7 @@ sub eachAlbum {
 				$current = {
 					album_id      => $albumId,
 					title         => $title,
+					artist        => $artist,
 					urlmd5        => [],
 					local         => [],
 					remote_tracks => 0,
@@ -235,6 +252,10 @@ sub _finish {
 		# accumulator rather than per track, since it is a property of the album.
 		# May be NULL in the database, so callers degrade to the id.
 		title            => $acc->{title},
+
+		# The album artist, likewise a property of the album. Bytes, and undef
+		# when albums.contributor is NULL or has no contributors row.
+		artist           => $acc->{artist},
 
 		album_key        => md5_hex( join '', @{ $acc->{urlmd5} } ),
 		source_timestamp => $source,

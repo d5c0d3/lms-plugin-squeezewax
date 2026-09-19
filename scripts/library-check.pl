@@ -119,7 +119,8 @@ $dbh->do(q{
 		content_type TEXT
 	)
 });
-$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT)');
+$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT, contributor INT)');
+$dbh->do('CREATE TABLE contributors (id INTEGER PRIMARY KEY, name BLOB)');
 
 my $insert = $dbh->prepare('INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)');
 
@@ -143,7 +144,16 @@ $insert->execute( 7, 4, md5_hex('g'), 'file:///g', 10, 1, 1, 0, 1, 'cpl' );
 # album 5: a track with audio = 0
 $insert->execute( 8, 5, md5_hex('h'), 'file:///h', 10, 1, 1, 0, 0, 'flc' );
 
-$dbh->do("INSERT INTO albums VALUES (1, 'One'), (2, 'Two'), (3, 'Three'), (4, 'Four'), (5, 'Five')");
+$dbh->do("INSERT INTO albums (id, title) VALUES (1, 'One'), (2, 'Two'), (3, 'Three'), (4, 'Four'), (5, 'Five')");
+
+# Artists. Album 1 gets a plain name, album 2 a non-ASCII one stored as the UTF-8
+# bytes LMS would have written; album 3 has a NULL contributor (the default
+# above); a dangling id is set up on album 3 in the tests below, not here.
+my $utf8Name = "Bj\xc3\xb6rk";    # "Björk" as UTF-8 bytes
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (1, ?)', undef, 'Depeche Mode' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (2, ?)', undef, $utf8Name );
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 1');
+$dbh->do('UPDATE albums SET contributor = 2 WHERE id = 2');
 
 my @albums;
 my $seen = $L->eachAlbum( sub { push @albums, $_[0]; 1 } );
@@ -232,6 +242,30 @@ is( $L->albumLabel( { album_id => 7, title => undef } ), 'album 7',
 	'albumLabel degrades to the album id when the title is NULL' );
 is( $L->albumLabel( { album_id => 8, title => '' } ), 'album 8',
 	'  ...and when it is empty' );
+
+# --- artist comes from albums.contributor, as bytes -----------------------
+is( $by{1}->{artist}, 'Depeche Mode', 'artist is the contributor\'s name' );
+
+# No decoding: DBD::SQLite returns the stored bytes, and the snapshot compares
+# them as bytes on both sides.
+is( $by{2}->{artist}, $utf8Name, 'a non-ASCII artist comes back byte-identical' );
+ok( !utf8::is_utf8( $by{2}->{artist} ), '  ...and is not a decoded character string' );
+
+# NULL albums.contributor: album 3 was seeded without one.
+ok( exists $by{3}->{artist} && !defined $by{3}->{artist},
+	'a NULL albums.contributor gives an undef artist, not a die' );
+
+# A contributor id with no contributors row. The LEFT JOIN must keep the album.
+$dbh->do('UPDATE albums SET contributor = 99 WHERE id = 3');
+my %dangling;
+my $danglingOk = eval {
+	$L->eachAlbum( sub { $dangling{ $_[0]->{album_id} } = $_[0]; 1 } );
+	1;
+};
+ok( $danglingOk, 'a dangling albums.contributor does not die' );
+ok( $dangling{3} && !defined $dangling{3}->{artist},
+	'  ...and the album is still emitted, with an undef artist' );
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
 
 # --- albumCount matches what the iterator emits ---------------------------
 is( $L->albumCount, 3,
