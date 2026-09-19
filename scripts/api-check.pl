@@ -385,9 +385,9 @@ sub load_fixture {
 {
 	# Paired fixture: the reference LMS library (hardware-tested throughout
 	# decisions/TODO.md) has this album at albums.id 3359, discc = 2, 25
-	# local tracks. Both sides of a future Structural comparison test are
-	# available once build-order item 5 needs them - not written here, per
-	# instruction; this block only asserts the Discogs side's own shape.
+	# local tracks - recorded in case a duration-based disambiguator is ever
+	# built (decisions §13.10, left open, not v1); this block only asserts
+	# the Discogs side's own shape.
 	my $result = $A->classifyResponse( 200, load_fixture('release-132512.json') );
 	ok( $result->{ok}, 'release-132512 parses' );
 

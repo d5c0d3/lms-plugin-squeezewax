@@ -111,7 +111,7 @@ my @accept = (
 	# from a browser or copied out of an API uri field must parse. Failing it
 	# would be worse than a miss: decide() treats unparseable as a conflict, so
 	# the album would land in the review queue as a false conflict instead of
-	# falling through to Structural.
+	# being treated as no tag at all.
 	[ 'https://www.discogs.com/Various-Aldre-Svenska-Spelman-Volym-I/release/4198228',
 	  4198228, 'slug before /release/' ],
 	[ 'https://www.discogs.com/Miles-Davis-Kind-Of-Blue/releases/123456',

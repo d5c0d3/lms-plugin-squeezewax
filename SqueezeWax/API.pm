@@ -1,7 +1,7 @@
 package Plugins::SqueezeWax::API;
 
 # Discogs API client, synchronous path (build-order step 4 §1 scope:
-# "Structural runs in the scanner... API/Async.pm is server-side and belongs
+# "Identification runs in the scanner... API/Async.pm is server-side and belongs
 # to steps 5/6"). Shape mirrored from refs/lms-plugin-tidal/API/Sync.pm
 # (commit 8df3d452, 2026-07-26): a thin _get wrapping
 # Slim::Networking::SimpleSyncHTTP, JSON decode, error handling by response
@@ -44,15 +44,13 @@ use constant REPO_URL => 'https://github.com/d5c0d3/lms-plugin-squeezewax';
 use constant DEFAULT_LIMIT  => 60;
 use constant WINDOW_SECONDS => 60;
 
-# 429 retry bound (§3.2). Three retries (four attempts total) at
-# WINDOW_SECONDS each is up to 4 minutes stalled on one request. Structural
-# runs unattended over hundreds of albums (plan §13's "~9 minutes at 60/min
-# for 500 albums" is the scale this competes with), so a single wedged
-# request must not be allowed to stall the scan indefinitely - a 429 that
-# survives the local throttle three times in a row means something is wrong
-# beyond ordinary pacing (concurrent use of the same token from elsewhere, or
-# a genuinely stuck window), and the right response is to give up on this one
-# request and let the album fall to the review queue, not to retry forever.
+# 429 retry bound (§3.2), shared by the pure backoffFor here and the async
+# collection sync's retry loop (API/Async.pm). Three retries (four attempts
+# total) at WINDOW_SECONDS each is up to 4 minutes stalled on one request -
+# a 429 that survives the local throttle three times in a row means
+# something is wrong beyond ordinary pacing (concurrent use of the same
+# token from elsewhere, or a genuinely stuck window), and the right response
+# is to give up and let this sync fail for the interval, not retry forever.
 use constant MAX_RETRIES => 3;
 
 # ---------------------------------------------------------------------------

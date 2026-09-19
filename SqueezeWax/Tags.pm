@@ -123,7 +123,7 @@ The slug form is the one Discogs itself emits, so a value pasted from a browser
 or copied out of an API C<uri> field has to parse. It particularly must not fail:
 decide() treats present-but-unparseable as a *conflict*, so a URL this could not
 read would put the album in the review queue as a false conflict rather than
-letting it fall through to Structural - worse than simply missing it.
+letting it be treated as no tag at all - worse than simply missing it.
 
 Never returns a valid falsy id: 0 is not a Discogs release, so callers may use
 C<if ( my $id = ... )>.

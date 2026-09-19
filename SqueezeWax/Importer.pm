@@ -370,8 +370,8 @@ sub _prePass {
 	# reach anything inside startScan's main::SCANNER block.
 	my $pairs = Plugins::SqueezeWax::Match::_resolveRelinks( \@orphans, \@misses );
 
-	for my $b (@backfill) {
-		$count{backfilled} += Plugins::SqueezeWax::Match->backfillArtist(@$b);
+	for my $entry (@backfill) {
+		$count{backfilled} += Plugins::SqueezeWax::Match->backfillArtist(@$entry);
 	}
 
 	for my $pair (@$pairs) {

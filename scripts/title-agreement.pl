@@ -224,7 +224,8 @@ sub _load_albums {
 	# Gate copied from Library.pm's $ALBUM_TRACKS_SQL, with local_tracks kept
 	# as a REPORTED COLUMN rather than a filter. Importer.pm's
 	# "local_tracks == 0" skip is deliberately not reproduced: it came from
-	# Structural's duration fingerprint, which needed local files to read
+	# the old Structural tier's duration fingerprint (removed by decisions
+	# §13.8), which needed local files to read
 	# durations from, and a title comparison needs no local file.
 	my $sql = q{
 		SELECT a.id,

@@ -65,7 +65,7 @@ PLUGIN_SQUEEZEWAX_TOKEN
 	EN	Discogs personal access token
 
 PLUGIN_SQUEEZEWAX_TOKEN_DESC
-	EN	Required for Structural matching and for the owned badge. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
+	EN	Required for collection sync and the owned badge. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
 
 PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS
 	EN	https://www.discogs.com/settings/developers
