@@ -479,8 +479,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       (decisions §15.2), so its size bounds how long the ownership pass takes.
       Unmeasured.
 - [ ] **2026-09-15: build-order rewrite from step 4 — in progress, NOT
-      decided.** The design chat has proposed a sequence; no plan file exists
-      yet. Recorded so it is not re-derived from scratch, not as a ruling.
+      decided.** ~~The design chat has proposed a sequence; no plan file exists
+      yet.~~ **2026-09-19: the sequence is decided (decisions §15.9, and
+      `CLAUDE.md`'s Build order), and step 4's plan is
+      `plans/build-order-step-4-identification-rework.md`. The item stays
+      open for Q9 and Q10.** Recorded so it is not re-derived from scratch,
+      not as a ruling.
       Proposed, in order:
       4 identification rework (importer stops writing `confirmed`; write
         `snapshot_artist` from `albums.contributor`, §11.4 and §15.5; build
@@ -607,6 +611,17 @@ Shared reminder list. Both I and Claude Code read and update this.
         decisions change, not build order. Decide from the pages 2–3
         measurement's four added questions, not from these two facts alone.
         Not decided.
+      Q10 — which LMS album artist does the ownership pass compare with
+        Discogs'? Decisions §11.4 recommended `Slim::Schema::Album::artists`,
+        and §15.12 found its rationale false at slimserver `a670a38`:
+        `artists` never reads `albums.contributor`, and it can reach
+        `variousArtistsObject`, which §11.3(d) forbids because it writes to
+        the library. Step 4 uses the `albums.contributor` column for the
+        snapshot, which compares LMS with LMS only. Step 7 compares with
+        Discogs, where the choice decides which albums badge — including the
+        11 Various-ish albums §11.3(c) measured with `compilation = 0`, and
+        §15.11's equivalence gate. Must not be `Album::artists`. Blocks
+        step 7. Not decided.
       Dependencies the design chat believes are already in TODO.md, not
       verified by it: (i) Various/Various Artists: FOUND at line 613
       (ii) version-menu picker: FOUND at lines 370, 423, 533
@@ -622,6 +637,23 @@ Shared reminder list. Both I and Claude Code read and update this.
       (§15.4). Offline assertions to add: a clean hit writes all three
       snapshot columns; a conflict row's snapshot columns are NULL; the
       narrow delete still fires on a conflict row whose tags were removed.
+- [ ] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
+      Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
+      one-to-one fits. An orphan fitting several new albums, or a new album
+      fitting several orphans, is left untouched and counted as unresolved
+      in the importer's summary. Step 8's review queue must offer it,
+      pre-filled with the previous answer (decisions §2). Until then those
+      rows stay orphaned: no loss, no automatic relink.
+- [ ] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
+      albums with no album artist.** VERIFIED at slimserver `a670a38`:
+      `Slim::Schema::_createOrUpdateAlbum` sets `albums.contributor` per
+      track from `_postCheckAttributes`'s primary contributor (`ALBUMARTIST`,
+      else `ARTIST`, else `TRACKARTIST`, first entry), so the last track
+      written wins. A rescan in a different order can change it; the snapshot
+      then does not fit, which fails safe for a tagged album
+      (identification recovers it) and loses a manual row's choice. Same
+      shape as the retagged-title hole. Recorded, not solved — revisit if
+      seen on hardware.
 
 ## Open design questions
 
