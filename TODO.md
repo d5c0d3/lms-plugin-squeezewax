@@ -134,9 +134,13 @@ Shared reminder list. Both I and Claude Code read and update this.
             The 2026-09-13 item requires this and it still stands.
             ALREADY KNOWN, so do not report "zero": `scripts/schema-check.pl`
             inserts into the table at two sites (verified 2026-09-18).
-          - UPDATE `scripts/schema-check.pl` in the same change: the
-            `list_state` CHECK assertions and both inserts go, since the
-            table they exercise will not exist.
+          - UPDATE `scripts/schema-check.pl` in the same change. THREE sites,
+            not two — corrected 2026-09-18, the earlier text named only the
+            inserts: the two inserts, the `list_state` CHECK assertions around
+            them, AND the "expected tables exist" loop, which asserts the
+            table is present. Do not work from this list alone: grep the suite
+            for `discogs_collection` and account for every hit, because this
+            enumeration has already been wrong once.
 - [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
       `discogs_collection`, which v1 must not have.** VERIFIED in
       `_migration_1`: the table plus an index on

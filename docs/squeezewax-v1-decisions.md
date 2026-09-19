@@ -3746,7 +3746,10 @@ a destructive migration, because "collection sync was never built so there are
 almost certainly none" is an inference. That requirement stands.
 
 **One writer is already known: `scripts/schema-check.pl` inserts into the table**
-(verified 2026-09-18 by Claude Code, two insert sites). It is a test rather than
+~~(verified 2026-09-18 by Claude Code, two insert sites)~~ — **corrected
+2026-09-18: three sites, not two. Two inserts plus the "expected tables exist"
+loop. The count was taken from a summary that named two of the three as "the
+insert sites", rather than from the grep that had already listed all three.** It is a test rather than
 plugin code, so it does not block the drop — but it does mean the suite fails
 the moment the table is gone unless the same edit removes those assertions.
 Recorded so the confirmation step is not reported as "zero found" when the
