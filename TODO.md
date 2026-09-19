@@ -902,14 +902,14 @@ Shared reminder list. Both I and Claude Code read and update this.
           design §9 does NOT carry the tier selector, because the
           reconciliation deleted it. That is precisely why decisions §15.8
           rules the pref out of the code rather than out of design.
-- [ ] **2026-09-15: detection likely offers a bare master id as a RELEASE
+- [x] **2026-09-15: detection likely offers a bare master id as a RELEASE
       candidate.** `Tags::candidateKeys` corroborates a bare integer when the
       key matches `/DISCOG/i`, and bare digits parse through
       `_parseReleaseId`, so `DISCOGS_MASTER_ID=999` would be listed as a
       corroborated release-id key. A user who ticks it alone stores master ids
       as release ids. INFERRED from reading, untested — `tags-check.pl`
       covers only the master-URL form. Step-3 code; schedule in the build
-      order.
+      order. — fixed in step 4 commit 1 (decisions §15.12 part 4)
 - [ ] **2026-09-15, recorded not acted on: `API.pm`'s synchronous `get` has no
       v1 caller** once Structural is gone and the sync is server-side
       (decisions §15.2). Keep it, or record why it stays, when the sync step

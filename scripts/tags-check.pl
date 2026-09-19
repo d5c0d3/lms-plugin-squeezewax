@@ -334,4 +334,17 @@ isnt( $hits[0]->[3], $hits[0]->[1], '  ...and differs from the parsed id' );
 @hits = $T->candidateKeys( { DISCOGS_MASTER_ID => 'https://www.discogs.com/master/999' } );
 is_deeply( \@hits, [], 'a master URL is not offered as a release candidate' );
 
+# A key naming a master is skipped entirely, whatever its value parses as: a
+# bare master id under a Discogs-named key would otherwise be corroborated as a
+# release id (decisions §15.12 part 4).
+@hits = $T->candidateKeys( { DISCOGS_MASTER_ID => '999' } );
+is_deeply( \@hits, [], 'a bare master id under DISCOGS_MASTER_ID is not offered' );
+
+@hits = $T->candidateKeys( { 'discogs master id' => '999' } );
+is_deeply( \@hits, [], 'a master key is matched case-insensitively, spaces included' );
+
+@hits = $T->candidateKeys( { DISCOGS_RELEASE_ID => '123456', DISCOGS_MASTER_ID => '999' } );
+is_deeply( \@hits, [ [ 'DISCOGS_RELEASE_ID', 123456, 1, '123456' ] ],
+	'with both keys present, only the release id is offered' );
+
 done_testing();

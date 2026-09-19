@@ -312,6 +312,12 @@ for a URL the parsed integer loses what would let the user recognise their own
 tag, and in the demoted list a raw C<0075678264122> under C<BARCODE> is
 self-evidently not a release ID in a way an integer is not.
 
+A key that names a master - one of the master key names matched
+case-insensitively, or anything matching C</MASTER/i> - is skipped entirely: not
+returned, not demoted. This matches a master URL, which is never offered either.
+A master id is known not to be a release id, and the demoted list means "other
+numeric tags that might be one".
+
 Two tiers of evidence, because a bare integer is not evidence of anything on its
 own:
 
@@ -338,12 +344,28 @@ would take that choice away.
 
 =cut
 
+# True for a key that names a master release: one of @MASTER_KEYS,
+# case-insensitively, or anything containing MASTER.
+sub _isMasterKey {
+	my ($key) = @_;
+
+	return 1 if $key =~ /MASTER/i;
+
+	my $uc = uc $key;
+	return scalar grep { $uc eq uc $_ } @MASTER_KEYS;
+}
+
 sub candidateKeys {
 	my ( $class, $tags ) = @_;
 
 	my @hits;
 
 	for my $key ( sort keys %$tags ) {
+		# A key naming a master is skipped entirely, as a master URL already is:
+		# a master id is known not to be a release id, so it belongs in neither
+		# tier. Decisions §15.12 part 4.
+		next if _isMasterKey($key);
+
 		# DISCOG, not DISCOGS: decisions §3 records both DISCOGS_RELEASE_ID and
 		# DISCOG_RELEASE_ID (no S) in Discogs' own forum threads.
 		my $named = $key =~ /DISCOG/i ? 1 : 0;
