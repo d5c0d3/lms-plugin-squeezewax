@@ -174,3 +174,8 @@ clean.
 Anything durable that starts life in `tmp/` must reach a tracked file in
 the same session — a plan appendix, a decision record, or `TODO.md`.
 Never commit files under `tmp/`.
+
+Hand-offs are served from `tmp/` and not committed anywhere else either —
+their content lands in `docs/`, `plans/` or `TODO.md`, not as a file. The
+2026-09-15..19 build-order hand-offs were removed from `plans/` for this
+reason; they are in git history up to `21d6d16710cd4641fa36a1e63c774ce50a3464ba`.
