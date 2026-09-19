@@ -25,6 +25,44 @@
 	[% END %]
 [% END %]
 
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC" desc="PLUGIN_SQUEEZEWAX_SYNC_DESC" %]
+	<div>[% "PLUGIN_SQUEEZEWAX_SYNC_LAST" | string %][% "COLON" | string %]
+		[% IF sync.lastSyncedF %]
+			[% sync.lastSyncedF | html %]
+			[% IF sync.lastItems.defined %]
+				&mdash; [% sync.lastItems %] [% "PLUGIN_SQUEEZEWAX_SYNC_ITEMS" | string %]
+			[% END %]
+		[% ELSE %]
+			[% "PLUGIN_SQUEEZEWAX_SYNC_NEVER" | string %]
+		[% END %]</div>
+
+	[%# The last failure is shown even when a previous sync succeeded: decisions
+	    §14.2 wants a sync that has silently stopped working to be visible, and
+	    the timestamp above cannot show it - a failure deliberately leaves the
+	    timestamp alone. %]
+	[% IF sync.lastError %]
+		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_FAIL" | string | replace('%s', sync.lastError) | html %]</div>
+	[% END %]
+
+	[% IF scanning %]
+		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSIF sync.running %]
+		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_RUNNING" | string %]</div>
+	[% ELSE %]
+		<input name="syncNow" type="submit" class="stdclick"
+			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]" />
+	[% END %]
+
+	[% IF syncResult %]
+		<div>[% syncResult | html %]</div>
+	[% END %]
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC_INTERVAL" desc="PLUGIN_SQUEEZEWAX_SYNC_INTERVAL_DESC" %]
+	<input type="text" class="stdedit" size="10"
+		name="pref_discogsSyncInterval" value="[% prefs.pref_discogsSyncInterval | html %]" />
+[% END %]
+
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
 	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
 	    variables inside FOREACH, so an outer counter reverts to 0 after the

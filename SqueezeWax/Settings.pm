@@ -10,6 +10,7 @@ use strict;
 
 use base qw(Slim::Web::Settings);
 
+use Slim::Utils::DateTime;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Scheduler;
@@ -47,7 +48,12 @@ sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html')
 # pref_discogsToken on saveSettings and populates params.prefs.pref_discogsToken
 # for the template, same as core's own password field (HTML/EN/settings/
 # server/security.html).
-sub prefs { return ($prefs, qw(discogsToken)) }
+#
+# discogsSyncInterval is a plain integer and rides the same generic path, with
+# its floor enforced by the validator Plugin.pm registers rather than by
+# anything here - a rejected value keeps the old one, which is the behaviour
+# core's own numeric settings have.
+sub prefs { return ($prefs, qw(discogsToken discogsSyncInterval)) }
 
 sub handler {
 	my ( $class, $client, $params, $callback, @args ) = @_;
@@ -63,6 +69,10 @@ sub handler {
 	}
 	elsif ( $params->{saveSettings} ) {
 		_saveTagNames($params, $scanning);
+	}
+	elsif ( $params->{syncNow} ) {
+		# Same deferral as _testToken below, for the same reason.
+		return _syncNow( $class, $client, $params, $callback, \@args, $scanning );
 	}
 	elsif ( $params->{testToken} ) {
 		# Async and self-contained: renders the page itself via $callback
@@ -170,6 +180,88 @@ sub _setChanged {
 	}
 
 	return 0;
+}
+
+# The manual "Sync collection now" button - one of §13.7's three triggers, and
+# the only one that has a user watching it. The other two are timers in
+# Plugin.pm, which is where they have to be: they must work on a headless
+# server, and this file is loaded only under main::WEBUI.
+#
+# Everything that decides anything lives in API/Async.pm - including the guard
+# that stops this button, the interval timer and ['rescan','done'] from starting
+# three overlapping syncs. This sub renders a result; it does not own one.
+sub _syncNow {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	# Refused during a scan, not queued. The sync itself would survive one - it
+	# touches no database at all - but the settings page's own conventions
+	# refuse every action while scanning, and a button that appears to work and
+	# then reports nothing is worse than one that says why it did not.
+	if ($scanning) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_BUSY_SCANNING');
+		return _finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	my $token = $prefs->get('discogsToken');
+
+	if ( !defined $token || $token eq '' ) {
+		$params->{syncResult} = string('PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN');
+		return _finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	require Plugins::SqueezeWax::API::Async;
+
+	Plugins::SqueezeWax::API::Async->sync( $token, sub {
+		my ($result) = @_;
+
+		$params->{syncResult} = _syncResultString($result);
+
+		_finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	} );
+
+	return;
+}
+
+# §14.2: a rejected token must read differently from a dropped connection, and
+# both must be distinguishable from "it worked". The error vocabulary is
+# API.pm's classifyResponse plus API/Async.pm's own three.
+sub _syncResultString {
+	my ($result) = @_;
+
+	if ( $result->{ok} ) {
+		$log->info( "collection sync: $result->{items} items in $result->{requests} requests" )
+			if main::INFOLOG && $log->is_info;
+
+		return sprintf( string('PLUGIN_SQUEEZEWAX_SYNC_OK'),
+			$result->{items} // 0, $result->{requests} // 0 );
+	}
+
+	my $error = $result->{error} || 'unknown';
+
+	# error, not warn, and separately from the rest: this one is not going to
+	# fix itself, and every future interval tick will fail the same way until
+	# the user does something about it.
+	if ( $error eq 'unauthorized' ) {
+		$log->error('collection sync failed: Discogs rejected the token');
+
+		return string('PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED');
+	}
+
+	if ( $error eq 'already_running' ) {
+		return string('PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING');
+	}
+
+	$log->warn("collection sync failed: $error");
+
+	return sprintf( string('PLUGIN_SQUEEZEWAX_SYNC_FAIL'), $error );
+}
+
+sub _finishSyncNow {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	$params->{scanning} = $scanning;
+
+	$callback->( $client, $params, $class->SUPER::handler( $client, $params ), @$args );
 }
 
 # GET /oauth/identity (decisions §9.7's "Token sanity check"). Server-side, so
@@ -387,6 +479,22 @@ sub beforeRender {
 
 	$params->{dbReady} = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
 	$params->{dbError} = Plugins::SqueezeWax::Schema->lastError;
+
+	# Required lazily, as _syncNow does: this is the only other reader, and
+	# Async.pm pulls in SimpleAsyncHTTP and Timers for a page that may never
+	# trigger a sync at all.
+	require Plugins::SqueezeWax::API::Async;
+	$params->{sync} = Plugins::SqueezeWax::API::Async->status;
+
+	# Formatted here, not in the template: Slim::Utils::DateTime honours the
+	# server's own shortdateFormat/timeFormat prefs (Slim/Utils/DateTime.pm:81,
+	# :103), so the timestamp reads the way every other date in the web UI does
+	# rather than in whatever this plugin would have invented.
+	if ( $params->{sync}->{lastSynced} ) {
+		$params->{sync}->{lastSyncedF} =
+			Slim::Utils::DateTime::shortDateF( $params->{sync}->{lastSynced} ) . ' '
+			. Slim::Utils::DateTime::timeF( $params->{sync}->{lastSynced} );
+	}
 
 	return unless %detection;
 

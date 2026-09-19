@@ -109,3 +109,45 @@ PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
 	EN	Token test failed (HTTP %s).
 
+
+PLUGIN_SQUEEZEWAX_SYNC
+	EN	Discogs collection
+
+PLUGIN_SQUEEZEWAX_SYNC_DESC
+	EN	SqueezeWax reads your Discogs collection to work out which albums in this library you own on record. It only counts what is there; nothing about your collection is stored, and your library is not changed. This happens automatically after a library rescan and on the interval below, and you can run it now with the button.
+
+PLUGIN_SQUEEZEWAX_SYNC_BUTTON
+	EN	Sync collection now
+
+PLUGIN_SQUEEZEWAX_SYNC_INTERVAL
+	EN	Sync interval (seconds)
+
+PLUGIN_SQUEEZEWAX_SYNC_INTERVAL_DESC
+	EN	How long to wait between automatic collection syncs. The default is 86400 (once a day), and the minimum is 3600 (once an hour). A sync costs one Discogs request per 100 items in your collection, so there is little to gain from a short interval.
+
+PLUGIN_SQUEEZEWAX_SYNC_LAST
+	EN	Last synced
+
+PLUGIN_SQUEEZEWAX_SYNC_NEVER
+	EN	Never
+
+PLUGIN_SQUEEZEWAX_SYNC_ITEMS
+	EN	items
+
+PLUGIN_SQUEEZEWAX_SYNC_RUNNING
+	EN	A collection sync is running.
+
+PLUGIN_SQUEEZEWAX_SYNC_OK
+	EN	Synced %s items in %s requests.
+
+PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN
+	EN	Add a Discogs personal access token above, and save it, before syncing.
+
+PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING
+	EN	A collection sync is already running. Its result will appear here when it finishes.
+
+PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED
+	EN	Discogs rejected the token, so the collection could not be read. Generate a new one and paste it in above.
+
+PLUGIN_SQUEEZEWAX_SYNC_FAIL
+	EN	Collection sync failed (%s) - see the server log. Previous results are unchanged.

@@ -35,6 +35,37 @@ my $prefs = preferences('plugin.squeezewax');
 # _ts_discogsMaxTier twin and saves (Slim/Utils/Prefs/Base.pm:242-258).
 $prefs->migrate(1, sub { $_[0]->remove('discogsMaxTier'); 1 });
 
+# Collection-sync defaults (build-order step 5). File scope and not under
+# main::WEBUI for the same reason as the migration above: the sync runs on a
+# headless server, which never loads Settings.pm, so its defaults cannot be
+# established there.
+#
+# 86400 (24h) is a product call made in step 5's plan, NOT a measured or
+# specified figure - no prior decision sets one, and TODO.md records that so a
+# later reader does not mistake it for sourced. The cost it is balanced against
+# is real though: decisions §9.4 measured a 203-item collection at 3 requests,
+# so daily polling is negligible against a 60/minute budget, and the thing being
+# polled for - a record bought and added to Discogs - moves on the order of days.
+#
+# discogsLastSynced is 0, not undef, so "never synced" is a value the template
+# can test rather than a missing key.
+$prefs->init({
+	discogsSyncInterval  => 86400,
+	discogsLastSynced    => 0,
+	discogsLastSyncItems => undef,
+	discogsLastSyncError => '',
+});
+
+# The interval field is user-editable, so it needs a floor: a typo of 60 would
+# poll hourly, and 0 or a non-integer would make the timer arithmetic nonsense.
+# 3600 is the low bound rather than something smaller because nothing about a
+# record collection changes faster than that, and the Discogs budget is shared
+# with every other thing the plugin will eventually do. intlimit is core's own
+# validator (Slim/Utils/Prefs/Namespace.pm:114-135, the same call shape
+# Slim/Utils/Prefs.pm:317-322 uses for httpport and bufferSecs); an out-of-range
+# value is refused and the previous one kept.
+$prefs->setValidate({ validator => 'intlimit', low => 3600 }, 'discogsSyncInterval');
+
 sub initPlugin {
 	my $class = shift;
 

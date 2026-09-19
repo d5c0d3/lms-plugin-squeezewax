@@ -103,15 +103,22 @@ TAGS_STUB='BEGIN {
 	sub get  { [] }
 	sub set  { 1 }
 	sub migrate { 1 }
+	sub setValidate { 1 }
 }'
 
 # Settings.pm inherits Slim::Web::Settings, which reaches the same web stack
 # Plugin.pm's base class does. Slim::Utils::Scheduler and Slim::Music::Import are
 # only called at runtime, so a marker in %INC is enough for the compile.
+#
+# Slim::Utils::DateTime is stubbed for the same reason IMPORT_STUB stubs the
+# module that reaches it: it goes straight to Slim::Utils::Unicode, which needs
+# an initialised OSDetect to answer localeDetails. Settings.pm calls shortDateF
+# and timeF only at render time.
 SETTINGS_STUB='BEGIN {
 	$INC{q(Slim/Web/Settings.pm)}   = 1;
 	$INC{q(Slim/Utils/Scheduler.pm)} = 1;
 	$INC{q(Slim/Utils/Strings.pm)}  = 1;
+	$INC{q(Slim/Utils/DateTime.pm)} = 1;
 
 	@Slim::Web::Settings::ISA = ();
 	*Slim::Web::Settings::new     = sub { 1 };

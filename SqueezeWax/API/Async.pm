@@ -25,11 +25,13 @@ use POSIX qw(ceil);
 
 use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Log;
+use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
 
 use Plugins::SqueezeWax::API;
 
-my $log = logger('plugin.squeezewax');
+my $log   = logger('plugin.squeezewax');
+my $prefs = preferences('plugin.squeezewax');
 
 # decisions §9.4, quoting the API docs: "By default, 50 items per page ... To
 # browse different pages, or change the number of items per page (up to 100),
@@ -57,6 +59,33 @@ use constant MAX_PAGES => 1000;
 # the next one start as though the budget were fresh.
 my $rateState;
 my $rateWait = 0;
+
+# A run that has not finished in this long is treated as dead, so a wedged sync
+# cannot block every future trigger for the life of the server. Deliberately
+# generous next to %detection's DETECTION_TIMEOUT of 600: a sync can legitimately
+# spend MAX_RETRIES * WINDOW_SECONDS stalled on a single 429, and a large
+# collection is many requests each of which may wait out a window.
+use constant SYNC_TIMEOUT => 3600;
+
+# Whether a sync is in flight, and which one. Module-level, server-process only,
+# and deliberately not a pref: it is transient, and a "running" flag that
+# survived a restart would be a lie that blocks the feature.
+#
+# This lives here rather than in Settings.pm - which is where %detection's
+# equivalent lives, and where step 5's plan put it - because Settings.pm is
+# loaded only under main::WEBUI (Plugin.pm's initPlugin, following
+# refs/lms-plugin-tidal/Plugin.pm:60-66). Two of the three triggers this guard
+# exists to serialise, the interval timer and ['rescan','done'], are server-wide
+# and must work on a headless server, which never loads Settings.pm at all -
+# decisions §15.12 part 3, the same trap Plugin.pm's own $prefs->migrate comment
+# records. The guard belongs with the thing it guards.
+#
+# `id` is what makes a superseded run harmless: a stale run's in-flight HTTP
+# request cannot be cancelled and will still call back, so _finish compares the
+# id it was started with against the current one and declines to touch shared
+# state if they differ.
+my %sync;
+my $syncId = 0;
 
 # ---------------------------------------------------------------------------
 # Pure functions. Covered by scripts/sync-check.pl without a transport.
@@ -171,7 +200,24 @@ sub sync {
 		return;
 	}
 
+	if ( $class->isRunning ) {
+		# Not an error the user needs to see as a failure - it means the
+		# trigger did its job and something else got there first. §13.7 wants
+		# three triggers and one sync, not three syncs.
+		$cb->( { ok => 0, error => 'already_running' } );
+		return;
+	}
+
+	if ( $sync{running} ) {
+		# isRunning said no while the flag says yes: the staleness backstop
+		# fired. Mirrors _startDetection's handling of the same situation in
+		# Settings.pm - warn, tear down what can be torn down, start fresh.
+		$log->warn('previous collection sync appears to have died; starting a new one');
+		$class->abort;
+	}
+
 	my $run = {
+		id       => ++$syncId,
 		token    => $token,
 		cb       => $cb,
 		requests => 0,
@@ -182,15 +228,50 @@ sub sync {
 		attempt  => 0,
 	};
 
+	%sync = (
+		running => 1,
+		started => time(),
+		id      => $run->{id},
+	);
+
 	_get( $run, '/oauth/identity', {}, \&_gotIdentity );
 
 	return;
 }
 
-# Cancel a pending scheduled request. Only the waiting is cancellable: a
-# request already handed to SimpleAsyncHTTP will still complete and still call
-# back, so callers guard against a superseded run's callback rather than
-# relying on this to prevent it (the sync-state guard in Settings.pm).
+# Is a sync in flight? Carries the staleness backstop, so a run that died
+# without clearing the flag cannot block every future trigger forever - the
+# same belt-and-braces shape, and the same reasoning, as Settings.pm's
+# %detection guard.
+sub isRunning {
+	my ($class) = @_;
+
+	return 0 unless $sync{running};
+
+	return 0 if ( time() - ( $sync{started} || 0 ) ) >= SYNC_TIMEOUT;
+
+	return 1;
+}
+
+# What the settings page displays: the last outcome, not the live progress.
+# There is nothing meaningful to show mid-run - a sync is a handful of requests,
+# not a per-album walk like detection - so this is deliberately coarser than
+# %detection's report.
+sub status {
+	my ($class) = @_;
+
+	return {
+		running    => $class->isRunning ? 1 : 0,
+		lastSynced => $prefs->get('discogsLastSynced') || 0,
+		lastItems  => $prefs->get('discogsLastSyncItems'),
+		lastError  => $prefs->get('discogsLastSyncError'),
+	};
+}
+
+# Cancel a pending scheduled request. Only the waiting is cancellable: a request
+# already handed to SimpleAsyncHTTP will still complete and still call back.
+# That is what $run->{id} is for - see %sync above; _finish declines to act on a
+# callback from a superseded run.
 sub abort {
 	my ($class) = @_;
 
@@ -325,6 +406,17 @@ sub _gotPage {
 			( $pagination && $pagination->{pages} && $pagination->{pages} > 0 )
 			? $pagination->{pages}
 			: _pageCount( $run->{items} );
+
+		if ( $run->{pages} > MAX_PAGES ) {
+			# Checked here, on the first page, rather than after the loop: the
+			# point of the bound is to not issue the requests, and a
+			# self-contradictory pagination block should cost one request, not
+			# MAX_PAGES of them against a rate-limited API.
+			$log->warn( "collection reported $run->{pages} pages, more than the "
+				. MAX_PAGES . " this will fetch - treating this sync as failed" );
+
+			return _fail( $run, { ok => 0, error => 'too_many_pages' } );
+		}
 	}
 
 	# Counted, then dropped on the floor. Nothing about a release survives this
@@ -332,19 +424,12 @@ sub _gotPage {
 	# not a mirrored collection, and discogs_collection is not a v1 table.
 	$run->{counted} += scalar @{ ( $data && $data->{releases} ) || [] };
 
-	if ( $run->{page} < $run->{pages} && $run->{page} < MAX_PAGES ) {
+	if ( $run->{page} < $run->{pages} ) {
 		$run->{page}++;
 
 		_get( $run, $run->{path}, _collectionParams( $run->{page} ), \&_gotPage );
 
 		return;
-	}
-
-	if ( $run->{pages} > MAX_PAGES ) {
-		$log->warn( "collection reported $run->{pages} pages, stopped at "
-			. MAX_PAGES . " - treating this sync as failed" );
-
-		return _fail( $run, { ok => 0, error => 'too_many_pages' } );
 	}
 
 	if ( defined $run->{items} && $run->{counted} != $run->{items} ) {
@@ -359,29 +444,70 @@ sub _gotPage {
 		&& $log->info( "collection sync complete: $run->{items} items over "
 			. "$run->{requests} requests" );
 
-	$run->{cb}->( {
+	return _finish( $run, {
 		ok       => 1,
 		items    => $run->{items},
 		counted  => $run->{counted},
 		pages    => $run->{pages},
 		requests => $run->{requests},
 	} );
-
-	return;
 }
 
 sub _fail {
 	my ( $run, $result ) = @_;
 
-	# Logged by the caller, not here: only the caller knows whether this is a
-	# user-visible button press or a background interval tick, and §14.2 wants
-	# a rejected token to read differently from a dropped connection. What this
-	# guarantees is that it is reported once, and that nothing was written.
-	$run->{cb}->( {
+	return _finish( $run, {
 		ok    => 0,
 		error => $result->{error} || 'unknown',
 		code  => $result->{code},
 	} );
+}
+
+# The single exit. Every path out of a sync comes through here, which is what
+# makes "never partially advance the timestamp for a sync that didn't complete"
+# (§13.7/§14.2) one rule in one place rather than a convention each caller has
+# to keep.
+#
+# discogsLastSynced advances on success and only on success. A failure records
+# its error - the settings page needs something to show, and §14.2 wants a
+# rejected token to be distinguishable from a dropped connection - but leaves
+# every figure from the last good sync exactly as it was. A transient failure
+# must not make a working collection look like it vanished.
+#
+# Which log level is the caller's decision, not this one's: only the caller
+# knows whether a failure followed a button press the user is watching or a
+# background interval tick.
+sub _finish {
+	my ( $run, $result ) = @_;
+
+	if ( ( $sync{id} || 0 ) != $run->{id} ) {
+		# A superseded run's in-flight request came back. It may not touch the
+		# prefs or the guard - a newer sync owns both - and its own caller is
+		# still owed exactly one callback.
+		main::INFOLOG && $log->is_info
+			&& $log->info("ignoring result from superseded sync $run->{id}");
+
+		$run->{cb}->( { ok => 0, error => 'superseded' } );
+
+		return;
+	}
+
+	%sync = (
+		running  => 0,
+		finished => time(),
+		id       => $run->{id},
+	);
+
+	if ( $result->{ok} ) {
+		$prefs->set( 'discogsLastSynced',    time() );
+		$prefs->set( 'discogsLastSyncItems', $result->{items} );
+		$prefs->set( 'discogsLastSyncError', '' );
+	}
+	else {
+		$prefs->set( 'discogsLastSyncError', $result->{error} );
+	}
+
+	$run->{cb}->($result);
 
 	return;
 }
