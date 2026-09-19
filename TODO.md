@@ -462,7 +462,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       path for it by decision — decisions §14.4 — on the stated assumption of a
       well-tagged library and a maintained Discogs collection. Grounds (a) and
       (b) are unaffected and still require reject/dismiss.
-- [ ] **2026-09-15, BUILD ORDER MUST HANDLE: `Match::_recordMatch` writes
+- [x] **2026-09-15, BUILD ORDER MUST HANDLE: `Match::_recordMatch` writes
       `state = 'confirmed'` on every clean tag hit, with no collection
       check.** VERIFIED: the SQL literal is `'strict','confirmed'`, and
       `match-check.pl` asserts "a clean hit auto-confirms". Design §3 node E
@@ -474,6 +474,13 @@ Shared reminder list. Both I and Claude Code read and update this.
       (INFERRED); snapshots are captured at confirm time, which moves if
       confirmation moves to the server-side pass; comments saying "the badge
       join is state='confirmed'" are stale.
+      — done in step 4 commit 4. `_recordMatch` writes `'strict','candidate'`
+      and returns `'identified'`; `hasAnyStrictMatch` keys on a non-NULL
+      `discogs_release_id` at strict tier in any state; the stale
+      badge-join comments in `Match.pm` and `match-check.pl` are rewritten.
+      The two knock-ons this item could not settle were ruled on rather than
+      coded: re-derivation of existing rows is the ownership pass's (§15.3),
+      and snapshot capture stays at identification (§15.4).
 - [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
       owned and tagged). It now runs server-side in a Scheduler task
       (decisions §15.2), so its size bounds how long the ownership pass takes.
@@ -628,7 +635,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       (iii) marketplace minimum scope: FOUND at line 445
       (iv) migration 3 obligations: FOUND at lines 63, 292, 937
       (i) matched only the pages 2-3 measurement item, not a decision item.
-- [ ] **2026-09-15: nothing writes `snapshot_artist`, so orphan recovery
+- [x] **2026-09-15: nothing writes `snapshot_artist`, so orphan recovery
       cannot work.** VERIFIED 2026-09-15: one grep hit, the DDL in
       `Schema.pm::_migration_1`. `Match.pm::_recordMatch` writes
       `snapshot_album_title` and `snapshot_track_count` only. Decisions §15.5
@@ -637,6 +644,19 @@ Shared reminder list. Both I and Claude Code read and update this.
       (§15.4). Offline assertions to add: a clean hit writes all three
       snapshot columns; a conflict row's snapshot columns are NULL; the
       narrow delete still fires on a conflict row whose tags were removed.
+      — done in step 4 commit 4. `_recordMatch` writes `snapshot_artist` from
+      `$album->{artist}` in both the INSERT and the ON CONFLICT list;
+      `_recordConflict` still names no snapshot column. All three assertions
+      are in `match-check.pl`, plus one that a non-ASCII artist is stored
+      byte-identical and one that an existing row's snapshots are carried
+      through a conflict rather than lost.
+- [ ] **2026-09-19: "Structural" wording survives outside plan §3's list.**
+      There is no Structural tier (decisions §13.8, §14.3). Hits at step 4
+      commit 4: strings.txt:68 (USER-VISIBLE — the token is "Required for
+      Structural matching"; after step 5 the token serves the collection
+      sync, so step 5 rewrites this string), Tags.pm:126, API.pm:4, :48,
+      :266, tags-check.pl:114, title-agreement.pl:227, api-check.pl:388.
+      Comment-only except strings.txt:68. Sweep in step 5's first commit.
 - [ ] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
       Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
       one-to-one fits. An orphan fitting several new albums, or a new album
@@ -966,6 +986,13 @@ Shared reminder list. Both I and Claude Code read and update this.
       the session starts from a list rather than deriving one.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-09-19: step 4 commit 4 — a rescan of a healthy library shows no
+      "check the configured tag names" warning, and the summary reads
+      "identified N".** Plan §6 check 2. The warning's condition is now
+      `$count{identified} == 0 && !hasAnyStrictMatch`, and
+      `hasAnyStrictMatch` no longer reads `state`. Offline coverage proves
+      the predicate; only a real library proves the warning stays quiet.
 
 - [ ] **2026-09-13: the pages 2–3 measurement is now also the revisit trigger
       for two decisions.** Already recorded above as its own item; noting the

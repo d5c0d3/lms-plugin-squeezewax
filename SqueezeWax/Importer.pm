@@ -87,8 +87,10 @@ sub initPlugin {
 		# progress row on every scan forever. Same pattern as
 		# Slim/Music/ReleaseTypes.pm:32, which gates on its own pref.
 		#
-		# Step 4 must relax this: Structural needs no tag names, so the gate
-		# becomes "Strict configured OR Structural enabled".
+		# Step 4 does NOT relax this (decisions §15.8). Identification still
+		# reads tags and nothing else does, so "no tag names configured" still
+		# means "nothing for this importer to do". The ownership pass at step 7
+		# is server-side and does not run here.
 		use    => scalar @{ $prefs->get('discogsTagNames') || [] },
 	} );
 
@@ -163,7 +165,7 @@ sub startScan { if (main::SCANNER) {
 	Slim::Schema->forceCommit;
 
 	my %count = (
-		examined => 0, confirmed => 0, candidate => 0, none => 0,
+		examined => 0, identified => 0, candidate => 0, none => 0,
 		manual   => 0, kept      => 0, skipped   => 0,
 	);
 	my $since = 0;
@@ -187,6 +189,11 @@ sub startScan { if (main::SCANNER) {
 		# timestamps instead: a third-party importer can populate those (Spotty
 		# does - see Library::_finish), so "remote rows have no timestamp" is not
 		# a property to rely on.
+		#
+		# Skipped here is not skipped by the plugin. An all-remote album still
+		# gets an ownership answer at step 7, which works from the collection
+		# rather than from tags and so needs no local files (decisions §15.11,
+		# §13.10.1). This gate is about THIS pass having nothing to read.
 		if ( !$album->{local_tracks} ) {
 			$count{skipped}++;
 			return 1;
@@ -206,7 +213,7 @@ sub startScan { if (main::SCANNER) {
 
 		$outcome ||= '';
 
-		$count{confirmed}++ if $outcome eq 'confirmed';
+		$count{identified}++ if $outcome eq 'identified';
 		$count{candidate}++ if $outcome eq 'candidate';
 		$count{none}++      if $outcome eq 'none';
 		$count{manual}++    if $outcome eq 'manual';
@@ -223,12 +230,12 @@ sub startScan { if (main::SCANNER) {
 	$progress->final;
 
 	my $summary = "Discogs matching finished: examined $count{examined}, "
-		. "confirmed $count{confirmed}, conflicts $count{candidate}, "
+		. "identified $count{identified}, conflicts $count{candidate}, "
 		. "no tag $count{none}, manual $count{manual}, kept $count{kept}, "
 		. "skipped $count{skipped}";
 
 	# Escalated to warn in the one case LMS's own start/complete pair cannot
-	# report: a mistyped tag name produces "examined 4,800, confirmed 0" and
+	# report: a mistyped tag name produces "examined 4,800, identified 0" and
 	# nothing else, and at WARN our INFO summary would be invisible.
 	#
 	# 'decidable' excludes manual and kept, which are outcomes where a match was
@@ -240,7 +247,7 @@ sub startScan { if (main::SCANNER) {
 	#
 	# hasAnyStrictMatch is the second half of the same lesson, and the first fix
 	# was not enough on its own: a run that examines ONE untagged album in a
-	# library where hundreds are matched also reported "confirmed 0" and sent the
+	# library where hundreds are matched also reported "identified 0" and sent the
 	# user to check tag names that were demonstrably fine. Also observed. The
 	# warning is about the configuration producing nothing, not about this run
 	# producing nothing, so it asks whether anything has ever matched.
@@ -249,7 +256,7 @@ sub startScan { if (main::SCANNER) {
 	# and the question being asked is not "how many" but "has this ever worked".
 	my $decidable = $count{examined} - $count{manual} - $count{kept};
 
-	if ( $count{confirmed} == 0 && $decidable > 0
+	if ( $count{identified} == 0 && $decidable > 0
 		&& !Plugins::SqueezeWax::Match->hasAnyStrictMatch ) {
 		$log->warn("$summary - check the configured tag names");
 	}
@@ -263,7 +270,7 @@ sub startScan { if (main::SCANNER) {
 	# (Slim/Music/Import.pm:405-406, :580). The post pass discards it, so this is
 	# convention rather than correctness - but returning undef into a += is the
 	# kind of thing the XXX comment at :403 exists because of.
-	return $count{confirmed};
+	return $count{identified};
 } }
 
 # Skip when what we already recorded still describes the files on disk.

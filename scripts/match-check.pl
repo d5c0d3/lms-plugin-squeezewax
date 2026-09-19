@@ -275,6 +275,7 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		album_key        => $key,
 		album_id         => 42,
 		title            => 'Kind of Blue',
+		artist           => 'Miles Davis',
 		source_timestamp => 900,
 		local_tracks     => 5,
 	};
@@ -297,26 +298,56 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
 
-	# a clean hit auto-confirms
-	is( $M->recordStrict( $album, { id => 123, master_id => 9 }, undef ), 'confirmed',
-		'a clean hit auto-confirms' );
+	# A clean hit IDENTIFIES. It does not confirm: confirmation means the release
+	# is in the collection, which the scanner cannot check (decisions §13.4,
+	# §15.3, design §3 node E). Whatever this case says, it must not say that a
+	# tag hit settles ownership.
+	is( $M->recordStrict( $album, { id => 123, master_id => 9 }, undef ), 'identified',
+		'a clean hit returns identified, not confirmed' );
 	my $r = row($key);
-	is( $r->{discogs_release_id}, 123,        '  ...with the release id' );
-	is( $r->{discogs_master_id},  9,          '  ...and the master id' );
-	is( $r->{state},              'confirmed', '  ...state confirmed' );
-	is( $r->{match_tier},         'strict',   '  ...tier strict' );
-	is( $r->{source_timestamp},   900,        '  ...and the source timestamp' );
+	is( $r->{discogs_release_id}, 123,         '  ...with the release id' );
+	is( $r->{discogs_master_id},  9,           '  ...and the master id' );
+	is( $r->{state},              'candidate', '  ...state candidate - only the ownership pass promotes' );
+	is( $r->{match_tier},         'strict',    '  ...tier strict' );
+	is( $r->{source_timestamp},   900,         '  ...and the source timestamp' );
 
-	# no tag at all, over a confirmed row: the row is kept, not deleted
+	# All THREE snapshot columns, captured at identification rather than at
+	# promotion (§15.4). snapshot_artist was written by nothing before step 4,
+	# which left orphan recovery unable to match anything (§15.5).
+	is( $r->{snapshot_album_title}, 'Kind of Blue', '  ...snapshot_album_title is captured' );
+	is( $r->{snapshot_track_count}, 5,              '  ...snapshot_track_count is captured' );
+	is( $r->{snapshot_artist},      'Miles Davis',  '  ...snapshot_artist is captured too' );
+
+	# no tag at all, over an IDENTIFIED row: the row is kept, not deleted. The
+	# narrow delete does not reach it - it has a release id and a snapshot, and
+	# those are the clauses that protect it now that its state is 'candidate'.
 	is( $M->recordStrict( { %$album, source_timestamp => 950 }, {}, $M->strictState($key) ),
-		'kept', 'no tag over a confirmed row keeps it' );
+		'kept', 'no tag over an identified row keeps it' );
 	is( row($key)->{discogs_release_id}, 123, '  ...release id survives' );
+	is( row($key)->{state}, 'candidate', '  ...and so does its state' );
 	is( row($key)->{source_timestamp}, 950, '  ...timestamp refreshed so it stops re-examining' );
 	is( noMatchRow($key), undef, '  ...and no no-match row is written (invariant 1)' );
 
 	# LMS reassigns albums.id on a full rescan, and this is the one path that
 	# would otherwise leave a row carrying a stale id indefinitely.
 	is( row($key)->{lms_album_id}, 42, '  ...and lms_album_id is refreshed too' );
+
+	# The snapshot stores contributors.name as the iterator read it: bytes, never
+	# decoded. Decoding one side and not the other would break every non-ASCII
+	# artist silently - the recovery fit would simply never match (§2.3).
+	{
+		my $utf8Key  = 'b' x 32;
+		my $utf8Name = "Bj\xc3\xb6rk";    # "Björk" as UTF-8 bytes
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+		$M->recordStrict(
+			{ %$album, album_key => $utf8Key, artist => $utf8Name, title => 'Vespertine' },
+			{ id => 321 }, undef
+		);
+		is( row($utf8Key)->{snapshot_artist}, $utf8Name,
+			'a non-ASCII artist is snapshotted byte-identical' );
+		ok( !utf8::is_utf8( row($utf8Key)->{snapshot_artist} ),
+			'  ...and comes back as bytes, not a decoded character string' );
+	}
 
 	# A no-match row followed by a clean hit must not leave both (invariant 1).
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
@@ -336,6 +367,13 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'  ...with a NULL release id, per §3a - no first-wins by another name' );
 	is( row($key)->{state}, 'candidate', '  ...state candidate' );
 
+	# §15.4: a conflict row NEVER carries a snapshot. A snapshot on one would
+	# make the narrow delete below unreachable, and the row would advertise a
+	# conflict forever in a queue that cannot render it.
+	is( row($key)->{snapshot_album_title}, undef, '  ...and snapshot_album_title is NULL' );
+	is( row($key)->{snapshot_track_count}, undef, '  ...snapshot_track_count is NULL' );
+	is( row($key)->{snapshot_artist},      undef, '  ...snapshot_artist is NULL' );
+
 	# a conflict whose tags then disappear: the row is DELETED and a no-match
 	# written. This is §2a's one permitted deletion.
 	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'none',
@@ -344,19 +382,31 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	ok( noMatchRow($key), '  ...and a no-match row replaces it' );
 	is( noMatchRow($key)->{source_timestamp}, 900, '  ...carrying the source timestamp' );
 
-	# THE TRANSITION §3a DID NOT COVER: a conflict over an existing CONFIRMED
-	# row keeps the incumbent id rather than NULLing it. Demoting to candidate
-	# stops the badge (the join is state='confirmed'), so the signal is visible,
-	# and the queue entry carries a proposal.
+	# THE TRANSITION §3a DID NOT COVER: a conflict over an existing IDENTIFIED
+	# row keeps the incumbent id rather than NULLing it. The demotion to
+	# 'candidate' marks it unresolved for the review queue - it is not what
+	# stops the badge, which reads the ownership column (design §4), and over an
+	# identified row it changes no value, since identification already writes
+	# 'candidate'.
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
 	$M->recordStrict( $album, { id => 123 }, undef );
 
 	is( $M->recordStrict( $album, { conflict => ['A=123','B=456'] }, $M->strictState($key) ),
-		'candidate', 'a conflict over a confirmed row demotes it' );
-	is( row($key)->{state}, 'candidate', '  ...so the badge stops immediately' );
+		'candidate', 'a conflict over an identified row records the conflict' );
+	is( row($key)->{state}, 'candidate', '  ...state candidate' );
 	is( row($key)->{discogs_release_id}, 123,
 		'  ...but the adjudicated id is KEPT, not NULLed - §2a protects a decision' );
+
+	# The snapshots of the row it landed on survive, because _recordConflict's
+	# ON CONFLICT list does not name them. §15.4 bars a conflict from CAPTURING
+	# a snapshot; it does not ask an existing one to be thrown away, and
+	# throwing it away would cost the album its orphan recovery over a tagging
+	# mistake. Described here, not changed.
+	is( row($key)->{snapshot_album_title}, 'Kind of Blue',
+		'  ...and the identification\'s snapshot_album_title is carried through' );
+	is( row($key)->{snapshot_track_count}, 5,  '  ...along with snapshot_track_count' );
+	is( row($key)->{snapshot_artist}, 'Miles Davis', '  ...and snapshot_artist' );
 
 	# manual is outside all of it
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
@@ -379,9 +429,19 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( row($key)->{lms_album_id}, 42, '  ...along with lms_album_id' );
 }
 
-# --- hasAnyStrictMatch: "has this ever worked", not "did this run work" ---
+# --- hasAnyStrictMatch: "have the tags ever worked", not "did this run work" -
 # The importer's anomaly warning uses this to tell a broken configuration from
 # a run that examined one untagged album in a library that is otherwise fine.
+#
+# A hit is a clean TAG hit - a strict row with a release id, in any state - and
+# not an ownership decision. Keying on state = 'confirmed' was correct only
+# while _recordMatch confirmed; since §13.4 nothing is confirmed until step 7,
+# so that predicate would answer 0 for every library and fire the warning on
+# every scan, telling users to check tag names that are fine. That exact
+# regression has been observed on hardware twice.
+#
+# The 0-cases all run before either 1-case: the question is "any row", so once
+# one qualifies nothing after it can show a 0.
 {
 	no warnings 'redefine', 'once';
 	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
@@ -394,20 +454,42 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		 VALUES (?, 'strict', 'candidate')", undef, 'c' x 32
 	);
 	is( $M->hasAnyStrictMatch, 0,
-		'a strict candidate does not count - it is an unresolved proposal' );
+		'a strict row with a NULL release id does not count - a fresh conflict named nothing' );
 
-	$dbh->do(
-		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state)
-		 VALUES (?, 'manual', 'confirmed')", undef, 'd' x 32
-	);
-	is( $M->hasAnyStrictMatch, 0,
-		'a manual match does not count - it says nothing about the tag names' );
-
+	# CHANGED AT STEP 4, AND NOT BY ADDING A RELEASE ID. This row is a strict
+	# 'confirmed' with no release id; under the old state predicate it counted,
+	# and under the tag predicate it must not. A row that names no release is
+	# not evidence that the tag names work, whatever its state says. Giving it
+	# an id to keep the old answer would delete the case.
 	$dbh->do(
 		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state)
 		 VALUES (?, 'strict', 'confirmed')", undef, 'e' x 32
 	);
-	is( $M->hasAnyStrictMatch, 1, 'one confirmed strict match is enough' );
+	is( $M->hasAnyStrictMatch, 0,
+		'a strict confirmed row with a NULL release id does not count either' );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state, discogs_release_id)
+		 VALUES (?, 'manual', 'confirmed', 901)", undef, 'd' x 32
+	);
+	is( $M->hasAnyStrictMatch, 0,
+		'a manual match does not count even with a release id - the user chose it, not the tags' );
+
+	# Both states count, which is the whole point: identification writes
+	# 'candidate', so if this one failed the warning would fire on every scan.
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state, discogs_release_id)
+		 VALUES (?, 'strict', 'candidate', 902)", undef, 'f' x 32
+	);
+	is( $M->hasAnyStrictMatch, 1,
+		'a strict candidate WITH a release id is enough - that is what identification writes' );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, match_tier, state, discogs_release_id)
+		 VALUES (?, 'strict', 'confirmed', 903)", undef, 'g' x 32
+	);
+	is( $M->hasAnyStrictMatch, 1,
+		'and a strict confirmed row with a release id still counts, as it always did' );
 }
 
 # --- invariant 1 is detected, for free, by the skip query -----------------

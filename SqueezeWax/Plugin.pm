@@ -16,7 +16,7 @@ use Plugins::SqueezeWax::Schema;
 # healthy run. That stopped being true once the importer had a row in the scan
 # progress UI and LMS's own "Starting/Completed ... Scan" pair in scanner.log
 # (Slim/Music/Import.pm:578, :710-712) - neither of which needs the category
-# turned up. The one thing those cannot report, "examined 4,800, confirmed 0",
+# turned up. The one thing those cannot report, "examined 4,800, identified 0",
 # is escalated to warn by the importer itself.
 my $log = Slim::Utils::Log->addLogCategory({
 	category     => 'plugin.squeezewax',

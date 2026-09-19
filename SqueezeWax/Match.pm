@@ -161,11 +161,24 @@ my $STATE_SQL = q{
 
 =head2 hasAnyStrictMatch()
 
-True if anything in the library has ever matched under Strict.
+True if the configured tag names have ever named a release: a Strict row
+carrying a C<discogs_release_id>, whatever its C<state>.
 
 Used by the importer's anomaly warning to tell "this configuration produces
 nothing" from "this one album has no tag". A run that examines a single
 untagged album in a library where hundreds are matched is not an anomaly.
+
+A hit is a clean tag hit, not an ownership decision. Since decisions §13.4,
+identification writes C<candidate> and only the ownership pass promotes to
+C<confirmed>, so a predicate keyed on C<state> would answer 0 for every library
+until step 7 - and would fire the warning on every scan of every library, which is
+the warning's own documented failure mode. The question it asks is whether the
+tags have ever produced anything, and tags are what C<discogs_release_id>
+records.
+
+A conflict row holding an incumbent id counts: tags did once name a release. A
+fresh conflict row, whose id is NULL, does not. A manual row does not either -
+the user chose it, and it says nothing about the tag names.
 
 =cut
 
@@ -174,7 +187,7 @@ sub hasAnyStrictMatch {
 
 	my ($found) = Slim::Schema->dbh->selectrow_array(
 		q{SELECT 1 FROM squeezewax.discogs_match
-		   WHERE match_tier = 'strict' AND state = 'confirmed' LIMIT 1}
+		   WHERE match_tier = 'strict' AND discogs_release_id IS NOT NULL LIMIT 1}
 	);
 
 	return $found ? 1 : 0;
@@ -221,7 +234,8 @@ Write the outcome of the Strict pass for one album. C<%decision> is what
 C<Plugins::SqueezeWax::Tags-E<gt>decide> returned; an empty hashref means no
 configured tag was present.
 
-Returns one of 'confirmed', 'candidate', 'none', 'manual' or undef.
+Returns one of 'identified', 'candidate' (a conflict), 'none', 'kept',
+'manual' or undef.
 
 =cut
 
@@ -266,8 +280,19 @@ sub recordStrict {
 	return $class->_recordNoMatch( $album, $state );
 }
 
-# A clean hit. Auto-confirm is what design §3 specifies for Strict: the tag names
-# the release, so there is nothing to resolve.
+# A clean hit: the tag names the release, so there is nothing to resolve at this
+# tier. It is an IDENTIFICATION, not a confirmation. Confirmation means the
+# release is in the user's collection, which this process has not checked and
+# cannot check - design §3 node E puts that test in the ownership pass, and
+# decisions §13.4 and §15.3 make that pass the only writer of 'confirmed'. So
+# this writes 'candidate' and returns 'identified'.
+#
+# The recovery snapshot rides identification rather than promotion (§15.4): the
+# scanner has the album's LMS-side data open here, nothing about a snapshot
+# depends on ownership, and capturing on promotion would leave every unowned
+# album without recovery material. snapshot_artist is $album->{artist} exactly
+# as the iterator supplied it - bytes from contributors.name, never decoded,
+# because recovery compares it against the same bytes (§11.4).
 sub _recordMatch {
 	my ( $class, $album, $decision ) = @_;
 
@@ -279,8 +304,8 @@ sub _recordMatch {
 			INSERT INTO squeezewax.discogs_match
 				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
 				 match_tier, state, matched_at, source_timestamp,
-				 snapshot_album_title, snapshot_track_count)
-			VALUES (?,?,?,?,'strict','confirmed',?,?,?,?)
+				 snapshot_album_title, snapshot_track_count, snapshot_artist)
+			VALUES (?,?,?,?,'strict','candidate',?,?,?,?,?)
 			ON CONFLICT(album_key) DO UPDATE SET
 				lms_album_id         = excluded.lms_album_id,
 				discogs_release_id   = excluded.discogs_release_id,
@@ -290,16 +315,18 @@ sub _recordMatch {
 				matched_at           = excluded.matched_at,
 				source_timestamp     = excluded.source_timestamp,
 				snapshot_album_title = excluded.snapshot_album_title,
-				snapshot_track_count = excluded.snapshot_track_count
+				snapshot_track_count = excluded.snapshot_track_count,
+				snapshot_artist      = excluded.snapshot_artist
 		},
 		undef,
 		$key, $album->{album_id}, $decision->{id}, $decision->{master_id},
-		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks}
+		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		$album->{artist}
 	);
 
 	_clearNoMatch( $dbh, $key );
 
-	return 'confirmed';
+	return 'identified';
 }
 
 # Tags disagree, or a configured tag's value will not parse. §3a.
@@ -314,8 +341,19 @@ sub _recordConflict {
 	# writing NULL on a fresh conflict is that taking the top-precedence tag's id
 	# would be first-wins under another name - but preserving an incumbent is not
 	# choosing between the competing tags. That choice was already made and §2a
-	# says a decision survives. The demotion to 'candidate' is what stops the
-	# badge, since the badge join is state = 'confirmed'.
+	# says a decision survives. The demotion to 'candidate' marks the row
+	# unresolved for the review queue (step 8). It is NOT what stops the badge:
+	# the badge reads the ownership column directly, with no join and no
+	# render-time test on state (design §4). Since §13.4 an identified row is
+	# 'candidate' already, over one of those the demotion changes no value at
+	# all - what the conflict actually records is the tier and timestamp
+	# refresh, and the warning below.
+	#
+	# No snapshot columns here, by rule (§15.4): a snapshot on a conflict row
+	# would make _recordNoMatch's narrow delete unreachable and the row would
+	# advertise a conflict forever. An EXISTING row's snapshots survive because
+	# the ON CONFLICT list below does not name them - they are carried, not
+	# rewritten.
 	my $incumbent = ( $state && $state->{src} eq 'match' )
 		? $state->{discogs_release_id}
 		: undef;
@@ -361,14 +399,20 @@ sub _recordNoMatch {
 
 	# §2a invariant 2, and the one place a discogs_match row may be deleted. A
 	# conflict row whose tags have since been removed would otherwise sit in the
-	# review queue forever advertising a conflict that no longer exists, and step
-	# 5 cannot even render it - §3a stores no conflict_note and re-reads tags that
-	# are now gone.
+	# review queue forever advertising a conflict that no longer exists, and the
+	# queue (step 8) cannot even render it - §3a stores no conflict_note and
+	# re-reads tags that are now gone.
 	#
 	# The predicate IS the rule "never delete a row that carries a decision or a
-	# recovery snapshot", written out: 'strict' excludes manual, 'candidate'
-	# excludes confirmed, a NULL release id excludes anything adjudicated, and a
-	# NULL snapshot excludes orphan recovery's index material. Anyone widening
+	# recovery snapshot", written out. Read it clause by clause, because since
+	# §13.4 the state clause no longer carries the weight it reads as: an
+	# identified row is 'candidate' too, so 'candidate' no longer separates
+	# identifications from conflicts. What protects an identification is the
+	# other two clauses - it has a release id AND a snapshot, and a fresh
+	# conflict row is the only thing with neither. 'strict' still excludes
+	# manual; 'candidate' still excludes a row the ownership pass promoted; a
+	# NULL release id still excludes anything a tag or a user ever named; a NULL
+	# snapshot still excludes orphan recovery's index material. Anyone widening
 	# this must show their case passes that test, not that it resembles this
 	# shape.
 	$dbh->do(
