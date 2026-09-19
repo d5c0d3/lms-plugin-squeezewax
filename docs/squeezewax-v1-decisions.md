@@ -1726,6 +1726,7 @@ assigned unconditionally by `_createOrUpdateAlbum` for every album. Role
 integers (`ARTIST` 1, `COMPOSER` 2, `CONDUCTOR` 3, `BAND` 4, `ALBUMARTIST` 5,
 `TRACKARTIST` 6 — `Slim/Schema/Contributor.pm:76-84`) are LMS's business, not
 ours.
+
 **Corrected 2026-09-19 (§15.12), from source at slimserver `a670a38`.** Two
 claims in the paragraph above are false. `Album::artists` does **not** build on
 `albums.contributor`: it reads role rows (`ALBUMARTIST`, then `BAND` if the pref
