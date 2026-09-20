@@ -942,4 +942,105 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( $again->{backfilled}, 0, '  ...and backfills nothing' );
 }
 
+# --- R6: the importer ignores ownership-only rows (§15.13 part 6) ----------
+#
+# Since migration 3, match_tier is nullable and a NULL one means "no
+# identification": the row exists for the ownership pass's conclusion alone.
+# The importer's lookups must not see it. Without the filter, every untagged
+# album a sync concluded on would log an invariant-1 error on the next scan and
+# then never be examined for tags again.
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $key = 'w' x 32;
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	# What the ownership pass writes: a key, an album id and an ownership.
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
+		 VALUES (?, 7, 'exact')", undef, $key
+	);
+
+	my $state = $M->strictState($key);
+	is( $state, undef,
+		'strictState does not see an ownership-only row - it is not an identification' );
+
+	# The pair §15.13 part 6 explicitly permits. They answer different
+	# questions: "do you own this record" and "did reading the tags produce a
+	# candidate", and one album may truthfully have both answers.
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+		 VALUES (?, 'strict', 1, 1)", undef, $key
+	);
+
+	$state = $M->strictState($key);
+	is( $state->{src}, 'none',
+		'an ownership-only row and a strict no-match row coexist, and the no-match wins' );
+
+	# ...and no invariant-1 error is logged, because only one row comes back.
+	# Two rows is what triggers it, and the filter is what stops there being two.
+	my ($rows) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key );
+	is( $rows, 1, '  ...while the ownership-only row is still there, untouched' );
+
+	# _recordNoMatch's surviving-row count carries the same filter. An
+	# ownership-only row must not suppress the no-match row, or one sync would
+	# stop the album ever being re-read for tags.
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	my $album = {
+		album_key => $key, album_id => 7, source_timestamp => 42,
+		title => 'Untagged', artist => 'Someone', local_tracks => 1,
+	};
+
+	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'none',
+		'an album with only an ownership row still records a no-match, not "kept"' );
+	ok( noMatchRow($key), '  ...and the no-match row is actually written' );
+	is( row($key)->{ownership}, 'exact',
+		'  ...and the ownership conclusion is left alone' );
+
+	# A tag hit upserting over an ownership-only row keeps ownership, because
+	# neither _recordMatch nor _recordConflict names the column in its update
+	# list. The badge survives identification arriving later.
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	is( $M->recordStrict( $album, { id => 4242 }, $M->strictState($key) ), 'identified',
+		'a tag hit over an ownership-only row identifies it' );
+
+	my $upserted = row($key);
+	is( $upserted->{ownership},          'exact', '  ...and keeps the ownership conclusion' );
+	is( $upserted->{discogs_release_id}, 4242,    '  ...while gaining the identification' );
+	is( $upserted->{match_tier},         'strict', '  ...and the tier' );
+
+	# The same for the conflict path, which has the shorter update list.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
+		 VALUES (?, 7, 'version')", undef, $key
+	);
+
+	is( $M->recordStrict( $album, { conflict => [ 'A=1', 'B=2' ] }, $M->strictState($key) ),
+		'candidate', 'a tag conflict over an ownership-only row records the conflict' );
+	is( row($key)->{ownership}, 'version',
+		'  ...and keeps the ownership conclusion too' );
+
+	# snapshotRows is deliberately NOT filtered: the orphan filter lives in
+	# _prePass and already requires match_tier (Importer.pm:355-359). What that
+	# means in practice is that an ownership-only row still blocks a relink onto
+	# its album - recorded for step 8 in TODO.md, not fixed here.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
+		 VALUES (?, 7, 'exact')", undef, $key
+	);
+
+	my ($seen) = grep { $_->{album_key} eq $key } @{ $M->snapshotRows };
+	ok( $seen, 'snapshotRows still returns an ownership-only row, by design' );
+	is( $seen->{match_tier}, undef, '  ...with a NULL match_tier, so it is never an orphan' );
+}
+
 done_testing();

@@ -149,10 +149,21 @@ sub invalidateStrict {
 # §2a says Match.pm enforces - an album in discogs_match and discogs_no_match for
 # the same tier - caught for free on the one code path that would ever notice,
 # and it returns match_tier for the manual guard at the same time.
+#
+# match_tier IS NOT NULL is what makes that invariant survive the ownership
+# pass (decisions §15.13 part 6). Since migration 3 the column is nullable, and
+# a NULL one means "no identification": the row exists for its ownership
+# conclusion alone. Such a row and a strict no-match row may coexist for one
+# album without contradiction - they answer different questions, "do you own
+# this record" and "did reading the tags produce a candidate" - so invariant 1
+# is reworded to cover identification rows only, and the importer's lookups
+# filter to those. Without the clause, every untagged album the pass concluded
+# on would log an invariant-1 error on the next scan.
 my $STATE_SQL = q{
 	SELECT 'match' AS src, match_tier AS tier, source_timestamp, discogs_release_id, state
 	  FROM squeezewax.discogs_match
 	 WHERE album_key = ?
+	   AND match_tier IS NOT NULL
 	UNION ALL
 	SELECT 'none' AS src, tier, source_timestamp, NULL, NULL
 	  FROM squeezewax.discogs_no_match
@@ -672,8 +683,15 @@ sub _recordNoMatch {
 	);
 
 	# Only when nothing survives in discogs_match, or invariant 1 breaks.
+	#
+	# The same match_tier IS NOT NULL filter $STATE_SQL carries, for the same
+	# reason (§15.13 part 6): an ownership-only row is not something that
+	# survived identification, so it must not suppress the no-match row. Without
+	# the clause, one sync concluding on an untagged album would stop that album
+	# ever being re-examined for tags.
 	my ($still) = $dbh->selectrow_array(
-		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key
+		'SELECT COUNT(*) FROM squeezewax.discogs_match
+		  WHERE album_key = ? AND match_tier IS NOT NULL', undef, $key
 	);
 
 	if ($still) {
