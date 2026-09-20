@@ -90,9 +90,14 @@ sits where it does.
 5. **Collection sync** — server-side, asynchronous, on `['rescan','done']`
    plus an interval and a manual button (§15.2, §13.7)
 6. **Migration 3** — the `discogs_match` rebuild. Reviewable on its own,
-   but **ships with step 7 and is never merged ahead of it** (§15.9)
+   but **ships with step 7 and is never merged ahead of it** (§15.9) —
+   **code complete** (`e275221`); the plan §5 hardware checks are open in
+   `TODO.md`
 7. **Ownership pass** — design §3's flow, writing the `ownership` column.
-   Covers **every** album, all-remote ones included (§13.10.1, §15.11)
+   Covers **every** album, all-remote ones included (§13.10.1, §15.11) —
+   **code complete** (`3b197cb`, wired at `c39acd2`); the plan §5 hardware
+   checks are open in `TODO.md`. The completed sync hands the pass its
+   collection in memory and never re-fetches (§15.13 part 1)
 8. **Review queue + manual re-match**
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
@@ -104,8 +109,12 @@ stale in its entirety: do not patch it, do not use it as a template, do not
 mine it for shape.
 
 **`discogs_collection` is not a v1 table.** Migration 1 creates it and
-migration 3 drops it (§13.2, and `TODO.md` 2026-09-07). Nothing may read or
-write it. Ownership is a column on `discogs_match`, not a mirrored collection.
+migration 3 drops it — done at `e275221` (§13.2, and `TODO.md` 2026-09-07).
+Nothing may read or write it, and nothing ever did: Phase 0 grepped
+`SqueezeWax/` and `scripts/` and found zero readers and no writers outside
+migration 1's own DDL. Ownership is a column on `discogs_match`, not a
+mirrored collection, and the sync keeps its collection in memory for the
+length of one pass (§15.13 part 1).
 
 v1 auth is a user-supplied Discogs personal access token (§9.1), never OAuth.
 Token handling, request construction and rate-limit accounting are already

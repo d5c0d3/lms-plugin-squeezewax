@@ -178,14 +178,19 @@ Shared reminder list. Both I and Claude Code read and update this.
       on an inference. `discogs_price_snapshot` and `discogs_release_cache`
       are NOT the same case: both are unwritten in v1 by plan, serve v2/v3,
       and are named in design §10.
-- [ ] **2026-09-13: the ownership pass must not write a row per album.**
-      Decisions §14.8's invariant: absence of a row already means "nothing
+- [x] **2026-09-13: the ownership pass must not write a row per album.**
+      DONE 3b197cb (`Ownership::_apply`, the `!$row` branch). Decisions
+      §14.8's invariant: absence of a row already means "nothing
       known", so a row with NULL `state`, NULL `match_tier` and
       `ownership = 'absent'` asserts nothing and must never be written. A row
       exists only where there is an identification, or an ownership
       conclusion other than `absent`. Without this the pass would write 765
       rows on the reference library, most of them empty. The invariant is
       NEW in §14.8 — it follows from the columns but was never stated.
+      Asserted in `scripts/ownership-check.pl`: an untagged album owning
+      nothing gets no row, an ambiguous one gets no row, a Various-gated one
+      gets no row, and §15.13 part 5's delete removes a row whose ownership
+      lapsed. The hardware check is (2) of the step 6-7 entry below.
 - [x] **2026-09-13: is a master-id tag among the configurable tag names?**
       UNVERIFIED — `SqueezeWax/Tags.pm` settles it. Design §3's flowchart
       node F asks whether an album's master is in the collection, and it
@@ -1106,6 +1111,38 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
+      the ownership pass).** Plan
+      `plans/build-order-step-6-7-ownership.md` §5. Code complete and
+      offline-verified (`schema-check.pl` 110 assertions, `ownership-check.pl`
+      96, `match-check.pl` 153, `sync-check.pl` 104); none of these can be
+      checked without a real server, a real library and a real Discogs
+      account.
+      (1) **Upgrade.** `user_version` goes 2 → 3; the row count equals Phase
+          0's figure of 481; no row's `state` changed; `discogs_collection`
+          is gone; the log shows rows copied and the per-state counts.
+      (2) **First sync.** Requests = pages + 1. `discogsLastSynced` advances
+          only after the pass logs its summary. Report
+          exact/version/gated/ambiguous against §13.10's page-1 figures —
+          they will not match exactly, because the rules differ per §15.13
+          parts 2-3 and the full collection is 203 items, not 100.
+          **EXPECT A LARGE DEMOTION HERE.** Phase 0 found all 478 strict rows
+          `confirmed`, written by step 3 before §13.4. Every one whose
+          release is not in the collection drops to `candidate`, which could
+          be most of them. That is §13.4/§15.3 working as designed and it
+          closes §15.3's accepted window. Record the promoted and demoted
+          counts. Check (1)'s "no state changed" applies to the UPGRADE only.
+      (3) **Second sync, nothing changed:** zero writes. This is §13.2's
+          determinism on real data; the offline suite asserts it on fixtures.
+      (4) **Start a scan mid-sync:** the pass is `refused`, the log says so at
+          info, and the next rescan-done brings a sync that applies. Inherits
+          step 5's checks (d) and (e).
+      (5) **An untagged local album that is owned:** an ownership-only row
+          appears, and the next scan logs NO invariant-1 error. This is the
+          one that would catch §15.13 part 6 being wrong.
+      (6) **Remove a record from the Discogs collection:** after a sync its
+          ownership-only row is deleted, and a tagged row goes to `absent` /
+          `candidate` while keeping its release id.
 - [ ] **2026-09-19: build-order step 5's hardware checks (collection sync).**
       Plan `plans/build-order-step-5-collection-sync.md` §3. Code complete and
       offline-verified; none of these can be checked without a real server and
