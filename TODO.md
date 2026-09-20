@@ -371,7 +371,9 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **2026-09-07: mandatory Discogs attribution.** Both required notices
       are recorded in `squeezewax-v1-decisions.md` §9.6. Still open: **a
       grid badge has no natural place for the "Data provided by Discogs"
-      notice — decide before step 6 starts.**
+      notice — decide before step 6 starts.** 2026-09-19: "step 6" is the
+      2026-09-07 numbering and meant the badge, now build-order step 9.
+      Decide before step 9 starts.
 - [ ] **Step 4's plan must open with an enumerated "what step 3 established
       that step 4 must honour" section**, each item citing its decision
       record or symbol — the same shape step 3's plan used for step 2's
@@ -515,9 +517,11 @@ Shared reminder list. Both I and Claude Code read and update this.
         REORDERED 2026-09-18 by decisions §15.9, and it SHIPS WITH step 7 —
         reviewable as its own step, not merged ahead of the code that
         exercises it;
-      7 ownership pass (design §3 nodes C–K, decisions §14.8, §13.5).
+      7 ownership pass (design §3 nodes C–K, decisions §14.8).
         Iterates EVERY album, all-remote included — this is where §13.10.1
-        lands, not in the importer (§15.11);
+        lands, not in the importer (§15.11). §13.5's all-tags read moved to
+        step 8 on 2026-09-19 (decisions §15.13 part 7). Plan:
+        `plans/build-order-step-6-7-ownership.md`;
       8 review queue and manual re-match (decisions §13.10.5, §14.9);
       9 owned badge and context menu (design §4, decisions §14.5, §14.10);
       10 on-demand marketplace lookup (design §7).
@@ -626,6 +630,9 @@ Shared reminder list. Both I and Claude Code read and update this.
         Discogs' `year` is the pressing's. This AMENDS §13.10.3, so it is a
         decisions change, not build order. Decide from the pages 2–3
         measurement's four added questions, not from these two facts alone.
+        2026-09-19: step 7 ships with this open (decisions §15.13 part 8) —
+        matches reached only through the `Various` equivalence stay
+        unbadged, per §15.7/§15.11, until the measurement reports.
         Not decided.
       Q10 — which LMS album artist does the ownership pass compare with
         Discogs'? Decisions §11.4 recommended `Slim::Schema::Album::artists`,
@@ -637,7 +644,13 @@ Shared reminder list. Both I and Claude Code read and update this.
         Discogs, where the choice decides which albums badge — including the
         11 Various-ish albums §11.3(c) measured with `compilation = 0`, and
         §15.11's equivalence gate. Must not be `Album::artists`. Blocks
-        step 7. Not decided.
+        step 7.
+        RESOLVED 2026-09-19 — decisions §15.13 part 2: the rule
+        `scripts/title-agreement.pl` measured with — first ALBUMARTIST
+        (role 5) by contributor id, else first ARTIST (role 1), else
+        `albums.contributor`, by raw SQL, decoded to characters — compared
+        at L2 after the ` (N)` strip (§15.13 part 3, which departs from the
+        script's L5 for artists). The snapshot keeps `albums.contributor`.
       Dependencies the design chat believes are already in TODO.md, not
       verified by it: (i) Various/Various Artists: FOUND at line 613
       (ii) version-menu picker: FOUND at lines 370, 423, 533
@@ -690,6 +703,59 @@ Shared reminder list. Both I and Claude Code read and update this.
       (identification recovers it) and loses a manual row's choice. Same
       shape as the retagged-title hole. Recorded, not solved — revisit if
       seen on hardware.
+- [ ] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
+      part 4: step 7 stores none. An ambiguous or artist-disagreeing album
+      is `ownership = 'absent'` if tagged and has NO ROW if untagged, and
+      the collection is discarded (§13.2), so step 8 cannot find these
+      without stored state. Step 8 adds a nullable reason column
+      (ambiguous | artist disagrees | artist absent | Various-gated) by
+      `ADD COLUMN`, and the ownership pass writes it. `ADD COLUMN` with a
+      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and LMS bundles
+      SQLite 3.46.1 (DBD::SQLite 1.76, perl 5.32–5.42 trees in
+      `refs/slimserver/CPAN/arch`; VERIFIED 2026-09-20 by Claude Code, Phase
+      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0. Step 7's pass
+      already counts all four buckets in its summary, so the queue's size is
+      known before it is built.
+- [ ] **2026-09-19, STEP 8: decisions §13.5's all-tags read.** Moved out of
+      step 7 by §15.13 part 7: its only product is a queue item. Runs as a
+      Scheduler task (§15.2 obligation 2). Accepted gap until then: an owned,
+      tagged album whose tracks 3..N carry a different release id can badge
+      `exact`. Size still unmeasured (the 2026-09-15 item).
+- [ ] **2026-09-19, STEP 8: an ownership-only row blocks a later relink.**
+      `Importer::_prePass` treats any `discogs_match` row as "not a key
+      miss", so once a sync has written an ownership-only row (NULL
+      `match_tier`) on a new album, an orphan can no longer relink onto it.
+      INFERRED from reading: reachable only when the relink did not happen
+      at the scan that moved the files — an ambiguous fit, or a user with no
+      tag names — since the pass runs after the scan. The ambiguous-relink
+      work must delete that row first (§15.13 part 5's predicate), or
+      `relinkOrphan`'s UPDATE hits the primary key and dies in the scanner.
+- [ ] **2026-09-19, STEP 8: a conflict row with an incumbent id looks like a
+      tagged candidate.** Both are `strict`, `candidate`, non-NULL release id
+      (decisions §3a, §13.4). The ownership pass treats it as an
+      identification and may promote it to `confirmed`. The queue's "Strict
+      conflicts" entry (§13.10.5) has no way to select these rows today.
+- [ ] **2026-09-19, MEASURE BEFORE STEP 7 SHIPS: the auto-badge split under
+      the step-7 rules.** Decisions §15.13 parts 2–3: artist source as
+      measured, but artists at L2 rather than the script's L5. Re-run
+      `scripts/title-agreement.pl` with an L2 artist rule on the reference
+      `library.db` and the page-1 fixture — no token needed. Expected, not
+      verified: only moves albums from badge to queue. Report; add no rule
+      mid-run.
+- [ ] **2026-09-19, MEASURE: the ownership pass's run time** on the
+      reference library. It runs synchronously in the server process over
+      every album; INFERRED to be well under a second, not measured. If it is
+      not, it needs the Scheduler shape `Settings.pm`'s detection uses.
+- [ ] **2026-09-19: migration 3 obligation (g)'s EXPLAIN QUERY PLAN check has
+      no query to check.** VERIFIED 2026-09-19 (design chat): nothing in
+      `SqueezeWax/` queries through the orphan index — the relink loads every
+      row and matches in Perl (`Match::snapshotRows`,
+      `Importer::_prePass`), and the two statements naming
+      `snapshot_track_count` are keyed on `album_key`. The index is rebuilt
+      as (g) requires and the check is replaced by this finding (approved
+      2026-09-19). Same defect shape as (d)/(g): an obligation written
+      against a query that was never built as SQL. Revisit if a SQL lookup
+      is ever added, or drop the index by its own ruling.
 
 ## Open design questions
 
@@ -788,6 +854,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       a streaming copy sees the album twice in the grid, and only the
       local row is badged.** Arguably correct; will read oddly. A UI
       question for step 6, not a matching one.
+      2026-09-19: "step 6" is the 2026-09-07 numbering — the badge is now
+      step 9. The premise is also stale: under decisions §13.10.3 a rip and
+      a stream of one owned record BOTH badge (design §3 walkthrough 4), so
+      "only the local row is badged" no longer happens. Re-check at step 9;
+      likely closable.
 - [ ] **Detection has no progress feedback, and the fix depends on the next
       item.** The Settings worker runs through `Slim::Utils::Scheduler` and the
       page never refreshes, so it shows "Reading files... (0/79)" until the user

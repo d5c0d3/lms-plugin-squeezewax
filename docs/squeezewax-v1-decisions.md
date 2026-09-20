@@ -3948,3 +3948,61 @@ Reading `Album::artists` at `a670a38` to confirm §11.4 found its rationale
 false; §11.4 carries the correction in place. The snapshot is unaffected — it
 compares LMS with LMS — but the ownership pass compares LMS with Discogs, and
 must choose its artist source knowingly. That is `TODO.md` Q10.
+
+### 15.13 Eight rulings for migration 3 and the ownership pass
+
+**Decided 2026-09-19 (design chat)**, on the survey for
+`plans/build-order-step-6-7-ownership.md`. Each was put as a choice; the reason
+the chosen option won is recorded, and the plan carries the detail.
+
+1. **One fetch, handed over.** The completed sync hands the pass its entry list
+   in memory. The pass runs only if the list, de-duplicated by `instance_id`,
+   matches `pagination.items`. The last-synced time means "ownership last
+   derived". A re-fetch was rejected: it doubles §14.7's per-sync cost and
+   contradicts §13.2. Running the pass on a count mismatch was rejected: a row
+   dropped by pagination would silently remove a badge, which is §13.7's named
+   failure.
+2. **Q10: the LMS artist is the measured rule.** First ALBUMARTIST, else first
+   ARTIST (each by contributor id), else `albums.contributor`, by raw SQL. It is
+   what §13.10's split was measured with. `albums.contributor` alone was
+   rejected: never measured against Discogs, and it depends on scan order for
+   mixed-artist albums.
+3. **Artists normalise at L2**, after the ` (N)` strip, plus §15.7's rule.
+   §13.10.4 is read as applying to every text comparison with Discogs. The
+   measurement script used L5 for artists, and that is recorded as a divergence
+   between the script and the record, not as a rule. The change can only move
+   albums from badge to queue (inferred), and the split is re-measured before
+   shipping.
+4. **Step 8 owns the queue marker.** Step 7 stores none: the collection is
+   discarded, so an ambiguous untagged album leaves no trace until step 8 adds
+   a nullable reason column. `ADD COLUMN` needs no rebuild (observed on SQLite
+   3.45.1; LMS bundles 3.46.1, verified 2026-09-20), so the rule that a column lands
+   in the step that reads it (TODO 2026-09-07) costs nothing here.
+5. **A second permitted deletion in `discogs_match`**: `match_tier IS NULL AND
+   discogs_release_id IS NULL AND snapshot_track_count IS NULL`, applied when
+   the pass concludes `absent` or the album is gone. It passes §2a's governing
+   rule (no decision, no snapshot), and without it §14.8's invariant cannot
+   hold. **Amends §2a invariant 2's "the one place".**
+6. **§2a invariant 1 covers identification rows only.** The importer's
+   lookups filter `match_tier IS NOT NULL`, so an ownership-only row and a
+   strict no-match row may coexist for one album. They answer different
+   questions.
+7. **§13.5's all-tags read moves to step 8.** Its only product is a queue item.
+   Accepted gap until then: an album whose later tracks carry a different tag
+   can badge `exact`.
+8. **Step 7 ships with Q9 open.** Matches reached only through the Various
+   equivalence stay unbadged per §15.7/§15.11 until the pages 2–3 measurement
+   reports.
+
+**Two further items, approved with the plan.**
+
+- **`ownership` carries `DEFAULT 'absent'`.** Without a default, the importer's
+  two INSERTs, which don't name the column, would fail and stop
+  identification altogether. `absent` is §15.3's own value for a row no sync
+  has concluded on. This is not the hazard §14.8 removed with `state`'s
+  default: that default put albums into the review queue, while this one only
+  withholds a badge until the next sync.
+- **Obligation (g)'s EXPLAIN QUERY PLAN check is replaced by a finding.** No
+  query in `SqueezeWax/` uses the orphan index (the relink matches in Perl),
+  so the index is rebuilt as (g) requires and the check is recorded as having
+  nothing to check (`TODO.md`, 2026-09-19).
