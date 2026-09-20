@@ -43,7 +43,12 @@
 # LMS's SQLite file read-only is safe; the report records whether one was
 # running.
 #
-# Usage: scripts/title-agreement.pl <library.db> <collection.json> [<server.prefs>]
+# Usage: scripts/title-agreement.pl [--step7] <library.db> <collection.json> [<server.prefs>]
+#
+# --step7 appends one further section: the same split under the rules step 7
+# actually ships (decisions 15.13 part 3, 15.14), measured by calling
+# Plugins::SqueezeWax::Ownership's own comparison functions. It is OFF by
+# default and changes nothing above it when off.
 
 use strict;
 use warnings;
@@ -56,6 +61,7 @@ use utf8;
 
 use Config;
 use Encode qw(decode);
+use File::Temp qw(tempdir);
 use FindBin qw($Bin);
 
 # Same @INC dance as the offline suites, for the same reason: DBI and
@@ -86,11 +92,128 @@ use DBI;
 use DBD::SQLite;
 use JSON::XS ();
 
+# ---------------------------------------------------------------------------
+# --step7: measure the SHIPPED rule
+# ---------------------------------------------------------------------------
+#
+# Decisions 15.13 part 3 changed the artist rung from this script's L5 to L2
+# and 15.14 added the compilation gate, and TODO.md 2026-09-19 requires the
+# auto-badge split to be re-measured under those rules before step 7 ships.
+#
+# The re-measurement calls Plugins::SqueezeWax::Ownership's own _titleKey,
+# _artistKey and _artistsAgree rather than reimplementing them here. A
+# re-implementation would measure a rule that resembles the shipped one, which
+# is the failure mode the whole exercise exists to avoid: the figure would read
+# as measured and would actually be a figure about this file.
+#
+# DEFAULT OFF, and when off not one byte below changes. The L0-L5 ladder and
+# the L2 report are the artefact decisions 13.10.4 was written from, and they
+# stay reproducible byte-for-byte. THE LADDER IS FIXED still applies to this
+# section too: it reports the shipped rule, it does not add one.
+our $STEP7;
+
+BEGIN {
+	my @keep;
+
+	for my $arg (@ARGV) {
+		if ( $arg eq '--step7' ) {
+			$STEP7 = 1;
+			next;
+		}
+
+		push @keep, $arg;
+	}
+
+	@ARGV = @keep;
+}
+
+# Ownership.pm has real `use Slim::*` and `use Plugins::SqueezeWax::*` lines,
+# so loading it outside LMS needs the same stubbing and the same
+# Plugins/SqueezeWax layout scripts/ownership-check.pl builds. Copied from
+# there deliberately: two suites loading the module two different ways is two
+# things to keep true.
+#
+# Only the pure comparison half is called below. Nothing here opens the
+# plugin's database, and _apply is never reached.
+BEGIN {
+	if ($STEP7) {
+
+		$INC{'Slim/Utils/Log.pm'}    = 1;
+		$INC{'Slim/Schema.pm'}       = 1;
+		$INC{'Slim/Music/Info.pm'}   = 1;
+		$INC{'Slim/Music/Import.pm'} = 1;
+		$INC{'Slim/Utils/Prefs.pm'}  = 1;
+		$INC{'Slim/Formats.pm'}      = 1;
+
+		no strict 'refs';
+
+		*{'Slim::Music::Import::stillScanning'} = sub { 0 };
+		*{'Slim::Utils::Prefs::preferences'}    = sub { Step7::StubPrefs->new };
+		*{'Slim::Utils::Prefs::import'}         = sub {
+			my $caller = caller;
+			no strict 'refs';
+			*{ $caller . '::preferences' } = \&Slim::Utils::Prefs::preferences;
+		};
+
+		*{'Slim::Utils::Log::logger'}   = sub { Step7::StubLogger->new };
+		*{'Slim::Utils::Log::logError'} = sub { };
+		*{'Slim::Utils::Log::import'}   = sub {
+			my $caller = caller;
+			no strict 'refs';
+			*{"${caller}::logger"}   = \&Slim::Utils::Log::logger;
+			*{"${caller}::logError"} = \&Slim::Utils::Log::logError;
+		};
+
+		*{'main::SCANNER'}   = sub () { 0 };
+		*{'main::INFOLOG'}   = sub () { 0 };
+		*{'main::DEBUGLOG'}  = sub () { 0 };
+		*{'main::ISWINDOWS'} = sub () { 0 };
+
+		my $incdir = tempdir( CLEANUP => 1 );
+
+		mkdir "$incdir/Plugins";
+
+		symlink "$Bin/../SqueezeWax", "$incdir/Plugins/SqueezeWax"
+			or die "could not link the plugin into $incdir: $!\n";
+
+		unshift @INC, $incdir;
+	}
+}
+
+{
+	package Step7::StubPrefs;
+	sub new { bless {}, shift }
+	sub get { [] }
+	sub set { 1 }
+}
+
+{
+	package Step7::StubLogger;
+	sub new      { bless {}, shift }
+	sub error    { }
+	sub warn     { }
+	sub info     { }
+	sub debug    { }
+	sub is_info  { 0 }
+	sub is_debug { 0 }
+}
+
+if ($STEP7) {
+	require Plugins::SqueezeWax::Ownership;
+}
+
+# Plain functions, called as plain functions - CLAUDE.md's calling convention.
+# Calling one of these method-style would silently eat the package name as its
+# first argument.
+sub _o_titleKey     { return Plugins::SqueezeWax::Ownership::_titleKey(@_) }
+sub _o_artistKey    { return Plugins::SqueezeWax::Ownership::_artistKey(@_) }
+sub _o_artistsAgree { return Plugins::SqueezeWax::Ownership::_artistsAgree(@_) }
+
 binmode STDOUT, ':encoding(UTF-8)';
 
 my ( $dbPath, $jsonPath, $prefsPath ) = @ARGV;
 
-die "Usage: $0 <library.db> <collection.json> [<server.prefs>]\n"
+die "Usage: $0 [--step7] <library.db> <collection.json> [<server.prefs>]\n"
 	unless defined $dbPath && defined $jsonPath;
 
 die "library.db not found: $dbPath\n"      unless -f $dbPath;
@@ -399,6 +522,12 @@ my ( $entries, $pagination ) = _load_collection($jsonPath);
 my @withLocal = grep { $_->{local_tracks} > 0 } @$albums;
 my @allRemote = grep { $_->{local_tracks} == 0 } @$albums;
 
+# Measured before anything prints. A finding here has to appear at the TOP of
+# the report, not nine hundred lines into it.
+my $step7 = $STEP7 ? _step7_measure( $albums, $entries, $prefsPath ) : undef;
+
+_step7_flags($step7) if $step7;
+
 print "=" x 74, "\n";
 print "TITLE AGREEMENT - LMS library vs Discogs collection\n";
 print "=" x 74, "\n\n";
@@ -457,6 +586,8 @@ print "gained nothing at all. L2 is retained as cheap defensive hygiene\n";
 print "despite also gaining nothing on this fixture.\n\n";
 
 _report_l2( $albums, $entries, \@withLocal, \@allRemote );
+
+_step7_report($step7) if $step7;
 
 sub _report_prefs {
 	my ($path) = @_;
@@ -910,4 +1041,324 @@ sub _is_various_pair {
 	}
 
 	return 0;
+}
+
+# ---------------------------------------------------------------------------
+# The step-7 split, measured through the shipped module
+# ---------------------------------------------------------------------------
+
+sub _step7_various_string {
+	my ($path) = @_;
+
+	# refs/slimserver/Slim/Music/Info.pm:1540-1543 - variousArtistString() is
+	# the variousArtistsString pref, else the localized VARIOUSARTISTS string.
+	# The pref is read out of the supplied server.prefs; the fallback is the
+	# English string, which is what an English install resolves to and all a
+	# standalone script can know. Which of the two was used is reported, never
+	# assumed.
+	my $default = 'Various Artists';
+
+	return ( $default, 'the English VARIOUSARTISTS default (no server.prefs supplied)' )
+		unless defined $path;
+
+	open my $fh, '<:encoding(UTF-8)', $path
+		or return ( $default, "the English VARIOUSARTISTS default (could not read $path: $!)" );
+
+	my $value;
+
+	while ( my $line = <$fh> ) {
+		next unless $line =~ /^variousArtistsString:\s*(.*?)\s*$/;
+
+		$value = $1;
+
+		last;
+	}
+
+	close $fh;
+
+	# YAML `~` is undef, and Info.pm's `||` takes the fallback for undef and
+	# for the empty string alike.
+	return ( $default, "the English VARIOUSARTISTS default (variousArtistsString is unset in $path)" )
+		unless defined $value && $value ne '' && $value ne '~';
+
+	$value =~ s/^['"]//;
+	$value =~ s/['"]$//;
+
+	return ( $value, "the variousArtistsString pref in $path" );
+}
+
+# The old rule, exactly as _report_l2's auto-badge split computes it: entries
+# indexed at L2, artists at rung 5, no compilation gate. Returns the same
+# vocabulary the new rule returns, so the two are comparable term for term -
+# except that 'various' is a verdict only the new rule can reach.
+sub _step7_old_verdict {
+	my ( $album, $cands ) = @_;
+
+	return 'several' if @$cands >= 2;
+
+	my ( $ok, $why ) = _artists_agree( $album->{artist}, $cands->[0]{artists} );
+
+	return $ok ? 'agree' : $why;
+}
+
+sub _step7_measure {
+	my ( $albums, $entries, $prefsPath ) = @_;
+
+	my ( $variousString, $variousSource ) = _step7_various_string($prefsPath);
+
+	# Ownership::_indexCollection's byTitle, transcribed: keyed on _titleKey,
+	# holding DISTINCT RELEASE IDS rather than entries. The same record owned
+	# twice is two instances of one release, and counting it as two candidates
+	# would make that album ambiguous where no choice changes anything. The old
+	# split indexes entries, so a duplicated release in the fixture would make
+	# the two rules differ for a reason that is not the artist rung. The count
+	# is reported so that cannot hide.
+	my %byTitle;
+	my $dupReleases = 0;
+
+	for my $e (@$entries) {
+		next unless defined $e->{id};
+
+		my $k = _o_titleKey( $e->{title} );
+
+		next if $k eq '';
+
+		$dupReleases++ if $byTitle{$k}{ $e->{id} };
+
+		$byTitle{$k}{ $e->{id} } = $e;
+	}
+
+	my $oldBy = _index_by_key( $entries, 2 );
+
+	my ( %bucket, %oldBucket, @rows, @diffs );
+
+	# The population is the script's own: every album _load_albums returned,
+	# with the LMS artist from its existing three-way choice - ALBUMARTIST,
+	# else ARTIST, else albums.contributor - which is the rule decisions
+	# 15.13 part 2 adopted for the pass.
+	for my $album (@$albums) {
+		my $k = _o_titleKey( $album->{title} );
+
+		next if $k eq '';
+
+		my $cands = $byTitle{$k} or next;
+
+		my @ids = sort { $a <=> $b } keys %$cands;
+
+		my ( $verdict, $entry );
+
+		if ( @ids > 1 ) {
+			$verdict = 'several';
+		}
+		else {
+			$entry   = $cands->{ $ids[0] };
+			$verdict = _o_artistsAgree( $album->{artist}, $entry->{artists}, $variousString );
+		}
+
+		my $old = _step7_old_verdict( $album, $oldBy->{$k} );
+
+		$bucket{$verdict}++;
+		$oldBucket{$old}++;
+
+		my $row = {
+			album   => $album,
+			entry   => $entry,
+			cands   => [ map { $cands->{$_} } @ids ],
+			verdict => $verdict,
+			old     => $old,
+		};
+
+		push @rows, $row;
+		push @diffs, $row if $verdict ne $old;
+	}
+
+	return {
+		various_string => $variousString,
+		various_source => $variousSource,
+		dup_releases   => $dupReleases,
+		bucket         => \%bucket,
+		old_bucket     => \%oldBucket,
+		rows           => \@rows,
+		diffs          => \@diffs,
+	};
+}
+
+# Only 'agree' badges. 'various' is the compilation gate (15.14) and is NOT a
+# weaker agreement.
+sub _step7_badges {
+	my ($verdict) = @_;
+
+	return $verdict eq 'agree' ? 1 : 0;
+}
+
+# Printed BEFORE the rest of the report, because a finding here is the reason
+# the measurement was asked for. Decisions 14.4 names a wrong badge as the
+# trigger to revisit.
+sub _step7_flags {
+	my ($step7) = @_;
+
+	my @toBadge = grep { _step7_badges( $_->{verdict} ) && !_step7_badges( $_->{old} ) }
+		@{ $step7->{diffs} };
+
+	print "=" x 74, "\n";
+	print "STEP-7 RULE: FINDINGS\n";
+	print "=" x 74, "\n\n";
+
+	if (@toBadge) {
+		print "!! FLAGGED: the step-7 rule moves albums from queue to BADGE.\n";
+		print "!! Expected, not verified, was that it can only move badge to\n";
+		print "!! queue (decisions 15.13 part 3). It does not. Read these\n";
+		print "!! before shipping step 7:\n\n";
+
+		_step7_print_row($_) for @toBadge;
+	}
+	else {
+		print "No album moves from queue to badge: every difference under the\n";
+		print "step-7 rule withholds a badge that the old split granted, or\n";
+		print "moves one queue reason to another. That is the direction\n";
+		print "decisions 15.13 part 3 inferred.\n\n";
+	}
+
+	printf "Auto-badge pairs whose raw strings are not identical on both sides,\n";
+	printf "listed in full below for reading: see the PAIRS TO READ section.\n\n";
+}
+
+sub _step7_print_row {
+	my ($row) = @_;
+
+	my $album = $row->{album};
+	my $entry = $row->{entry};
+
+	printf "    album %-6s  LMS title   : %s\n", $album->{id}, $album->{title};
+	printf "                   LMS artist  : %s   (%s)\n",
+		( defined $album->{artist} ? $album->{artist} : '(none)' ),
+		( defined $album->{artist_tier} ? $album->{artist_tier} : 'no source' );
+
+	if ($entry) {
+		printf "                   release %-10s Discogs title : %s\n",
+			$entry->{id}, ( defined $entry->{title} ? $entry->{title} : '(none)' );
+		printf "                   Discogs artists: %s\n",
+			( @{ $entry->{artists} } ? join( ', ', @{ $entry->{artists} } ) : '(none)' );
+	}
+	else {
+		print "                   candidates:\n";
+
+		for my $c ( @{ $row->{cands} } ) {
+			printf "                     release %-10s %-40s [%s]\n",
+				$c->{id}, _trunc( $c->{title}, 40 ), join( ', ', @{ $c->{artists} } );
+		}
+	}
+
+	printf "                   old (L5 artist, no gate) : %s\n", $row->{old};
+	printf "                   step-7 (L2 artist + gate): %s\n\n", $row->{verdict};
+}
+
+sub _step7_report {
+	my ($step7) = @_;
+
+	my $bucket    = $step7->{bucket};
+	my $oldBucket = $step7->{old_bucket};
+
+	print "-" x 74, "\n";
+	print "AUTO-BADGE SPLIT UNDER THE STEP-7 RULES (decisions 15.13, 15.14)\n";
+	print "-" x 74, "\n\n";
+
+	print "Same albums, same page-1 fixture, same L2 title rung. What differs\n";
+	print "from the split above is the ARTIST rule, and it is not reimplemented\n";
+	print "here: _titleKey, _artistKey and _artistsAgree are called on\n";
+	print "Plugins::SqueezeWax::Ownership itself, so this measures the shipped\n";
+	print "module and not a description of it.\n\n";
+
+	print "  artist rung L2, not L5 (15.13 part 3)\n";
+	print "  the compilation gate: both sides a various-artists name -> no\n";
+	print "  badge, however each side spells it (15.14)\n";
+	print "  collection indexed by DISTINCT RELEASE ID (Ownership::_indexCollection)\n\n";
+
+	printf "Various-artists label used: '%s'\n", $step7->{various_string};
+	printf "  from %s\n\n", $step7->{various_source};
+
+	printf "Duplicate releases collapsed by the distinct-id index: %d\n",
+		$step7->{dup_releases};
+	print  "  Zero means the index change cannot account for any difference\n";
+	print  "  below and the artist rule accounts for all of it.\n\n";
+
+	my $total = 0;
+	$total += $bucket->{$_} || 0 for qw(agree various disagree lms-absent discogs-absent several);
+
+	printf "  one candidate, artist agrees        : %4d   AUTO-BADGE\n", $bucket->{agree}          || 0;
+	printf "  one candidate, both sides Various   : %4d   queue (gated, 15.14)\n", $bucket->{various} || 0;
+	printf "  one candidate, artist disagrees     : %4d   queue\n", $bucket->{disagree}            || 0;
+	printf "  one candidate, LMS artist absent    : %4d   queue\n", $bucket->{'lms-absent'}        || 0;
+	printf "  one candidate, Discogs artist absent: %4d   queue\n", $bucket->{'discogs-absent'}    || 0;
+	printf "  several candidates (direction (a))  : %4d   queue\n", $bucket->{several}             || 0;
+	printf "  %s\n", '-' x 52;
+	printf "  total L2 title matches              : %4d\n\n", $total;
+
+	print "Beside decisions 13.10.4's figures for the same fixture and library\n";
+	print "(87 auto-badge / 8 artist disagreement / 1 ambiguous, of 96):\n\n";
+
+	printf "  %-24s %-10s %-10s\n", '', 'old (L5)', 'step 7';
+	printf "  %-24s %-10d %-10d\n", 'auto-badge',
+		$oldBucket->{agree} || 0, $bucket->{agree} || 0;
+	printf "  %-24s %-10s %-10d\n", 'Various-gated', '-', $bucket->{various} || 0;
+	printf "  %-24s %-10d %-10d\n", 'artist disagrees',
+		$oldBucket->{disagree} || 0, $bucket->{disagree} || 0;
+	printf "  %-24s %-10d %-10d\n", 'LMS artist absent',
+		$oldBucket->{'lms-absent'} || 0, $bucket->{'lms-absent'} || 0;
+	printf "  %-24s %-10d %-10d\n", 'Discogs artist absent',
+		$oldBucket->{'discogs-absent'} || 0, $bucket->{'discogs-absent'} || 0;
+	printf "  %-24s %-10d %-10d\n", 'several candidates',
+		$oldBucket->{several} || 0, $bucket->{several} || 0;
+	print  "\n";
+
+	# --- every album that moves ---------------------------------------------
+	print "-" x 74, "\n";
+	printf "ALBUMS WHOSE OUTCOME DIFFERS FROM THE OLD L5-ARTIST SPLIT: %d\n",
+		scalar @{ $step7->{diffs} };
+	print "-" x 74, "\n\n";
+
+	if ( !@{ $step7->{diffs} } ) {
+		print "  None. The two rules agree on every one of the title matches\n";
+		print "  on this fixture.\n\n";
+	}
+
+	_step7_print_row($_) for @{ $step7->{diffs} };
+
+	# --- the auto-badge pairs that are worth a human read -------------------
+	my @read = grep {
+		_step7_badges( $_->{verdict} ) && _step7_not_identical($_)
+	} @{ $step7->{rows} };
+
+	print "-" x 74, "\n";
+	printf "PAIRS TO READ: auto-badged, raw strings not identical: %d\n", scalar @read;
+	print "-" x 74, "\n\n";
+
+	print "Every album the step-7 rule badges where the LMS and Discogs raw\n";
+	print "title or artist strings are not character-for-character equal, i.e.\n";
+	print "where normalisation did work. These are where a badge could pair two\n";
+	print "different records. Listed for a human read; the script makes no\n";
+	print "judgement and adds no rule.\n\n";
+
+	if ( !@read ) {
+		print "  None: every auto-badge is an exact string match on both sides.\n\n";
+	}
+
+	_step7_print_row($_) for @read;
+}
+
+sub _step7_not_identical {
+	my ($row) = @_;
+
+	my $album = $row->{album};
+	my $entry = $row->{entry} or return 0;
+
+	return 1 unless defined $entry->{title} && $album->{title} eq $entry->{title};
+
+	my $artist = defined $album->{artist} ? $album->{artist} : '';
+
+	for my $d ( @{ $entry->{artists} } ) {
+		return 0 if defined $d && $d eq $artist;
+	}
+
+	return 1;
 }

@@ -776,13 +776,51 @@ Shared reminder list. Both I and Claude Code read and update this.
       (decisions §3a, §13.4). The ownership pass treats it as an
       identification and may promote it to `confirmed`. The queue's "Strict
       conflicts" entry (§13.10.5) has no way to select these rows today.
-- [ ] **2026-09-19, MEASURE BEFORE STEP 7 SHIPS: the auto-badge split under
+- [x] **2026-09-19, MEASURE BEFORE STEP 7 SHIPS: the auto-badge split under
       the step-7 rules.** Decisions §15.13 parts 2–3: artist source as
       measured, but artists at L2 rather than the script's L5. Re-run
       `scripts/title-agreement.pl` with an L2 artist rule on the reference
       `library.db` and the page-1 fixture — no token needed. Expected, not
       verified: only moves albums from badge to queue. Report; add no rule
       mid-run.
+      **MEASURED 2026-09-20**, `scripts/title-agreement.pl --step7` on a
+      scratch copy of the reference `library.db` (764 albums) and
+      `scripts/fixtures/collection-page1.json`. The split is taken through
+      `Ownership`'s own `_titleKey` / `_artistKey` / `_artistsAgree`, so it
+      measures the shipped module rather than a re-implementation of it.
+      `variousArtistsString` is unset in `server.prefs` (`~`), so the label
+      used is the English `VARIOUSARTISTS` default, `Various Artists` — which
+      is what `Slim::Music::Info::variousArtistString()` resolves to on this
+      install.
+
+      | | old (L5 artist) | step 7 (L2 + gate) |
+      |---|---|---|
+      | auto-badge | 87 | **79** |
+      | Various-gated (§15.14) | — | **6** |
+      | artist disagrees | 8 | **10** |
+      | LMS artist absent | 0 | 0 |
+      | Discogs artist absent | 0 | 0 |
+      | several candidates | 1 | 1 |
+      | total L2 title matches | 96 | 96 |
+
+      **Nothing flagged.** All 8 albums that move, move badge → queue, which
+      is the direction §15.13 part 3 inferred. None moves queue → badge. Of
+      the 8: two are `Future Sound Of London` against Discogs' `The Future
+      Sound Of London` (albums 3124, 3127) — L5 stripped the leading article,
+      L2 does not, so these are two badges genuinely lost on the same record;
+      six are §15.14's gate firing on `Various`/`Various` (albums 3345, 3347,
+      3351, 3355, 3356, 3358). Of the 79 that still badge, 77 are exact
+      string matches on both sides and the other two differ only by Discogs'
+      ` (2)` disambiguator (`Oasis (2)`, `Snow (2)`) — read, and the same
+      record in both cases. No auto-badge pairs two records that look
+      different.
+
+      Two corrections to the record, for the next design chat: §15.14 says
+      "measured page 1 has no matched compilation, so nothing about this is
+      measured either way" — it has six, and the gate costs six badges on
+      page 1 alone. And the distinct-release-id index collapses zero
+      duplicates on this fixture, so the artist rung accounts for the whole
+      difference.
 - [ ] **2026-09-19, MEASURE: the ownership pass's run time** on the
       reference library. It runs synchronously in the server process over
       every album; INFERRED to be well under a second, not measured. If it is
