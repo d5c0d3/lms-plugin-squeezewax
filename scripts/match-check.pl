@@ -155,9 +155,10 @@ sub seed {
 	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
 
 	# One row per match_tier, all with a source_timestamp set so a NULL after
-	# the fact is unambiguous.
+	# the fact is unambiguous. Two tiers, not four: migration 3 narrowed
+	# match_tier to ('strict','manual') per decisions §14.1/§14.3.
 	my $i = 0;
-	for my $tier (qw(strict structural fuzzy manual)) {
+	for my $tier (qw(strict manual)) {
 		my $key = substr( $tier . ( 'x' x 32 ), 0, 32 );
 		$dbh->do(
 			'INSERT INTO squeezewax.discogs_match
@@ -167,7 +168,9 @@ sub seed {
 		);
 	}
 
-	for my $tier (qw(strict structural)) {
+	# One tier, not two: migration 3 narrowed discogs_no_match to
+	# CHECK (tier IN ('strict')) per decisions §15.6.
+	for my $tier (qw(strict)) {
 		$dbh->do(
 			'INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
 			 VALUES (?,?,?,?)',
@@ -247,26 +250,32 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 
 	seed();
 
-	is( noMatchTiers(), 'strict,structural', 'both no-match tiers seeded' );
+	is( noMatchTiers(), 'strict', 'the one v1 no-match tier is seeded' );
 
 	my $rows = $M->invalidateStrict;
 
 	ok( defined $rows, 'invalidateStrict reports rows affected' );
 
-	# --- discogs_no_match: strict gone, structural kept -------------------
-	is( noMatchTiers(), 'structural',
-		'strict no-match rows are deleted, structural rows kept' );
+	# --- discogs_no_match: emptied ----------------------------------------
+	#
+	# In v1 this is the whole of invalidateStrict's behaviour here, because
+	# 'strict' is the only tier the CHECK admits (§15.6). The DELETE's
+	# WHERE tier = 'strict' therefore has nothing left to be scoped against,
+	# and its scoping is untested until v2 widens the CHECK - recorded in
+	# TODO.md, 2026-09-20, under "Deferred by decision".
+	is( noMatchTiers(), '', 'every no-match row is deleted' );
 
 	# --- discogs_match: strict NULLed, everything else untouched ----------
 	is( tierTimestamp('strict'), undef,
 		'a strict match row has its source_timestamp NULLed, so it is re-examined' );
 
-	# THE clause that protects a user decision. It has no other test.
+	# THE clause that protects a user decision. It has no other test - and
+	# since migration 3 narrowed match_tier to ('strict','manual'), 'manual' is
+	# also the only row left that proves the UPDATE is scoped by tier at all.
+	# The structural and fuzzy rows that used to carry that second job cannot
+	# be written any more (§14.1, §14.3).
 	is( tierTimestamp('manual'), 555,
 		"a match_tier = 'manual' row is untouched - the user's pressing choice survives" );
-
-	is( tierTimestamp('structural'), 555, 'a structural row is untouched' );
-	is( tierTimestamp('fuzzy'),      555, 'a fuzzy row is untouched' );
 
 	# --- the strict row survives, it is not deleted -----------------------
 	# §2a's rule is never delete a row that carries a decision, and every row

@@ -1729,6 +1729,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Deferred by decision — not forgotten
 
+- **2026-09-20: `invalidateStrict`'s tier scoping is untested in v1.** With
+  `discogs_no_match` narrowed to `CHECK (tier IN ('strict'))` (§15.6), no second
+  tier exists to prove the DELETE's `WHERE tier = 'strict'`. The v1 assertion is
+  "the table is empty afterwards". When v2 widens the CHECK for fuzzy negatives
+  (§15.6 Scope), restore a two-tier assertion: `'strict'` rows deleted, the other
+  tier kept.
 - **2026-09-07: pressing-vs-edition conflation remains in two ILLUSTRATIVE
   passages of `docs/squeezewax-design.md`, deliberately uncorrected**
   pending the step-5/6 "what does an edition-level match show" product

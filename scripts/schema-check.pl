@@ -228,18 +228,49 @@ my %tables = map { $_->[0] => 1 } @{
 	$dbh->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
 };
 
-for my $t (qw(discogs_match discogs_release_cache discogs_collection discogs_price_snapshot
+for my $t (qw(discogs_match discogs_release_cache discogs_price_snapshot
               discogs_no_match)) {
 	ok( $tables{$t}, "table $t exists" );
 }
 
-# migration 2's column, added by ALTER TABLE rather than in the CREATE
+# (i) discogs_collection was never a v1 table. Migration 1 created it and
+# migration 3 drops it; decisions §15.10.
+ok( !$tables{discogs_collection}, 'discogs_collection is gone after migrating' );
+
+# (f) the exact column set of the rebuilt discogs_match, not just a spot check:
+# migration 3 drops snapshot_total_duration and adds ownership, and asserting
+# the whole set is what catches a column that survives the rebuild by accident.
 my %matchColumns = map { $_->{name} => 1 } @{
 	$dbh->selectall_arrayref(
 		'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
 	)
 };
+
+is_deeply(
+	[ sort keys %matchColumns ],
+	[ sort qw(album_key mb_album_id lms_album_id discogs_release_id discogs_master_id
+	          match_tier state ownership matched_at snapshot_artist snapshot_album_title
+	          snapshot_track_count source_timestamp) ],
+	'discogs_match carries exactly the v1 column set'
+);
 ok( $matchColumns{source_timestamp}, 'discogs_match has source_timestamp' );
+ok( !$matchColumns{snapshot_total_duration}, 'snapshot_total_duration is dropped (f)' );
+
+# (g) the orphan index follows §15.5's predicate, which keys on match_tier
+# rather than state.
+my %indexes = map { $_->[0] => $_->[1] } @{
+	$dbh->selectall_arrayref(
+		"SELECT name, sql FROM squeezewax.sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+	)
+};
+
+for my $i (qw(discogs_match_release discogs_match_lms_album discogs_match_mb_album
+              discogs_match_orphan)) {
+	ok( $indexes{$i}, "index $i survives the rebuild" );
+}
+ok( !$indexes{discogs_collection_release}, 'discogs_collection_release is gone (i)' );
+like( $indexes{discogs_match_orphan} || '', qr/\(\s*match_tier\s*,\s*snapshot_track_count\s*\)/,
+	'the orphan index is on (match_tier, snapshot_track_count) (g)' );
 
 # --- no foreign keys, anywhere -------------------------------------------
 for my $t ( sort keys %tables ) {
@@ -279,20 +310,54 @@ ok( !$insertMatch->( album_key => 'b' x 32, match_tier => 'Strict' ),
 ok( $insertMatch->( album_key => 'c' x 32, match_tier => 'manual' ),
 	"match_tier CHECK accepts 'manual'" );
 
-for my $tier (qw(strict structural fuzzy)) {
-	ok( $insertMatch->( album_key => substr( $tier . ( 'x' x 32 ), 0, 32 ), match_tier => $tier ),
-		"match_tier CHECK accepts '$tier'" );
+# (b) The tiers v1 removed. Until migration 3 these were accepted; decisions
+# §14.3 deleted Fuzzy from the roadmap and §13.8 replaced Structural, so a row
+# arriving at either tier now is a bug and must not be storable.
+for my $tier (qw(structural fuzzy)) {
+	ok( !$insertMatch->( album_key => substr( $tier . ( 'x' x 32 ), 0, 32 ), match_tier => $tier ),
+		"match_tier CHECK rejects '$tier' (removed in v1)" );
 }
 
-ok( !eval {
-	$dbh->do( 'INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id, list_state)'
-		. " VALUES (1, 1, 'Owned')" ); 1
-}, "list_state CHECK rejects 'Owned'" );
+ok( $insertMatch->( album_key => 'd' x 32, match_tier => 'strict' ),
+	"match_tier CHECK accepts 'strict'" );
 
-ok( eval {
-	$dbh->do( 'INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id, list_state)'
-		. " VALUES (2, 1, 'wantlist')" ); 1
-}, "list_state CHECK accepts 'wantlist'" );
+# (b) NULL match_tier is the ownership pass's row: an ownership conclusion with
+# no identification behind it (§14.1, §14.8). Standard SQL treats a CHECK that
+# evaluates to NULL as not violated, so no explicit OR ... IS NULL is needed -
+# expected rather than verified when the obligation was written, asserted here.
+ok( $insertMatch->( album_key => 'e' x 32, match_tier => undef ),
+	'match_tier CHECK accepts NULL (an ownership-only row)' );
+ok( $insertMatch->( album_key => 'f' x 32, state => undef ),
+	'state CHECK accepts NULL' );
+
+# (c) and N1: what an insert that names neither column actually writes. state
+# must come out NULL - a DEFAULT 'candidate' here would drop an auto-badged
+# album into the review queue, silently wrong rather than loud (§14.8).
+# ownership must come out 'absent', because the importer's two INSERTs do not
+# name it and a bare NOT NULL column would fail both.
+$dbh->do( 'INSERT INTO squeezewax.discogs_match (album_key, lms_album_id) VALUES (?, ?)',
+	undef, 'g' x 32, 42 );
+
+my ( $bareState, $bareOwnership, $bareTier ) = $dbh->selectrow_array(
+	'SELECT state, ownership, match_tier FROM squeezewax.discogs_match WHERE album_key = ?',
+	undef, 'g' x 32
+);
+
+is( $bareState,     undef,    'an insert omitting state yields NULL (c)' );
+is( $bareTier,      undef,    'an insert omitting match_tier yields NULL' );
+is( $bareOwnership, 'absent', "an insert omitting ownership yields 'absent' (N1)" );
+
+# N1's enum. 'owned' is the word design §4 uses for the badge and is the likely
+# typo; 'Exact' is the casing one.
+for my $bad (qw(Exact owned)) {
+	ok( !$insertMatch->( album_key => substr( $bad . ( 'z' x 32 ), 0, 32 ), ownership => $bad ),
+		"ownership CHECK rejects '$bad'" );
+}
+
+for my $good (qw(exact version absent)) {
+	ok( $insertMatch->( album_key => substr( $good . ( 'y' x 32 ), 0, 32 ), ownership => $good ),
+		"ownership CHECK accepts '$good'" );
+}
 
 # --- discogs_no_match -----------------------------------------------------
 my $insertNoMatch = sub {
@@ -310,11 +375,21 @@ my $insertNoMatch = sub {
 
 ok( $insertNoMatch->(), 'a well-formed no-match row inserts' );
 
-# The composite PK is the point: strict-negative and structural-negative are
-# different facts and step 4 needs both true of one album at once.
-ok( $insertNoMatch->( tier => 'structural' ),
-	'the same album_key takes a second row under a different tier' );
-ok( !$insertNoMatch->(), 'but not a duplicate (album_key, tier)' );
+# (h) The composite PK still exists, but v1 has only one valid tier, so the
+# "same album_key under a second tier" case can no longer be written as a
+# second valid tier. What it asserts now is that the PK is composite and the
+# CHECK is what stops the second row, not the key.
+ok( !$insertNoMatch->( tier => 'structural' ),
+	"tier CHECK rejects 'structural' (removed in v1)" );
+ok( !$insertNoMatch->(), 'and a duplicate (album_key, tier) is still rejected' );
+
+my @noMatchPk = map { $_->{name} } grep { $_->{pk} } @{
+	$dbh->selectall_arrayref(
+		'SELECT name, pk FROM pragma_table_info(?)', { Slice => {} }, 'discogs_no_match'
+	)
+};
+is_deeply( [ sort @noMatchPk ], [ 'album_key', 'tier' ],
+	'discogs_no_match keeps its composite (album_key, tier) primary key' );
 
 # 'fuzzy' is v2 and deliberately outside the CHECK; a typo'd tier would
 # otherwise degrade to "not examined", which looks identical to correct
@@ -336,5 +411,189 @@ my ($skips) = $dbh->selectrow_array(
 	undef, 'p' x 32, 12345
 );
 is( $skips, 0, 'a NULL source_timestamp never matches a timestamp, so it never skips' );
+
+# --- migration 3: the upgrade path from a populated version-2 database -----
+#
+# Everything above runs against a database migrated straight to the current
+# version, where the rebuild had nothing to copy. The obligations that matter
+# most - (e), (a) and re-run safety - are about a file that already holds rows,
+# so build one the way a real upgrade meets it: migrations 1 and 2 only,
+# user_version pinned at 2, rows inserted under the OLD constraints.
+my $v2 = 0;
+
+sub version_2_dbh {
+	my (%opt) = @_;
+
+	$v2++;
+
+	my $h = DBI->connect( "dbi:SQLite:dbname=$dir/v2main$v2.db", '', '', {
+		RaiseError => 1, PrintError => 0, AutoCommit => 1,
+	} );
+	$h->do('PRAGMA foreign_keys = ON');
+	$h->do("ATTACH '$dir/v2-$v2.db' AS squeezewax");
+
+	# The plain-function halves of the migration list, called as plain
+	# functions (CLAUDE.md). Running _migrate would take the file to 3.
+	Plugins::SqueezeWax::Schema::_migration_1($h);
+	Plugins::SqueezeWax::Schema::_migration_2($h);
+	$h->do('PRAGMA squeezewax.user_version = 2');
+
+	# A confirmed strict row with a full snapshot, a conflict row (strict,
+	# candidate, NULL release id, no snapshot - §3a), and a manual row. These
+	# are the three shapes (e) has to carry forward untouched.
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, mb_album_id, lms_album_id, discogs_release_id, discogs_master_id,
+		 match_tier, state, matched_at, snapshot_artist, snapshot_album_title,
+		 snapshot_track_count, snapshot_total_duration, source_timestamp)
+		VALUES (?,?,?,?,?,'strict','confirmed',?,?,?,?,?,?)},
+		undef, 'a' x 32, 'mb-1', 11, 111, 999, 1000, 'Artist', 'Title', 12, 3600, 77 );
+
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, lms_album_id, match_tier, state, matched_at, source_timestamp)
+		VALUES (?,?,'strict','candidate',?,?)},
+		undef, 'b' x 32, 22, 1001, 88 );
+
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, lms_album_id, discogs_release_id, match_tier, state, matched_at)
+		VALUES (?,?,?,'manual','confirmed',?)},
+		undef, 'c' x 32, 33, 222, 1002 );
+
+	if ( $opt{legacy_tier} ) {
+		$h->do( q{INSERT INTO squeezewax.discogs_match
+			(album_key, lms_album_id, discogs_release_id, match_tier, state)
+			VALUES (?,?,?,?,'candidate')},
+			undef, 'l' x 32, 44, 444, $opt{legacy_tier} );
+	}
+
+	# A structural no-match row and a collection row, both of which migration 3
+	# discards rather than carries.
+	$h->do( q{INSERT INTO squeezewax.discogs_no_match (album_key, tier, checked_at)
+		VALUES (?,'structural',?)}, undef, 'n' x 32, 5 );
+	$h->do( q{INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id)
+		VALUES (1, 111)} );
+
+	return $h;
+}
+
+sub match_fingerprint {
+	my $h = shift;
+
+	return $h->selectall_arrayref(
+		q{SELECT album_key, mb_album_id, lms_album_id, discogs_release_id,
+		         discogs_master_id, match_tier, state, matched_at, snapshot_artist,
+		         snapshot_album_title, snapshot_track_count, source_timestamp
+		    FROM squeezewax.discogs_match ORDER BY album_key},
+		{ Slice => {} }
+	);
+}
+
+{
+	my $up = version_2_dbh();
+
+	my $beforeRows = $up->selectall_arrayref(
+		q{SELECT album_key, match_tier, state FROM squeezewax.discogs_match
+		  ORDER BY album_key}, { Slice => {} }
+	);
+	is( scalar @$beforeRows, 3, 'the version-2 fixture holds three rows' );
+
+	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-2 file to 3' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	my $afterRows = $up->selectall_arrayref(
+		q{SELECT album_key, match_tier, state, ownership FROM squeezewax.discogs_match
+		  ORDER BY album_key}, { Slice => {} }
+	);
+
+	# (e) row for row, same count, same state, same tier. The ownership pass -
+	# not the migration - is what re-derives state.
+	is( scalar @$afterRows, scalar @$beforeRows, 'the rebuild copied every row (e)' );
+
+	for my $i ( 0 .. $#$beforeRows ) {
+		is( $afterRows->[$i]{album_key}, $beforeRows->[$i]{album_key},
+			"row $i keeps its album_key" );
+		is( $afterRows->[$i]{state}, $beforeRows->[$i]{state},
+			"row $i keeps state '" . ( $beforeRows->[$i]{state} // 'NULL' ) . "' (e)" );
+		is( $afterRows->[$i]{match_tier}, $beforeRows->[$i]{match_tier},
+			"row $i keeps match_tier '" . ( $beforeRows->[$i]{match_tier} // 'NULL' ) . "' (e)" );
+		is( $afterRows->[$i]{ownership}, 'absent', "row $i takes ownership 'absent' (e)" );
+	}
+
+	# The conflict row is the one whose NULL release id must survive a rebuild
+	# that also narrowed two enums.
+	my ($conflictRelease) = $up->selectrow_array(
+		'SELECT discogs_release_id FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'b' x 32
+	);
+	is( $conflictRelease, undef, 'the conflict row keeps its NULL discogs_release_id' );
+
+	# The columns nothing above names, carried through by the explicit copy.
+	my ($mb, $master, $dur) = $up->selectrow_array(
+		'SELECT mb_album_id, discogs_master_id, snapshot_artist FROM squeezewax.discogs_match
+		  WHERE album_key = ?', undef, 'a' x 32
+	);
+	is( $mb,     'mb-1',   'mb_album_id survives the rebuild' );
+	is( $master, 999,      'discogs_master_id survives the rebuild' );
+	is( $dur,    'Artist', 'snapshot_artist survives the rebuild' );
+
+	# (h) and (i): both regenerable tables were discarded, not copied.
+	my ($noMatchLeft) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_no_match');
+	is( $noMatchLeft, 0, "the 'structural' no-match row is discarded, not migrated (h)" );
+
+	my %upTables = map { $_->[0] => 1 } @{
+		$up->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
+	};
+	ok( !$upTables{discogs_collection}, 'discogs_collection is dropped on upgrade (i)' );
+	ok( !$upTables{discogs_match_new},  'the scratch table is renamed away, not left behind' );
+
+	# --- re-run safety ----------------------------------------------------
+	#
+	# _migrate bumps user_version only after the migration sub returns, so a
+	# rebuild that commits and then dies leaves a version-3 table behind a
+	# version-2 marker. Both forms of re-run must be no-ops.
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_3($up); 1 },
+		'migration 3 runs a second time without dying' ) or diag($@);
+	is_deeply( match_fingerprint($up), $fingerprint, '  ...and changes nothing' );
+
+	$up->do('PRAGMA squeezewax.user_version = 2');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed rebuild with user_version forced back to 2' )
+		or diag($@);
+	is( version_of($up), $target, '  ...and reaches the current version' );
+	is_deeply( match_fingerprint($up), $fingerprint, '  ...and still changes nothing' );
+}
+
+# --- (a) a legacy tier refuses loudly and changes nothing ------------------
+for my $tier (qw(structural fuzzy)) {
+	my $bad = version_2_dbh( legacy_tier => $tier );
+
+	my $before = $bad->selectall_arrayref(
+		'SELECT album_key, match_tier FROM squeezewax.discogs_match ORDER BY album_key',
+		{ Slice => {} }
+	);
+
+	ok( !eval { $S->_migrate($bad); 1 }, "_migrate refuses a file holding a '$tier' row (a)" );
+	like( $@, qr/refusing to rebuild/, '  ...and says it is refusing' );
+	like( $@, qr/\b1 row/, '  ...and says how many rows it found' );
+
+	is( version_of($bad), 2, '  ...and leaves user_version at 2' );
+	is_deeply(
+		$bad->selectall_arrayref(
+			'SELECT album_key, match_tier FROM squeezewax.discogs_match ORDER BY album_key',
+			{ Slice => {} }
+		),
+		$before,
+		'  ...and leaves discogs_match untouched'
+	);
+
+	my %badTables = map { $_->[0] => 1 } @{
+		$bad->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
+	};
+	ok( $badTables{discogs_collection},
+		'  ...and has not begun the drops either (the refusal is first)' );
+	ok( !$badTables{discogs_match_new}, '  ...and left no scratch table behind' );
+}
 
 done_testing();

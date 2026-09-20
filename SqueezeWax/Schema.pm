@@ -32,6 +32,7 @@ use constant DB_SCHEMA => 'squeezewax';
 my @MIGRATIONS = (
 	\&_migration_1,
 	\&_migration_2,
+	\&_migration_3,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -384,7 +385,7 @@ sub _checkVersion {
 # them, and a separate attached file makes such a reference impossible to
 # declare in the first place, since SQLite resolves FK targets within one
 # database. And none between our own tables either: LMS sets
-# PRAGMA foreign_keys = ON connection-wide (Slim/Utils/SQLiteHelper.pm:99), so
+# PRAGMA foreign_keys = ON connection-wide (Slim/Utils/SQLiteHelper.pm:102), so
 # an ON DELETE CASCADE here would be live, and nothing is worth a cascade that
 # could remove a confirmed match.
 sub _migration_1 {
@@ -417,9 +418,10 @@ sub _migration_1 {
 			                                CHECK (state IN ('candidate','confirmed')),
 			matched_at              INTEGER,
 
-			-- Orphan-recovery snapshot, captured at confirm time. Lives here
-			-- rather than in discogs_collection so that recovery survives a
-			-- collection wipe.
+			-- Orphan-recovery snapshot. Lives here rather than in
+			-- discogs_collection so that recovery survives a collection wipe.
+			-- "Captured at confirm time" until decisions §15.4 moved it to
+			-- identification; migration 3 carries the corrected wording.
 			snapshot_artist         TEXT,
 			snapshot_album_title    TEXT,
 			snapshot_track_count    INTEGER,
@@ -434,7 +436,9 @@ sub _migration_1 {
 	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_mb_album
 		ON discogs_match (mb_album_id)');
 
-	# The orphan lookup: confirmed rows whose snapshot might fit a new album.
+	# The orphan lookup. Keyed on state because §14.8 was still current when
+	# this was written; §15.5 moved recovery's predicate onto match_tier, and
+	# migration 3 rebuilds the index as (match_tier, snapshot_track_count).
 	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_orphan
 		ON discogs_match (state, snapshot_track_count)');
 
@@ -557,6 +561,242 @@ sub _migration_2 {
 			PRIMARY KEY (album_key, tier)
 		)
 	});
+
+	return 1;
+}
+
+# Migration 3: rebuild discogs_match, and drop the two tables that ride with
+# it. Plan: plans/build-order-step-6-7-ownership.md §1.2; obligations (a)-(i)
+# are TODO.md's 2026-09-13 item.
+#
+# A 12-step table rebuild, not an ALTER. SQLite cannot modify an existing CHECK
+# constraint, and this changes three of them at once: match_tier narrows to
+# ('strict','manual') (§14.1), state becomes nullable and loses its default
+# (§14.8), and ownership arrives (§13.3, §15.3). ALTER COLUMN ... DROP NOT NULL
+# would cover the nullability half only, and it landed in SQLite 3.53.0 while
+# LMS bundles 3.46.1 - DBD::SQLite 1.76, refs/slimserver/CPAN/arch/5.32..5.42,
+# verified 2026-09-20. So the rebuild is required rather than chosen.
+sub _migration_3 {
+	my $dbh = shift;
+
+	# Shape check first, before anything reads or writes a row.
+	#
+	# _migrate bumps user_version only after this sub returns (:339-348), so a
+	# rebuild that commits and then dies before the bump would re-run against
+	# the new shape on the next connect, and the copy would fail on the column
+	# it just dropped - leaving the plugin dead on every start. The same
+	# reasoning as _migration_2's column check, one table wider.
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	if ( $columns{ownership} && !$columns{snapshot_total_duration} ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('discogs_match is already rebuilt; skipping to the drops');
+	}
+	else {
+		_rebuildMatchTable($dbh);
+	}
+
+	# (h) discogs_no_match narrows to CHECK (tier IN ('strict')) (§15.6). DROP
+	# and recreate rather than copy: the table is regenerable in full, so a
+	# surviving 'structural' row should be discarded, not fail the copy. The
+	# cost is one rescan's worth of re-reads for untagged albums.
+	$dbh->do('DROP TABLE IF EXISTS squeezewax.discogs_no_match');
+	$dbh->do(q{
+		CREATE TABLE squeezewax.discogs_no_match (
+			album_key        TEXT    NOT NULL
+			                         CHECK (length(album_key) = 32),
+			tier             TEXT    NOT NULL
+			                         CHECK (tier IN ('strict')),
+			source_timestamp INTEGER,
+			checked_at       INTEGER NOT NULL,
+			PRIMARY KEY (album_key, tier)
+		)
+	});
+
+	# (i) discogs_collection is not a v1 table (§13.2, §15.10). Migration 1
+	# created it and nothing ever read or wrote it - confirmed by grep over
+	# SqueezeWax/ and scripts/, and by finding it empty on the reference server
+	# (2026-09-20). The index goes with the table, but drop it by name first so
+	# the intent is on the record.
+	$dbh->do('DROP INDEX IF EXISTS squeezewax.discogs_collection_release');
+	$dbh->do('DROP TABLE IF EXISTS squeezewax.discogs_collection');
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('dropped discogs_collection; recreated discogs_no_match at tier strict');
+
+	return 1;
+}
+
+# The 12 columns migration 3 carries forward, named explicitly in both halves
+# of the copy so a column-order slip cannot pass. snapshot_total_duration is
+# deliberately absent: that is obligation (f).
+my @MATCH_COLUMNS = qw(
+	album_key
+	mb_album_id
+	lms_album_id
+	discogs_release_id
+	discogs_master_id
+	match_tier
+	state
+	matched_at
+	snapshot_artist
+	snapshot_album_title
+	snapshot_track_count
+	source_timestamp
+);
+
+# Steps 2-7 of the plan's §1.2. A plain function, called as one (CLAUDE.md).
+sub _rebuildMatchTable {
+	my $dbh = shift;
+
+	# (a) Refuse loudly, before the transaction opens and before anything has
+	# been changed. The narrowed CHECK would otherwise fail part-way through
+	# the copy, on the one table that is not disposable. That no such row
+	# exists was inferred when the obligation was written; it was verified on
+	# the reference server 2026-09-20, and this still runs, because the
+	# reference server is not the only database this will meet.
+	my ($legacy) = $dbh->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.discogs_match
+		   WHERE match_tier IN ('structural','fuzzy')}
+	);
+
+	if ($legacy) {
+		die "discogs_match holds $legacy row(s) at a tier v1 removed "
+			. "('structural' or 'fuzzy'); refusing to rebuild the table\n";
+	}
+
+	my ($before) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+
+	my $columns = join ', ', @MATCH_COLUMNS;
+
+	# One transaction for the whole rebuild. The server handle is
+	# AutoCommit => 1 (Slim/Schema.pm:274), and SQLite makes DDL on an attached
+	# schema transactional, so a failure anywhere below leaves the old table
+	# exactly as it was.
+	$dbh->begin_work;
+
+	eval {
+		# NULL match_tier and NULL state both mean "no identification": the row
+		# exists for its ownership conclusion alone (§14.1, §14.8, §15.3). A
+		# CHECK that evaluates to NULL is not a violation, so neither enum needs
+		# an explicit OR ... IS NULL.
+		#
+		# state carries no DEFAULT (obligation (c)): with one, an insert that
+		# omitted it would write 'candidate' and drop an auto-badged album into
+		# the review queue - wrong rather than loud.
+		#
+		# ownership DOES carry one, and 'absent' is the only safe value for it:
+		# the importer's two INSERTs do not name the column (Match.pm:546-569,
+		# :616-630), so without a default a NOT NULL column would fail both and
+		# stop identification altogether. 'absent' is §15.3's own value for a
+		# row no sync has concluded on, and it only withholds a badge until the
+		# next sync - not §14.8's hazard, which put albums into the queue.
+		$dbh->do(q{
+			CREATE TABLE squeezewax.discogs_match_new (
+				album_key            TEXT    NOT NULL PRIMARY KEY
+				                             CHECK (length(album_key) = 32),
+				mb_album_id          TEXT,
+				lms_album_id         INTEGER,
+				discogs_release_id   INTEGER,
+				discogs_master_id    INTEGER,
+				match_tier           TEXT    CHECK (match_tier IN ('strict','manual')),
+				state                TEXT    CHECK (state IN ('candidate','confirmed')),
+				ownership            TEXT    NOT NULL DEFAULT 'absent'
+				                             CHECK (ownership IN ('exact','version','absent')),
+				matched_at           INTEGER,
+
+				-- Orphan-recovery snapshot, captured at identification (§15.4).
+				snapshot_artist      TEXT,
+				snapshot_album_title TEXT,
+				snapshot_track_count INTEGER,
+				source_timestamp     INTEGER
+			)
+		});
+
+		# (e) state and match_tier copy forward unchanged; ownership takes its
+		# default on every row. The ownership pass, not the migration,
+		# re-derives state.
+		$dbh->do("INSERT INTO squeezewax.discogs_match_new ($columns)
+			SELECT $columns FROM squeezewax.discogs_match");
+
+		my ($after) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match_new');
+
+		if ( $after != $before ) {
+			die "copied $after rows into discogs_match_new, expected $before\n";
+		}
+
+		# Wider than obligation (e) asks for - it names state, match_tier and
+		# the row count - because a column-order slip in the copy would satisfy
+		# the narrow version and silently transpose two columns. EXCEPT treats
+		# NULLs as equal, which is what is wanted here.
+		for my $pair ( [ 'discogs_match_new', 'discogs_match' ],
+		               [ 'discogs_match', 'discogs_match_new' ] ) {
+			my ($differing) = $dbh->selectrow_array(
+				"SELECT COUNT(*) FROM (
+					SELECT $columns FROM squeezewax.$pair->[0]
+					EXCEPT
+					SELECT $columns FROM squeezewax.$pair->[1]
+				)"
+			);
+
+			if ($differing) {
+				die "$differing row(s) in $pair->[0] have no identical row in "
+					. "$pair->[1] across the copied columns\n";
+			}
+		}
+
+		$dbh->do('DROP TABLE squeezewax.discogs_match');
+		$dbh->do('ALTER TABLE squeezewax.discogs_match_new RENAME TO discogs_match');
+
+		# The three lookup indexes, recreated as migration 1 had them. Dropping
+		# the table took them with it.
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_release
+			ON discogs_match (discogs_release_id)');
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_lms_album
+			ON discogs_match (lms_album_id)');
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_mb_album
+			ON discogs_match (mb_album_id)');
+
+		# (g) The orphan index moves from (state, snapshot_track_count) to
+		# (match_tier, snapshot_track_count), because §15.5 moved recovery's
+		# predicate off state: an orphan is a row carrying an identification and
+		# a snapshot, whatever its state (Importer.pm:355-359).
+		#
+		# The obligation also asks for an EXPLAIN QUERY PLAN showing the
+		# recovery lookup using it. There is no such lookup to plan: snapshotRows
+		# selects the whole table and _prePass matches in Perl, and the two
+		# statements that name snapshot_track_count (Match.pm:412-416, :662-672)
+		# are keyed on album_key. The index is rebuilt as (g) requires and the
+		# query-plan check is recorded in TODO.md as having nothing to check.
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_orphan
+			ON discogs_match (match_tier, snapshot_track_count)');
+
+		$dbh->commit;
+
+		1;
+	} or do {
+		my $err = $@ || 'unknown error';
+
+		eval { $dbh->rollback; 1 } or $log->error("rollback after a failed rebuild also failed: $@");
+
+		die "rebuilding discogs_match failed: $err";
+	};
+
+	if ( main::INFOLOG && $log->is_info ) {
+		my $states = $dbh->selectall_arrayref(
+			q{SELECT COALESCE(state,'(null)') AS state, COUNT(*) AS n
+			    FROM squeezewax.discogs_match GROUP BY 1 ORDER BY 1},
+			{ Slice => {} }
+		) || [];
+
+		$log->info( "rebuilt discogs_match: $before rows copied, ownership defaulted to "
+			. "'absent'; by state: "
+			. ( join ', ', map { "$_->{state}=$_->{n}" } @$states ) );
+	}
 
 	return 1;
 }
