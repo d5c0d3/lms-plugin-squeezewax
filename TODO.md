@@ -655,7 +655,17 @@ Shared reminder list. Both I and Claude Code read and update this.
         2026-09-19: step 7 ships with this open (decisions §15.13 part 8) —
         matches reached only through the `Various` equivalence stay
         unbadged, per §15.7/§15.11, until the measurement reports.
-        Not decided.
+        2026-09-20, FOUND WHILE BUILDING B2, must be settled with Q9: the
+        gate has a seam. §15.13 part 8 gates matches reached ONLY through
+        the equivalence, and §2.2 consults the equivalence only after plain
+        equality fails. So with `variousArtistsString` at its English
+        default, a Discogs credit of `Various Artists` is plain equality and
+        BADGES, while `Various` on the same record reaches the equivalence
+        and is GATED — the outcome turns on which of its two
+        various-artists spellings Discogs used, though §15.7 calls both the
+        same vocabulary. Asserted as-built in
+        `scripts/ownership-check.pl`. Q9's answer must cover both spellings
+        or the gate is arbitrary. Not decided.
       Q10 — which LMS album artist does the ownership pass compare with
         Discogs'? Decisions §11.4 recommended `Slim::Schema::Album::artists`,
         and §15.12 found its rationale false at slimserver `a670a38`:

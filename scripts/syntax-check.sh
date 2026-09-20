@@ -169,7 +169,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match API API::Async Importer Settings Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async Importer Settings Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -181,8 +181,10 @@ for scanner in 0 1; do
 		# Plugin.pm under main::WEBUI, so it never reaches the scanner either.
 		# API/Async.pm is the server-side Discogs client - the scanner has no
 		# event loop to run SimpleAsyncHTTP on, which is the entire reason it
-		# exists separately from API.pm.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "API::Async" ]; }; then
+		# exists separately from API.pm. Ownership.pm runs after a scan, in the
+		# server, off a completed collection sync (decisions §15.2), so the
+		# scanner never loads it either.
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "API::Async" ] || [ "$m" = "Ownership" ]; }; then
 			continue
 		fi
 
@@ -210,6 +212,12 @@ BEGIN {
 				note=" (Slim::Plugin::Base, Slim::Utils::Prefs, Slim::Control::Request, Slim::Utils::Timers stubbed)"
 				;;
 			Library)
+				prelude="$SCHEMA_STUB"
+				note=" (Slim::Schema stubbed)"
+				;;
+			Ownership)
+				# The pure half needs nothing; the pass added at B3 reaches
+				# Slim::Schema and Slim::Music::Info, both only at runtime.
 				prelude="$SCHEMA_STUB"
 				note=" (Slim::Schema stubbed)"
 				;;
