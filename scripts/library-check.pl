@@ -122,6 +122,10 @@ $dbh->do(q{
 $dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT, contributor INT)');
 $dbh->do('CREATE TABLE contributors (id INTEGER PRIMARY KEY, name BLOB)');
 
+# ownershipArtists reads this one; eachAlbum does not. Columns and types from
+# refs/slimserver/SQL/SQLite/schema_1_up.sql:186-193.
+$dbh->do('CREATE TABLE contributor_album (role INT, contributor INT, album INT)');
+
 my $insert = $dbh->prepare('INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)');
 
 # album 1: three local tracks, inserted deliberately out of urlmd5 order so the
@@ -266,6 +270,80 @@ ok( $danglingOk, 'a dangling albums.contributor does not die' );
 ok( $dangling{3} && !defined $dangling{3}->{artist},
 	'  ...and the album is still emitted, with an undef artist' );
 $dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+
+# --- ownershipArtists: the measured three-way choice (§15.13 part 2) -------
+#
+# Deliberately a different answer from eachAlbum's artist for the same album.
+# That separation IS the ruling: the snapshot compares LMS with LMS and keeps
+# albums.contributor (§15.12), while the ownership pass compares LMS with
+# Discogs and uses the rule §13.10's split was measured with.
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (3, ?)', undef, 'Alan Wilder' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (4, ?)', undef, 'Martin Gore' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (5, ?)', undef, '   ' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (6, ?)', undef, 'Recoil' );
+
+# album 1: ALBUMARTIST (role 5) present, and it is NOT albums.contributor.
+# Two of them, so ORDER BY c.id has something to decide.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 4, 1), (5, 3, 1)');
+
+# album 2: no ALBUMARTIST, one ARTIST (role 1), which must win over
+# albums.contributor (which is the Björk row).
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (1, 6, 2)');
+
+# album 3: an ALBUMARTIST whose name is whitespace only. A present-but-blank
+# name is not a name, so the choice must fall through rather than return it.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 5, 3)');
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 3');
+
+my $ownership = $L->ownershipArtists;
+
+is( $ownership->{1}, 'Alan Wilder',
+	'ALBUMARTIST (role 5) wins, and ORDER BY c.id picks the lowest id of two' );
+isnt( $ownership->{1}, $by{1}->{artist},
+	'  ...which is deliberately NOT eachAlbum\'s albums.contributor artist (§15.12)' );
+
+is( $ownership->{2}, 'Recoil',
+	'ARTIST (role 1) is used when there is no ALBUMARTIST' );
+isnt( $ownership->{2}, $by{2}->{artist},
+	'  ...in preference to albums.contributor' );
+
+is( $ownership->{3}, 'Depeche Mode',
+	'a whitespace-only ALBUMARTIST falls through to albums.contributor' );
+
+# No contributor of any kind: absent from the hash rather than present-undef,
+# so the caller's "is there a name" test is one lookup.
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+$dbh->do('DELETE FROM contributor_album WHERE album = 3');
+my $noneAt3 = $L->ownershipArtists;
+ok( !exists $noneAt3->{3}, 'an album with no usable artist is absent from the hash' );
+
+# Album 4 has no qualifying tracks, so eachAlbum never emits it - but
+# ownershipArtists is one query over albums, and the pass joins in memory.
+# A superset is correct here; a missing row would not be.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 1, 4)');
+my $superset = $L->ownershipArtists;
+is( $superset->{4}, 'Depeche Mode',
+	'ownershipArtists covers albums eachAlbum filters out; the join happens in memory' );
+$dbh->do('DELETE FROM contributor_album WHERE album = 4');
+
+# Bytes, not characters. Decoding belongs in Ownership::_decode so that an
+# undecodable name is counted rather than repaired.
+# Contributor 2 is a lower id than 3, so adding it as a third ALBUMARTIST must
+# displace the previous pick. That is ORDER BY c.id proved in both directions:
+# adding a higher id changes nothing, adding a lower one changes the answer.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 2, 1)');
+my $utf8Pick = $L->ownershipArtists;
+is( $utf8Pick->{1}, $utf8Name,
+	'a lower contributor id displaces the previous pick, and comes back byte-identical' );
+ok( !utf8::is_utf8( $utf8Pick->{1} ),
+	'  ...as bytes, not a decoded character string - decoding is Ownership::_decode\'s job' );
+
+# Leave the fixture as the rest of the file expects it.
+$dbh->do('DELETE FROM contributor_album');
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 1');
+$dbh->do('UPDATE albums SET contributor = 2 WHERE id = 2');
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+$dbh->do('DELETE FROM contributors WHERE id > 2');
 
 # --- albumCount matches what the iterator emits ---------------------------
 is( $L->albumCount, 3,

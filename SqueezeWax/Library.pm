@@ -380,6 +380,97 @@ sub albumCount {
 	return $count || 0;
 }
 
+=head2 ownershipArtists()
+
+The album artist the B<ownership pass> compares with Discogs, as a hashref
+C<< { album_id => bytes } >>. Albums with no usable name are simply absent.
+
+Deliberately not C<eachAlbum>'s C<artist>, and deliberately not a change to
+C<$ALBUM_TRACKS_SQL>. Three reasons, in decreasing order of how much they
+matter:
+
+=over
+
+=item * B<It is the rule §13.10's split was measured with> (decisions §15.13
+part 2, resolving C<TODO.md> Q10): first ALBUMARTIST by contributor id, else
+first ARTIST by contributor id, else C<albums.contributor>. Changing the source
+would invalidate the measurement that chose the badge threshold.
+
+=item * B<The snapshot must keep C<albums.contributor>> (§15.12). Orphan
+recovery compares LMS with LMS, so its artist only has to be stable; the
+ownership pass compares LMS with Discogs, where the choice decides which albums
+badge. They are different questions and they get different queries.
+
+=item * A separate statement keeps the per-track walk free of correlated
+subqueries, which would run once per track rather than once per album.
+
+=back
+
+Roles are verified, not remembered: ARTIST is 1 and ALBUMARTIST is 5
+(C<refs/slimserver/Slim/Schema/Contributor.pm:78,82>). The tables are
+C<contributor_album(role, contributor, album)>
+(C<refs/slimserver/SQL/SQLite/schema_1_up.sql:186-193>) and
+C<contributors(id, name)> (C<:152-154>), and C<albums.contributor> is C<:127>.
+
+C<Slim::Schema::Album::artists> is never called, and neither is
+C<variousArtistsObject>: §15.12 found the former does not read
+C<albums.contributor> and can write to the library, and §11.3(d) rules out the
+latter as not side-effect-free.
+
+Names come back as bytes, exactly as C<DBD::SQLite> hands them over -
+C<contributors.name> is a blob and nothing under C<Slim/> sets
+C<sqlite_unicode>. Decoding belongs on the comparison side, in
+C<Ownership::_decode>, so that an undecodable name is counted rather than
+repaired.
+
+C<ORDER BY c.id> makes a multi-ALBUMARTIST album deterministic for a given
+library. Contributor ids do not survive a library wipe, so such an album's
+chosen name may change across one; the same library and the same collection
+still give the same answer, which is what §13.2 asks for.
+
+=cut
+
+my $OWNERSHIP_ARTISTS_SQL = q{
+	SELECT a.id,
+	       (SELECT c.name FROM contributor_album ca
+	          JOIN contributors c ON c.id = ca.contributor
+	         WHERE ca.album = a.id AND ca.role = 5
+	         ORDER BY c.id LIMIT 1) AS albumartist,
+	       (SELECT c.name FROM contributor_album ca
+	          JOIN contributors c ON c.id = ca.contributor
+	         WHERE ca.album = a.id AND ca.role = 1
+	         ORDER BY c.id LIMIT 1) AS artist,
+	       (SELECT c.name FROM contributors c WHERE c.id = a.contributor)
+	         AS singular
+	  FROM albums a
+};
+
+sub ownershipArtists {
+	my $class = shift;
+
+	my $rows = Slim::Schema->dbh->selectall_arrayref(
+		$OWNERSHIP_ARTISTS_SQL, { Slice => {} }
+	) || [];
+
+	my %artist;
+
+	for my $row (@$rows) {
+		# First that is defined and not blank. A present-but-empty name is not
+		# a name: it would compare equal to nothing and disagree with
+		# everything, which is worse than falling through to the next source.
+		for my $source (qw(albumartist artist singular)) {
+			my $name = $row->{$source};
+
+			next unless defined $name && $name =~ /\S/;
+
+			$artist{ $row->{id} } = $name;
+			last;
+		}
+	}
+
+	return \%artist;
+}
+
 =head2 albumLabel( $album )
 
 Display label for a progress or log line: the title, or the album id when the
