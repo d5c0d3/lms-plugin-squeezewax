@@ -670,7 +670,11 @@ Shared reminder list. Both I and Claude Code read and update this.
         various-artists spellings Discogs used, though §15.7 calls both the
         same vocabulary. Asserted as-built in
         `scripts/ownership-check.pl`. Q9's answer must cover both spellings
-        or the gate is arbitrary. Not decided.
+        or the gate is arbitrary.
+        2026-09-20: the SEAM is closed by decisions §15.14 — the gate now
+        holds every Various-to-Various match, however spelled, until the
+        pages 2–3 measurement reports. Q9 itself (a confirmation test) is
+        still open. Not decided.
       Q10 — which LMS album artist does the ownership pass compare with
         Discogs'? Decisions §11.4 recommended `Slim::Schema::Album::artists`,
         and §15.12 found its rationale false at slimserver `a670a38`:

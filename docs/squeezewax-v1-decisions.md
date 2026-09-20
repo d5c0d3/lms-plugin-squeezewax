@@ -4006,3 +4006,45 @@ the chosen option won is recorded, and the plan carries the detail.
   query in `SqueezeWax/` uses the orphan index (the relink matches in Perl),
   so the index is rebuilt as (g) requires and the check is recorded as having
   nothing to check (`TODO.md`, 2026-09-19).
+
+### 15.14 The compilation gate holds every Various-to-Various match, however it is spelled
+
+**Decided 2026-09-20 (design chat).** Amends §15.11 part 2 and §15.13 part 8.
+Found by Claude Code while building step 7 (`TODO.md`, the Q9 seam note).
+
+**Decided: until the pages 2–3 measurement reports, the ownership pass does not
+auto-badge any match where the Discogs artist is a various-artists name AND the
+LMS artist is a various-artists name, whether the two agree by plain equality
+or only through §15.7's equivalence.**
+
+- **Discogs side:** `various` or `various artists`, after the ` (N)` strip and
+  L2. Unchanged from §15.7.
+- **LMS side:** the configured label
+  (`Slim::Music::Info::variousArtistString()`) after L2, **or** the literals
+  `various` / `various artists`.
+
+#### Why
+
+§15.11 part 2 keyed the gate on "the equivalence having fired", and exempted
+the 23 albums whose LMS album artist is literally `Various` because they agree
+with Discogs' `Various` without the mapping. That was a correct argument
+against using `albums.compilation` as the key, and the wrong conclusion about
+the gate. The gate exists because, for a compilation, artist agreement carries
+almost no evidence (§11, §15.7). That holds whether the two sides say
+`Various` / `Various`, `Various Artists` / `Various Artists`, or need the
+mapping. Keyed on the mechanism, the outcome turned on which of Discogs' two
+spellings a release carried. Measured page 1 has no matched compilation, so
+nothing about this is measured either way.
+
+#### Why literals are acceptable on the LMS side here
+
+§15.7 forbids a literal on the LMS side for **agreement**, because a literal
+could badge a band genuinely called "Various Artists" on an install whose
+label is something else. The gate only **withholds** a badge, so a literal
+there fails safe: at worst such a band's album waits for the review queue.
+That is the same direction as every other rule in §13.10.
+
+#### Scope
+
+The gate lifts, or changes shape, with Q9 and the pages 2–3 measurement, as
+before. No other artist rule changes.

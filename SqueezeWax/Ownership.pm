@@ -138,25 +138,53 @@ sub _artistKey {
 
 One of C<agree>, C<various>, C<disagree>, C<lms-absent> or C<discogs-absent>.
 
+C<various> means B<both> sides name a various-artists compilation. It is not a
+weaker C<agree>: it is the compilation gate, and the caller must not badge on
+it (§15.14).
+
 C<$variousString> is C<Slim::Music::Info::variousArtistString()>, passed in
 rather than called, so that this stays pure and the offline suite can vary it.
 
 =cut
 
-# scripts/title-agreement.pl:373-390, plus decisions §15.7's equivalence.
+# Is this LMS name a various-artists name? The configured label (§15.7), or
+# either literal (§15.14).
 #
-# The Various check is consulted ONLY when plain equality has already failed,
-# so it can widen the set of matches and never narrow it.
+# The literals are acceptable HERE and nowhere else. §15.7 forbids a literal on
+# the LMS side for AGREEMENT, because a literal could badge a band genuinely
+# called "Various Artists" on an install whose label is something else. This
+# only ever WITHHOLDS a badge, so a literal fails safe: at worst that band's
+# album waits for the review queue. §15.7's rule is untouched - nothing below
+# grants agreement on a literal.
+sub _lmsIsVarious {
+	my ( $lms, $variousString ) = @_;
+
+	return 1 if $lms eq 'various' || $lms eq 'various artists';
+
+	my $label = _artistKey($variousString);
+
+	return ( defined $label && $lms eq $label ) ? 1 : 0;
+}
+
+# scripts/title-agreement.pl:373-390, plus decisions §15.7 and §15.14.
 #
-# The LMS side must equal the CONFIGURED various-artists label, never a
-# literal (§15.7). A user whose label is "Diverse" has albums genuinely by a
-# band called "Various Artists", and treating the literal as the label would
-# badge those against any Discogs compilation with the same title. The Discogs
-# side is the literal, because that is Discogs' own fixed vocabulary.
+# The both-sides-Various test runs BEFORE plain equality, and that ordering is
+# the whole of §15.14. Consulted after equality - which is how §15.13 part 8
+# first shipped - the gate keyed on the MECHANISM by which the two sides
+# matched, so the outcome turned on which of Discogs' two spellings a release
+# happened to carry: 'Various Artists' against the default label reached plain
+# equality and badged, while 'Various' on the same record reached the mapping
+# and was gated. §15.11 part 2's exemption for albums whose LMS artist is
+# literally 'Various' was the same seam from the other side.
 #
-# Returning 'various' rather than 'agree' is what lets step 7 ship with Q9
-# open (§15.13 part 8): a match reached only this way does not badge, pending
-# the pages 2-3 measurement.
+# The gate exists because for a compilation, artist agreement carries almost no
+# evidence (§11, §15.7) - and that is true however the two sides spell it. So
+# this narrows the set of matches that badge, which is the opposite of what the
+# equivalence alone did, and is why it cannot be a post-equality widening.
+#
+# The Discogs side is the literal, because that is Discogs' own fixed
+# vocabulary. The gate lifts or changes shape with Q9 and the pages 2-3
+# measurement (§15.14 Scope).
 sub _artistsAgree {
 	my ( $lmsArtist, $discogsArtists, $variousString ) = @_;
 
@@ -168,16 +196,14 @@ sub _artistsAgree {
 
 	return 'discogs-absent' unless @discogs;
 
-	for my $d (@discogs) {
-		return 'agree' if $d eq $lms;
-	}
-
-	my $various = _artistKey($variousString);
-
-	if ( defined $various && $lms eq $various ) {
+	if ( _lmsIsVarious( $lms, $variousString ) ) {
 		for my $d (@discogs) {
 			return 'various' if $d eq 'various' || $d eq 'various artists';
 		}
+	}
+
+	for my $d (@discogs) {
+		return 'agree' if $d eq $lms;
 	}
 
 	return 'disagree';
@@ -380,8 +406,10 @@ sub _decide {
 	}
 
 	if ( $verdict eq 'various' ) {
-		# The Q9 gate (§15.13 part 8). A match reached only through §15.7's
-		# equivalence does not badge until the pages 2-3 measurement reports.
+		# The compilation gate (§15.13 part 8, widened by §15.14). Both sides
+		# name a various-artists compilation, however each spells it, so the
+		# artists agreeing carries almost no evidence that this is the record
+		# the user owns. No badge until the pages 2-3 measurement reports.
 		$count->{gated}++;
 
 		return ( 'absent', $state, 'various' );

@@ -87,7 +87,9 @@ BEGIN {
 	};
 
 	*{'main::SCANNER'}   = sub () { 0 };
-	*{'main::INFOLOG'}   = sub () { 0 };
+	# On, so the pass's summary line is actually built and can be asserted.
+	# The counts it carries are what tells step 8 how big its queue will be.
+	*{'main::INFOLOG'}   = sub () { 1 };
 	*{'main::DEBUGLOG'}  = sub () { 0 };
 	# Schema::_samePath case-folds under ISWINDOWS; this runs the POSIX branch.
 	*{'main::ISWINDOWS'} = sub () { 0 };
@@ -105,10 +107,19 @@ BEGIN {
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
+}
+
+our @LOG;
+
+# The pass's one summary line, from the most recent run.
+sub summary {
+	my ($line) = grep { /^ownership pass:/ } reverse @LOG;
+
+	return $line;
 }
 
 # Ownership.pm has real `use Plugins::SqueezeWax::*` lines, so like
@@ -235,45 +246,66 @@ is( artistsAgree( 'Erasure', [ undef, '' ], $VA ), 'discogs-absent',
 is( artistsAgree( undef, [], $VA ), 'lms-absent',
 	'with both sides absent, lms-absent is reported' );
 
-# --- §15.7: Various and the LMS various-artists label ----------------------
-is( artistsAgree( $VA, ['Various'], $VA ), 'various',
-	"the configured label against Discogs' 'Various' is an equivalence, not an agreement" );
-# NOT 'various'. With the LMS label at its English default, a Discogs credit of
-# 'Various Artists' is reached by PLAIN EQUALITY, before the equivalence is ever
-# consulted - so it is not a match "reached only through the Various
-# equivalence" in §15.13 part 8's sense, and it is not gated. A credit of
-# 'Various' on the same record IS gated. Asserted because it is a real seam in
-# the gate rather than an accident, and recorded against Q9 in TODO.md.
-is( artistsAgree( $VA, ['Various Artists'], $VA ), 'agree',
-	"the default label against 'Various Artists' is plain equality, so it is not gated" );
-is( artistsAgree( $VA, ['Various'], $VA ), 'various',
-	"  ...while 'Various' on the same record reaches only the equivalence, and is" );
-
-# It is 'various', NOT 'agree'. That distinction is the whole of the Q9 gate
-# (§15.13 part 8): step 7 ships without badging these.
-isnt( artistsAgree( $VA, ['Various'], $VA ), 'agree',
-	'the equivalence never reports agree, so the gate has something to gate on' );
-
-# Consulted only after plain equality fails, so it can widen and never narrow.
-is( artistsAgree( $VA, [ 'Various Artists', 'Various' ], $VA ), 'agree',
-	'plain equality wins when it is available' );
-
-# The configured label is honoured, and the literal is NOT a second label.
+# --- §15.7 and §15.14: the compilation gate -------------------------------
+#
+# The rule is Various-to-Various, HOWEVER SPELLED. Until 2026-09-20 the gate
+# was consulted only after plain equality failed, which keyed it on the
+# MECHANISM of the match: 'Various Artists' against the default label reached
+# equality and badged, while 'Various' on the same record reached the mapping
+# and was gated. §15.14 closed that seam by running the test first. Every pair
+# below is a compilation on both sides, and none of them may badge.
 my $custom = 'Diverse Interpreten';
-is( artistsAgree( $custom, ['Various'], $custom ), 'various',
-	'a customised variousArtistsString is what the LMS side is tested against' );
-is( artistsAgree( 'Various Artists', ['Various'], $custom ), 'disagree',
-	"a literal 'Various Artists' on the LMS side does NOT match when the label differs" );
 
-# The Discogs side is the literal, because that is Discogs' own vocabulary.
+is( artistsAgree( $VA, ['Various'], $VA ), 'various',
+	"the default label against Discogs' 'Various' is gated" );
+is( artistsAgree( $VA, ['Various Artists'], $VA ), 'various',
+	"  ...and against 'Various Artists' too - the seam §15.14 closed" );
+is( artistsAgree( 'Various', ['Various'], $VA ), 'various',
+	"an LMS literal 'Various' is gated even though the label is 'Various Artists'" );
+is( artistsAgree( 'Various Artists', ['Various'], $VA ), 'various',
+	"  ...and an LMS literal 'Various Artists' likewise" );
+is( artistsAgree( $VA, ['Various (2)'], $VA ), 'various',
+	'the disambiguator strip happens before the gate, so "Various (2)" is gated' );
+is( artistsAgree( $VA, [ 'Various Artists', 'Various' ], $VA ), 'various',
+	'a Discogs list naming both spellings is gated, not agreed' );
+
+# It is 'various', NOT 'agree'. That distinction is the whole of the gate: the
+# caller writes no badge on it.
+isnt( artistsAgree( $VA, ['Various Artists'], $VA ), 'agree',
+	'the gate never reports agree, whichever spelling reached it' );
+
+# A customised label is gated against either Discogs spelling...
+is( artistsAgree( $custom, ['Various'], $custom ), 'various',
+	'a customised variousArtistsString is a various-artists name on the LMS side' );
+is( artistsAgree( $custom, ['Various Artists'], $custom ), 'various',
+	'  ...against either Discogs spelling' );
+
+# ...and the literals still count on the LMS side even when the label differs.
+# §15.7's no-literal rule is about AGREEMENT and is untouched: this only
+# withholds a badge, so treating a literal as a compilation fails safe.
+is( artistsAgree( 'Various Artists', ['Various'], $custom ), 'various',
+	"an LMS literal is a compilation even when the label is '$custom' - the gate fails safe" );
+
+# The Discogs side stays Discogs' own fixed vocabulary. A credit that merely
+# equals the user's label is a real artist name, not a compilation marker.
 is( artistsAgree( $custom, [$custom], $custom ), 'agree',
-	'the label on both sides is a plain agreement, not the equivalence' );
+	'the label on both sides is a plain agreement - Discogs never says "Diverse Interpreten"' );
 is( artistsAgree( $custom, ['Sundry'], $custom ), 'disagree',
 	'the LMS label against some other Discogs artist still disagrees' );
 
-# A missing or blank label must not turn every artist into a Various match.
+# Real artists are entirely unaffected: the gate narrows, and only here.
+is( artistsAgree( 'Depeche Mode', ['Depeche Mode'], $VA ), 'agree',
+	'a real artist on both sides still agrees' );
+is( artistsAgree( 'Depeche Mode', ['Various'], $VA ), 'disagree',
+	'a real LMS artist against a Discogs compilation still disagrees' );
+is( artistsAgree( $VA, ['Depeche Mode'], $VA ), 'disagree',
+	'an LMS compilation against a real Discogs artist still disagrees' );
+
+# A missing or blank label must not turn every artist into a compilation.
 is( artistsAgree( 'Erasure', ['Various'], undef ), 'disagree',
-	'an undef variousArtistsString disables the equivalence rather than widening it' );
+	'an undef variousArtistsString leaves the literals as the only LMS trigger' );
+is( artistsAgree( 'Various', ['Various'], undef ), 'various',
+	'  ...which still fire, so the gate survives a label that cannot be read' );
 is( artistsAgree( '', ['Various'], '' ), 'lms-absent',
 	'a blank label cannot make a blank LMS artist match' );
 
@@ -413,6 +445,13 @@ $K{conflict}   = album( 11, 'Conflicted',        'Someone' );
 $K{remote}     = album( 12, 'Isolar',            'Amorph', remote => 1 );
 $K{lapsing}    = album( 13, 'Was Owned',         'Someone' );
 
+# §15.14's two cases, at the apply level. Album 14's artist IS the configured
+# label and the Discogs credit is the same string, so before §15.14 this pair
+# reached plain equality and BADGED - it is the seam itself. Album 15's artist
+# is the literal 'Various', which differs from the label, and must gate too.
+$K{va_equal}   = album( 14, 'Another Compilation', $VA );
+$K{va_literal} = album( 15, 'Third Compilation',   'Various' );
+
 # h_disagree and h_agree share a title deliberately; the byTitle route keys on
 # the title alone and the artist check is what separates them.
 
@@ -429,7 +468,9 @@ my @collection = (
 	entry( 1006, 666, 9006, 'Isolar',            'Amorph' ),
 	entry( 1007, 777, 9007, 'Ciao Monkey',       'Band One' ),
 	entry( 1008, 888, 9008, 'Ciao Monkey',       'Band Two' ),
-	entry( 1009, 999, 9009, 'A Compilation',     'Various' ),
+	entry( 1009, 999, 9009, 'A Compilation',      'Various' ),
+	entry( 1010, 1110, 9110, 'Another Compilation', 'Various Artists' ),
+	entry( 1011, 1111, 9111, 'Third Compilation',   'Various' ),
 );
 
 # Tagged rows. f_zero and f_undef carry the two master-id sentinel forms
@@ -507,7 +548,21 @@ ok( !rowFor( $K{h_ambig} ),
 	'H: two different owned releases sharing a title is ambiguous, and writes nothing' );
 
 ok( !rowFor( $K{h_various} ),
-	'H: a match reached only through the Various equivalence is gated, not badged' );
+	'H: the label against Discogs\' "Various" is gated, not badged' );
+
+# §15.14, the seam: both sides say 'Various Artists' and it matches by plain
+# equality. Before the ruling this badged. It must not.
+ok( !rowFor( $K{va_equal} ),
+	'H: "Various Artists" on both sides is gated too, though it agrees exactly' );
+ok( !rowFor( $K{va_literal} ),
+	'H: an LMS literal "Various" against Discogs\' "Various" is gated' );
+
+# All three land in the gated bucket, not in artist-disagree - step 8 needs to
+# tell "we declined to decide" apart from "these are different artists".
+like( summary(), qr/\bgated=3\b/,
+	'all three compilations are counted as gated in the summary' );
+like( summary(), qr/\bartist-disagree=1\b/,
+	'  ...and the genuine artist disagreement is still counted separately' );
 
 ok( !rowFor( $K{h_disagree} ),
 	'H: a title match whose artist disagrees writes nothing' );
@@ -536,7 +591,7 @@ ok( rowFor( $K{d_manual} ),  'R5 never deletes a manual row' );
 ok( rowFor( $K{f_undef} ),   'R5 never deletes a strict row' );
 ok( rowFor( $K{conflict} ),  'R5 never deletes a conflict row' );
 
-cmp_ok( matchCount(), '<', $before + 13,
+cmp_ok( matchCount(), '<', $before + 15,
 	'the pass did not write a row per album' );
 
 # --- what the pass must never write ----------------------------------------
