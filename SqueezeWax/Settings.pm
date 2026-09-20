@@ -251,6 +251,24 @@ sub _syncResultString {
 		return string('PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING');
 	}
 
+	# The three ways step 7 can stop a sync short of writing ownership. Each
+	# reads differently because each calls for something different from the
+	# user: wait, nothing, or look at the log.
+	if ( $error eq 'refused' ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('ownership pass declined - a scan is running');
+
+		return string('PLUGIN_SQUEEZEWAX_SYNC_REFUSED');
+	}
+
+	if ( $error eq 'count_mismatch' || $error eq 'count_unknown' ) {
+		$log->warn("collection sync could not be shown complete: $error");
+
+		return string( $error eq 'count_mismatch'
+			? 'PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH'
+			: 'PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN' );
+	}
+
 	$log->warn("collection sync failed: $error");
 
 	return sprintf( string('PLUGIN_SQUEEZEWAX_SYNC_FAIL'), $error );

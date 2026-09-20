@@ -151,3 +151,12 @@ PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED
 
 PLUGIN_SQUEEZEWAX_SYNC_FAIL
 	EN	Collection sync failed (%s) - see the server log. Previous results are unchanged.
+
+PLUGIN_SQUEEZEWAX_SYNC_REFUSED
+	EN	The collection was read, but ownership could not be updated while a library scan is running. It will be updated automatically when the scan finishes.
+
+PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH
+	EN	The collection changed while it was being read, so ownership was not updated. Nothing was changed. Try again in a moment.
+
+PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN
+	EN	Discogs did not report how many items your collection holds, so it could not be shown to be complete. Ownership was not updated and nothing was changed.

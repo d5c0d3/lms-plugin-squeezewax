@@ -202,6 +202,26 @@ use lib "$Bin/..";
 require SqueezeWax::API;
 BEGIN { $INC{'Plugins/SqueezeWax/API.pm'} = 1 }
 
+# The ownership pass is exercised in full by scripts/ownership-check.pl. What
+# this suite is about is the WIRING: whether the pass is called at all, what it
+# is handed, and what its answer does to the prefs. So it is stubbed, and the
+# stub records every call.
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Ownership.pm'} = 1;
+
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Ownership::apply'} = sub {
+		my ( $class, $entries ) = @_;
+
+		push @main::APPLIED, $entries;
+
+		return $main::APPLY_RESULT;
+	};
+}
+
+our @APPLIED;
+our $APPLY_RESULT = 'ok';
+
 require SqueezeWax::API::Async;
 
 my $A = 'Plugins::SqueezeWax::API::Async';
@@ -226,24 +246,37 @@ sub identity_response {
 
 # One page of a collection: $n release rows, and a pagination block claiming
 # $items items over $pages pages.
+#
+# Ids are offset by page, so they are unique ACROSS pages. Until step 7 every
+# page returned ids 1001.. and it did not matter, because releases were counted
+# and discarded. They are now keyed by instance_id, so three identical pages
+# would de-duplicate to one page's worth and fail the completeness check - a
+# fixture that was quietly describing an impossible collection.
 sub page_response {
-	my ( $n, $page, $pages, $items ) = @_;
+	my ( $n, $page, $pages, $items, %opt ) = @_;
+
+	my $base = ( $page - 1 ) * 100;
 
 	return {
 		code    => 200,
 		headers => healthy_headers(),
 		content => encode_json( {
-			pagination => {
+			$opt{no_pagination} ? () : ( pagination => {
 				page     => $page,
 				pages    => $pages,
 				items    => $items,
 				per_page => 100,
-			},
+			} ),
 			releases => [
 				map { {
-					id                => 1000 + $_,
-					instance_id       => 2000 + $_,
-					basic_information => { id => 1000 + $_, title => "Album $_" },
+					id                => 1000 + $base + $_,
+					instance_id       => 2000 + $base + $_,
+					basic_information => {
+						id        => 1000 + $base + $_,
+						master_id => 9000 + $base + $_,
+						title     => 'Album ' . ( $base + $_ ),
+						artists   => [ { name => 'Artist ' . ( $base + $_ ) } ],
+					},
 				} } 1 .. $n
 			],
 		} ),
@@ -251,11 +284,13 @@ sub page_response {
 }
 
 sub reset_state {
-	@REQUESTS  = ();
-	@RESPONSES = ();
-	@TIMERS    = ();
-	@KILLS     = ();
-	%PREFS     = ( discogsLastSynced => 0 );
+	@REQUESTS     = ();
+	@RESPONSES    = ();
+	@TIMERS       = ();
+	@KILLS        = ();
+	%PREFS        = ( discogsLastSynced => 0 );
+	@APPLIED      = ();
+	$APPLY_RESULT = 'ok';
 }
 
 # Run one sync to completion and return its result. Safe because every stub is
@@ -647,6 +682,189 @@ sub run_sync {
 
 	is( $second->{error}, 'already_running',
 		'...distinguishably from a failure, because it is not one' );
+}
+
+# ---------------------------------------------------------------------------
+# Step 7's wiring: the completed sync hands the ownership pass its list
+# ---------------------------------------------------------------------------
+#
+# Decisions §15.13 part 1. The pass is stubbed here; what is under test is that
+# it is called at the right moment, with the whole collection, and that
+# discogsLastSynced advances only when it succeeded - because that timestamp
+# now means "ownership last derived", not "the collection was read".
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 3, 203 ),
+		page_response( 100, 2, 3, 203 ),
+		page_response( 3,   3, 3, 203 ),
+	);
+
+	ok( $result->{ok}, 'a complete sync succeeds' );
+
+	is( scalar @APPLIED, 1, 'the ownership pass is called exactly once per sync' );
+
+	my $entries = $APPLIED[0];
+	is( scalar @$entries, 203, '  ...and is handed every collection entry' );
+
+	# The five fields the pass needs, and no more. A sixth would be a mirrored
+	# collection by accretion, which is what §13.2 rules out.
+	my ($one) = grep { $_->{instance_id} == 2001 } @$entries;
+	is_deeply(
+		[ sort keys %$one ],
+		[ sort qw(instance_id id master_id title artists) ],
+		'each entry carries exactly the five fields the pass reads'
+	);
+	is( $one->{id},        1001,       '  ...the release id' );
+	is( $one->{master_id}, 9001,       '  ...the master id, from basic_information' );
+	is( $one->{title},     'Album 1',  '  ...the title' );
+	is_deeply( $one->{artists}, ['Artist 1'], '  ...and the artist names, flattened' );
+
+	# Entries from the LAST page are there too: the list is the whole
+	# collection, not the page the walk happened to end on.
+	ok( ( grep { $_->{instance_id} == 2201 } @$entries ),
+		'entries from the final page are in the list' );
+
+	ok( $PREFS{discogsLastSynced}, 'discogsLastSynced advances when the pass succeeded' );
+	is( $PREFS{discogsLastSyncItems}, 203, '  ...along with the item count' );
+}
+
+# --- the pass declines: the timestamp must not move ------------------------
+for my $outcome (qw(refused failed)) {
+	reset_state();
+
+	$APPLY_RESULT = $outcome;
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 2, 1, 1, 2 ),
+	);
+
+	ok( !$result->{ok}, "a sync whose pass returned '$outcome' is not a success" );
+	is( $result->{error}, $outcome, '  ...and reports why' );
+	is( scalar @APPLIED, 1, '  ...having actually called the pass' );
+	ok( !$PREFS{discogsLastSynced},
+		'  ...but discogsLastSynced does NOT advance - it means "ownership last derived"' );
+	is( $PREFS{discogsLastSyncError}, $outcome, '  ...and the error is recorded' );
+}
+
+# --- completeness: the pass is never called on a list that cannot be shown
+#     complete ------------------------------------------------------------
+{
+	reset_state();
+
+	# Two pages promised, 203 items claimed, 102 delivered. §9.4's pagination
+	# hazard: rows moved under us, and a dropped row silently removes a badge.
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 2, 203 ),
+		page_response( 2,   2, 2, 203 ),
+	);
+
+	ok( !$result->{ok}, 'a count mismatch fails the sync rather than warning' );
+	is( $result->{error}, 'count_mismatch', '  ...as count_mismatch' );
+	is( scalar @APPLIED, 0, '  ...and the pass is never called' );
+	ok( !$PREFS{discogsLastSynced}, '  ...so the timestamp does not advance' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 2, 1, 1, 2, no_pagination => 1 ),
+	);
+
+	ok( !$result->{ok}, 'a response with no pagination block fails the sync' );
+	is( $result->{error}, 'count_unknown',
+		'  ...as count_unknown - completeness that cannot be shown is not shown' );
+	is( scalar @APPLIED, 0, '  ...and the pass is never called' );
+}
+
+# --- the same release owned twice ------------------------------------------
+#
+# Two instances of one release are two collection entries and must both reach
+# the pass: counted is instances, and pagination.items counts instances too.
+# Whether they are one candidate or two is the pass's question (§0.2).
+{
+	reset_state();
+
+	my $page = {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( {
+			pagination => { page => 1, pages => 1, items => 2, per_page => 100 },
+			releases   => [
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Twice Owned' } },
+				{ id => 777, instance_id => 222,
+				  basic_information => { id => 777, title => 'Twice Owned' } },
+			],
+		} ),
+	};
+
+	my $result = run_sync( identity_response(), $page );
+
+	ok( $result->{ok}, 'one release owned twice is a complete collection, not a mismatch' );
+	is( $result->{counted}, 2, '  ...counted as two entries, because items counts two' );
+	is( scalar @{ $APPLIED[0] }, 2, '  ...and both are handed to the pass' );
+}
+
+# --- a duplicated instance_id -----------------------------------------------
+#
+# The same instance twice is the server repeating itself, not two records. It
+# de-duplicates, which then fails the completeness check - which is the right
+# answer, because a repeat means something else was dropped.
+{
+	reset_state();
+
+	my $page = {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( {
+			pagination => { page => 1, pages => 1, items => 2, per_page => 100 },
+			releases   => [
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Once' } },
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Once' } },
+			],
+		} ),
+	};
+
+	my $result = run_sync( identity_response(), $page );
+
+	ok( !$result->{ok}, 'a repeated instance_id de-duplicates and fails the count' );
+	is( $result->{error}, 'count_mismatch', '  ...as count_mismatch' );
+	is( scalar @APPLIED, 0, '  ...with the pass never called' );
+}
+
+# --- a superseded run never reaches the pass (W3) --------------------------
+#
+# _finish's first act is the superseded check, and the pass sits after it: a
+# newer sync owns the prefs and the guard, and it owns the badges too. Driven
+# directly, because this suite's transport is synchronous and a real overlap
+# cannot be staged through it.
+{
+	reset_state();
+
+	my $result;
+
+	Plugins::SqueezeWax::API::Async::_finish(
+		{
+			id      => -1,
+			cb      => sub { $result = shift },
+			entries => { 1 => { instance_id => 1, id => 7, title => 'X', artists => [] } },
+		},
+		{ ok => 1, items => 1, counted => 1, pages => 1, requests => 2 },
+	);
+
+	is( $result->{error}, 'superseded', 'a superseded run reports superseded' );
+	is( scalar @APPLIED, 0, '  ...and never reaches the ownership pass' );
+	ok( !$PREFS{discogsLastSynced}, '  ...and touches no pref' );
 }
 
 done_testing();

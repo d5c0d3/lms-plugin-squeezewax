@@ -13,11 +13,18 @@ package Plugins::SqueezeWax::API::Async;
 # and resumes from a timer.
 #
 # What a sync does NOT do, by decision (step 5 plan §0, decisions §13.2/§15.9):
-# it writes nothing to discogs_match, it writes nothing to discogs_collection
-# (not a v1 table, dropped by migration 3), and it caches no page contents for
-# a later pass. Ownership is computed at step 7, which re-fetches - §13.6:
-# "every completed sync re-derives every conclusion from scratch". The only
-# durable outputs are an item count and a timestamp, and the caller owns both.
+# it writes nothing to discogs_collection (not a v1 table, dropped by
+# migration 3) and it caches no page contents for a later pass. §13.6 still
+# holds - "every completed sync re-derives every conclusion from scratch" -
+# and the collection is still discarded when the sync returns.
+#
+# CORRECTED at build-order step 7 (decisions §15.13 part 1): this said
+# ownership is computed by a pass "which re-fetches". It does not. A re-fetch
+# would double §14.7's per-sync cost for a second copy of what this run already
+# has, so the completed sync HANDS the pass its entry list in memory, the pass
+# runs inside _finish, and the list is dropped when _finish returns. Nothing
+# about a release persists. discogs_match is therefore written during a sync
+# after all - by the pass, never by this module.
 
 use strict;
 
@@ -179,10 +186,13 @@ sub _collectionParams {
 # 'unauthorized' is a rejected token and deserves an error-level log, anything
 # else is transient and deserves a warning; neither may advance a timestamp.
 #
-# `items` is the server's own pagination.items; `counted` is how many release
-# rows were actually seen. They should agree, and a disagreement is the
-# pagination hazard showing up in the one figure this step reports - worth
-# surfacing rather than averaging away.
+# `items` is the server's own pagination.items; `counted` is how many DISTINCT
+# instance_ids were seen. They must agree, and a disagreement now FAILS the
+# sync with 'count_mismatch' rather than warning and carrying on - corrected at
+# step 7 (§15.13 part 1). The ownership pass derives every badge from this list,
+# so a row dropped by pagination would silently remove a badge, which is §13.7's
+# named failure. An `items` the server never reported fails the same way, as
+# 'count_unknown': completeness that cannot be shown is treated as not shown.
 #
 # The username is fetched fresh on every run rather than cached in a pref.
 # Caching it would save one request per sync and buy a silent-staleness
@@ -222,6 +232,7 @@ sub sync {
 		cb       => $cb,
 		requests => 0,
 		counted  => 0,
+		entries  => {},
 		page     => 1,
 		pages    => undef,
 		items    => undef,
@@ -419,10 +430,34 @@ sub _gotPage {
 		}
 	}
 
-	# Counted, then dropped on the floor. Nothing about a release survives this
-	# sub - §13.2: ownership is a column on discogs_match computed at step 7,
-	# not a mirrored collection, and discogs_collection is not a v1 table.
-	$run->{counted} += scalar @{ ( $data && $data->{releases} ) || [] };
+	# Collected, and dropped on the floor when _finish returns. Nothing about a
+	# release reaches the database - §13.2: ownership is a column on
+	# discogs_match, not a mirrored collection, and discogs_collection is not a
+	# v1 table. What the ownership pass needs is the five fields below and
+	# nothing else (§15.13 part 1).
+	#
+	# Keyed by instance_id, which is the collection ENTRY's identity: the same
+	# release owned twice is two instances, and de-duplicating here would make
+	# `counted` disagree with pagination.items and fail the sync. Whether two
+	# instances of one release count as one candidate is the ownership pass's
+	# question, not this one's.
+	for my $release ( @{ ( $data && $data->{releases} ) || [] } ) {
+		my $instance = $release->{instance_id};
+
+		next unless defined $instance;
+
+		my $basic = $release->{basic_information} || {};
+
+		$run->{entries}{$instance} = {
+			instance_id => $instance,
+			id          => $release->{id},
+			master_id   => $basic->{master_id},
+			title       => $basic->{title},
+			artists     => [ map { $_->{name} } @{ $basic->{artists} || [] } ],
+		};
+	}
+
+	$run->{counted} = scalar keys %{ $run->{entries} };
 
 	if ( $run->{page} < $run->{pages} ) {
 		$run->{page}++;
@@ -432,12 +467,26 @@ sub _gotPage {
 		return;
 	}
 
-	if ( defined $run->{items} && $run->{counted} != $run->{items} ) {
-		# decisions §9.4's pagination hazard, observed rather than theorised.
-		# Not fatal - the count still came from the server - but it means rows
-		# moved under us, which step 7 will care about a great deal more.
-		$log->warn( "collection sync saw $run->{counted} releases but the "
-			. "server reported $run->{items} items" );
+	# The completeness gate. Until step 7 this warned and carried on, because
+	# the only durable output was the count itself. Now the ownership pass
+	# derives every badge from this list, so an incomplete list silently removes
+	# badges - §13.7's named failure - and both ways of being unable to show
+	# completeness fail the sync instead (§15.13 part 1).
+	#
+	# This also makes §9.4's residual tie risk from pinning sort=added fail
+	# safe: a reshuffle between pages aborts the pass rather than dropping a
+	# record.
+	if ( !defined $run->{items} ) {
+		$log->warn('collection sync got no pagination.items; cannot show the list is complete');
+
+		return _fail( $run, { ok => 0, error => 'count_unknown' } );
+	}
+
+	if ( $run->{counted} != $run->{items} ) {
+		$log->warn( "collection sync saw $run->{counted} distinct collection entries but "
+			. "the server reported $run->{items} items; not deriving ownership from it" );
+
+		return _fail( $run, { ok => 0, error => 'count_mismatch' } );
 	}
 
 	main::INFOLOG && $log->is_info
@@ -497,6 +546,25 @@ sub _finish {
 		finished => time(),
 		id       => $run->{id},
 	);
+
+	# The ownership pass, after the superseded check and before any pref is set
+	# (§15.13 part 1). A superseded run must never reach it: a newer sync owns
+	# the prefs and the guard, and it would own the badges too.
+	#
+	# This stays the single exit. The pass is one more condition on the
+	# timestamp advancing, not a second way out: discogsLastSynced means
+	# "ownership last derived", so it may not move for a sync whose conclusions
+	# were never written.
+	if ( $result->{ok} ) {
+		require Plugins::SqueezeWax::Ownership;
+
+		my $applied = Plugins::SqueezeWax::Ownership->apply(
+			[ values %{ $run->{entries} || {} } ] );
+
+		if ( $applied ne 'ok' ) {
+			$result = { ok => 0, error => $applied };
+		}
+	}
 
 	if ( $result->{ok} ) {
 		$prefs->set( 'discogsLastSynced',    time() );

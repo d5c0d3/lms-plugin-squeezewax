@@ -221,6 +221,20 @@ sub _syncDone {
 		return;
 	}
 
+	# Not a failure either: the sync itself worked, and the ownership pass
+	# declined because a scan started under it (decisions §15.13 part 1). The
+	# collection was discarded, so there is nothing to retry FROM - but the
+	# scan that caused this ends in a ['rescan','done'], which re-arms a fresh
+	# sync through _scheduleSync. That is §15.2 obligation 1's retry, and it
+	# needs no mechanism of its own.
+	if ( $error eq 'refused' ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('ownership pass declined - a scan is running; '
+				. 'the next rescan-done will bring another sync');
+
+		return;
+	}
+
 	$log->warn("collection sync failed: $error");
 
 	return;

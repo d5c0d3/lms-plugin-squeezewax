@@ -18,6 +18,16 @@ plans/build-order-step-5-collection-sync.md
   ownership pass (step 7) will call this step's fetch again when it runs —
   nothing here is cached for it (§13.2, §13.6: "every completed sync
   re-derives every conclusion from scratch").
+
+  **Superseded 2026-09-20 by decisions §15.13 part 1, when step 7 was built.**
+  The pass does *not* re-fetch: a second fetch would double §14.7's per-sync
+  cost for a second copy of what the completed run already holds. The sync now
+  hands the pass its entry list in memory, inside `_finish`, and drops it when
+  `_finish` returns. §13.2 and §13.6 are unaffected — nothing is cached and
+  every completed sync still re-derives every conclusion from scratch — but
+  "nothing written to `discogs_match`" above is true of *this step's* code
+  only. A sync does write to it now, through the pass. See
+  `plans/build-order-step-6-7-ownership.md` §2.5.
 - **Out of scope, recorded not designed**: the `lms_album_id` refresh hook's
   own `['rescan','done']` subscription (build-order step 2 finding, still
   unbuilt). A shared debounce helper could serve both triggers. Not built
