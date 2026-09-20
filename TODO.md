@@ -60,8 +60,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
-- [ ] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
-      rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** Verified
+- [x] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
+      rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** DONE
+      e275221 (`Schema.pm::_migration_3`) — every obligation below is ticked
+      individually. The 3.53.0 reasoning held up: LMS bundles SQLite 3.46.1
+      (VERIFIED 2026-09-20), so `ALTER COLUMN ... DROP NOT NULL` was not
+      available and the rebuild was required rather than chosen. Verified
       against `sqlite.org/lang_altertable.html` (page dated 2026-06-04): SQLite
       cannot modify an existing CHECK constraint; the ALTER TABLE page's §8
       names the create-copy-drop-rename procedure as the only route. `ALTER COLUMN ...
@@ -69,12 +73,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       nullability half only. The ownership column (§13.3) and the narrowed
       `match_tier` CHECK (§14.1) therefore ride one rebuild. Two obligations,
       both blocking:
-      (a) COUNT any `match_tier IN ('structural','fuzzy')` rows before copying
+      (a) DONE e275221. COUNT any `match_tier IN ('structural','fuzzy')` rows before copying
           and REFUSE LOUDLY if any exist — the narrowed CHECK would otherwise
           fail mid-copy on the one table that is not disposable. That none
           exist is INFERRED (step 4 stopped after item 3), not verified.
           Inference is not sufficient for a destructive migration.
-      (b) ASSERT in the offline suite that a NULL `match_tier` is accepted by
+      (b) DONE e275221. ASSERT in the offline suite that a NULL `match_tier` is accepted by
           `CHECK(match_tier IN ('strict','manual'))`. Standard SQL treats a
           CHECK evaluating to NULL as not violated, so no explicit
           `OR match_tier IS NULL` should be needed — expected, NOT verified
@@ -85,7 +89,7 @@ Shared reminder list. Both I and Claude Code read and update this.
           structural fuzzy))` loop): after the narrowing both must be
           REJECTED. Added 2026-09-15 — obligation (h) carried this for
           `discogs_no_match.tier` and (b) did not for `match_tier`.
-      (c) DROP the `state` column's `DEFAULT 'candidate'`. Decisions §14.8
+      (c) DONE e275221. DROP the `state` column's `DEFAULT 'candidate'`. Decisions §14.8
           makes `state` nullable; with the default retained, any insert
           omitting it writes `candidate` instead of NULL and drops an
           auto-badged album into the review queue — silently wrong rather
@@ -102,19 +106,31 @@ Shared reminder list. Both I and Claude Code read and update this.
           The struck text is kept because the reasoning it carries — that a
           predicate-based exclusion is inferred rather than verified against a
           query plan — still applies, and (g) inherits it.
-      (e) COPY `state` AND `match_tier` FORWARD UNCHANGED, and set
+      (e) DONE e275221. COPY `state` AND `match_tier` FORWARD UNCHANGED, and set
           `ownership = 'absent'` on every copied row (decisions §15.3). COUNT
           rows before and after the rebuild and assert equal; assert that no
           row's `state` differs from its pre-migration value. The ownership
           pass, not the migration, re-derives `state`.
-      (f) DROP `snapshot_total_duration` (decisions §15.5). Nothing in v1
+      (f) DONE e275221. DROP `snapshot_total_duration` (decisions §15.5). Nothing in v1
           reads or writes it; the rebuild makes dropping it free. COUNT the
           columns of the rebuilt table and assert the expected set.
-      (g) REBUILD the orphan index to match §15.5's predicate
+      (g) DONE e275221, IN PART — and (d), which it superseded, is discharged
+          with it. REBUILD the orphan index to match §15.5's predicate
           (`match_tier`, `snapshot_track_count`) instead of
           `(state, snapshot_track_count)`. Verify with EXPLAIN QUERY PLAN
           that the recovery lookup uses it, per obligation (d)'s standard.
-      (h) NARROW `discogs_no_match.tier` to `CHECK (tier IN ('strict'))`
+          The rebuild is done and asserted (`schema-check.pl`, the orphan-index
+          case). The EXPLAIN QUERY PLAN half is NOT done and cannot be: there
+          is no such lookup to plan. VERIFIED 2026-09-20 by Claude Code against
+          HEAD — `Match::snapshotRows` (`Match.pm:259-268`) selects the whole
+          table and `Importer::_prePass` (`:355-359`) filters in Perl, and the
+          only two statements naming `snapshot_track_count`
+          (`Match.pm:412-416`, `:662-672`) are keyed on `album_key`, the
+          PRIMARY KEY. Replaced by the recorded finding at the 2026-09-19 item
+          below, approved with the plan (N2). This is the same defect shape as
+          (d): an obligation written against a query that was never built as
+          SQL.
+      (h) DONE e275221. NARROW `discogs_no_match.tier` to `CHECK (tier IN ('strict'))`
           (decisions §15.6), by `DROP TABLE IF EXISTS` and recreate — NOT by
           copying, so surviving `'structural'` rows are discarded rather than
           failing the copy. Three sub-obligations:
@@ -126,7 +142,7 @@ Shared reminder list. Both I and Claude Code read and update this.
             changes shape rather than being deleted.
           - The drop costs one rescan's worth of re-reads for untagged
             albums. Expected, not a defect.
-      (i) DROP `discogs_collection` and its index `discogs_collection_release`
+      (i) DONE e275221. DROP `discogs_collection` and its index `discogs_collection_release`
           (decisions §15.10). A plain `DROP TABLE IF EXISTS` — the table is
           entirely regenerable and carries no decision, unlike
           `discogs_match`. Two sub-obligations:
@@ -141,8 +157,14 @@ Shared reminder list. Both I and Claude Code read and update this.
             table is present. Do not work from this list alone: grep the suite
             for `discogs_collection` and account for every hit, because this
             enumeration has already been wrong once.
-- [ ] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
-      `discogs_collection`, which v1 must not have.** VERIFIED in
+- [x] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
+      `discogs_collection`, which v1 must not have.** DONE e275221 by obligation
+      (i). The "CONFIRM ZERO READERS AND WRITERS FIRST" condition was met:
+      Phase 0 (2026-09-20) grepped `SqueezeWax/` and `scripts/` and found 11
+      references, zero readers, and no writers outside `_migration_1`'s own
+      DDL — and found the table present with 0 rows on the reference server,
+      so the drop discards nothing. The inference the item refused to migrate
+      on is now a verified count. VERIFIED in
       `_migration_1`: the table plus an index on
       `(discogs_release_id, list_state)` commented as "the badge-derivation
       join in design §4" — a join decisions §13.3 replaced with a column
