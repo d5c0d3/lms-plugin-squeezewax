@@ -17,13 +17,64 @@
 use strict;
 use warnings;
 
+use Config;
 use FindBin qw($Bin);
+use File::Temp qw(tempdir);
 use Test::More;
+
+# DBI and DBD::SQLite come from refs/slimserver, so the pass runs against the
+# same SQLite LMS ships. Search order matters and is not approximated: see
+# scripts/schema-check.pl's header for why crossing the pure-perl and XS halves
+# is a DynaLoader mismatch rather than a clean failure.
+BEGIN {
+	my $libPath = "$Bin/../refs/slimserver";
+	die "refs/slimserver not found at $libPath\n" unless -d $libPath;
+
+	my $arch = $Config::Config{archname};
+	$arch =~ s/^i[3456]86-/i386-/;
+	$arch =~ s/gnu-//;
+
+	my $perlmajorversion = $Config{version};
+	$perlmajorversion =~ s/\.\d+$//;
+
+	unshift @INC, grep { -d } (
+		"$libPath/CPAN/arch/$perlmajorversion/$arch",
+		"$libPath/CPAN/arch/$perlmajorversion/$arch/auto",
+		"$libPath/CPAN/arch/$Config{version}/$Config::Config{archname}",
+		"$libPath/CPAN/arch/$Config{version}/$Config::Config{archname}/auto",
+		"$libPath/CPAN/arch/$perlmajorversion/$Config::Config{archname}",
+		"$libPath/CPAN/arch/$perlmajorversion/$Config::Config{archname}/auto",
+		"$libPath/CPAN/arch/$Config::Config{archname}",
+		"$libPath/CPAN/arch/$perlmajorversion",
+		"$libPath/lib",
+		"$libPath/CPAN",
+		$libPath,
+	);
+}
+
+require DBI;
+
+use Digest::MD5 qw(md5_hex);
 
 # Same stubbing as the other suites: logger() is called at file scope.
 BEGIN {
-	$INC{'Slim/Utils/Log.pm'} = 1;
-	$INC{'Slim/Schema.pm'}    = 1;
+	$INC{'Slim/Utils/Log.pm'}    = 1;
+	$INC{'Slim/Schema.pm'}       = 1;
+	$INC{'Slim/Music/Info.pm'}   = 1;
+	$INC{'Slim/Music/Import.pm'} = 1;
+	$INC{'Slim/Utils/Prefs.pm'}  = 1;
+	$INC{'Slim/Formats.pm'}      = 1;
+
+	# Match.pm reads this at runtime to decide whether a scan holds the write
+	# lock; the pass's own tests drive _writeOk directly.
+	no strict 'refs';
+	*{'Slim::Music::Import::stillScanning'} = sub { 0 };
+	*{'Slim::Utils::Prefs::preferences'}    = sub { Test::StubPrefs->new };
+	*{'Slim::Utils::Prefs::import'}         = sub {
+		my $caller = caller;
+		no strict 'refs';
+		*{$caller . '::preferences'} = \&Slim::Utils::Prefs::preferences;
+	};
 
 	no strict 'refs';
 	*{'Slim::Utils::Log::logger'}   = sub { Test::StubLogger->new };
@@ -35,9 +86,18 @@ BEGIN {
 		*{"${caller}::logError"} = \&Slim::Utils::Log::logError;
 	};
 
-	*{'main::SCANNER'}  = sub () { 0 };
-	*{'main::INFOLOG'}  = sub () { 0 };
-	*{'main::DEBUGLOG'} = sub () { 0 };
+	*{'main::SCANNER'}   = sub () { 0 };
+	*{'main::INFOLOG'}   = sub () { 0 };
+	*{'main::DEBUGLOG'}  = sub () { 0 };
+	# Schema::_samePath case-folds under ISWINDOWS; this runs the POSIX branch.
+	*{'main::ISWINDOWS'} = sub () { 0 };
+}
+
+{
+	package Test::StubPrefs;
+	sub new  { bless {}, shift }
+	sub get  { [] }
+	sub set  { 1 }
 }
 
 {
@@ -51,8 +111,21 @@ BEGIN {
 	sub is_debug { 0 }
 }
 
-use lib "$Bin/..";
-require SqueezeWax::Ownership;
+# Ownership.pm has real `use Plugins::SqueezeWax::*` lines, so like
+# match-check.pl it needs the Plugins/SqueezeWax layout LMS resolves against
+# rather than a by-file-path require. Build it, the same way syntax-check.sh
+# does.
+my $incdir;
+
+BEGIN {
+	$incdir = tempdir( CLEANUP => 1 );
+	mkdir "$incdir/Plugins";
+	symlink "$Bin/../SqueezeWax", "$incdir/Plugins/SqueezeWax"
+		or die "could not link the plugin into $incdir: $!\n";
+	unshift @INC, $incdir;
+}
+
+require Plugins::SqueezeWax::Ownership;
 
 # Plain functions, called as plain functions - CLAUDE.md's calling convention.
 # Calling one of these method-style would silently eat the class name as its
@@ -203,5 +276,328 @@ is( artistsAgree( 'Erasure', ['Various'], undef ), 'disagree',
 	'an undef variousArtistsString disables the equivalence rather than widening it' );
 is( artistsAgree( '', ['Various'], '' ), 'lms-absent',
 	'a blank label cannot make a blank LMS artist match' );
+
+# ===========================================================================
+# The pass itself.
+# ===========================================================================
+#
+# A real SQLite database behind the real Schema.pm migrations, and a stub
+# library for Library::eachAlbum to walk - the same shape match-check.pl uses.
+# The rules above are pure; everything below is about what actually lands in
+# discogs_match, which is the one table in this plugin that is not disposable.
+
+my $dir = tempdir( CLEANUP => 1 );
+my $dbh = DBI->connect( "dbi:SQLite:dbname=$dir/library.db", '', '', {
+	RaiseError => 1, PrintError => 0, AutoCommit => 1,
+} );
+
+$dbh->do('PRAGMA foreign_keys = ON');
+$dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax");
+
+{
+	no warnings 'once', 'redefine';
+
+	*Slim::Schema::dbh = sub { $dbh };
+
+	# §15.7's label, which _artistsAgree takes as an argument so it stays pure.
+	# The pass reads it once per run (Slim/Music/Info.pm:1540).
+	*Slim::Music::Info::variousArtistString = sub { $VA };
+
+	# The suite migrates the database directly rather than through
+	# postDBConnect, so Schema's readiness flag was never set and _writeOk would
+	# refuse everything. The refusal itself is exercised below by overriding
+	# _writeOk, which is the condition that actually matters here.
+	*Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+}
+
+# Only the columns Library reads. Types from SQL/SQLite/schema_16_up.sql.
+$dbh->do(q{
+	CREATE TABLE tracks (
+		id INTEGER PRIMARY KEY, album INT, urlmd5 TEXT, url TEXT,
+		timestamp INT, disc INT, tracknum INT, remote INT, audio INT,
+		content_type TEXT
+	)
+});
+$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title BLOB, contributor INT)');
+$dbh->do('CREATE TABLE contributors (id INTEGER PRIMARY KEY, name BLOB)');
+$dbh->do('CREATE TABLE contributor_album (role INT, contributor INT, album INT)');
+
+require Plugins::SqueezeWax::Schema;
+Plugins::SqueezeWax::Schema->_migrate($dbh);
+
+my $nextTrack = 0;
+
+# One album, with its album_key computed the way Library::_finish computes it.
+sub album {
+	my ( $id, $title, $artist, %opt ) = @_;
+
+	my $tracks = $opt{tracks} || 1;
+	my $remote = $opt{remote} ? 1 : 0;
+
+	my @urlmd5;
+
+	for my $n ( 1 .. $tracks ) {
+		$nextTrack++;
+		my $url = ( $remote ? 'spotify://' : 'file:///' ) . "a$id-t$n";
+		my $md5 = md5_hex($url);
+		push @urlmd5, $md5;
+		$dbh->do( 'INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)', undef,
+			$nextTrack, $id, $md5, $url, 100, 1, $n, $remote, 1, 'flc' );
+	}
+
+	$dbh->do( 'INSERT INTO albums (id, title) VALUES (?,?)', undef, $id, $title );
+
+	if ( defined $artist ) {
+		$dbh->do( 'INSERT INTO contributors (id, name) VALUES (?,?)', undef, $id, $artist );
+		$dbh->do( 'INSERT INTO contributor_album (role, contributor, album) VALUES (5,?,?)',
+			undef, $id, $id );
+	}
+
+	return md5_hex( join '', sort @urlmd5 );
+}
+
+sub entry {
+	my ( $instance, $release, $master, $title, @artists ) = @_;
+
+	return {
+		instance_id => $instance,
+		id          => $release,
+		master_id   => $master,
+		title       => $title,
+		artists     => \@artists,
+	};
+}
+
+sub matchRow {
+	my (%col) = @_;
+
+	my @names = sort keys %col;
+
+	$dbh->do(
+		'INSERT INTO squeezewax.discogs_match (' . join( ',', @names ) . ') VALUES ('
+			. join( ',', ('?') x @names ) . ')',
+		undef, map { $col{$_} } @names
+	);
+
+	return;
+}
+
+sub rowFor {
+	my $key = shift;
+
+	return $dbh->selectrow_hashref(
+		'SELECT * FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key
+	);
+}
+
+sub matchCount {
+	my ($n) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	return $n;
+}
+
+# --- the fixture -----------------------------------------------------------
+#
+# One album per path through design §3, so a failure names the path.
+my %K;
+$K{d_strict}   = album( 1,  'Violator',          'Depeche Mode' );
+$K{d_manual}   = album( 2,  'Music For Masses',  'Depeche Mode' );
+$K{f_version}  = album( 3,  'Black Celebration', 'Depeche Mode' );
+$K{f_zero}     = album( 4,  'Some Great Reward', 'Depeche Mode' );
+$K{f_undef}    = album( 5,  'Construction Time', 'Depeche Mode' );
+$K{h_agree}    = album( 6,  'Isolar',            'Amorph' );
+$K{h_none}     = album( 7,  'Nothing Owned',     'Nobody' );
+$K{h_ambig}    = album( 8,  'Ciao Monkey',       'Someone' );
+$K{h_various}  = album( 9,  'A Compilation',     $VA );
+$K{h_disagree} = album( 10, 'Isolar',            'Wrong Artist' );
+$K{conflict}   = album( 11, 'Conflicted',        'Someone' );
+$K{remote}     = album( 12, 'Isolar',            'Amorph', remote => 1 );
+$K{lapsing}    = album( 13, 'Was Owned',         'Someone' );
+
+# h_disagree and h_agree share a title deliberately; the byTitle route keys on
+# the title alone and the artist check is what separates them.
+
+my @collection = (
+	entry( 1001, 111, 9001, 'Violator',          'Depeche Mode' ),
+	entry( 1002, 222, undef, 'Music For Masses', 'Depeche Mode' ),
+	entry( 1003, 333, 9003, 'Black Celebration', 'Depeche Mode' ),
+	# The two master-id sentinels. Their TITLES deliberately do not match the
+	# albums that point at them, so node H cannot rescue the album and the only
+	# route left to 'version' is the master. If either sentinel were indexed at
+	# face value, masters{0} would exist and both albums would badge on it.
+	entry( 1004, 444, 0,     'Masterless Zero',   'Depeche Mode' ),
+	entry( 1005, 555, undef, 'Masterless Undef',  'Depeche Mode' ),
+	entry( 1006, 666, 9006, 'Isolar',            'Amorph' ),
+	entry( 1007, 777, 9007, 'Ciao Monkey',       'Band One' ),
+	entry( 1008, 888, 9008, 'Ciao Monkey',       'Band Two' ),
+	entry( 1009, 999, 9009, 'A Compilation',     'Various' ),
+);
+
+# Tagged rows. f_zero and f_undef carry the two master-id sentinel forms
+# (TODO.md 2026-09-07): 0 for "no master", and the field absent entirely.
+matchRow( album_key => $K{d_strict}, lms_album_id => 1, discogs_release_id => 111,
+	discogs_master_id => 9001, match_tier => 'strict', state => 'candidate',
+	snapshot_track_count => 1 );
+matchRow( album_key => $K{d_manual}, lms_album_id => 2, discogs_release_id => 222,
+	match_tier => 'manual', state => 'candidate', snapshot_track_count => 1 );
+matchRow( album_key => $K{f_version}, lms_album_id => 3, discogs_release_id => 3330,
+	discogs_master_id => 9003, match_tier => 'strict', state => 'confirmed',
+	snapshot_track_count => 1 );
+matchRow( album_key => $K{f_zero}, lms_album_id => 4, discogs_release_id => 4440,
+	discogs_master_id => 0, match_tier => 'strict', state => 'confirmed',
+	snapshot_track_count => 1 );
+matchRow( album_key => $K{f_undef}, lms_album_id => 5, discogs_release_id => 5550,
+	match_tier => 'strict', state => 'confirmed', snapshot_track_count => 1 );
+
+# A conflict row: strict, candidate, NULL release id, no snapshot (§3a).
+matchRow( album_key => $K{conflict}, lms_album_id => 11, match_tier => 'strict',
+	state => 'candidate' );
+
+# An ownership-only row whose record has since left the collection.
+matchRow( album_key => $K{lapsing}, lms_album_id => 13, ownership => 'exact' );
+
+# An ownership-only row for an album that is no longer in the library at all.
+matchRow( album_key => 'z' x 32, lms_album_id => 99, ownership => 'version' );
+
+my $before = matchCount();
+
+is( $O->apply( \@collection ), 'ok', 'the pass runs and reports ok' );
+
+# --- C/D/F: the tagged paths ----------------------------------------------
+is( rowFor( $K{d_strict} )->{ownership}, 'exact',
+	'D: a tagged album whose release is in the collection is exact' );
+is( rowFor( $K{d_strict} )->{state}, 'confirmed',
+	'  ...and a strict row is promoted to confirmed' );
+
+is( rowFor( $K{d_manual} )->{ownership}, 'exact',
+	'D: a manual row gets ownership written too' );
+is( rowFor( $K{d_manual} )->{state}, 'candidate',
+	"  ...but its state is NEVER touched - the user's choice is not cross-checked" );
+
+is( rowFor( $K{f_version} )->{ownership}, 'version',
+	'F: a tagged album whose MASTER is owned, at a different release, is version' );
+is( rowFor( $K{f_version} )->{state}, 'candidate',
+	'  ...and a strict row drops back to candidate' );
+
+# The two sentinels. Collection entry 444 has master_id 0 and 555 has none; if
+# either were indexed at face value, every masterless release would collide on
+# one key and these two albums would badge on nothing at all.
+is( rowFor( $K{f_zero} )->{ownership}, 'absent',
+	'F: master_id 0 is a sentinel, not a master - no version match' );
+is( rowFor( $K{f_undef} )->{ownership}, 'absent',
+	'F: an undefined master_id likewise' );
+is( rowFor( $K{f_zero} )->{state}, 'candidate',
+	'  ...and the strict row is demoted rather than left confirmed' );
+
+# The identification itself is untouched by any of this.
+is( rowFor( $K{f_zero} )->{discogs_release_id}, 4440,
+	'the pass never unmatches an album: the release id stands' );
+
+# --- H: the title route ----------------------------------------------------
+my $agreed = rowFor( $K{h_agree} );
+is( $agreed->{ownership}, 'version',
+	'H: an untagged album whose title and artist match one owned release is version' );
+is( $agreed->{match_tier}, undef, '  ...on a row with no identification' );
+is( $agreed->{state},      undef, '  ...and no state' );
+is( $agreed->{discogs_release_id}, undef,
+	'  ...and no release id - an ownership conclusion is not an identification' );
+
+ok( !rowFor( $K{h_none} ), 'H: an untagged album owning nothing gets NO ROW (§14.8)' );
+
+ok( !rowFor( $K{h_ambig} ),
+	'H: two different owned releases sharing a title is ambiguous, and writes nothing' );
+
+ok( !rowFor( $K{h_various} ),
+	'H: a match reached only through the Various equivalence is gated, not badged' );
+
+ok( !rowFor( $K{h_disagree} ),
+	'H: a title match whose artist disagrees writes nothing' );
+
+# §13.10.3 and §15.11: one collection entry, two albums - the rip and the
+# stream - and BOTH badge. This is the case that lands on the ownership pass
+# rather than the importer, because an all-remote album has no tags to read.
+is( rowFor( $K{remote} )->{ownership}, 'version',
+	'an all-remote album badges from the collection (§13.10.1, §15.11)' );
+
+# --- the conflict row ------------------------------------------------------
+my $conflict = rowFor( $K{conflict} );
+ok( $conflict, 'a conflict row is not deleted by the pass' );
+is( $conflict->{state}, 'candidate',
+	'a conflict row skips C and its state is never written - there is nothing to promote' );
+is( $conflict->{ownership}, 'absent', '  ...and its ownership is absent' );
+
+# --- R5: the second permitted delete ---------------------------------------
+ok( !rowFor( $K{lapsing} ),
+	'R5: an ownership-only row whose record left the collection is deleted' );
+ok( !rowFor( 'z' x 32 ),
+	'R5: an ownership-only row whose album left the library is deleted' );
+
+# and never anything else
+ok( rowFor( $K{d_manual} ),  'R5 never deletes a manual row' );
+ok( rowFor( $K{f_undef} ),   'R5 never deletes a strict row' );
+ok( rowFor( $K{conflict} ),  'R5 never deletes a conflict row' );
+
+cmp_ok( matchCount(), '<', $before + 13,
+	'the pass did not write a row per album' );
+
+# --- what the pass must never write ----------------------------------------
+my $untouched = rowFor( $K{d_strict} );
+is( $untouched->{source_timestamp}, undef, 'the pass never writes source_timestamp' );
+is( $untouched->{snapshot_track_count}, 1,  'the pass never writes a snapshot column' );
+is( $untouched->{discogs_master_id}, 9001,  'the pass never writes discogs_master_id' );
+is( $untouched->{match_tier}, 'strict',     'the pass never writes match_tier' );
+
+# --- determinism (§13.2): a second pass over the same inputs writes nothing -
+my $after = matchCount();
+my $snapshot = $dbh->selectall_arrayref(
+	'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
+
+is( $O->apply( \@collection ), 'ok', 'a second pass over the same inputs runs' );
+is( matchCount(), $after, '  ...and changes no row count' );
+is_deeply(
+	$dbh->selectall_arrayref(
+		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } ),
+	$snapshot,
+	'  ...and changes nothing at all - the same inputs give the same answer'
+);
+
+# --- a refused write changes nothing ---------------------------------------
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Match::_writeOk = sub { 0 };
+
+	is( $O->apply( \@collection ), 'refused', 'a refused write reports refused' );
+	is_deeply(
+		$dbh->selectall_arrayref(
+			'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } ),
+		$snapshot,
+		'  ...and nothing changed'
+	);
+}
+
+# --- a record leaving the collection demotes rather than deletes -----------
+{
+	my @shrunk = grep { $_->{id} != 111 } @collection;
+
+	is( $O->apply( \@shrunk ), 'ok', 'a pass over a shrunk collection runs' );
+
+	my $row = rowFor( $K{d_strict} );
+	ok( $row, 'a tagged row whose record left the collection survives' );
+	is( $row->{ownership}, 'absent', '  ...with ownership back to absent' );
+	is( $row->{state},     'candidate', '  ...and state back to candidate' );
+	is( $row->{discogs_release_id}, 111, '  ...and its identification intact' );
+}
+
+# --- an empty collection is a valid answer, not a failure ------------------
+{
+	is( $O->apply( [] ), 'ok', 'a pass over an empty collection runs' );
+
+	my ($ownershipOnly) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE match_tier IS NULL' );
+	is( $ownershipOnly, 0, '  ...and every ownership-only row is gone' );
+
+	my ($identified) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE match_tier IS NOT NULL' );
+	is( $identified, 6, '  ...while every identification survives' );
+}
 
 done_testing();

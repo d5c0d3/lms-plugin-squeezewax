@@ -216,10 +216,18 @@ BEGIN {
 				note=" (Slim::Schema stubbed)"
 				;;
 			Ownership)
-				# The pure half needs nothing; the pass added at B3 reaches
-				# Slim::Schema and Slim::Music::Info, both only at runtime.
-				prelude="$SCHEMA_STUB"
-				note=" (Slim::Schema stubbed)"
+				# Ownership.pm pulls in our own Library.pm and Match.pm, so it
+				# inherits their stubs. Its own LMS dependency is
+				# Slim::Music::Info, for variousArtistString - which reaches
+				# Slim::Utils::Unicode and needs an initialised OSDetect, the
+				# same chain IMPORT_STUB cuts one module earlier. The call is at
+				# runtime, so a bare %INC marker is enough; the name itself was
+				# read from refs (Slim/Music/Info.pm:1540) rather than assumed.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+}'
+				note=" (Slim::Schema, Slim::Music::Info stubbed)"
 				;;
 			Tags)
 				prelude="$TAGS_STUB"
