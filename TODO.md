@@ -104,6 +104,51 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [ ] **2026-09-22, DEFECT: `unauthorized` is unreachable through
+      `API/Async.pm`, so a rejected token reads as a dropped connection.**
+      Found by step 5 check (c) on hardware at 0.0.0.6. A wrong token
+      produces `no_response` at **warn**, never `unauthorized` at error, and
+      `discogsLastSyncError` reads `no_response`.
+      **Mechanism, verified in refs:**
+      `Slim/Networking/SimpleAsyncHTTP.pm:76-101` (`onError`) sets `error` and
+      calls the error callback but never calls `$self->code(...)`; only
+      `onBody` at `:112` sets the code, and that runs on success only. So on
+      the error path `$http->code` is unset and `API::classifyResponse` takes
+      its `!$code` branch. `classifyResponse` itself is correct — its 401
+      branch is simply never reached from the async side.
+      `Async.pm:331-334`'s comment records the wrong assumption: "the error
+      path means no response". A 401 is a real response that also takes the
+      error path. `Settings.pm`'s `_testToken` shares the pattern and the
+      hole.
+      **This breaks §14.2** ("a rejected token must read differently from a
+      dropped connection") and it is not cosmetic: a rejected token is
+      treated as transient, so the interval retries it forever, at warn, with
+      nothing naming the real cause.
+      **Likely fix:** `onError` passes `$http->response` as its THIRD
+      callback argument, so the real code is available there. Not applied —
+      it changes retry behaviour on a recorded decision, and belongs in a
+      design ruling first.
+- [ ] **2026-09-22: the two token buttons disagree about which token they
+      mean.** `_testToken` deliberately prefers the unsaved field
+      (`Settings.pm:321`) — the point of a Test button is to check before
+      committing. `_syncNow` reads the stored pref (`:220`), and
+      `SUPER::handler` only saves the field afterwards, inside
+      `_finishSyncNow`. So pasting a token and pressing **Sync collection
+      now** syncs with the PREVIOUS token and saves the new one after the
+      fact; you must Save first, then Sync. Observed 2026-09-22: the first
+      click succeeded with the old token while the new one was already in the
+      field. Decide whether `_syncNow` should prefer the field like
+      `_testToken`, or whether the page should say so.
+- [ ] **2026-09-22, FOR THE DESIGN CHAT: the scheduled sync cannot be turned
+      off.** `Plugin.pm:77` validates `discogsSyncInterval` with
+      `intlimit, low => 3600`, so the smallest legal value is one hour and
+      there is no `0 = off`. For a plugin that makes unattended third-party
+      network calls from someone's music server, "you may choose the
+      frequency but not whether" is the wrong default. Compounded by the
+      defect above: with a bad or revoked token the schedule retries daily
+      forever and reports a misleading transient error each time. The 86400
+      default is already recorded in `Plugin.pm:46-50` as a product call, not
+      a measured or specified figure.
 - [x] **2026-09-22, REGRESSION SHIPPED AND FIXED IN ONE SESSION: 0.0.0.5's
       disable-on-click made the buttons dead again.** Disabling a submit
       button inside its own click handler does not merely drop its name from
@@ -1408,7 +1453,8 @@ Shared reminder list. Both I and Claude Code read and update this.
           `discogs_no_match` - and the scan logged no invariant-1 error.
           **This is the check that would have caught §15.13 part 6 being
           wrong. It did not.**
-      (6) **PASS OFFLINE; NOT OBSERVED ON HARDWARE.** The owner declined to
+      (6) **PASS — offline first, then ON HARDWARE 2026-09-22 at 0.0.0.6.**
+          The owner declined to
           alter a real Discogs collection, which is a reasonable refusal: the
           designed check mutates data this project does not own and cannot
           restore if a step fails. Run instead against COPIES of the live
@@ -1429,9 +1475,21 @@ Shared reminder list. Both I and Claude Code read and update this.
           them back restores both rows exactly.
           What this does NOT prove, and why the hardware check stays open:
           the sync handing the pass a genuinely changed list, the live write
-          path in the server process, and Discogs itself. The harness lives
-          in the session scratchpad and is not committed - see the note
-          below.
+          path in the server process, and Discogs itself.
+          **Then proved on hardware**, without touching the collection, using
+          `discogsTestExcludeReleases` (0.0.0.6). With the filter set to
+          `9701013,443973` a real sync fetched the real collection — 203 items
+          over 4 requests, the unfiltered count — logged `test filter active:
+          hiding 2 releases from the ownership pass` at warn, and wrote
+          `updated=1 deleted=1 demoted=1`. The diff against a copy taken
+          beforehand is **exactly two rows**: album 3233's ownership-only row
+          deleted, and album 2898 `confirmed` -> `candidate`,
+          `exact` -> `absent`, keeping release id 443973, its snapshot
+          (`Alanis Morissette`, 13 tracks) and its `source_timestamp`.
+          Clearing the pref and syncing again restored the table
+          **byte-identical** to the copy (`inserted=1 promoted=1`). This is
+          what the harness could not prove: the real fetch handing a changed
+          list to the pass, and the live write path in the server process.
       **Live data was never written by any check.** `discogs_match` is
       identical across checks 3, 4, 5, (d) and 6, and identical to the
       `-pre-collection-change` backup: 507 rows, 100 no-match rows,
@@ -1474,9 +1532,15 @@ Shared reminder list. Both I and Claude Code read and update this.
           `_scheduleSync` kills any armed timer before arming the next
           (`Plugin.pm:159-160`). The manual button against the interval timer
           was not hit in practice and stays unproven - the interval is 24 h.
-      (c) **NOT OBSERVED.** Revoking the token and killing the network
-          mid-sync both act on the owner's live account and connection; not
-          run without an explicit instruction to.
+      (c) **PARTLY OBSERVED 2026-09-22 at 0.0.0.6, and it FOUND A DEFECT.**
+          The owner pasted a deliberately wrong token and synced. State
+          protection passes: `discogsLastSynced` stayed at the last
+          successful sync and `discogs_match` was byte-identical to a
+          507-row snapshot. **The error vocabulary does not:** the failure
+          came out as `no_response`, logged at **warn**, and the
+          `Discogs rejected the token` line appears nowhere in the log. See
+          the `unauthorized`-is-unreachable item above. Killing the network
+          mid-sync is still NOT OBSERVED.
       (d) **PASS — and this is the one that was load-bearing.** §15.2
           obligation 1 rested on an INFERENCE from `SQLiteHelper`'s
           `_notifyFromScanner` exit branch that had never been observed. It
