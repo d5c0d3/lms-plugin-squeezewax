@@ -326,9 +326,26 @@ sub _testToken {
 
 	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest( '/oauth/identity', {}, $token );
 
+	# Same shape, and the same correction, as API/Async.pm's _handle: every
+	# status that is not 2xx or 3xx reaches the ERROR callback
+	# (Slim/Networking/Async/HTTP.pm:434-436), and onError sets neither code nor
+	# content on $http - it passes the HTTP::Response as its third argument
+	# instead (SimpleAsyncHTTP.pm:96). Reading only $http->code made a 401
+	# indistinguishable from a dropped connection, which is precisely what this
+	# button exists to tell apart.
 	my $done = sub {
-		my $http = shift;
-		my $result = Plugins::SqueezeWax::API->classifyResponse( $http->code, $http->content );
+		my ( $http, undef, $response ) = @_;
+
+		my $code    = $http->code;
+		my $content = $http->content;
+
+		if ( !defined $code && $response ) {
+			$code    = $response->code;
+			$content = $response->content;
+		}
+
+		my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
+
 		_tokenTested( $class, $client, $params, $callback, $args, $scanning, $result );
 	};
 

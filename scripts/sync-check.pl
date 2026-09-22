@@ -168,6 +168,21 @@ BEGIN {
 		return bless { cb => $cb, ecb => $ecb, args => $args }, $class;
 	}
 
+	# Which callback fires, and what is populated when it does, is modelled on
+	# the real thing rather than simplified - because the simplification hid a
+	# production defect for the whole of build-order step 5.
+	#
+	# refs/slimserver/Slim/Networking/Async/HTTP.pm:434-436 sends EVERY status
+	# that is not 2xx or 3xx to _http_error, which reaches SimpleAsyncHTTP's
+	# onError. onError (:76-101) sets neither code nor content nor headers on
+	# the SimpleAsyncHTTP object; it passes the HTTP::Response as the error
+	# callback's THIRD argument (:96). Only onBody sets them (:112-114), and it
+	# then calls the success callback.
+	#
+	# The old stub set code on every response and always called the success
+	# callback, so `unauthorized`, `rate_limited`, `not_found` and
+	# `server_error` all appeared reachable here while being unreachable in
+	# production (decisions §15.15 part 2).
 	sub get {
 		my ( $self, $url, @headers ) = @_;
 
@@ -176,13 +191,49 @@ BEGIN {
 		my $canned = shift @RESPONSES
 			or die "stub transport: no canned response left for $url\n";
 
+		# A connection that never produced a status at all: no response object
+		# either. This is the only thing that should classify as no_response.
+		if ( !defined $canned->{code} ) {
+			$self->{ecb}->( $self, 'connection failed', undef );
+
+			return;
+		}
+
+		my $response = Test::StubResponse->new($canned);
+
+		if ( $canned->{code} !~ /^[23]\d\d$/ ) {
+			$self->{ecb}->( $self, "HTTP $canned->{code}", $response );
+
+			return;
+		}
+
 		$self->{code}    = $canned->{code};
 		$self->{content} = $canned->{content};
-		$self->{headers} = Test::StubHeaders->new( %{ $canned->{headers} || {} } );
+		$self->{headers} = $response->headers;
 
 		$self->{cb}->($self);
 
 		return;
+	}
+
+	sub code    { $_[0]->{code} }
+	sub content { $_[0]->{content} }
+	sub headers { $_[0]->{headers} }
+}
+
+# What onError hands over as its third argument. Only code/content/headers are
+# reached.
+{
+	package Test::StubResponse;
+
+	sub new {
+		my ( $class, $canned ) = @_;
+
+		return bless {
+			code    => $canned->{code},
+			content => $canned->{content},
+			headers => Test::StubHeaders->new( %{ $canned->{headers} || {} } ),
+		}, $class;
 	}
 
 	sub code    { $_[0]->{code} }
@@ -975,6 +1026,160 @@ diag('the test-only collection filter');
 	is( scalar @REQUESTS, 4, 'the filter does not change the fetch' );
 	ok( !( grep { $_->{url} =~ /999|exclude|1001/ } @REQUESTS ),
 		'  ...and no request mentions a filtered id' );
+}
+
+# ---------------------------------------------------------------------------
+# The error path carries the status (decisions §15.15 part 2)
+# ---------------------------------------------------------------------------
+#
+# Every status that is not 2xx or 3xx reaches the ERROR callback with nothing
+# populated on the SimpleAsyncHTTP object. Until 2026-09-22 _handle read only
+# $http->code, so all of these classified as no_response and the whole lower
+# half of classifyResponse was unreachable in production. The stub transport
+# above now models that routing, so these assertions mean what they say.
+
+diag('§15.15 part 2: every non-2xx status survives the error path');
+
+{
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 500,
+		headers => healthy_headers(),
+		content => 'upstream exploded',
+	} );
+
+	ok( !$result->{ok}, 'a 5xx fails the sync' );
+	is( $result->{error}, 'server_error',
+		'  ...as server_error - transient, so the caller logs at warn' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 404,
+		headers => healthy_headers(),
+		content => '',
+	} );
+
+	is( $result->{error}, 'not_found', 'a 404 survives the error path as not_found' );
+}
+
+# The one thing that must STILL be no_response: a connection that produced no
+# status at all. If this ever starts classifying as something else, the fix
+# above has over-reached.
+{
+	reset_state();
+
+	my $result = run_sync( { code => undef } );
+
+	ok( !$result->{ok}, 'a connection that never answered fails the sync' );
+	is( $result->{error}, 'no_response',
+		'  ...as no_response, which now means only that' );
+}
+
+# The headers come across too, not just the status. A 429 whose headers say the
+# budget is spent must be accounted for, or the back-off throttles on stale
+# state - and a 429 is exactly when the headers matter most.
+{
+	reset_state();
+
+	my $spent = {
+		code    => 429,
+		headers => {
+			'X-Discogs-Ratelimit'           => 60,
+			'X-Discogs-Ratelimit-Used'      => 60,
+			'X-Discogs-Ratelimit-Remaining' => 0,
+		},
+		content => '',
+	};
+
+	my $result = run_sync(
+		identity_response(),
+		$spent,
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a 429 with spent-budget headers still recovers' );
+	ok( scalar @TIMERS >= 1, '  ...having waited rather than hammered' );
+	ok( ( grep { $_->{delay} && $_->{delay} > 0 } @TIMERS ),
+		'  ...on a real delay taken from the error response, not a zero wait' );
+}
+
+# ---------------------------------------------------------------------------
+# The rejection pause
+# ---------------------------------------------------------------------------
+
+diag('a rejected token pauses scan-triggered syncs until something changes');
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'nothing is paused to begin with' );
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	ok( Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a rejected token sets the pause' );
+
+	ok( Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...and the first skip reports itself as the first' );
+	ok( !Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...while later ones do not, so it is logged once' );
+}
+
+{
+	reset_state();
+
+	# A sync that completes proves the token works, whatever triggered it.
+	run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a successful sync clears the pause' );
+	ok( Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...and resets the log-once marker with it' );
+}
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+	ok( Plugins::SqueezeWax::API::Async->tokenRejected, 'paused again' );
+
+	# What Settings.pm calls when the token pref changes (§15.15 part 3).
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'  ...and a token change clears it' );
+}
+
+# A transient failure must NOT pause: the whole point of the distinction is
+# that one of these is worth retrying and the other is not.
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => undef } );
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a dropped connection does NOT pause scan-triggered syncs' );
+}
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => 500, headers => healthy_headers(), content => '' } );
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'nor does a server error' );
 }
 
 done_testing();

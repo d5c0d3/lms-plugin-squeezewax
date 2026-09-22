@@ -182,6 +182,24 @@ sub _syncTick {
 		return;
 	}
 
+	# Paused, not deferred and not retried: Discogs has rejected this token, and
+	# nothing a scan does changes that (§15.15 part 2). Logged once, at info -
+	# the error that caused the pause was already logged at error, and repeating
+	# it at every scan would bury it. The button is the remedy and always runs.
+	require Plugins::SqueezeWax::API::Async;
+
+	if ( Plugins::SqueezeWax::API::Async->tokenRejected ) {
+		# Marked unconditionally, logged conditionally: whether this skip is the
+		# first one is a fact about the pause, not about the log level.
+		my $first = Plugins::SqueezeWax::API::Async->noteSkipped;
+
+		main::INFOLOG && $first && $log->is_info
+			&& $log->info('Discogs rejected the token; skipping the scan-triggered '
+				. 'sync until the token changes or a manual sync succeeds');
+
+		return;
+	}
+
 	# Deferred, not refused: the button refuses during a scan because a user is
 	# waiting for an answer, and this one has nobody waiting.
 	#
@@ -196,8 +214,6 @@ sub _syncTick {
 
 		return;
 	}
-
-	require Plugins::SqueezeWax::API::Async;
 
 	Plugins::SqueezeWax::API::Async->sync( $token, \&_syncDone );
 

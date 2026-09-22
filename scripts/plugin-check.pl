@@ -57,6 +57,9 @@ our @SYNCS;       # every Async->sync call
 our %PREFS;
 our %MIGRATIONS;  # version => coderef, as recorded by the prefs stub
 our $SCANNING = 0;
+our $REJECTED = 0;
+our $SKIP_FIRST = 1;
+our @SKIPS;
 
 BEGIN {
 	$INC{'Slim/Plugin/Base.pm'}      = 1;
@@ -164,6 +167,14 @@ BEGIN {
 		push @SYNCS, $token;
 		return 1;
 	};
+
+	# The rejection pause (§15.15 part 2). Async owns the state; Plugin.pm only
+	# consults it, so the suite drives it from here.
+	*{'Plugins::SqueezeWax::API::Async::tokenRejected'} = sub { $main::REJECTED };
+	*{'Plugins::SqueezeWax::API::Async::noteSkipped'}   = sub {
+		push @SKIPS, 1;
+		return $main::SKIP_FIRST--> 0 ? 1 : 0;
+	};
 }
 
 my $incdir;
@@ -185,7 +196,10 @@ sub reset_state {
 	@KILLS  = ();
 	@SYNCS  = ();
 	@SUBSCRIBED = ();
+	@SKIPS    = ();
 	$SCANNING = 0;
+	$REJECTED = 0;
+	$SKIP_FIRST = 1;
 }
 
 # ---------------------------------------------------------------------------
@@ -330,6 +344,62 @@ diag('the tick is terminal: every path out re-arms nothing');
 	is( scalar @SYNCS,  0, 'a tick while a scan is running defers' );
 	is( scalar @TIMERS, 0,
 		'  ...and re-arms nothing: that scan\'s own rescan-done is the net' );
+}
+
+# ---------------------------------------------------------------------------
+# The rejection pause (§15.15 part 2)
+# ---------------------------------------------------------------------------
+
+diag('a rejected token stops scan-triggered syncs, not the button');
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 1;
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 0,
+		'a scan-triggered sync is skipped while the token is rejected' );
+	is( scalar @SKIPS, 1, '  ...and the skip is recorded once for logging' );
+	is( scalar @TIMERS, 0, '  ...and nothing is re-armed' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 1;
+
+	Plugins::SqueezeWax::Plugin::_syncTick() for 1 .. 3;
+
+	is( scalar @SYNCS, 0, 'three scans while rejected start no syncs' );
+	is( scalar @SKIPS, 3, '  ...each consulting the once-only marker' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 0;
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1, 'once the rejection clears, a scan syncs again' );
+	is( scalar @SKIPS, 0, '  ...with no skip recorded' );
+}
+
+# The pause is consulted BEFORE the scanning check, so a rejected token is
+# reported as the reason rather than being masked by a scan in progress.
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 1;
+	local $main::SCANNING = 1;
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SKIPS, 1,
+		'a rejected token is the reported reason even while a scan runs' );
+	is( scalar @SYNCS, 0, '  ...and no sync starts either way' );
 }
 
 done_testing();

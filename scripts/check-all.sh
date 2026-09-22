@@ -42,20 +42,40 @@ for suite in "$ROOT"/scripts/*-check.pl; do
 	name=$(basename "$suite")
 
 	case " $SKIP " in
-		*" $name "*) printf '==> %-24s skipped (needs arguments)\n' "$name"; continue ;;
+		*" $name "*) printf '==> %-28s skipped (needs arguments)\n' "$name"; continue ;;
 	esac
 
-	out=$(perl "$suite" 2>&1) || true
+	# Exit status AND the plan, not just the absence of "not ok". A suite that
+	# dies partway prints no failures at all - it simply stops - and checking
+	# only for "not ok" reported one as green on 2026-09-22. The plan line is
+	# what catches a silent truncation: Test::More prints 1..N only if
+	# done_testing() was reached.
+	# errexit off around the run: a failing suite must be REPORTED, not abort
+	# the runner before it can say which one failed.
+	set +e
+	out=$(perl "$suite" 2>&1)
+	rc=$?
+	set -e
 
 	n=$(printf '%s\n' "$out" | grep -c '^ok' || true)
 	bad=$(printf '%s\n' "$out" | grep -c '^not ok' || true)
+	plan=$(printf '%s\n' "$out" | sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p' | tail -1)
 	total=$((total + n))
 
-	if [ "$bad" -eq 0 ] && [ "$n" -gt 0 ]; then
-		printf '==> %-24s %4d assertions, ok\n' "$name" "$n"
+	why=''
+	[ "$bad" -ne 0 ]                && why="${bad} failed"
+	[ "$rc" -ne 0 ]                 && why="${why:+$why, }exit $rc"
+	[ -z "$plan" ]                  && why="${why:+$why, }no plan - suite died before done_testing"
+	[ -n "$plan" ] && [ "$plan" -ne "$((n + bad))" ] \
+		&& why="${why:+$why, }plan says $plan, saw $((n + bad))"
+	[ "$n" -eq 0 ]                  && why="${why:+$why, }no assertions ran"
+
+	if [ -z "$why" ]; then
+		printf '==> %-28s %4d assertions, ok\n' "$name" "$n"
 	else
-		printf '==> %-24s %4d assertions, %d FAILED\n' "$name" "$n" "$bad"
+		printf '==> %-28s %4d assertions, FAILED (%s)\n' "$name" "$n" "$why"
 		printf '%s\n' "$out" | grep -A3 '^not ok' | head -40
+		printf '%s\n' "$out" | tail -5
 		fail=$((fail + 1))
 	fi
 done

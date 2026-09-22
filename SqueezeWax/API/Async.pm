@@ -94,6 +94,22 @@ use constant SYNC_TIMEOUT => 3600;
 my %sync;
 my $syncId = 0;
 
+# Set when Discogs rejects the token, cleared when the token changes or a manual
+# sync succeeds (§15.15 part 2). While it is set, scan-triggered syncs are
+# skipped: retrying a token Discogs has rejected cannot succeed, and the only
+# thing a retry produces is another error line in the log.
+#
+# In memory, not a pref. It describes this server's last conversation with
+# Discogs, not the user's configuration, and a restart is a perfectly good
+# reason to try once more. `logged` keeps the skip quiet after the first one -
+# §14.2 wants the failure visible, not repeated.
+#
+# This is a STATED EXCEPTION to §15.2 obligation 1: a sync skipped here is
+# dropped, not kept pending. A pass whose WRITE was refused - a scan running
+# under it - still stays pending for the next notification, which is a different
+# case and unchanged.
+my %rejected = ( token => 0, logged => 0 );
+
 # ---------------------------------------------------------------------------
 # Pure functions. Covered by scripts/sync-check.pl without a transport.
 # ---------------------------------------------------------------------------
@@ -279,6 +295,51 @@ sub status {
 	};
 }
 
+=head2 tokenRejected( )
+
+True while Discogs has rejected the token and no manual sync has succeeded
+since. Scan-triggered syncs consult this; the manual button does not.
+
+=cut
+
+sub tokenRejected {
+	my ($class) = @_;
+
+	return $rejected{token} ? 1 : 0;
+}
+
+=head2 noteSkipped( )
+
+Record that a scan-triggered sync was skipped, and report whether this is the
+first one, so the caller logs once rather than once per scan.
+
+=cut
+
+sub noteSkipped {
+	my ($class) = @_;
+
+	return 0 if $rejected{logged};
+
+	$rejected{logged} = 1;
+
+	return 1;
+}
+
+=head2 clearTokenRejected( )
+
+Forget a rejection. Called when the token pref changes (§15.15 part 3) and on
+any sync that completes.
+
+=cut
+
+sub clearTokenRejected {
+	my ($class) = @_;
+
+	%rejected = ( token => 0, logged => 0 );
+
+	return;
+}
+
 # Cancel a pending scheduled request. Only the waiting is cancellable: a request
 # already handed to SimpleAsyncHTTP will still complete and still call back.
 # That is what $run->{id} is for - see %sync above; _finish declines to act on a
@@ -327,12 +388,30 @@ sub _fire {
 	my ( $url, @headers ) =
 		Plugins::SqueezeWax::API->buildRequest( $path, $params, $run->{token} );
 
-	# One callback for both outcomes, as Settings.pm's _testToken does: on the
-	# error path SimpleAsyncHTTP leaves code unset (it only sets it from a real
-	# response, refs/slimserver/Slim/Networking/SimpleAsyncHTTP.pm:115), and
-	# classifyResponse's !$code branch already means exactly that - no_response.
+	# One callback for both outcomes, as Settings.pm's _testToken does - but the
+	# error path carries the response SEPARATELY, and the second argument here
+	# is what this file got wrong until 2026-09-22.
+	#
+	# The old comment claimed an unset code "already means no_response". It does
+	# not. refs/slimserver/Slim/Networking/Async/HTTP.pm:434-436 routes EVERY
+	# status that is not 2xx or 3xx to _http_error, which reaches the error
+	# callback; SimpleAsyncHTTP's onError sets neither code nor headers
+	# (:76-101), while onBody sets both (:112-114) and then calls the SUCCESS
+	# callback. So a 401, a 429, a 404 and a 500 all arrived here with no code
+	# and were classified as a dropped connection - every branch of
+	# classifyResponse below its !$code test was unreachable. §14.2 wanted a
+	# rejected token to read differently from a dropped connection; instead
+	# nothing could. The rate-limit back-off was dead the same way: the one
+	# response it exists for, a 429, was the one it never saw (§15.15 part 2).
+	#
+	# onError passes the HTTP::Response as its third argument
+	# (SimpleAsyncHTTP.pm:96), so the real status and the real headers are
+	# there. A genuine connection failure has no response at all, which is how
+	# no_response stays reachable and keeps meaning what it says.
 	my $done = sub {
-		_handle( shift, $run, $path, $params, $next );
+		my ( $http, undef, $response ) = @_;
+
+		_handle( $http, $run, $path, $params, $next, $response );
 	};
 
 	Slim::Networking::SimpleAsyncHTTP->new( $done, $done, { timeout => 15 } )
@@ -342,16 +421,30 @@ sub _fire {
 }
 
 sub _handle {
-	my ( $http, $run, $path, $params, $next ) = @_;
+	my ( $http, $run, $path, $params, $next, $response ) = @_;
 
-	my $result = Plugins::SqueezeWax::API->classifyResponse(
-		$http->code, $http->content );
+	# The success path sets both on $http; the error path sets neither and hands
+	# the response over separately. Prefer whichever is actually populated, so
+	# one classification serves both and no caller has to know which path it is
+	# on. undef from both is a real no-response, and classifyResponse's !$code
+	# branch still means exactly that.
+	my $code    = $http->code;
+	my $content = $http->content;
+	my $headers = $http->headers;
+
+	if ( !defined $code && $response ) {
+		$code    = $response->code;
+		$content = $response->content;
+		$headers = $response->headers;
+	}
+
+	my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
 
 	# Account for the request whatever it returned - a 429 costs budget too,
 	# and an error response that carries no rate headers is precisely the case
 	# accountRequest's degradation ladder exists for (API.pm §3.4).
 	( $rateState, $rateWait ) = Plugins::SqueezeWax::API->accountRequest(
-		Plugins::SqueezeWax::API::_parseRateHeaders( $http->headers ),
+		Plugins::SqueezeWax::API::_parseRateHeaders($headers),
 		time(), $rateState );
 
 	if ( ( $result->{error} || '' ) eq 'rate_limited' ) {
@@ -612,6 +705,17 @@ sub _finish {
 		if ( $applied ne 'ok' ) {
 			$result = { ok => 0, error => $applied };
 		}
+	}
+
+	# The rejection flag is set and cleared here, at the single exit, for the
+	# same reason the timestamp is: one rule in one place rather than a
+	# convention each caller has to keep. A sync that got far enough to write
+	# ownership proves the token works, whatever triggered it.
+	if ( ( $result->{error} || '' ) eq 'unauthorized' ) {
+		$rejected{token} = 1;
+	}
+	elsif ( $result->{ok} ) {
+		%rejected = ( token => 0, logged => 0 );
 	}
 
 	if ( $result->{ok} ) {
