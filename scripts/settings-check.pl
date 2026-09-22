@@ -465,4 +465,90 @@ diag('the hidden field, read out of refs/ rather than assumed');
 		'settings/footer.html still ships a HIDDEN saveSettings field' );
 }
 
+# ---------------------------------------------------------------------------
+# Button feedback (2026-09-22): what of it is testable server-side
+# ---------------------------------------------------------------------------
+#
+# The disabling itself is browser behaviour and is not tested here. What IS
+# testable, and what actually breaks if someone edits the template: that the
+# buttons the script wires up are exactly the ones handler() dispatches on,
+# that each of those names still reaches its action when it arrives as a
+# HIDDEN field (which is how it arrives once the button is disabled), and that
+# every running string the template names exists in strings.txt.
+
+diag('button feedback: the template and the dispatcher must agree');
+
+my $TEMPLATE = "$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/settings.html";
+my $STRINGS  = "$Bin/../SqueezeWax/strings.txt";
+
+my $tpl = do {
+	open my $fh, '<', $TEMPLATE or die "could not read $TEMPLATE: $!\n";
+	local $/;
+	<$fh>;
+};
+
+my $strings = do {
+	open my $fh, '<', $STRINGS or die "could not read $STRINGS: $!\n";
+	local $/;
+	<$fh>;
+};
+
+# Every input carrying the swxAction class, with the running string it names.
+my %wired;
+
+while ( $tpl =~ /<input\s+name="([^"]+)"[^>]*?class="[^"]*\bswxAction\b[^"]*"(.*?)\/>/gs ) {
+	my ( $name, $rest ) = ( $1, $2 );
+
+	my ($running) = $rest =~ /data-swx-running="\[%\s*"([^"]+)"/;
+
+	$wired{$name} = $running;
+}
+
+is_deeply( [ sort keys %wired ], [ sort qw(detectTagNames syncNow testToken) ],
+	'the template wires exactly the three action buttons handler() dispatches on' );
+
+for my $name ( sort keys %wired ) {
+	ok( defined $wired{$name}, "$name names a running string" );
+
+	like( $strings, qr/^\Q$wired{$name}\E\n\tEN\t\S/m,
+		"  ...$wired{$name} exists in strings.txt with EN text" )
+		if defined $wired{$name};
+}
+
+# The hidden field carries the SAME name the button had, so the server cannot
+# tell the two apart - which is the point. Driven from the parsed template, so
+# renaming a button without renaming its param fails here.
+{
+	$PREFS{discogsToken} = 'a-token';
+
+	%CALLS = ();
+	Plugins::SqueezeWax::Settings->handler( undef,
+		{ saveSettings => 1, syncNow => 'Sync collection now' }, sub { 1 }, 'ARG1' );
+	ok( $CALLS{async_sync},
+		'syncNow arriving as a hidden field (button value, not 1) still reaches _syncNow' );
+
+	%CALLS = ();
+	Plugins::SqueezeWax::Settings->handler( undef,
+		{ saveSettings => 1, testToken => 'Test token' }, sub { 1 }, 'ARG1' );
+	ok( $CALLS{http_get}, 'testToken likewise' );
+}
+
+# The ordering the hidden field depends on: the name is copied BEFORE anything
+# is disabled. Reversed, every action would fall through to a plain save.
+{
+	my ($script) = $tpl =~ /<script type="text\/javascript">(.*?)<\/script>/s;
+
+	ok( $script, 'the template carries the feedback script' );
+
+	if ($script) {
+		my $append  = index( $script, 'form.appendChild(hidden)' );
+		my $disable = index( $script, 'disabled = true' );
+
+		ok( $append >= 0,  '  ...which copies the clicked name into a hidden field' );
+		ok( $disable >= 0, '  ...and disables the buttons' );
+		ok( $append >= 0 && $disable >= 0 && $append < $disable,
+			'  ...copying BEFORE disabling, or the name never reaches the server' );
+	}
+}
+
 done_testing();

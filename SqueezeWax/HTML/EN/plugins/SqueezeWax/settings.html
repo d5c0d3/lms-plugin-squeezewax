@@ -16,8 +16,9 @@
 	[% IF scanning %]
 		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSE %]
-		<input name="testToken" type="submit" class="stdclick"
-			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]" />
+		<input name="testToken" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]" />
 	[% END %]
 
 	[% IF tokenTestResult %]
@@ -49,8 +50,9 @@
 	[% ELSIF sync.running %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_RUNNING" | string %]</div>
 	[% ELSE %]
-		<input name="syncNow" type="submit" class="stdclick"
-			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]" />
+		<input name="syncNow" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]" />
 	[% END %]
 
 	[% IF syncResult %]
@@ -99,8 +101,9 @@
 	[% IF scanning %]
 		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSE %]
-		<input name="detectTagNames" type="submit" class="stdclick"
-			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]" />
+		<input name="detectTagNames" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING" | string | html %]" />
 	[% END %]
 
 	[% IF detection %]
@@ -159,5 +162,72 @@
 		[% END %]
 	[% END %]
 [% END %]
+
+[%# Button feedback, decided 2026-09-22 (design chat).
+
+    Every action on this page defers its render until its own callback fires -
+    _syncNow waits for the collection fetch, _testToken for /oauth/identity -
+    so the browser sits on a pending POST with nothing to look at. The natural
+    response to a button that looks dead is to press it again, which is how
+    the dead-button bug was found in the first place.
+
+    No core settings page does this. The nearest thing is
+    settings/server/basic.html:11-30, which polls `rescan ?` on an Ext
+    TaskRunner and disables anything carrying .disableOnScan. That is the
+    polling shape this was explicitly decided against: it needs a server-side
+    thing to poll, and these actions have none.
+
+    So: no new server state, no polling, no framework. Plain DOM, and the page
+    still works with JavaScript off - the buttons simply submit as they always
+    did.
+
+    The one subtlety is why the hidden field exists. A disabled control is not
+    part of the form data set, so disabling the clicked submit button removes
+    the very name handler() dispatches on and every action would fall through
+    to a plain save. The clicked button's name and value are copied into a
+    hidden input BEFORE anything is disabled, so what reaches the server is
+    identical either way.
+%]
+<script type="text/javascript">
+(function () {
+	var form = document.getElementById('settingsForm');
+
+	if (!form || !form.querySelectorAll) { return; }
+
+	var buttons = form.querySelectorAll('input.swxAction');
+
+	if (!buttons.length) { return; }
+
+	var fired = false;
+
+	var onClick = function (clicked) {
+		return function () {
+			if (fired) { return; }
+
+			fired = true;
+
+			var hidden = document.createElement('input');
+
+			hidden.type  = 'hidden';
+			hidden.name  = clicked.name;
+			hidden.value = clicked.value || '1';
+
+			form.appendChild(hidden);
+
+			var running = clicked.getAttribute('data-swx-running');
+
+			if (running) { clicked.value = running; }
+
+			for (var j = 0; j < buttons.length; j++) {
+				buttons[j].disabled = true;
+			}
+		};
+	};
+
+	for (var i = 0; i < buttons.length; i++) {
+		buttons[i].onclick = onClick(buttons[i]);
+	}
+})();
+</script>
 
 [% PROCESS settings/footer.html %]

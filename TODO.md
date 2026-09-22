@@ -116,10 +116,25 @@ Shared reminder list. Both I and Claude Code read and update this.
       not the queue). The queue selects §13.10.5's four contents only; on this
       run that is 5 ambiguous + 2 artist-disagree, plus Strict conflicts and
       (later) tag disagreements.
-- [ ] **2026-09-22, DECIDED (design chat): settings-page action buttons
+- [x] **2026-09-22, DECIDED (design chat): settings-page action buttons
       disable and relabel on click**, client side, showing the existing
       running string. A polling interim page is recorded, not designed:
       revisit if syncs longer than ~10s are seen.
+      DONE 2026-09-22. Plain DOM in `settings.html`, no framework and no
+      polling; the page still works with JavaScript off. **Deviation worth
+      knowing:** the existing `*_RUNNING` strings are sentences ("A collection
+      sync is running.") that read wrong as a button label, so three short
+      labels were added — `PLUGIN_SQUEEZEWAX_{SYNC,TOKEN_TEST,DETECT}_BUTTON_RUNNING`
+      — and the sentence strings keep their existing server-rendered uses.
+      The subtlety the implementation turns on: a disabled control is not part
+      of the form data set, so the clicked button's name and value are copied
+      into a hidden input BEFORE anything is disabled, or every action would
+      fall through to a plain save. `settings-check.pl` asserts that ordering,
+      that the wired buttons are exactly the three `handler()` dispatches on,
+      and that each running string exists in `strings.txt`.
+      No core pattern was followed because none exists:
+      `settings/server/basic.html:11-30` polls `rescan ?` on an Ext TaskRunner,
+      which is the shape this was decided against.
 - [x] **2026-09-22: `Settings.pm` has an offline suite.**
       `scripts/settings-check.pl`, 43 assertions. It drives the REAL
       `handler()`, not an extracted dispatcher: extracting the chain would
