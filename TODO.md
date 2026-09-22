@@ -120,6 +120,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       path means no response". A 401 is a real response that also takes the
       error path. `Settings.pm`'s `_testToken` shares the pattern and the
       hole.
+      **Confirmed end to end 2026-09-22**, not only by reading: from the
+      reference server `GET https://api.discogs.com/` returns 200 in 0.25s,
+      so the host has connectivity, and an unauthenticated
+      `GET /oauth/identity` returns **401**. A sync against that same endpoint
+      with a rejected token reported `no_response`. The 401 is real, reaches
+      the error callback, and is discarded before `classifyResponse` sees it.
       **This breaks §14.2** ("a rejected token must read differently from a
       dropped connection") and it is not cosmetic: a rejected token is
       treated as transient, so the interval retries it forever, at warn, with
