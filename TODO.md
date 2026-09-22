@@ -104,6 +104,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [ ] **2026-09-22: the offline check-6 harness is not committed.** Check 6
+      was proved by driving the real `Ownership->apply` and `Library` against
+      COPIES of the live databases with a doctored collection, which tests
+      ownership conclusions without touching anyone's Discogs account. That
+      is worth having as `scripts/ownership-offline-check.pl`, and it is the
+      only way to exercise "a record leaves the collection" repeatably. It
+      currently exists only in a session scratchpad and will be lost. Decide
+      whether to commit it; if not, record the method in the plan so the run
+      is reproducible.
+
 - [ ] **2026-09-22, UI: the action buttons give no "working on it" feedback.**
       Asked for after the first real sync. `_syncNow` defers the page render
       through `$callback` until the sync's own callback fires, so the browser
@@ -894,10 +904,17 @@ Shared reminder list. Both I and Claude Code read and update this.
       page 1 alone. And the distinct-release-id index collapses zero
       duplicates on this fixture, so the artist rung accounts for the whole
       difference.
-- [ ] **2026-09-19, MEASURE: the ownership pass's run time** on the
+- [x] **2026-09-19, MEASURE: the ownership pass's run time** on the
       reference library. It runs synchronously in the server process over
       every album; INFERRED to be well under a second, not measured. If it is
       not, it needs the Scheduler shape `Settings.pm`'s detection uses.
+      **MEASURED 2026-09-22 on 0.0.0.4**, from INFO timestamps between
+      `_gotPage`'s "collection sync complete" and `_apply`'s summary, over
+      764 albums and 203 collection items: **49.6 ms** with 503 writes
+      (the first pass), **39.3 ms** and **39.5 ms** with zero writes. Three
+      orders of magnitude inside the budget, so it does **not** need the
+      Scheduler shape. Re-measure if the library grows by an order of
+      magnitude.
 - [ ] **2026-09-19: migration 3 obligation (g)'s EXPLAIN QUERY PLAN check has
       no query to check.** VERIFIED 2026-09-19 (design chat): nothing in
       `SqueezeWax/` queries through the orphan index — the relink loads every
@@ -1226,7 +1243,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
+- [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan
       `plans/build-order-step-6-7-ownership.md` §5. Code complete and
       offline-verified (`schema-check.pl` 110 assertions, `ownership-check.pl`
@@ -1258,7 +1275,88 @@ Shared reminder list. Both I and Claude Code read and update this.
       (6) **Remove a record from the Discogs collection:** after a sync its
           ownership-only row is deleted, and a tagged row goes to `absent` /
           `candidate` while keeping its release id.
-- [ ] **2026-09-19: build-order step 5's hardware checks (collection sync).**
+
+      **RUN 2026-09-22 on 0.0.0.4.** All six pass. Evidence below; the
+      backups are `/home/denny/squeezewax-backups/2026-09-20-pre-step-6-7`
+      (pre-migration) and `.../2026-09-22-pre-hardware-checks` (pre-checks,
+      plus a `-pre-collection-change` pair taken before check 6).
+      (1) **PASS**, observed 2026-09-20, re-verified 2026-09-22.
+          `user_version` 3; the migration logged `481 rows copied ... by
+          state: candidate=2, confirmed=479`, which equals the Phase 0
+          baseline exactly, so no state changed at the upgrade; a row-level
+          diff of tier/release id/snapshot against
+          `BASELINE-discogs_match.csv` is 0 lost, 0 added, 0 changed;
+          `discogs_collection` and its index are absent from `sqlite_master`;
+          `discogs_no_match` carries `CHECK (tier IN ('strict'))`;
+          `discogs_match_orphan` is rebuilt on `(match_tier,
+          snapshot_track_count)` per obligation (g); the log carries all four
+          migration lines.
+      (2) **PASS**, observed 2026-09-20/22, re-verified. 203 items over 4
+          requests = 3 pages + 1 identity. `discogsLastSynced` advances only
+          after the pass: `Async.pm:570` sets it strictly after
+          `Ownership->apply` at `:561`, and check 4 below proves the negative
+          case. Split: exact=149 version=50 gated=0 ambiguous=5
+          artist-disagree=2 artist-absent=0 undecodable=0; inserted=26
+          updated=477 deleted=0 promoted=0 **demoted=327**. The demotion is
+          confirmed by query: exactly 327 rows moved `confirmed` ->
+          `candidate`, 154 unchanged, 481 total. `gated=0` against the page-1
+          measurement's 6 is NOT a discrepancy - the script measures the
+          title route over every album, while the pass reaches node H only
+          for albums no tag resolved first, and all six of those compilations
+          are tagged.
+      (3) **PASS**. Sync driven through the settings form's own `syncNow`
+          button (`POST /plugins/SqueezeWax/settings.html`;
+          `csrfProtectionLevel` is 0, so `CSRF.pm:179` admits it). Log:
+          `inserted=0 updated=0 deleted=0 promoted=0 demoted=0`, and a full
+          `SELECT *` diff of `discogs_match` before and after is byte
+          identical.
+      (4) **PASS**, both halves. Sync started 12:44:34.86; rescan fired
+          12:44:35.56 via `["rescan"]` (`Request.pm:607`); fetch finished
+          12:44:37.1155; 1.1 ms later `Match::_writeOk` logged *refusing to
+          write to squeezewax.db: a scan is running* and Settings reported
+          *ownership pass declined*. `discogsLastSynced` did NOT advance and
+          `discogsLastSyncError` read `refused`. Then `_rescanDone` at
+          12:45:11.81 scheduled a sync that fired at 12:46:11.31 (the 60 s
+          `DEBOUNCE_AFTER_RESCAN`) and applied - timestamp advanced to
+          12:46:13, error cleared.
+      (5) **PASS**, and not vacuous. The check-4 rescan repopulated
+          `discogs_no_match` to exactly 100 strict rows (migration 3 had
+          emptied it per obligation (h)). Exactly two albums then carried a
+          row in BOTH tables at once - 3204 *Here Comes The Night* and 3233
+          *Route 66*, each NULL `match_tier`, NULL `state`,
+          `ownership = 'version'` in `discogs_match` and `strict` in
+          `discogs_no_match` - and the scan logged no invariant-1 error.
+          **This is the check that would have caught §15.13 part 6 being
+          wrong. It did not.**
+      (6) **PASS OFFLINE; NOT OBSERVED ON HARDWARE.** The owner declined to
+          alter a real Discogs collection, which is a reasonable refusal: the
+          designed check mutates data this project does not own and cannot
+          restore if a step fails. Run instead against COPIES of the live
+          `squeezewax.db` (507 rows) and `library.db` (764 albums), driving
+          the real `Ownership->apply` and the real `Library::eachAlbum` /
+          `ownershipArtists`, with the committed page-1 fixture as the
+          collection. Three sequential passes on one database, which is how
+          the real thing behaves since every sync re-derives everything:
+          A = full fixture, B = fixture minus releases 9701013 (*Route 66*,
+          Nat King Cole) and 443973 (*Jagged Little Pill*, Alanis
+          Morissette), C = full fixture again. Albums whose owned release is
+          not on page 1 conclude `absent` in all three passes and cancel out,
+          so the two removals are the only variable.
+          A -> B differs in **exactly two rows**: album 3233's ownership-only
+          row is **DELETED** (§15.13 part 5's permitted deletion), and album
+          2898 goes `confirmed` -> `candidate` and `exact` -> `absent`
+          **while keeping release id 443973**. A -> C is **empty**: adding
+          them back restores both rows exactly.
+          What this does NOT prove, and why the hardware check stays open:
+          the sync handing the pass a genuinely changed list, the live write
+          path in the server process, and Discogs itself. The harness lives
+          in the session scratchpad and is not committed - see the note
+          below.
+      **Live data was never written by any check.** `discogs_match` is
+      identical across checks 3, 4, 5, (d) and 6, and identical to the
+      `-pre-collection-change` backup: 507 rows, 100 no-match rows,
+      `user_version` 3 throughout.
+- [ ] **2026-09-19: build-order step 5's hardware checks (collection sync).** PARTLY DONE — (a) (b) (d) (e) pass; (c) not observed.
       Plan `plans/build-order-step-5-collection-sync.md` §3. Code complete and
       offline-verified; none of these can be checked without a real server and
       a real Discogs account.
@@ -1286,6 +1384,33 @@ Shared reminder list. Both I and Claude Code read and update this.
           are synchronous — a stubbed request calls back before `->get`
           returns, a stubbed timer fires before `setTimer` returns. The real
           `Slim::Utils::Timers` / `SimpleAsyncHTTP` interaction is unproven.
+
+      **PARTLY RUN 2026-09-22 on 0.0.0.4**, alongside the steps 6-7 checks.
+      (a) **PASS.** 203 items over 4 requests = `ceil(203/100) + 1`, on four
+          separate syncs. `discogsLastSynced` advances on each that applies.
+          `discogs_match` row count unchanged at 507 before and after.
+      (b) **PASS for the rescan-done trigger**, via (d) below: three
+          `_rescanDone` events in 2.7 s produced exactly ONE sync, because
+          `_scheduleSync` kills any armed timer before arming the next
+          (`Plugin.pm:159-160`). The manual button against the interval timer
+          was not hit in practice and stays unproven - the interval is 24 h.
+      (c) **NOT OBSERVED.** Revoking the token and killing the network
+          mid-sync both act on the owner's live account and connection; not
+          run without an explicit instruction to.
+      (d) **PASS — and this is the one that was load-bearing.** §15.2
+          obligation 1 rested on an INFERENCE from `SQLiteHelper`'s
+          `_notifyFromScanner` exit branch that had never been observed. It
+          is now observed: a full rescan started 12:46:49, `abortscan`
+          (`Request.pm:474`) issued at 12:46:57 while `rescan ?` still
+          reported 1. `_rescanDone` fired immediately at 12:46:57.7134, then
+          twice more at 12:47:00.0579 and .3963 as the scanner exited. One
+          sync was scheduled, fired at 12:48:00.3555 (60 s after the last
+          notification) and applied. **The inference holds.**
+      (e) **PASS by implication.** Every observation above ran through the
+          real `Slim::Utils::Timers` and `SimpleAsyncHTTP`: the 300 s
+          first-poll timer fired on its own at 12:30:33, the 60 s debounce
+          fired twice to the second, and four real HTTP syncs completed. The
+          stub-only gap this item names is closed for the paths exercised.
 
 - [ ] **2026-09-19: prove the `discogsMaxTier` removal on a real prefs file.**
       Check 1 could not, because this server's `squeezewax.prefs` never had the
