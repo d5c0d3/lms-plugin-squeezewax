@@ -60,6 +60,25 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Next — build-order steps 3–5 (matching)
 
+- [x] **2026-09-22, SHIPPED BUG, FIXED: `syncNow` and `testToken` were dead
+      buttons.** Found on the reference server — the manual "Sync collection
+      now" button did nothing at all: no sync, no pref change, no log line.
+      `settings/footer.html:39` puts a **hidden** `saveSettings=1` in the
+      settings form beside the visible Save button at `:38`, so every submit
+      carries `saveSettings` whichever button was clicked. `Settings.pm`'s
+      `handler` tested `saveSettings` second in its `elsif` chain, so it
+      swallowed `syncNow` and `testToken`, which sat behind it.
+      `detectTagNames` was tested first and so always worked — which is why
+      this was never noticed. Fixed by testing every named action first and
+      leaving `saveSettings` as the fallback.
+- [ ] **2026-09-22, NO SUITE COVERS `Settings.pm`'s dispatch.** The dead-button
+      bug above shipped in 0.0.0.3 and would have been caught by one offline
+      test asserting that a params hash carrying BOTH `saveSettings` and
+      `syncNow` reaches `_syncNow`. There is no `scripts/settings-check.pl`;
+      `Settings.pm` is the only module with no offline exercise, and it is the
+      one module whose inputs come from a browser. Worth one, at least for the
+      dispatch chain — the async render paths are harder and can wait.
+
 - [x] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
       rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** DONE
       e275221 (`Schema.pm::_migration_3`) — every obligation below is ticked

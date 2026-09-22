@@ -64,11 +64,20 @@ sub handler {
 	# metainformation.isScanning.
 	my $scanning = Slim::Music::Import->stillScanning ? 1 : 0;
 
+	# ORDER MATTERS, and not for a stylistic reason. settings/footer.html:39
+	# puts a HIDDEN saveSettings=1 in the form, beside the visible Save button
+	# at :38, so EVERY submit from this page carries saveSettings whichever
+	# button was clicked. Tested before the named action buttons it swallows
+	# them: the page re-renders having saved, the action never runs, and
+	# nothing is logged, because the action's own code was never reached.
+	#
+	# So every named action is tested first and saveSettings is the fallback -
+	# "no action button was clicked, so this is a plain Save". detectTagNames
+	# was already ahead of it and worked; syncNow and testToken were behind it
+	# and did not (found on the reference server 2026-09-22, both buttons dead
+	# in 0.0.0.3).
 	if ( $params->{detectTagNames} ) {
 		_startDetection($params, $scanning);
-	}
-	elsif ( $params->{saveSettings} ) {
-		_saveTagNames($params, $scanning);
 	}
 	elsif ( $params->{syncNow} ) {
 		# Same deferral as _testToken below, for the same reason.
@@ -82,6 +91,9 @@ sub handler {
 		# Settings.pm:83-101,134). Must return here rather than fall through
 		# to the synchronous SUPER::handler call below.
 		return _testToken( $class, $client, $params, $callback, \@args, $scanning );
+	}
+	elsif ( $params->{saveSettings} ) {
+		_saveTagNames($params, $scanning);
 	}
 
 	$params->{scanning} = $scanning;
