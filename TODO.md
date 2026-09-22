@@ -71,6 +71,60 @@ Shared reminder list. Both I and Claude Code read and update this.
       `detectTagNames` was tested first and so always worked — which is why
       this was never noticed. Fixed by testing every named action first and
       leaving `saveSettings` as the fallback.
+- [x] **2026-09-22, FIRST REAL RUN of the sync and the ownership pass**, on
+      the reference server at 0.0.0.4. Recorded here because it is the first
+      evidence that steps 5–7 work end to end on real rows, and nothing else
+      tracked holds it.
+      Sync: `203 items over 4 requests` (1 identity + 3 pages) — matches
+      §9.4's measured collection size.
+      Pass: `764 albums, exact=149 version=50 absent-with-row=305; wrote
+      inserted=26 updated=477 deleted=0 promoted=0 demoted=327; queue-to-be
+      gated=0 ambiguous=5 artist-disagree=2 artist-absent=0 undecodable=0`.
+      **No identification was touched.** All 481 pre-existing rows still
+      carry their original `match_tier`, `discogs_release_id` and
+      `snapshot_track_count` — diffed against
+      `BASELINE-discogs_match.csv`: 0 lost, 0 added, 0 changed. The 26
+      inserts are ownership-only rows from the title route (NULL tier), for
+      507 rows total and 199 with ownership.
+      **demoted=327 is design §3 node E working, not a regression.** Step 3
+      wrote `confirmed` with no collection check (the defect step 4 fixed);
+      478 strict rows were confirmed, only 149 are owned exactly, so 327
+      dropped back to `candidate`. The identification stands in every case.
+      **Three rows look wrong and are not.** `strict/confirmed/absent` ×2 and
+      `manual/confirmed/absent` ×1 all carry synthetic release ids (999999,
+      77777, 888888) from earlier hand testing. The manual one keeps
+      `confirmed` because a manual link is not subject to the collection
+      cross-check (design §3). The other two are orphans: album 3633 has no
+      tracks left, and `ab8737fa…` claims `lms_album_id 2919` but album
+      2919's real `album_key` is `f0be6395…`, which has its own row and WAS
+      correctly demoted. An orphan carrying an identification keeps its state
+      for orphan recovery, exactly as `Ownership::_apply` says it should.
+      **`gated=0`, against the page-1 measurement's 6.** Not a contradiction:
+      `scripts/title-agreement.pl` measures the title route over every album,
+      while the pass reaches node H only for albums no tag resolved first.
+      Those compilations are tagged, so they never reach the gate. The
+      script's figures bound the title route, not the pass.
+- [ ] **2026-09-22, UI: the action buttons give no "working on it" feedback.**
+      Asked for after the first real sync. `_syncNow` defers the page render
+      through `$callback` until the sync's own callback fires, so the browser
+      sits on a pending POST for the whole sync and the person who clicked
+      sees nothing at all — no spinner, no "syncing…", just a page that has
+      not come back yet. It happened to be ~2s on the reference collection
+      (203 items, 4 requests); a larger collection, a rate-limit wait or
+      §15.2's retry makes it long enough to look broken, and the natural
+      response to a button that looks dead is to click it again.
+      The template already has a `sync.running` branch
+      (`settings.html:49-50`, `PLUGIN_SQUEEZEWAX_SYNC_RUNNING`), but it only
+      renders for someone who RELOADS the page while a sync is running —
+      never for the person who started it. So the string exists and the state
+      exists; what is missing is showing it to the clicker before the work
+      finishes.
+      Same gap on "Test token" and "Detect tag names", which defer the same
+      way. Worth solving once for all three rather than three times.
+      Needs a decision on the shape: a client-side disable-and-relabel on
+      submit is the cheap one and needs no new round trip; rendering an
+      interim page that polls is the honest one and is what a long sync
+      actually wants. Design chat, not a unilateral pick.
 - [ ] **2026-09-22, NO SUITE COVERS `Settings.pm`'s dispatch.** The dead-button
       bug above shipped in 0.0.0.3 and would have been caught by one offline
       test asserting that a params hash carrying BOTH `saveSettings` and
