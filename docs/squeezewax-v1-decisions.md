@@ -2193,8 +2193,11 @@ conclusions and the freshly-synced collection, costing no file reads at all;
 completes, in the server, not at scan start. The completed-sync rule below is
 unchanged.
 
-**Decided: three triggers — the start of a music scan, the interval pref, and a
-manual "Sync collection now" button.** The interval and the button were already
+**Decided: ~~three triggers — the start of a music scan, the interval pref, and a
+manual "Sync collection now" button.~~** **Corrected 2026-09-22 — see §15.2 and
+§15.15.** Two triggers: a music scan **finishing** (`['rescan','done']`,
+debounced), and the manual "Sync collection now" button. The scan trigger was
+corrected to scan-finish by §15.2; the interval pref was removed by §15.15. The interval and the button were already
 specified in TODO, 2026-09-07; a scan is added because reaching for rescan when
 something has changed is what LMS users already do, and a plugin needing its own
 separate ritual is one users will forget.
@@ -2896,8 +2899,16 @@ on something other than the rescan they were about to run.
 #### What this requires
 
 The action states, before it runs, that badges will be absent until a collection
-sync completes, and that a scan alone does not restore them. Design §9 carries
+sync completes~~, and that a scan alone does not restore them~~. Design §9 carries
 the requirement.
+
+**Corrected 2026-09-22 (§15.2, §15.15): a scan alone DOES restore them.** When
+this was written the scan trigger was believed to fire at scan start; §15.2
+established that it fires on `['rescan','done']`, so a finished scan runs a sync.
+After clear & rebuild, badges return **at the next scan or a press of "Sync
+collection now"** — unless no token is set, or the token is rejected, in which
+case §15.15 part 2 pauses scan-triggered syncs and the button is the only remedy.
+The ruling is unchanged: the action still spends no API requests of its own.
 
 **The manual "sync collection now" button (§13.7) is the user's remedy**, and it
 is in the same settings page — so the wait is bounded by one click for anyone
@@ -3067,8 +3078,11 @@ end of a scan.
 
 #### Why not in the scanner
 
-- The interval and manual triggers have no scanner process, so the server needs
-  its own sync anyway. Doing it in the scanner too means two sync
+- ~~The interval and manual triggers have no scanner process~~ — **corrected
+  2026-09-22 (§15.15): the interval no longer exists.** The manual trigger has no
+  scanner process, so the server needs its own sync anyway; the argument is
+  unchanged and now rests on the button and on `['rescan','done']`, which the
+  server also handles. Doing it in the scanner too means two sync
   implementations under a rule (design §3) that the pass be deterministic.
 - In-server rescans never reach the importer.
 - A Discogs stall would stall the scan: `API.pm` allows three 60-second
@@ -3135,7 +3149,9 @@ observed running:
 
 `ownership` is NOT NULL and `absent` is an answer rather than a missing one
 (§13.3). No sync has run, so strictly the value is unknown rather than absent,
-and `absent` overstates it for one sync interval. The alternative is a fourth
+and `absent` overstates it ~~for one sync interval~~ **until the next scan or
+press of "Sync collection now" (corrected 2026-09-22, §15.15 — there is no
+interval).** The alternative is a fourth
 value for "not yet synced", which would have to be handled at every read site
 forever to buy accuracy in a window that closes by itself. §14.9 already accepts
 this exact shape: badges are dark until the next sync completes.
@@ -4075,3 +4091,55 @@ That is the same direction as every other rule in §13.10.
 
 The gate lifts, or changes shape, with Q9 and the pages 2–3 measurement, as
 before. No other artist rule changes.
+
+### 15.15 No scheduled sync; a rejected token is a stop; buttons act on the page
+
+**Decided 2026-09-22 (design chat),** on the prompt-C hardware report. Amends §13.7's
+three triggers and §15.2, and sharpens §14.2.
+
+1. **The collection syncs only when a library scan finishes, or when the user presses
+   "Sync collection now".** The interval timer and the startup sync are removed, along
+   with the `discogsSyncInterval` setting. The plugin makes no unattended call to
+   Discogs on a schedule.
+
+   *The cost, accepted by the user and stated so it is not rediscovered:* a record
+   added to the Discogs collection does not badge until the next library scan or a
+   press of the button. A missing badge looks exactly like a record the user does not
+   own, so staleness is silent; the settings page's last-synced time is the only
+   signal. The design chat recommended keeping the timer with an off switch; the user
+   chose removal, on the ground that a server plugin should not call a third party on
+   its own schedule. Rescan-done stays: it follows an action the user took.
+
+2. **A rejected token is reported as one, and stops automatic syncs.** Verified at
+   slimserver `a670a38`: `Slim/Networking/SimpleAsyncHTTP.pm` `onError` passes the
+   HTTP response to the error callback (`:96`) but never sets `code`; only `onBody`
+   does (`:112`). Observed on the reference server: a sync with a wrong token was
+   logged as `no_response`. §14.2 required the opposite. The status is now read from
+   the error path, so `unauthorized` is reachable; it logs at error and pauses syncs
+   triggered by a scan until the token changes or a manual sync succeeds. Retrying a
+   token Discogs has rejected cannot succeed and only fills the log.
+
+   **This applies to every non-2xx status, not only 401.** Phase 0 established the
+   mechanism: `Slim/Networking/Async/HTTP.pm:434-436` routes any code not matching
+   `[23]\d\d` to `_http_error`, which reaches the same error callback. Every branch
+   of `API::classifyResponse` below its `!$code` test was therefore unreachable from
+   the asynchronous side. The status **and the headers** are now read from the error
+   callback's third argument, so `429` backs off, `5xx` is `server_error`, `404` is
+   `not_found`, and `accountRequest` gets real rate headers on an error response
+   instead of degrading.
+
+   **Phase 0 finding, recorded because it was silent:** the rate-limit back-off was
+   dead for the same reason. A `429` classified as `no_response` and aborted the sync
+   rather than backing off — the one response the back-off exists for was the one it
+   never saw.
+
+   This is a stated exception to §15.2 obligation 1. While a token is rejected, syncs
+   triggered by a scan are skipped, not kept pending. A pass whose WRITE is refused (a
+   scan is running) still stays pending for the next notification, as before.
+
+3. **The action buttons act on what is on the page.** The settings page's shared form
+   carries a hidden save field on every submit (`settings/footer.html:39`), so every
+   action button also saves. "Test token" already read the token from the field;
+   "Sync collection now" read the stored one and then saved the field, so it synced
+   with the old token and stored the new one. Both now use the field, both save, and
+   the page says so. Changing the token clears the last sync error.

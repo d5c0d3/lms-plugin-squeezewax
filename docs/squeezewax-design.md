@@ -401,9 +401,17 @@ a tag (`squeezewax-v1-decisions.md` §13.6). A sync is three requests for a
 203-item collection and takes seconds, so re-deriving every conclusion is
 cheaper than tracking which ones could have moved.
 
-The sync itself has three triggers — scan start, a configurable interval, and a
-manual button in Settings — set out in §9 and
-`squeezewax-v1-decisions.md` §13.7.
+The sync itself has **two** triggers — a library scan **finishing**, and a manual
+"Sync collection now" button in Settings — set out in §9 and
+`squeezewax-v1-decisions.md` §13.7, as corrected by §15.2 (the scan trigger fires
+on `['rescan','done']`, not at scan start) and §15.15 (the configurable interval
+and the startup sync are removed; the plugin makes no unattended call to Discogs
+on a schedule).
+
+The cost is accepted and stated rather than hidden: a record added to the Discogs
+collection does not badge until the next scan or a press of the button, and a
+missing badge looks the same as a record the user does not own. The last-synced
+timestamp in §9 is the only visible signal.
 
 ### Constraints
 
@@ -714,8 +722,13 @@ or unreachable:
 - **Marketplace lookup / value fetch** (on-demand actions) fail gracefully
   with a short message ("Discogs not reachable — try again later") and never
   block navigation.
-- **Collection sync** and **price snapshots** are background jobs: on failure
-  they log at `warn`, back off, and retry at the next scheduled interval. **A
+- **Collection sync** and **price snapshots** are background jobs. On failure a
+  sync logs and changes nothing — at `warn` for anything that may pass, and at
+  `error` for a token Discogs rejected, which will not. There is no retry timer
+  (`squeezewax-v1-decisions.md` §15.15): the next library scan to finish, or a
+  press of "Sync collection now", is the retry. While a token is rejected,
+  scan-triggered syncs are skipped until the token changes or a manual sync
+  succeeds, because retrying a rejected token cannot succeed. **A
   failed or partial sync leaves the previous ownership conclusions untouched**
   — it never clears a badge it could not reconfirm. A badge that silently
   vanishes is the same class of failure as one that is silently wrong, and the
@@ -772,6 +785,12 @@ would let a user opt into wrong badges
   collection sync completes. The action does not itself trigger one; it must
   say so before it runs, because "rebuild" implies a wait but not an unbounded
   one (`squeezewax-v1-decisions.md` §14.9).
+  **Corrected 2026-09-22 (§14.9, §15.2, §15.15):** the warning must NOT say that
+  a scan alone will not restore the badges — since §15.2 a finished scan runs a
+  sync, so badges return at the next scan **or** a press of "Sync collection
+  now". The exceptions the warning should name instead: no token set, or a token
+  Discogs has rejected, in which case scan-triggered syncs are paused and the
+  button is the only remedy.
 
 ### Badge
 - Enable/disable badge in grid view.
@@ -791,9 +810,14 @@ would let a user opt into wrong badges
   (e.g. amount available first, then price range).
 
 ### Collection / value
-- **Collection sync interval.** Wantlist sync is v2 (§11).
-- **"Sync collection now"** — a manual trigger, alongside the two automatic
-  ones in §3 (`squeezewax-v1-decisions.md` §13.7).
+- ~~**Collection sync interval.**~~ **Removed 2026-09-22
+  (`squeezewax-v1-decisions.md` §15.15):** there is no scheduled sync and no
+  interval setting. Wantlist sync is v2 (§11).
+- **"Sync collection now"** — a manual trigger, alongside the one automatic
+  trigger in §3, a library scan finishing
+  (`squeezewax-v1-decisions.md` §13.7, §15.2, §15.15). Both this button and
+  "Test token" act on the token **currently on the page**, and both save it
+  (§15.15 part 3); the page says so.
 - **Last-synced timestamp**, displayed. When the badges look wrong this is the
   first thing to check, and a timestamp that has stopped advancing is the only
   visible sign of a sync that keeps failing. If the failure is an authentication

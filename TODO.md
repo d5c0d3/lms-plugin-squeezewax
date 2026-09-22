@@ -104,7 +104,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
-- [ ] **2026-09-22, DEFECT: `unauthorized` is unreachable through
+- [ ] **2026-09-22, RECORDED NOT DESIGNED: on a fresh install the first sync
+      only happens at the first library scan or a press of "Sync collection
+      now".** Neither "Test token" nor Save triggers one, and §15.15 part 1
+      removed the startup sync that used to cover this. So a user who installs
+      the plugin, pastes a token and saves, sees no badges at all until they
+      rescan or press the button. Revisit if first-run users report no badges.
+
+- [x] **DECIDED 2026-09-22 by §15.15 part 2; being fixed in prompt D PART 3.**
+      **2026-09-22, DEFECT: `unauthorized` is unreachable through
       `API/Async.pm`, so a rejected token reads as a dropped connection.**
       Found by step 5 check (c) on hardware at 0.0.0.6. A wrong token
       produces `no_response` at **warn**, never `unauthorized` at error, and
@@ -134,7 +142,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       callback argument, so the real code is available there. Not applied —
       it changes retry behaviour on a recorded decision, and belongs in a
       design ruling first.
-- [ ] **2026-09-22: EVERY action button saves the settings, and the two token
+- [x] **DECIDED 2026-09-22 by §15.15 part 3; being fixed in prompt D PART 4** —
+      both buttons act on the token on the page, both save, the page says so.
+      **2026-09-22: EVERY action button saves the settings, and the two token
       buttons then disagree about which token they used.** Corrected and
       widened by the owner, 2026-09-22.
       `_finishTestToken` and `_finishSyncNow` are character-identical: both
@@ -158,7 +168,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       `_syncNow` should prefer the field as `_testToken` does, whether the
       buttons should stop saving at all, or whether the page should say what
       each one does.
-- [ ] **2026-09-22, FOR THE DESIGN CHAT: the scheduled sync cannot be turned
+- [x] **SETTLED 2026-09-22 by §15.15 part 1: the scheduled sync is REMOVED**,
+      not given an off switch. The design chat recommended keeping the timer
+      with `0 = off`; the user chose removal, on the ground that a server
+      plugin should not call a third party on its own schedule. The accepted
+      cost is recorded in §15.15 part 1: staleness is silent.
+      **2026-09-22, FOR THE DESIGN CHAT: the scheduled sync cannot be turned
       off.** `Plugin.pm:77` validates `discogsSyncInterval` with
       `intlimit, low => 3600`, so the smallest legal value is one hour and
       there is no `0 = off`. For a plugin that makes unattended third-party
@@ -613,8 +628,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       derived per-album label, written by a sync that fetches transiently
       and stores only the conclusion. The column lands in migration 3, in
       the step that reads it — NOT step 4 (step 2 finding 8: don't add a
-      column nothing reads yet). Sync has its own trigger: interval pref
-      plus a visible manual "Sync collection now" — a music rescan does not
+      column nothing reads yet). Sync has its own trigger: ~~interval pref
+      plus~~ **(corrected 2026-09-22, §15.15: a finished scan, plus)** a visible
+      manual "Sync collection now" — a music rescan does not
       refresh it, since the skip contract keys on file state and ownership
       isn't in it. Settings page shows collection last-synced time.
 - [ ] **2026-09-07: artist pre-filter** to shrink any master backfill from
@@ -1549,8 +1565,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       (b) **PASS for the rescan-done trigger**, via (d) below: three
           `_rescanDone` events in 2.7 s produced exactly ONE sync, because
           `_scheduleSync` kills any armed timer before arming the next
-          (`Plugin.pm:159-160`). The manual button against the interval timer
-          was not hit in practice and stays unproven - the interval is 24 h.
+          (`Plugin.pm:159-160`). ~~The manual button against the interval timer
+          was not hit in practice and stays unproven - the interval is 24 h.~~
+          **Moot from 2026-09-22 (§15.15): there is no interval timer. The
+          remaining pair is the button against `['rescan','done']`, and the
+          guard between them is the same `killTimers`.**
       (c) **PARTLY OBSERVED 2026-09-22 at 0.0.0.6, and it FOUND A DEFECT.**
           The owner pasted a deliberately wrong token and synced. State
           protection passes: `discogsLastSynced` stayed at the last
