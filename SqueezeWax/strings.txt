@@ -79,6 +79,9 @@ PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
 	EN	Test token
 
+PLUGIN_SQUEEZEWAX_ACTIONS_HINT
+	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
+
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING
 	EN	Testing...
 

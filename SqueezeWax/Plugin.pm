@@ -42,6 +42,24 @@ $prefs->migrate(1, sub { $_[0]->remove('discogsMaxTier'); 1 });
 # as migrate(1) above.
 $prefs->migrate(2, sub { $_[0]->remove('discogsSyncInterval'); 1 });
 
+# A new token is a new chance (§15.15 parts 2 and 3). The last error and the
+# rejection pause both describe the OLD token's last conversation with Discogs,
+# and leaving either in place after the user has fixed the thing they describe
+# is how a fixed server goes on looking broken - which is exactly how a stale
+# `no_response` misled a reader of this project's own logs on 2026-09-22.
+#
+# File scope, like the migrations: the scanner never loads Settings.pm, and a
+# headless server must clear these too. The callback signature is
+# ( $prefname, $newvalue, ... ) - refs/slimserver/Slim/Utils/Prefs/Base.pm:91
+# dispatches the onchange list registered by
+# Slim/Utils/Prefs/Namespace.pm:148-164.
+$prefs->setChange( sub {
+	$prefs->set( 'discogsLastSyncError', '' );
+
+	require Plugins::SqueezeWax::API::Async;
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+}, 'discogsToken' );
+
 # Collection-sync defaults (build-order step 5). File scope and not under
 # main::WEBUI for the same reason as the migrations above: the sync runs on a
 # headless server, which never loads Settings.pm, so its defaults cannot be

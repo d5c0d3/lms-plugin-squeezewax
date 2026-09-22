@@ -222,6 +222,11 @@ BEGIN {
 	*{'Plugins::SqueezeWax::API::Async::status'} = sub {
 		return { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
 	};
+	*{'Plugins::SqueezeWax::API::Async::clearTokenRejected'} = sub {
+		$CALLS{clear_rejected}++;
+		return;
+	};
+	*{'Plugins::SqueezeWax::API::Async::tokenRejected'} = sub { 0 };
 }
 
 require Plugins::SqueezeWax::Settings;
@@ -560,6 +565,92 @@ for my $name ( sort keys %wired ) {
 		ok( $defer >= 0 && $disable >= 0 && $defer < $disable,
 			'  ...with the disable INSIDE the deferral, or the form never submits' );
 	}
+}
+
+# ---------------------------------------------------------------------------
+# One meaning for the buttons (§15.15 part 3)
+# ---------------------------------------------------------------------------
+#
+# Both buttons act on the token ON THE PAGE. Sync now read the STORED pref
+# until 2026-09-22 while the shared form saved the field afterwards, so it
+# synced with the old token and stored the new one - observed on the reference
+# server, where pasting a wrong token and pressing Sync now produced a
+# SUCCESSFUL sync against the previous token.
+
+diag('§15.15 part 3: both buttons act on the token on the page');
+
+{
+	$PREFS{discogsToken} = 'stored-old';
+
+	%CALLS = ();
+	my $params = { saveSettings => 1, syncNow => 1, pref_discogsToken => 'typed-new' };
+	Plugins::SqueezeWax::Settings->handler( undef, $params, sub { 1 }, 'ARG1' );
+
+	is( $CALLS{async_sync_token}, 'typed-new',
+		'Sync now uses the token in the FIELD, not the stored one' );
+}
+
+{
+	$PREFS{discogsToken} = 'stored-old';
+
+	%CALLS = ();
+	my $params = { saveSettings => 1, syncNow => 1 };
+	Plugins::SqueezeWax::Settings->handler( undef, $params, sub { 1 }, 'ARG1' );
+
+	is( $CALLS{async_sync_token}, 'stored-old',
+		'  ...falling back to the stored token when the field is absent' );
+}
+
+{
+	$PREFS{discogsToken} = 'stored-old';
+
+	%CALLS = ();
+	my $params = { saveSettings => 1, syncNow => 1, pref_discogsToken => '' };
+	Plugins::SqueezeWax::Settings->handler( undef, $params, sub { 1 }, 'ARG1' );
+
+	is( $CALLS{async_sync_token}, 'stored-old',
+		'  ...and an EMPTY field is not a token, so the stored one still wins' );
+}
+
+# The two buttons now agree, which is the whole point of the ruling.
+{
+	$PREFS{discogsToken} = 'stored-old';
+
+	%CALLS = ();
+	Plugins::SqueezeWax::Settings->handler( undef,
+		{ saveSettings => 1, testToken => 1, pref_discogsToken => 'typed-new' },
+		sub { 1 }, 'ARG1' );
+	my $testUsedField = $CALLS{http_get} ? 1 : 0;
+
+	%CALLS = ();
+	Plugins::SqueezeWax::Settings->handler( undef,
+		{ saveSettings => 1, syncNow => 1, pref_discogsToken => 'typed-new' },
+		sub { 1 }, 'ARG1' );
+
+	ok( $testUsedField && $CALLS{async_sync_token} eq 'typed-new',
+		'Test token and Sync now now mean the same thing by "the token"' );
+}
+
+# The hint that says so has to exist, or the behaviour is right and still not
+# discoverable - which is what the ruling actually complained about.
+{
+	my $tpl = do {
+		open my $fh, '<', $TEMPLATE or die "could not read $TEMPLATE: $!\n";
+		local $/;
+		<$fh>;
+	};
+
+	my $strings = do {
+		open my $fh, '<', $STRINGS or die "could not read $STRINGS: $!\n";
+		local $/;
+		<$fh>;
+	};
+
+	my $uses = () = $tpl =~ /PLUGIN_SQUEEZEWAX_ACTIONS_HINT/g;
+
+	ok( $uses >= 2, 'the page states what the buttons act on, beside both of them' );
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_ACTIONS_HINT\n\tEN\t\S/m,
+		'  ...and the string exists with EN text' );
 }
 
 done_testing();

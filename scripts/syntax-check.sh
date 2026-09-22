@@ -104,6 +104,8 @@ TAGS_STUB='BEGIN {
 	sub set  { 1 }
 	sub migrate { 1 }
 	sub setValidate { 1 }
+	sub setChange { 1 }
+	sub remove { 1 }
 }'
 
 # Settings.pm inherits Slim::Web::Settings, which reaches the same web stack

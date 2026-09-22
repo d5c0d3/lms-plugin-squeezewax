@@ -212,7 +212,17 @@ sub _syncNow {
 		return _finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
 	}
 
-	my $token = $prefs->get('discogsToken');
+	# The token in the FIELD, exactly as _testToken does (§15.15 part 3).
+	#
+	# This read the stored pref until 2026-09-22, while the shared form saved
+	# the field afterwards in _finishSyncNow - so pasting a token and pressing
+	# this button synced with the OLD token and stored the new one, and the
+	# page gave no hint that it had. Observed on the reference server while
+	# testing a deliberately wrong token: the first press succeeded against the
+	# previous token. Both buttons now mean the same thing by "the token", and
+	# the page says so.
+	my $token = $params->{pref_discogsToken};
+	$token = $prefs->get('discogsToken') unless defined $token && length $token;
 
 	if ( !defined $token || $token eq '' ) {
 		$params->{syncResult} = string('PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN');

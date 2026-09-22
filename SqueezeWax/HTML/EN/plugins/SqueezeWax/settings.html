@@ -19,6 +19,7 @@
 		<input name="testToken" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]"
 			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]" />
+		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
 
 	[% IF tokenTestResult %]
@@ -53,6 +54,7 @@
 		<input name="syncNow" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]"
 			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]" />
+		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
 
 	[% IF syncResult %]

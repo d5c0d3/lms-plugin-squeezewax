@@ -56,10 +56,12 @@ our @SUBSCRIBED;  # every Slim::Control::Request::subscribe call
 our @SYNCS;       # every Async->sync call
 our %PREFS;
 our %MIGRATIONS;  # version => coderef, as recorded by the prefs stub
+our %CHANGES;     # prefname => coderef, likewise
 our $SCANNING = 0;
 our $REJECTED = 0;
 our $SKIP_FIRST = 1;
 our @SKIPS;
+our @CLEARED;
 
 BEGIN {
 	$INC{'Slim/Plugin/Base.pm'}      = 1;
@@ -140,7 +142,9 @@ BEGIN {
 	# against a prefs store that actually contains the dead key.
 	sub migrate     { $MIGRATIONS{ $_[1] } = $_[2]; return 1 }
 	sub setValidate { $main::VALIDATED{ $_[2] } = $_[1]; return 1 }
-	sub setChange   { 1 }
+	# Recorded, so the assertions can fire the registered callback the way
+	# Slim/Utils/Prefs/Base.pm:91 does when the pref is written.
+	sub setChange   { my ( $self, $cb, @prefs ) = @_; $CHANGES{$_} = $cb for @prefs; return 1 }
 	sub remove      { delete $PREFS{ $_[1] }; delete $PREFS{ '_ts_' . $_[1] }; return 1 }
 }
 
@@ -171,6 +175,11 @@ BEGIN {
 	# The rejection pause (§15.15 part 2). Async owns the state; Plugin.pm only
 	# consults it, so the suite drives it from here.
 	*{'Plugins::SqueezeWax::API::Async::tokenRejected'} = sub { $main::REJECTED };
+	*{'Plugins::SqueezeWax::API::Async::clearTokenRejected'} = sub {
+		push @CLEARED, 1;
+		$main::REJECTED = 0;
+		return;
+	};
 	*{'Plugins::SqueezeWax::API::Async::noteSkipped'}   = sub {
 		push @SKIPS, 1;
 		return $main::SKIP_FIRST--> 0 ? 1 : 0;
@@ -197,6 +206,7 @@ sub reset_state {
 	@SYNCS  = ();
 	@SUBSCRIBED = ();
 	@SKIPS    = ();
+	@CLEARED  = ();
 	$SCANNING = 0;
 	$REJECTED = 0;
 	$SKIP_FIRST = 1;
@@ -400,6 +410,51 @@ diag('a rejected token stops scan-triggered syncs, not the button');
 	is( scalar @SKIPS, 1,
 		'a rejected token is the reported reason even while a scan runs' );
 	is( scalar @SYNCS, 0, '  ...and no sync starts either way' );
+}
+
+# ---------------------------------------------------------------------------
+# A new token is a new chance (§15.15 parts 2 and 3)
+# ---------------------------------------------------------------------------
+#
+# The last error and the rejection pause both describe the OLD token's last
+# conversation with Discogs. Leaving either in place after the user has fixed
+# the thing they describe is how a fixed server goes on looking broken - which
+# is how a stale `no_response` misled a reader of this project's own logs on
+# 2026-09-22.
+
+diag('changing the token clears what described the old one');
+
+{
+	reset_state();
+
+	ok( $CHANGES{discogsToken}, 'a change handler is registered for the token' );
+	ok( !$CHANGES{discogsLastSyncError},
+		'  ...and not for anything it writes itself, which would recurse' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsLastSyncError} = 'unauthorized';
+	$REJECTED = 1;
+
+	$CHANGES{discogsToken}->( 'discogsToken', 'a-new-token' );
+
+	is( $PREFS{discogsLastSyncError}, '',
+		'changing the token clears the last sync error' );
+	is( scalar @CLEARED, 1, '  ...and clears the rejection pause' );
+	ok( !$REJECTED, '  ...so the next finished scan syncs again' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsLastSynced}    = 1790085746;
+	$PREFS{discogsLastSyncItems} = 203;
+
+	$CHANGES{discogsToken}->( 'discogsToken', 'another-token' );
+
+	is( $PREFS{discogsLastSynced}, 1790085746,
+		'  ...but leaves the last-synced time alone' );
+	is( $PREFS{discogsLastSyncItems}, 203, '  ...and the item count' );
 }
 
 done_testing();
