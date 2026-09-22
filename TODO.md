@@ -151,15 +151,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       Also adds `scripts/check-all.sh` — there was no all-suites runner
       before, which is part of why a missing suite was easy to miss. 733
       assertions across eight suites.
-- [ ] **2026-09-22: the offline check-6 harness is not committed.** Check 6
-      was proved by driving the real `Ownership->apply` and `Library` against
-      COPIES of the live databases with a doctored collection, which tests
-      ownership conclusions without touching anyone's Discogs account. That
-      is worth having as `scripts/ownership-offline-check.pl`, and it is the
-      only way to exercise "a record leaves the collection" repeatably. It
-      currently exists only in a session scratchpad and will be lost. Decide
-      whether to commit it; if not, record the method in the plan so the run
-      is reproducible.
+- [x] **2026-09-22: the offline check-6 harness is not committed.** DONE —
+      landed as `scripts/ownership-offline-check.pl`. Takes its paths as
+      arguments like `title-agreement.pl`, defaults to the committed page-1
+      fixture and to dropping releases 9701013 and 443973, and takes its own
+      copies of both databases through SQLite's online backup from a
+      read-only handle — so it is safe to point straight at a running LMS and
+      it does not trust the caller to have passed a copy. Verified against
+      the live files: same two-row result, and `discogs_match` byte-identical
+      afterwards. **Not in `scripts/check-all.sh`**, and its header says why:
+      it needs a real library, which no other suite does.
 
 - [ ] **2026-09-22, UI: the action buttons give no "working on it" feedback.**
       Asked for after the first real sync. `_syncNow` defers the page render
