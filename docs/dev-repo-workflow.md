@@ -344,6 +344,54 @@ assumed — see §7.
 
 ---
 
+## 6a. Testing ownership without changing the collection
+
+The ownership pass's most awkward behaviour to exercise is "a record left the
+Discogs collection": its ownership-only row should be deleted, and a tagged
+row should fall back to `absent` / `candidate` while keeping its release id.
+Testing that for real means editing a collection the project does not own and
+cannot restore if a step fails, so there are two ways to do it without
+touching one.
+
+**Offline, on copies** — `scripts/ownership-offline-check.pl`. It takes a
+`library.db` and a `squeezewax.db`, copies both through SQLite's online backup
+from a read-only handle (safe against a running LMS), and runs the real pass
+three times against the committed page-1 fixture: as given, minus some release
+ids, then as given again. It needs no token and no network. It proves what the
+pass does with a changed list; it cannot prove a real fetch produces one.
+
+**On the live server** — the `discogsTestExcludeReleases` pref. A
+comma-separated list of Discogs release ids, empty by default and with no
+field on the settings page. `API/Async.pm`'s `_testFilter` removes those
+releases from the entry list the ownership pass is handed, *after* the
+completeness gate and *before* `Ownership->apply`. The fetch is untouched and
+nothing is sent to Discogs: the collection on discogs.com does not change.
+
+Because the filter sits after the gate, hiding a release can never make a sync
+look incomplete or mask a genuinely short page — the `counted` vs `items`
+comparison has already run on the unfiltered list.
+
+Set it through LMS's own pref interface rather than by editing the file, so
+the running server sees it:
+
+```
+curl -s -X POST http://<server>:9000/jsonrpc.js -H 'Content-Type: application/json' \
+  -d '{"id":1,"method":"slim.request","params":["",["pref","plugin.squeezewax:discogsTestExcludeReleases","9701013,443973"]]}'
+```
+
+Then press **Sync collection now** and diff `discogs_match` against a copy
+taken beforehand. Clear it with `""` and sync again; the table must return to
+the copy exactly, because every sync re-derives every conclusion (decisions
+§13.2).
+
+**It cannot sit on silently.** While the pref is non-empty every sync logs at
+**warn**: `test filter active: hiding N releases from the ownership pass`,
+including when N is 0 — a filter naming an id the collection does not contain
+is still a filter that is on, and that line is how its owner tells a wrong id
+from a wrong conclusion.
+
+---
+
 ## 7. What's confirmed, and what this doesn't solve
 
 - `sha1sum`'s digest is what LMS's Extension Downloader verifies before

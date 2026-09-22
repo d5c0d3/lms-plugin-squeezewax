@@ -512,6 +512,54 @@ sub _fail {
 	} );
 }
 
+=head2 _testFilter( \@entries )
+
+The entry list with any release id named by C<discogsTestExcludeReleases>
+removed. A development aid, not a feature.
+
+=cut
+
+# Build-order steps 6-7's hardware check (6) is "remove a record from the
+# Discogs collection and watch the pass react". Doing that for real mutates
+# data this project does not own and cannot restore if a step fails. This
+# makes a release invisible TO THE PASS instead, which is the only place the
+# pass ever sees one.
+#
+# Where it sits is the whole of its safety. It runs AFTER the completeness
+# gate, which compares $run->{counted} against $run->{items} - both computed
+# from the unfiltered list, before this is reached - so hiding a release can
+# never make a sync look incomplete, and can never mask a real short page.
+# Nothing is sent to Discogs and the fetch is untouched: the collection on
+# discogs.com is not altered, read-only or otherwise.
+#
+# There is no settings-page field for the pref on purpose. It is set by hand
+# for a test and cleared afterwards, and a control on the page would invite it
+# being left on.
+#
+# It cannot sit on silently. While the pref is non-empty EVERY sync logs at
+# warn, not info, so a forgotten filter shows up in the log of a server whose
+# owner is wondering why a record stopped badging.
+sub _testFilter {
+	my ($entries) = @_;
+
+	my $raw = $prefs->get('discogsTestExcludeReleases');
+
+	return $entries unless defined $raw && $raw =~ /\S/;
+
+	my %drop = map { $_ => 1 } grep { /^\d+$/ } split /\s*,\s*/, $raw;
+
+	my @kept = grep { !defined $_->{id} || !$drop{ $_->{id} } } @$entries;
+
+	# Logged even when nothing matched: a filter naming ids this collection
+	# does not contain is still a filter that is on, and the count is how its
+	# owner notices it was the wrong id rather than the wrong conclusion.
+	$log->warn( 'test filter active: hiding '
+		. ( scalar(@$entries) - scalar(@kept) )
+		. ' releases from the ownership pass' );
+
+	return \@kept;
+}
+
 # The single exit. Every path out of a sync comes through here, which is what
 # makes "never partially advance the timestamp for a sync that didn't complete"
 # (§13.7/§14.2) one rule in one place rather than a convention each caller has
@@ -559,7 +607,7 @@ sub _finish {
 		require Plugins::SqueezeWax::Ownership;
 
 		my $applied = Plugins::SqueezeWax::Ownership->apply(
-			[ values %{ $run->{entries} || {} } ] );
+			_testFilter( [ values %{ $run->{entries} || {} } ] ) );
 
 		if ( $applied ne 'ok' ) {
 			$result = { ok => 0, error => $applied };

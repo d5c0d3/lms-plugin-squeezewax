@@ -104,6 +104,18 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [ ] **2026-09-22: `discogsTestExcludeReleases` is a development aid and must
+      not outlive v1's testing.** A hidden pref, empty by default, no settings
+      field: `API/Async.pm`'s `_testFilter` hides the listed release ids from
+      the ownership pass, after the completeness gate and before
+      `Ownership->apply`, so "a record left the collection" can be exercised
+      on a live server without altering a real collection. The fetch is
+      untouched and nothing is sent to Discogs. Every sync warns while it is
+      set, including with a count of 0. Documented in
+      `docs/dev-repo-workflow.md` §6a; asserted in `sync-check.pl` (15
+      assertions). **Before v1 ships, decide whether it stays.** It is a
+      back door into the badging rules that no user should ever need, and its
+      only defence is that it warns.
 - [ ] **2026-09-22, NAMED COST of decisions §15.13 part 3 (artists at L2): two
       correct badges lost on the reference library** — Future Sound Of London,
       albums 3124 and 3127, against Discogs `The Future Sound Of London`.
