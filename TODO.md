@@ -104,6 +104,23 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [ ] **2026-09-22, NAMED COST of decisions §15.13 part 3 (artists at L2): two
+      correct badges lost on the reference library** — Future Sound Of London,
+      albums 3124 and 3127, against Discogs `The Future Sound Of London`.
+      §13.10.4's trade, accepted; these reach the review queue (step 8).
+      Revisit only if the pattern repeats.
+- [ ] **2026-09-22, STEP 8 CONSTRAINT, restated with a number:** after the
+      first real pass the reference server has 329 `strict`/`candidate` rows,
+      of which 305 are ownership `absent` — tagged albums the user does not
+      own. None of them is a queue item (§13.4, §14.3, design §3: candidate is
+      not the queue). The queue selects §13.10.5's four contents only; on this
+      run that is 5 ambiguous + 2 artist-disagree, plus Strict conflicts and
+      (later) tag disagreements.
+- [ ] **2026-09-22, DECIDED (design chat): settings-page action buttons
+      disable and relabel on click**, client side, showing the existing
+      running string. A polling interim page is recorded, not designed:
+      revisit if syncs longer than ~10s are seen.
+- [ ] **2026-09-22: `Settings.pm` has an offline suite.**
 - [ ] **2026-09-22: the offline check-6 harness is not committed.** Check 6
       was proved by driving the real `Ownership->apply` and `Library` against
       COPIES of the live databases with a doctored collection, which tests
@@ -1570,6 +1587,12 @@ Shared reminder list. Both I and Claude Code read and update this.
             slimserver `a670a38c2b14` that nothing in 9.1 writes the column;
             (iv) checks that empirically and asks what a file read would
             cost to get it (Q9).
+      (v)   Count the albums that actually reach the title route (node H): no
+            identification, or a strict identification not resolved at node D
+            or F. The gate governs only those; (i)-(ii) over every album
+            measure the title route, not the gate (decisions §15.14
+            correction, 2026-09-22). Needs a copy of squeezewax.db beside
+            library.db.
       Add no rule mid-run: report the numbers, decide afterwards. That is
       the same trap warning this measurement's first run honoured over the
       `Various` equivalence itself.

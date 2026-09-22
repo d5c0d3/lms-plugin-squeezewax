@@ -2498,9 +2498,13 @@ LMS album — expected, and they generate no queue work.
   Every figure in 13.10 is a one-page figure.
 - **The `Various` / `Various Artists` vocabulary difference is unresolved, not
   absent.** LMS names compilation artists `Various Artists`; Discogs uses
-  `Various`. It measured **zero impact on page 1 only because no compilation
-  matched there** — with 95 LMS compilations and 7 `Various` entries on that page
-  alone, pages 2–3 could move the auto-badge rate materially. An equivalence rule
+  `Various`. ~~It measured **zero impact on page 1 only because no compilation
+  matched there**~~ — with 95 LMS compilations and 7 `Various` entries on that page
+  alone, pages 2–3 could move the auto-badge rate materially.
+  **Corrected 2026-09-22:** six compilations matched on page 1 (albums 3345, 3347,
+  3351, 3355, 3356, 3358). The zero is the number of times the equivalence fired,
+  not the number of matches: all six carry the literal `Various` on the LMS side
+  and agree with Discogs without the mapping. An equivalence rule
   was deliberately not added mid-measurement. If it is added later it is a
   **vocabulary mapping between two catalogues**, the same class as stripping
   Discogs' trailing ` (N)` disambiguator, and must be justified on that ground
@@ -3420,8 +3424,16 @@ between two catalogues**, the same class as stripping Discogs' trailing ` (N)`
 disambiguator, and must be justified on that ground rather than on improving a
 number."
 
-It passes that test, and it visibly does not improve a number. **Measured on
-page 1: zero impact**, because no compilation matched there (§13.10.6). The two
+It passes that test, and it visibly does not improve a number. ~~**Measured on
+page 1: zero impact**, because no compilation matched there (§13.10.6).~~
+
+**Corrected 2026-09-22.** Six compilations *did* match on page 1 — albums 3345,
+3347, 3351, 3355, 3356 and 3358. Every one carries the literal `Various` on the
+LMS side, which agrees with Discogs' `Various` by plain equality and needs no
+mapping. So the measured zero is real, but it is the number of times **the
+equivalence fired**, not the number of compilations that matched. The ruling is
+unaffected: an equivalence that never fires neither improves nor worsens a
+number. The two
 catalogues simply name the same entity differently — Discogs calls it `Various`,
 LMS calls it by its own configurable label — and neither name is evidence about
 which record the user owns.
@@ -3499,8 +3511,14 @@ record — so the gate costs nothing that was not already being paid.
 remain bad at 10:1." A queued compilation is not a lost badge — the user
 confirms it and it badges. So this equivalence buys convenience and pays in
 wrong-badge exposure on the one class §14.4 gives no recovery path. Both sides of
-that trade are unmeasured: page 1 showed **zero** compilations matching, so even
-the queue-flood it was meant to prevent is a projection.
+that trade are unmeasured: ~~page 1 showed **zero** compilations matching, so even
+the queue-flood it was meant to prevent is a projection.~~
+
+**Corrected 2026-09-22.** Page 1 showed **six** compilations matching, not zero;
+what was zero is the number of times the equivalence fired, because all six carry
+the literal `Various` on the LMS side. The queue-flood the equivalence was meant
+to prevent remains a projection, for the different reason that no page-1
+compilation needed the mapping at all.
 
 #### What is not designed here
 
@@ -4033,8 +4051,17 @@ the gate. The gate exists because, for a compilation, artist agreement carries
 almost no evidence (§11, §15.7). That holds whether the two sides say
 `Various` / `Various`, `Various Artists` / `Various Artists`, or need the
 mapping. Keyed on the mechanism, the outcome turned on which of Discogs' two
-spellings a release carried. Measured page 1 has no matched compilation, so
-nothing about this is measured either way.
+spellings a release carried. ~~Measured page 1 has no matched compilation, so
+nothing about this is measured either way.~~
+
+**Corrected 2026-09-22.** Page 1 has six Various-to-Various matches — albums 3345,
+3347, 3351, 3355, 3356 and 3358, LMS album artist literally `Various`, Discogs
+`Various` — and under the title route the gate holds all six
+(`scripts/title-agreement.pl --step7`, `990ce2a`). On the first real run the gate
+held **zero**: all six are tagged and are decided at design §3 node D or F, so they
+never reach node H. The script measures the title route over every album; the pass
+reaches the title route only for albums no tag resolved. The ruling stands. Its
+measured cost on this well-tagged library is zero.
 
 #### Why literals are acceptable on the LMS side here
 

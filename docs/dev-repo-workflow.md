@@ -280,6 +280,14 @@ itself, not left to memory.
    the code *onto* the server, it doesn't confirm it's correct.
 6. Repeat.
 
+**Pushes do not work from the Claude Code environment.** The remote is HTTPS
+with no stored credential, no SSH identity and no `gh`, so `--publish` builds
+the zip, writes `repo.xml`, commits both, and then fails at `git push` — and
+says so rather than failing silently. The consequence to plan around: the
+version is bumped and committed *before* anyone can see it served, so a build
+that is never pushed still consumes its number. The user pushes by hand; until
+they do, the `<url>` in `repo.xml` points at a zip GitHub does not yet have.
+
 **Never leave a production repository and a branch repository configured
 at the same time** — §1's `findUpdates` finding is the reason, and it fails
 silently (a higher-versioned branch build gets offered to a production
