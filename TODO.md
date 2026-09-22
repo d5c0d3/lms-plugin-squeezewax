@@ -120,7 +120,22 @@ Shared reminder list. Both I and Claude Code read and update this.
       disable and relabel on click**, client side, showing the existing
       running string. A polling interim page is recorded, not designed:
       revisit if syncs longer than ~10s are seen.
-- [ ] **2026-09-22: `Settings.pm` has an offline suite.**
+- [x] **2026-09-22: `Settings.pm` has an offline suite.**
+      `scripts/settings-check.pl`, 43 assertions. It drives the REAL
+      `handler()`, not an extracted dispatcher: extracting the chain would
+      have left the shipped dispatch as untested as it was when the bug
+      shipped. Which action ran is observed at the module's real boundaries
+      (`Async->sync`, `SimpleAsyncHTTP->get`, `sample_albums`/`add_task`, the
+      pref write), never by overriding the action subs. It also reads
+      `settings/footer.html` out of `refs/` and asserts the hidden
+      `saveSettings` field is still there, so a core change to that template
+      fails here rather than in the field.
+      **Verified to catch the original bug:** restoring 0.0.0.3's dispatch
+      order fails 10 of the 43, including "saveSettings + syncNow reaches
+      _syncNow".
+      Also adds `scripts/check-all.sh` — there was no all-suites runner
+      before, which is part of why a missing suite was easy to miss. 733
+      assertions across eight suites.
 - [ ] **2026-09-22: the offline check-6 harness is not committed.** Check 6
       was proved by driving the real `Ownership->apply` and `Library` against
       COPIES of the live databases with a doctored collection, which tests
@@ -152,13 +167,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       submit is the cheap one and needs no new round trip; rendering an
       interim page that polls is the honest one and is what a long sync
       actually wants. Design chat, not a unilateral pick.
-- [ ] **2026-09-22, NO SUITE COVERS `Settings.pm`'s dispatch.** The dead-button
+- [x] **2026-09-22, NO SUITE COVERS `Settings.pm`'s dispatch.** DONE — see
+      `scripts/settings-check.pl` above.
+      ~~ The dead-button
       bug above shipped in 0.0.0.3 and would have been caught by one offline
       test asserting that a params hash carrying BOTH `saveSettings` and
       `syncNow` reaches `_syncNow`. There is no `scripts/settings-check.pl`;
       `Settings.pm` is the only module with no offline exercise, and it is the
       one module whose inputs come from a browser. Worth one, at least for the
-      dispatch chain — the async render paths are harder and can wait.
+      dispatch chain — the async render paths are harder and can wait.~~
 
 - [x] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
       rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** DONE
