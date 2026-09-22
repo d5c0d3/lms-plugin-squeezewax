@@ -104,6 +104,24 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [x] **2026-09-22, REGRESSION SHIPPED AND FIXED IN ONE SESSION: 0.0.0.5's
+      disable-on-click made the buttons dead again.** Disabling a submit
+      button inside its own click handler does not merely drop its name from
+      the form data set — it **cancels the submission**. On the reference
+      server the buttons greyed out, relabelled, and produced no server-side
+      activity at all; the only sync in the window was the 300s first-poll
+      timer. Fixed in 0.0.0.6 by deferring the disable with `setTimeout(…, 0)`,
+      after the form data set has been serialised.
+      **Why the suite missed it:** `settings-check.pl` asserted that the name
+      is copied BEFORE the disable, which was still true. The defect was that
+      the disable happened synchronously at all. Two assertions added: the
+      script must defer with `setTimeout`, and the disable must be inside the
+      deferral.
+      Second time in one session that this page's dispatch has been broken by
+      something invisible to the server (the hidden `saveSettings` field, then
+      this). Both were browser-side facts, and neither offline suite could
+      have found them without being told what to look for. **A browser-level
+      check of this page is the only thing that would catch the third.**
 - [ ] **2026-09-22: `discogsTestExcludeReleases` is a development aid and must
       not outlive v1's testing.** A hidden pref, empty by default, no settings
       field: `API/Async.pm`'s `_testFilter` hides the listed release ids from

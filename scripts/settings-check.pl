@@ -543,11 +543,22 @@ for my $name ( sort keys %wired ) {
 	if ($script) {
 		my $append  = index( $script, 'form.appendChild(hidden)' );
 		my $disable = index( $script, 'disabled = true' );
+		my $defer   = index( $script, 'setTimeout(' );
 
 		ok( $append >= 0,  '  ...which copies the clicked name into a hidden field' );
 		ok( $disable >= 0, '  ...and disables the buttons' );
 		ok( $append >= 0 && $disable >= 0 && $append < $disable,
 			'  ...copying BEFORE disabling, or the name never reaches the server' );
+
+		# The regression 0.0.0.5 shipped. Disabling a submit button inside its
+		# own click handler does not just drop its name from the form data
+		# set - it CANCELS the submission. The buttons greyed out, relabelled,
+		# and nothing was ever sent. The disable has to be deferred past the
+		# current task, and the ordering assertion above cannot see the
+		# difference, because copying still came first.
+		ok( $defer >= 0, '  ...and defers the disable with setTimeout' );
+		ok( $defer >= 0 && $disable >= 0 && $defer < $disable,
+			'  ...with the disable INSIDE the deferral, or the form never submits' );
 	}
 }
 
