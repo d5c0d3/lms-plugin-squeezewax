@@ -60,11 +60,6 @@
 	[% END %]
 [% END %]
 
-[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC_INTERVAL" desc="PLUGIN_SQUEEZEWAX_SYNC_INTERVAL_DESC" %]
-	<input type="text" class="stdedit" size="10"
-		name="pref_discogsSyncInterval" value="[% prefs.pref_discogsSyncInterval | html %]" />
-[% END %]
-
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
 	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
 	    variables inside FOREACH, so an outer counter reverts to 0 after the

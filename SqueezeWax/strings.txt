@@ -128,12 +128,6 @@ PLUGIN_SQUEEZEWAX_SYNC_BUTTON
 PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING
 	EN	Syncing...
 
-PLUGIN_SQUEEZEWAX_SYNC_INTERVAL
-	EN	Sync interval (seconds)
-
-PLUGIN_SQUEEZEWAX_SYNC_INTERVAL_DESC
-	EN	How long to wait between automatic collection syncs. The default is 86400 (once a day), and the minimum is 3600 (once an hour). A sync costs one Discogs request per 100 items in your collection, so there is little to gain from a short interval.
-
 PLUGIN_SQUEEZEWAX_SYNC_LAST
 	EN	Last synced
 

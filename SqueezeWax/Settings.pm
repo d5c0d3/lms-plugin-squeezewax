@@ -49,11 +49,9 @@ sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html')
 # for the template, same as core's own password field (HTML/EN/settings/
 # server/security.html).
 #
-# discogsSyncInterval is a plain integer and rides the same generic path, with
-# its floor enforced by the validator Plugin.pm registers rather than by
-# anything here - a rejected value keeps the old one, which is the behaviour
-# core's own numeric settings have.
-sub prefs { return ($prefs, qw(discogsToken discogsSyncInterval)) }
+# discogsSyncInterval was here until §15.15 part 1 removed the scheduled sync.
+# Nothing replaces it: there is no setting for a thing that no longer happens.
+sub prefs { return ($prefs, qw(discogsToken)) }
 
 sub handler {
 	my ( $class, $client, $params, $callback, @args ) = @_;

@@ -37,22 +37,25 @@ my $prefs = preferences('plugin.squeezewax');
 # _ts_discogsMaxTier twin and saves (Slim/Utils/Prefs/Base.pm:242-258).
 $prefs->migrate(1, sub { $_[0]->remove('discogsMaxTier'); 1 });
 
+# discogsSyncInterval is gone with the scheduled sync (decisions §15.15 part 1);
+# drop it from existing prefs files. Same pattern, same place and same reasoning
+# as migrate(1) above.
+$prefs->migrate(2, sub { $_[0]->remove('discogsSyncInterval'); 1 });
+
 # Collection-sync defaults (build-order step 5). File scope and not under
-# main::WEBUI for the same reason as the migration above: the sync runs on a
+# main::WEBUI for the same reason as the migrations above: the sync runs on a
 # headless server, which never loads Settings.pm, so its defaults cannot be
 # established there.
 #
-# 86400 (24h) is a product call made in step 5's plan, NOT a measured or
-# specified figure - no prior decision sets one, and TODO.md records that so a
-# later reader does not mistake it for sourced. The cost it is balanced against
-# is real though: decisions §9.4 measured a 203-item collection at 3 requests,
-# so daily polling is negligible against a 60/minute budget, and the thing being
-# polled for - a record bought and added to Discogs - moves on the order of days.
+# There is no interval pref. §15.15 part 1 removed the scheduled sync outright
+# rather than giving it an off switch: a server plugin should not call a third
+# party on its own schedule. The accepted cost is recorded there - a record
+# added to the collection does not badge until the next scan or a press of the
+# button, and staleness is silent.
 #
 # discogsLastSynced is 0, not undef, so "never synced" is a value the template
 # can test rather than a missing key.
 $prefs->init({
-	discogsSyncInterval  => 86400,
 	discogsLastSynced    => 0,
 	discogsLastSyncItems => undef,
 	discogsLastSyncError => '',
@@ -74,15 +77,6 @@ $prefs->init({
 # validator (Slim/Utils/Prefs/Namespace.pm:114-135, the same call shape
 # Slim/Utils/Prefs.pm:317-322 uses for httpport and bufferSecs); an out-of-range
 # value is refused and the previous one kept.
-$prefs->setValidate({ validator => 'intlimit', low => 3600 }, 'discogsSyncInterval');
-
-# Not at startup. initPlugin runs while the server is still coming up, and a
-# sync there would compete with it for no reason - the collection is not going
-# anywhere. Long enough to be clear of startup, short enough that a server which
-# is only ever up briefly still syncs. Same reasoning, and the same ballpark, as
-# Slim/Plugin/OnlineLibrary/Plugin.pm's DELAY_FIRST_POLL.
-use constant DELAY_FIRST_SYNC => 300;
-
 # Long enough to absorb a duplicate ['rescan','done'] and let LMS settle after a
 # scan, short enough that a user who rescans to pick up a new record does not
 # wait noticeably for the badge. Not a measured figure.
@@ -110,13 +104,18 @@ sub initPlugin {
 	$class->SUPER::initPlugin(@_);
 }
 
-# Two of §13.7's three triggers. The third is the settings-page button, which
-# lives in Settings.pm because that is the only one with a user attached; these
-# two are here because they have to run on a headless server, which never loads
-# Settings.pm (decisions §15.12 part 3).
+# One of §13.7's two triggers, as §15.15 part 1 leaves them. The other is the
+# settings-page button, which lives in Settings.pm because that is the only one
+# with a user attached; this one is here because it has to run on a headless
+# server, which never loads Settings.pm (decisions §15.12 part 3).
 #
-# Neither of them decides whether to sync. API/Async.pm's guard does, so a
-# rescan finishing three seconds after an interval tick costs one sync, not two.
+# Nothing here decides whether to sync. API/Async.pm's guard does, so a rescan
+# finishing while a manual sync is already running costs one sync, not two.
+#
+# NO TIMER IS ARMED HERE. There is no startup sync and no interval (§15.15 part
+# 1): a fresh install syncs for the first time at the first finished scan, or
+# when the user presses the button. That is a recorded consequence, not an
+# oversight - see TODO.md, 2026-09-22.
 sub _initSync {
 	# Keyed by the stringified coderef (refs/slimserver/Slim/Control/Request.pm:
 	# 788-809, %listeners), so subscribing the same named sub twice replaces its
@@ -129,8 +128,6 @@ sub _initSync {
 	# corrects §13.7 on this - there is nothing to compare a collection against
 	# until the library scan has finished writing it.
 	Slim::Control::Request::subscribe( \&_rescanDone, [ ['rescan'], ['done'] ] );
-
-	_scheduleSync(DELAY_FIRST_SYNC);
 
 	return;
 }
@@ -170,14 +167,12 @@ sub _scheduleSync {
 	return;
 }
 
+# The debounced tick. Reached only from _rescanDone (§15.15 part 1 removed the
+# interval re-arm that used to stand at the top of this sub), so every path out
+# of here simply returns: there is nothing to re-arm, and the retry for anything
+# that fails is the next finished scan or the button (§14.2 as §15.15 sharpens
+# it).
 sub _syncTick {
-	# Re-armed first, on every path out of here, so that a sync which fails -
-	# or is refused because one is already running, or because the token is
-	# missing - does not silently end automatic syncing for the life of the
-	# server. §14.2: a failure is reported and retried on the interval, never
-	# terminal.
-	_scheduleSync( $prefs->get('discogsSyncInterval') || 86400 );
-
 	my $token = $prefs->get('discogsToken');
 
 	if ( !defined $token || $token eq '' ) {
@@ -188,8 +183,13 @@ sub _syncTick {
 	}
 
 	# Deferred, not refused: the button refuses during a scan because a user is
-	# waiting for an answer, but an interval tick has all the time in the world
-	# and the next rescan-done will bring it back anyway.
+	# waiting for an answer, and this one has nobody waiting.
+	#
+	# Its safety net used to be the interval. It is now the scan itself: this
+	# tick fires DEBOUNCE_AFTER_RESCAN after a ['rescan','done'], so reaching it
+	# while a scan is running means a NEW scan started inside that window - and
+	# that scan ends in its own ['rescan','done'], which arms a fresh tick.
+	# Dropping this one loses nothing.
 	if ( Slim::Music::Import->stillScanning ) {
 		main::INFOLOG && $log->is_info
 			&& $log->info('library scan in progress; deferring collection sync');
