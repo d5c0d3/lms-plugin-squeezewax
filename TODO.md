@@ -134,17 +134,30 @@ Shared reminder list. Both I and Claude Code read and update this.
       callback argument, so the real code is available there. Not applied —
       it changes retry behaviour on a recorded decision, and belongs in a
       design ruling first.
-- [ ] **2026-09-22: the two token buttons disagree about which token they
-      mean.** `_testToken` deliberately prefers the unsaved field
-      (`Settings.pm:321`) — the point of a Test button is to check before
-      committing. `_syncNow` reads the stored pref (`:220`), and
-      `SUPER::handler` only saves the field afterwards, inside
-      `_finishSyncNow`. So pasting a token and pressing **Sync collection
-      now** syncs with the PREVIOUS token and saves the new one after the
-      fact; you must Save first, then Sync. Observed 2026-09-22: the first
-      click succeeded with the old token while the new one was already in the
-      field. Decide whether `_syncNow` should prefer the field like
-      `_testToken`, or whether the page should say so.
+- [ ] **2026-09-22: EVERY action button saves the settings, and the two token
+      buttons then disagree about which token they used.** Corrected and
+      widened by the owner, 2026-09-22.
+      `_finishTestToken` and `_finishSyncNow` are character-identical: both
+      call `$class->SUPER::handler( $client, $params )`, which saves every
+      scalar in `prefs()` whenever `saveSettings` is present — and
+      `settings/footer.html:39`'s hidden field means it always is.
+      `detectTagNames` reaches the same call by falling through. So all three
+      buttons save.
+      What differs is only which value the ACTION consults:
+      - **Test token** reads the FIELD (`Settings.pm:321`, deliberate — the
+        point of a Test button is to check before committing), then saves it.
+        Effectively "Test and Save".
+      - **Sync collection now** reads the STORED pref (`:220`) and only saves
+        the field afterwards, in `_finishSyncNow`. Effectively "Sync with the
+        old token, then Save".
+      Observed end to end: a fake token typed and Test-token'd was both
+      tested and stored; a later Sync then failed against it. Restoring the
+      real token by Test token alone was enough to make the next sync
+      succeed.
+      Neither behaviour is discoverable from the page. Decide whether
+      `_syncNow` should prefer the field as `_testToken` does, whether the
+      buttons should stop saving at all, or whether the page should say what
+      each one does.
 - [ ] **2026-09-22, FOR THE DESIGN CHAT: the scheduled sync cannot be turned
       off.** `Plugin.pm:77` validates `discogsSyncInterval` with
       `intlimit, low => 3600`, so the smallest legal value is one hour and
