@@ -57,6 +57,7 @@ our @SYNCS;       # every Async->sync call
 our %PREFS;
 our %MIGRATIONS;  # version => coderef, as recorded by the prefs stub
 our %CHANGES;     # prefname => coderef, likewise
+our @WRITES;      # ordered pref writes
 our $SCANNING = 0;
 our $REJECTED = 0;
 our $SKIP_FIRST = 1;
@@ -130,7 +131,33 @@ BEGIN {
 	package Test::StubPrefs;
 	sub new { bless {}, shift }
 	sub get { return $PREFS{ $_[1] } }
-	sub set { $PREFS{ $_[1] } = $_[2]; return 1 }
+	# Dispatches onchange, as Slim/Utils/Prefs/Base.pm:91 does, and suppresses
+	# a scalar set that changes nothing (:94-97).
+	#
+	# Until 2026-09-24 this was a plain hash write and the assertions fired the
+	# registered callback BY HAND - so they proved the callback's body and not
+	# that anything was wired to it. Deleting the setChange registration in
+	# Plugin.pm would have left this suite green (stub audit, entry 2.2).
+	sub set {
+		my ( $self, $pref, $new ) = @_;
+
+		my $old = $PREFS{$pref};
+
+		return 1 if !ref $new
+			&& defined $new
+			&& defined $old
+			&& $new eq $old;
+
+		$PREFS{$pref} = $new;
+
+		push @WRITES, $pref;
+
+		if ( my $cb = $CHANGES{$pref} ) {
+			$cb->( $pref, $new );
+		}
+
+		return 1;
+	}
 	sub init {
 		my ( $self, $defaults ) = @_;
 		for my $k ( keys %{ $defaults || {} } ) {
@@ -200,6 +227,11 @@ require Plugins::SqueezeWax::Plugin;
 
 my $P = 'Plugins::SqueezeWax::Plugin';
 
+# The same store Plugin.pm holds: Slim::Utils::Prefs::preferences returns a
+# fresh object each call, but every one of them reads and writes %PREFS and
+# consults %CHANGES, so a write through this handle is a write through theirs.
+my $prefs_under_test = Test::StubPrefs->new;
+
 sub reset_state {
 	@TIMERS = ();
 	@KILLS  = ();
@@ -207,6 +239,7 @@ sub reset_state {
 	@SUBSCRIBED = ();
 	@SKIPS    = ();
 	@CLEARED  = ();
+	@WRITES   = ();
 	$SCANNING = 0;
 	$REJECTED = 0;
 	$SKIP_FIRST = 1;
@@ -437,7 +470,9 @@ diag('changing the token clears what described the old one');
 	$PREFS{discogsLastSyncError} = 'unauthorized';
 	$REJECTED = 1;
 
-	$CHANGES{discogsToken}->( 'discogsToken', 'a-new-token' );
+	# Written through the store, not fired by hand: that is the difference
+	# between proving the callback's body and proving it is WIRED.
+	$prefs_under_test->set( 'discogsToken', 'a-new-token' );
 
 	is( $PREFS{discogsLastSyncError}, '',
 		'changing the token clears the last sync error' );
@@ -450,11 +485,41 @@ diag('changing the token clears what described the old one');
 	$PREFS{discogsLastSynced}    = 1790085746;
 	$PREFS{discogsLastSyncItems} = 203;
 
-	$CHANGES{discogsToken}->( 'discogsToken', 'another-token' );
+	$prefs_under_test->set( 'discogsToken', 'another-token' );
 
 	is( $PREFS{discogsLastSynced}, 1790085746,
 		'  ...but leaves the last-synced time alone' );
 	is( $PREFS{discogsLastSyncItems}, 203, '  ...and the item count' );
+}
+
+# The registration itself, not just its body. Deleting the setChange line in
+# Plugin.pm used to leave this suite green (stub audit, entry 2.2).
+{
+	reset_state();
+	$PREFS{discogsLastSyncError} = 'unauthorized';
+	$REJECTED = 1;
+
+	$prefs_under_test->set( 'discogsToken', 'yet-another' );
+
+	ok( ( grep { $_ eq 'discogsToken' } @WRITES ),
+		'writing the token really writes it' );
+	is( scalar @CLEARED, 1,
+		'  ...and the hook Plugin.pm registered fires from the WRITE' );
+}
+
+# Suppression, so an unchanged token is not a "new chance".
+{
+	reset_state();
+	$PREFS{discogsToken}         = 'same';
+	$PREFS{discogsLastSyncError} = 'unauthorized';
+	$REJECTED = 1;
+
+	$prefs_under_test->set( 'discogsToken', 'same' );
+
+	is( scalar @WRITES, 0, 'saving an unchanged token is suppressed' );
+	is( scalar @CLEARED, 0, '  ...so it does not clear a live rejection' );
+	is( $PREFS{discogsLastSyncError}, 'unauthorized',
+		'  ...nor the error that explains it' );
 }
 
 done_testing();
