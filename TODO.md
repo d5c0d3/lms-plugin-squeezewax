@@ -104,6 +104,70 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [x] **2026-09-24: decisions §15.15's hardware checks, at 0.0.0.7 and 0.0.0.8.**
+      Prompt D's post-install list. Three pass, one not observed by decision,
+      and one regression was found and fixed between the two versions.
+      (1) **PASS** (0.0.0.7). `discogsSyncInterval` and its `_ts_` twin are gone
+          from `squeezewax.prefs`; `_version` is 2; the settings page has no
+          interval field. Ten full minutes after the 12:23:54 load the only
+          SqueezeWax lines were the load and two `postDBConnect` lines,
+          `discogsLastSynced` stayed at the previous day's 16:03:51 and
+          `discogs_match` was untouched. Under 0.0.0.6 a startup sync would
+          have fired at 12:28:54.
+      (2) **PASS** (0.0.0.7). Rescan at 12:34:22, scan finished 12:34:49, TWO
+          `_rescanDone` notifications 0.34s apart, collapsed into exactly one
+          sync at 12:35:49.34 — 60s after the last, the debounce. 203 items
+          over 4 requests; `discogsLastSynced` advanced; `discogs_match`
+          unchanged.
+      (3) **PASS at 0.0.0.8**, after failing at 0.0.0.7 — see the regression
+          item below. At 0.0.0.8, in order:
+          16:05:39 a wrong token, manual sync: `collection sync failed: Discogs
+          rejected the token` at **error**, `discogsLastSyncError` =
+          `unauthorized` **not** `no_response`, `discogsLastSynced` unchanged,
+          `discogs_match` unchanged. **That is §15.15 part 2's whole point,
+          working against real Discogs.**
+          16:06:15 a scan finished (two `_rescanDone`), and at 16:07:15
+          `_syncTick` logged *"Discogs rejected the token; skipping the
+          scan-triggered sync until the token changes or a manual sync
+          succeeds"* at info, **once**. The pause works.
+          16:11:48 the real token restored, manual sync: 203 items over 4
+          requests, error cleared, pause cleared.
+      (4) **NOT OBSERVED, by decision** (prompt D): killing the network
+          mid-sync is not to be run.
+      **An unplanned 5xx validated the fix further.** At 16:11:07 a manual
+      sync with the REAL token failed as `server_error` — a genuine transient
+      from Discogs, which the owner saw as "a server error" and which needed a
+      second press. Two things it proves that no test could: `server_error` is
+      now reachable at all (before §15.15 part 2 it would have read
+      `no_response`), and a transient failure correctly does **not** set the
+      pause — the log carries exactly one skip line, from 16:07, and the next
+      sync ran normally.
+      `discogs_match` is byte-identical at 507 rows across every check.
+- [x] **2026-09-24, REGRESSION FOUND ON HARDWARE AND FIXED: PART 4 undid PART
+      3.** At 0.0.0.7 a rejected token set the pause and the save that followed
+      immediately wiped it, so the next finished scan synced anyway (observed
+      14:37:02 rejected, 14:38:55 synced regardless).
+      The shared form saves every scalar pref through `SUPER::handler` in
+      `_finishSyncNow`, which runs from the SYNC'S OWN CALLBACK — so the save
+      lands after the sync finishes, and `Plugin.pm`'s `setChange` on
+      `discogsToken` cleared the pause the sync had just set. Fixed in 0.0.0.8
+      by writing the field token BEFORE starting the sync;
+      `Slim/Utils/Prefs/Base.pm:94-97` then suppresses the later no-op write,
+      onchange included, so the hook cannot fire twice.
+      **Neither suite could see it**: `settings-check.pl` stubbed Async
+      wholesale so `clearTokenRejected` was a counter, and `sync-check.pl`
+      never goes through the save path. `StubPrefs` now models both real
+      behaviours and the ordering is asserted against an event log; with the
+      fix reverted, 3 assertions fail.
+- [ ] **2026-09-24, STANDING LESSON: three regressions this round were found on
+      hardware, not offline, and all three were interactions the stubs had
+      smoothed over.** The hidden `saveSettings` field, the synchronous button
+      disable, and the save-after-sync ordering. Each suite asserted something
+      true about the piece it owned; none modelled the seam. The stubs have
+      since been made faithful one at a time, each after the fact. Worth a
+      deliberate pass over the remaining stubs asking what else they smooth
+      over — the transport already was one, and `StubPrefs` was another.
+
 - [ ] **2026-09-22, RECORDED NOT DESIGNED: on a fresh install the first sync
       only happens at the first library scan or a press of "Sync collection
       now".** Neither "Test token" nor Save triggers one, and §15.15 part 1
