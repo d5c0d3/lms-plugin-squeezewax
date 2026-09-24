@@ -128,19 +128,28 @@ BEGIN {
 	};
 
 	*{'main::SCANNER'}   = sub () { 0 };
-	*{'main::INFOLOG'}   = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}   = sub () { 1 };
 	*{'main::DEBUGLOG'}  = sub () { 0 };
 	*{'main::ISWINDOWS'} = sub () { 0 };
 }
+
+our @LOG;
 
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { shift; push @main::WARNINGS, "@_"; return }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
 }
 
@@ -388,6 +397,7 @@ sub reset_state {
 	%PREFS        = ( discogsLastSynced => 0 );
 	@APPLIED      = ();
 	@WARNINGS     = ();
+	@LOG          = ();
 	@WRITES       = ();
 	%CHANGES      = ();
 	$APPLY_RESULT = 'ok';
@@ -804,6 +814,14 @@ sub run_sync {
 	);
 
 	ok( $result->{ok}, 'a complete sync succeeds' );
+
+	# Reachable only since INFOLOG was turned on. The line carries the two
+	# figures the settings page and the hardware checks are read against.
+	my ($done) = grep { /collection sync complete/ } @LOG;
+
+	ok( $done, 'a complete sync logs its summary at info' );
+	like( $done, qr/203 items over 4 requests/,
+		'  ...carrying the item count and the request count' );
 
 	is( scalar @APPLIED, 1, 'the ownership pass is called exactly once per sync' );
 

@@ -151,7 +151,14 @@ BEGIN {
 	*{'Slim::Music::Import::stillScanning'} = sub { $main::SCANNING };
 
 	*{'main::SCANNER'}   = sub () { 0 };
-	*{'main::INFOLOG'}   = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}   = sub () { 1 };
 	*{'main::DEBUGLOG'}  = sub () { 0 };
 	*{'main::ISWINDOWS'} = sub () { 0 };
 	*{'main::WEBUI'}     = sub () { 1 };
@@ -208,14 +215,16 @@ our $SCANNING = 0;
 	sub setChange   { 1 }
 }
 
+our @LOG;
+
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
 }
 

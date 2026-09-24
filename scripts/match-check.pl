@@ -85,7 +85,14 @@ BEGIN {
 	};
 
 	*{'main::SCANNER'}   = sub () { 0 };
-	*{'main::INFOLOG'}   = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}   = sub () { 1 };
 	*{'main::DEBUGLOG'}  = sub () { 0 };
 	*{'main::ISWINDOWS'} = sub () { 0 };
 }
@@ -99,14 +106,16 @@ BEGIN {
 	sub migrate { 1 }
 }
 
+our @LOG;
+
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
 }
 
@@ -252,7 +261,19 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 
 	is( noMatchTiers(), 'strict', 'the one v1 no-match tier is seeded' );
 
+	@LOG = ();
+
 	my $rows = $M->invalidateStrict;
+
+	# Reachable only since INFOLOG was turned on (stub audit entry 5.3): the
+	# line interpolates two live counters, so a rename or a typo in either
+	# would have gone unseen while the expression was short-circuited away.
+	my ($line) = grep { /strict cache invalidated/ } @LOG;
+
+	ok( $line, 'the invalidation logs a summary at info' );
+	like( $line, qr/\d+ no-match rows deleted/, '  ...naming the rows deleted' );
+	like( $line, qr/\d+ match rows will be re-examined/,
+		'  ...and the rows left to re-examine' );
 
 	ok( defined $rows, 'invalidateStrict reports rows affected' );
 
