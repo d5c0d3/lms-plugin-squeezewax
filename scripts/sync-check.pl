@@ -31,6 +31,11 @@ use FindBin qw($Bin);
 # Host Test::More, before refs goes on @INC - see library-check.pl.
 use Test::More;
 
+# Ordered pref writes, and the onchange callbacks registered against them.
+# Ordered because ORDER was the 0.0.0.7 defect.
+our @WRITES;
+our %CHANGES;
+
 # Every stubbed request that was issued, oldest first, as { url, headers }.
 our @REQUESTS;
 
@@ -143,10 +148,45 @@ BEGIN {
 	package Test::StubPrefs;
 	sub new { bless {}, shift }
 	sub get { return $PREFS{ $_[1] } }
-	sub set { $PREFS{ $_[1] } = $_[2]; return 1 }
+
+	# Models two behaviours of the real store that a plain hash write does not,
+	# and whose absence is exactly what hid the 0.0.0.7 regression one file
+	# over (stub audit 2026-09-24, entry 2.1):
+	#
+	#   1. refs/slimserver/Slim/Utils/Prefs/Base.pm:94-97 suppresses a scalar
+	#      set that does not change the value - onchange included. A write that
+	#      changes nothing is not an event.
+	#   2. Base.pm:91 dispatches the onchange list registered through
+	#      Prefs/Namespace.pm:148-164. Async.pm writes three prefs at its single
+	#      exit, and a hook on any of them would fire here unmodelled.
+	#
+	# @WRITES is ordered, because ORDER was the defect: a pref write landing
+	# after the thing it was meant to precede.
+	sub set {
+		my ( $self, $pref, $new ) = @_;
+
+		my $old = $PREFS{$pref};
+
+		return 1 if !ref $new
+			&& defined $new
+			&& defined $old
+			&& $new eq $old;
+
+		$PREFS{$pref} = $new;
+
+		push @main::WRITES, $pref;
+
+		if ( my $cb = $main::CHANGES{$pref} ) {
+			$cb->( $pref, $new );
+		}
+
+		return 1;
+	}
+
 	sub init { 1 }
 	sub migrate { 1 }
 	sub setValidate { 1 }
+	sub setChange { my ( $self, $cb, @prefs ) = @_; $main::CHANGES{$_} = $cb for @prefs; return 1 }
 }
 
 # Minimal stand-in for an HTTP::Headers object, as api-check.pl's own
@@ -266,6 +306,11 @@ BEGIN {
 
 		push @main::APPLIED, $entries;
 
+		# Recorded in the same ordered list as the pref writes, so "the pass
+		# runs before any pref is set" (§15.13 part 1) is assertable rather
+		# than merely commented.
+		push @main::WRITES, '<pass>';
+
 		return $main::APPLY_RESULT;
 	};
 }
@@ -343,6 +388,8 @@ sub reset_state {
 	%PREFS        = ( discogsLastSynced => 0 );
 	@APPLIED      = ();
 	@WARNINGS     = ();
+	@WRITES       = ();
+	%CHANGES      = ();
 	$APPLY_RESULT = 'ok';
 }
 
@@ -917,7 +964,10 @@ for my $outcome (qw(refused failed)) {
 
 	is( $result->{error}, 'superseded', 'a superseded run reports superseded' );
 	is( scalar @APPLIED, 0, '  ...and never reaches the ownership pass' );
-	ok( !$PREFS{discogsLastSynced}, '  ...and touches no pref' );
+	# Was `!$PREFS{discogsLastSynced}` - absence of a VALUE, which would also
+	# pass if the pref had been written with a falsy one, and which said
+	# nothing about the other two. Now absence of a WRITE, for all of them.
+	is( scalar @WRITES, 0, '  ...and touches no pref at all' );
 }
 
 # ---------------------------------------------------------------------------
@@ -1180,6 +1230,85 @@ diag('a rejected token pauses scan-triggered syncs until something changes');
 
 	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
 		'nor does a server error' );
+}
+
+# ---------------------------------------------------------------------------
+# Pref writes: what, in what order (stub audit 2026-09-24, entry 2.1)
+# ---------------------------------------------------------------------------
+#
+# The store now suppresses a no-op scalar write and dispatches setChange, as
+# Slim/Utils/Prefs/Base.pm:91,94-97 do. Until 2026-09-24 it was a plain hash
+# write, which is the gap that let the 0.0.0.7 regression through one file
+# over: a pref write landing AFTER the thing it was meant to precede, and an
+# onchange hook firing unmodelled.
+
+diag('the single exit: which prefs are written, and when');
+
+{
+	reset_state();
+
+	run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	# §15.13 part 1: the pass runs before any pref is set, so a timestamp can
+	# never claim ownership was derived when it was not.
+	my ($passAt)  = grep { $WRITES[$_] eq '<pass>' }            0 .. $#WRITES;
+	my ($syncAt)  = grep { $WRITES[$_] eq 'discogsLastSynced' } 0 .. $#WRITES;
+
+	ok( defined $passAt, 'a successful sync runs the ownership pass' );
+	ok( defined $syncAt, '  ...and writes discogsLastSynced' );
+	ok( defined $passAt && defined $syncAt && $passAt < $syncAt,
+		'  ...the pass FIRST, then the timestamp (§15.13 part 1)' );
+
+	is_deeply(
+		[ grep { $_ ne '<pass>' } @WRITES ],
+		[qw(discogsLastSynced discogsLastSyncItems discogsLastSyncError)],
+		'  ...and writes exactly those three prefs, in that order'
+	);
+}
+
+{
+	reset_state();
+	$PREFS{discogsLastSynced}    = 1_700_000_000;
+	$PREFS{discogsLastSyncItems} = 203;
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is_deeply( [ grep { $_ ne '<pass>' } @WRITES ], ['discogsLastSyncError'],
+		'a failed sync writes ONLY the error' );
+	ok( !( grep { $_ eq '<pass>' } @WRITES ),
+		'  ...and never reaches the pass' );
+	is( $PREFS{discogsLastSynced}, 1_700_000_000,
+		'  ...leaving the previous figures exactly as they were' );
+}
+
+# A second identical failure must not re-write the error: Base.pm:94-97
+# suppresses a scalar set that changes nothing, so an unchanged error is not an
+# event and cannot re-trigger anything hung off it.
+{
+	reset_state();
+	$PREFS{discogsLastSyncError} = 'unauthorized';
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is( scalar @WRITES, 0,
+		'the same error twice is suppressed, not written again' );
+}
+
+# And an onchange hook on one of Async's own prefs fires when it writes - the
+# mechanism that, hung off discogsToken, caused the 0.0.0.7 regression.
+{
+	reset_state();
+
+	my @fired;
+	$CHANGES{discogsLastSyncError} = sub { push @fired, $_[1] };
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is_deeply( \@fired, ['unauthorized'],
+		'a setChange hook on a pref Async writes does fire, with the new value' );
 }
 
 done_testing();
