@@ -998,9 +998,14 @@ is_deeply( [ sort keys %{ { map { $_ => 1 } @MISSING_STRINGS } } ], [],
 {
 	my @sources;
 
+	# A glob over the templates, not a named list. settings.html was named
+	# explicitly until step 8 added a second template, at which point the
+	# hardcoded path quietly stopped covering the shipped page set - and a
+	# missing string token on a page no suite drives is exactly the defect this
+	# scan exists to catch (step 8 plan §3.2).
 	push @sources, glob("$Bin/../SqueezeWax/*.pm"),
 		glob("$Bin/../SqueezeWax/API/*.pm"),
-		"$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/settings.html";
+		glob("$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/*.html");
 
 	my %referenced;
 

@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async Importer Settings Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async Importer Settings Queue Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -180,13 +180,14 @@ for scanner in 0 1; do
 	for m in $MODULES; do
 		# Plugin.pm is the server's entry point and the scanner never loads it
 		# (Slim/Utils/PluginManager.pm:204). Settings.pm is required only from
-		# Plugin.pm under main::WEBUI, so it never reaches the scanner either.
+		# Plugin.pm under main::WEBUI, so it never reaches the scanner either,
+		# and Queue.pm only from Settings.pm, one hop further out.
 		# API/Async.pm is the server-side Discogs client - the scanner has no
 		# event loop to run SimpleAsyncHTTP on, which is the entire reason it
 		# exists separately from API.pm. Ownership.pm runs after a scan, in the
 		# server, off a completed collection sync (decisions §15.2), so the
 		# scanner never loads it either.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "API::Async" ] || [ "$m" = "Ownership" ]; }; then
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ] || [ "$m" = "Ownership" ]; }; then
 			continue
 		fi
 
@@ -276,9 +277,11 @@ BEGIN {
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
-			Settings)
+			Settings|Queue)
 				# Slim::Web::Settings is a web-UI class; stub the base the same
-				# way Plugin.pm's is stubbed, and reuse the other stubs.
+				# way Plugin.pm's is stubbed, and reuse the other stubs. Queue.pm
+				# is the same shape for the same reason: a Slim::Web::Settings
+				# subclass reaching the same web stack through its base class.
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$SETTINGS_STUB"
 				note=" (Slim::Web::Settings and friends stubbed)"
 				;;

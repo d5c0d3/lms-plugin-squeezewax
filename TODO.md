@@ -410,7 +410,7 @@ Each names its sites so the work is mechanical rather than a search.
       albums 3124 and 3127, against Discogs `The Future Sound Of London`.
       §13.10.4's trade, accepted; these reach the review queue (step 8).
       Revisit only if the pattern repeats.
-- [ ] **2026-09-22, STEP 8 CONSTRAINT, restated with a number:** after the
+- [x] **2026-09-22, STEP 8 CONSTRAINT, restated with a number:** after the
       first real pass the reference server has 329 `strict`/`candidate` rows,
       of which 305 are ownership `absent` — tagged albums the user does not
       own. None of them is a queue item (§13.4, §14.3, design §3: candidate is
@@ -908,7 +908,7 @@ Each names its sites so the work is mechanical rather than a search.
 - [x] **Anomalous-run summary at `warn`** when
       `matched == 0 && examined > 0`. Done 2026-09-04 (cec7a46).
 - [x] **`startScan` returns an integer** (matched count). Done (cec7a46).
-- [ ] **Step 5's review queue must offer reject / dismiss, not only confirm.**
+- [x] **Step 5's review queue must offer reject / dismiss, not only confirm.**
       Recorded three times over — corrected 2026-09-07; previously miscounted
       as four, with two cases that don't actually belong (see below):
       (a) **A confirmed match demoted to candidate by a tag conflict** keeps
@@ -1167,7 +1167,7 @@ Each names its sites so the work is mechanical rather than a search.
       users are covered, or record why not.
       → 2026-09-24: RECORDED WHY NOT. Accepted for now, a possible future
       feature (decisions §15.16 part 11). Ticked in commit P.
-- [ ] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
+- [x] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
       Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
       one-to-one fits. An orphan fitting several new albums, or a new album
       fitting several orphans, is left untouched and counted as unresolved
@@ -1841,7 +1841,7 @@ Each names its sites so the work is mechanical rather than a search.
       current again, were examined, and came out `candidate` with a timestamp
       and `snapshot_artist`. This is §15.3's accepted consequence, recorded
       because it is the first time it was seen on real rows.
-- [ ] **2026-09-19: `unrelinked orphans` is the absolute count, not a per-scan
+- [x] **2026-09-19: `unrelinked orphans` is the absolute count, not a per-scan
       figure.** It is 3 on the reference server after the test data was removed,
       all three identified by recomputing every current `album_key` from
       `library.db` and diffing against `discogs_match` (481 rows, 764 current

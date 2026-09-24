@@ -1,0 +1,330 @@
+[% title = "PLUGIN_SQUEEZEWAX_QUEUE" %]
+[% PROCESS settings/header.html %]
+
+[%# nosubmit, as settings/server/status.html:44 does. The footer's visible Save
+    button sits inside [% IF NOT nosubmit %] (settings/footer.html:38); its
+    hidden saveSettings at :39 is emitted either way and is harmless here,
+    because this page declares no prefs() and the base handler's save loop
+    therefore runs zero times (Slim/Web/Settings.pm:150-182). %]
+[% nosubmit = 1 %]
+
+[% IF !dbReady %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DB_UNUSABLE" desc="" %]
+		<div>[% dbError | html %]</div>
+	[% END %]
+[% ELSE %]
+
+[% IF actionResult %]
+	<div class="settingSection"><div>[% actionResult | html %]</div></div>
+[% END %]
+
+[%# --- the re-match list, when one was just fetched ---------------------
+    Shown instead of the queue, not beside it: the user pressed a button about
+    ONE album and is now choosing for it, and the queue below would be a second
+    set of buttons competing for the same attention. %]
+[% IF rematch %]
+
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE" desc="" %]
+		<div><b>[% rematch.album.title | html %]</b>
+			[% IF rematch.album.artist %] &mdash; [% rematch.album.artist | html %][% END %]</div>
+
+		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER" | string %]</div>
+
+		[% IF rematch.total == 0 %]
+			<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_NONE" | string %]</div>
+		[% ELSE %]
+			[%# Client-side, over what was already rendered: no request per
+			    keystroke against a rate-limited API, and with JavaScript off
+			    the full list is simply there. %]
+			<div><label>[% "PLUGIN_SQUEEZEWAX_QUEUE_FILTER" | string %][% "COLON" | string %]
+				<input type="text" class="stdedit" size="30" id="swxFilter" /></label></div>
+
+			[% BLOCK choiceRows %]
+				[% FOREACH c = rows %]
+					<tr class="swxChoice">
+						<td>
+							<b>[% c.title | html %]</b><br />
+							[% c.artists | html %]
+							[% IF c.year %] &mdash; [% c.year | html %][% END %]
+							[% IF c.formats %]<br />[% c.formats | html %][% END %]
+							[% IF c.labels %]<br />[% c.labels | html %][% END %]
+							<br />[% "PLUGIN_SQUEEZEWAX_QUEUE_RELEASE_ID" | string %][% "COLON" | string %]
+							[% c.release_id | html %]
+							[%# §9.6: the attribution and a followed hyperlink beside
+							    any Discogs data shown. %]
+							&mdash; <a href="[% c.url | html %]" target="_blank" rel="noopener">[%
+								"PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS" | string %]</a>
+						</td>
+						<td>
+							<button type="submit" name="link" class="stdclick swxAction"
+								value="[% c.release_id | html %]"
+								data-swx-field="release_id"
+								data-swx-extra="album_key=[% rematch.album_key | html %]"
+								data-swx-master="[% c.master_id | html %]"
+								data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON_RUNNING" | string | html %]">[%
+								"PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON" | string %]</button>
+						</td>
+					</tr>
+				[% END %]
+			[% END %]
+
+			[% IF rematch.matching.size %]
+				<div class="prefHead">[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_MATCHING" | string %]</div>
+				<table>[% PROCESS choiceRows rows = rematch.matching %]</table>
+			[% END %]
+
+			[% IF rematch.rest.size %]
+				<div class="prefHead">[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_ALL" | string %]</div>
+				<table>[% PROCESS choiceRows rows = rematch.rest %]</table>
+			[% END %]
+
+			<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION" | string %]</div>
+		[% END %]
+	[% END %]
+
+[% ELSE %]
+
+[%# --- the review queue -------------------------------------------------- %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_QUEUE" desc="PLUGIN_SQUEEZEWAX_QUEUE_DESC" %]
+
+	[% IF !review.size %]
+		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_EMPTY" | string %]</div>
+	[% ELSE %]
+		<table>
+			<tr>
+				<th>[% "PLUGIN_SQUEEZEWAX_QUEUE_ALBUM" | string %]</th>
+				<th>[% "PLUGIN_SQUEEZEWAX_QUEUE_REASON" | string %]</th>
+				<th></th>
+			</tr>
+		[% FOREACH item = review %]
+			<tr>
+				<td>
+					<b>[% item.title | html %]</b>
+					[% IF item.artist %]<br />[% item.artist | html %][% END %]
+				</td>
+				<td>
+					[% item.reasonText | html %]
+
+					[%# A conflict stores no note (§3a), so the detail is the tags
+					    as they read right now. %]
+					[% IF item.tagsSkipped %]
+						<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_SKIPPED" | string %]</div>
+					[% ELSIF item.tags %]
+						[% IF item.tags.read == 0 %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE" | string %]</div>
+						[% ELSIF item.tags.resolved %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED" | string %]</div>
+						[% ELSIF item.tags.conflict %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NOW" | string %][% "COLON" | string %]
+								[% item.tags.conflict.join(', ') | html %]</div>
+						[% END %]
+					[% END %]
+				</td>
+				<td>
+					[% IF scanning %]
+						[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]
+					[% ELSE %]
+						<button type="submit" name="rematch" class="stdclick swxAction"
+							value="[% item.album_key | html %]"
+							data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON_RUNNING" | string | html %]">[%
+							"PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON" | string %]</button>
+
+						[%# Only a row with something to undo is rejectable.
+						    rejectRow refuses a computed item anyway, and the page
+						    not offering it is the same rule said once more. %]
+						[% IF item.reason == 'conflict' %]
+							<button type="submit" name="reject" class="stdclick swxAction"
+								value="[% item.album_key | html %]"
+								data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON_RUNNING" | string | html %]"
+								data-swx-confirm="[% "PLUGIN_SQUEEZEWAX_QUEUE_REJECT_CONFIRM" | string | html %]">[%
+								"PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON" | string %]</button>
+						[% END %]
+					[% END %]
+				</td>
+			</tr>
+		[% END %]
+		</table>
+
+		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST" | string %]</div>
+	[% END %]
+[% END %]
+
+[%# --- orphans: a second list, same page (§15.16 part 5) ----------------- %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS" desc="PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_DESC" %]
+
+	[% IF !orphans.size %]
+		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_EMPTY" | string %]</div>
+	[% ELSE %]
+		<table>
+		[% FOREACH o = orphans %]
+			<tr>
+				<td>
+					<b>[% o.title | html %]</b>
+					[% IF o.artist %]<br />[% o.artist | html %][% END %]
+					<br />[% "PLUGIN_SQUEEZEWAX_QUEUE_TRACKS" | string %][% "COLON" | string %] [% o.tracks | html %]
+					<br />[% "PLUGIN_SQUEEZEWAX_QUEUE_RELEASE_ID" | string %][% "COLON" | string %] [% o.release_id | html %]
+					&mdash; <a href="[% o.url | html %]" target="_blank" rel="noopener">[%
+						"PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS" | string %]</a>
+				</td>
+				<td>
+					[% IF scanning %]
+						[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]
+					[% ELSE %]
+						[% IF o.candidates.size %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_MOVE_TO" | string %][% "COLON" | string %]</div>
+							[% FOREACH c = o.candidates %]
+								<div>
+									[% c.title | html %]
+									[% IF c.artist %] &mdash; [% c.artist | html %][% END %]
+									<button type="submit" name="relink" class="stdclick swxAction"
+										value="[% c.album_key | html %]"
+										data-swx-field="target_key"
+										data-swx-extra="album_key=[% o.album_key | html %]"
+										data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON_RUNNING" | string | html %]">[%
+										"PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON" | string %]</button>
+								</div>
+							[% END %]
+						[% ELSE %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT" | string %]</div>
+						[% END %]
+
+						<button type="submit" name="reject" class="stdclick swxAction"
+							value="[% o.album_key | html %]"
+							data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON_RUNNING" | string | html %]"
+							data-swx-confirm="[% "PLUGIN_SQUEEZEWAX_QUEUE_REJECT_CONFIRM" | string | html %]">[%
+							"PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON" | string %]</button>
+					[% END %]
+				</td>
+			</tr>
+		[% END %]
+		</table>
+
+		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION" | string %]</div>
+	[% END %]
+[% END %]
+
+[% END %][%# rematch / queue %]
+[% END %][%# dbReady %]
+
+[%# Button behaviour, carried from settings.html:163-249 with the same two
+    subtleties and the same reasons.
+
+    The controls are <button type="submit"> rather than <input type="submit">,
+    which the settings page uses. A button submits its `value` attribute while
+    DISPLAYING its content, and this page needs both at once: per-row buttons
+    have to carry their album key to the server, and a row of buttons labelled
+    with 32 hex characters is not a page. An input can do one or the other.
+    The consequence is that every action still works with JavaScript off, for
+    the two actions that need only one value.
+
+    The hidden inputs are created from the clicked button BEFORE its label is
+    swapped for the running text, which is settings.html:213-219 then :223 -
+    what reaches the server is identical whether or not the label changed.
+
+    The disable is deferred through setTimeout(0), because disabling a submit
+    control inside its own click handler does not merely drop its name from the
+    form data set, it cancels the submission outright. 0.0.0.5 shipped with a
+    synchronous disable and every button on the settings page became dead.
+
+    data-swx-field renames the submitted key, and data-swx-extra adds one more
+    name=value pair. Two actions need two keys: a link sends the release and
+    the album it is for, a relink sends the target and the orphan. Those two
+    therefore need JavaScript - with it off they submit one value and the
+    handler answers "that album is no longer there" rather than acting on half
+    a request. rematch and reject need only their album key, which is the
+    button's own value, so they work either way (the handler falls back to it).
+
+    The confirm dialog is a courtesy; the handler requires the confirm field as
+    well, because a deletion from discogs_match must not be one press away from
+    a mis-click. %]
+<script type="text/javascript">
+(function () {
+	var form = document.getElementById('settingsForm');
+
+	if (!form || !form.querySelectorAll) { return; }
+
+	var buttons = form.querySelectorAll('.swxAction');
+
+	if (!buttons.length) { return; }
+
+	var fired = false;
+
+	var onClick = function (clicked) {
+		return function (event) {
+			if (fired) { return; }
+
+			var confirmText = clicked.getAttribute('data-swx-confirm');
+
+			if (confirmText && !window.confirm(confirmText)) {
+				if (event && event.preventDefault) { event.preventDefault(); }
+				return false;
+			}
+
+			fired = true;
+
+			var key = clicked.value;
+
+			var add = function (name, value) {
+				var hidden = document.createElement('input');
+				hidden.type  = 'hidden';
+				hidden.name  = name;
+				hidden.value = value;
+				form.appendChild(hidden);
+			};
+
+			add(clicked.name, '1');
+			add(clicked.getAttribute('data-swx-field') || 'album_key', key);
+
+			// One extra name=value pair. Split on the first '=', though neither
+			// value can contain one - a 32-character hex key or an integer.
+			var extra = clicked.getAttribute('data-swx-extra');
+
+			if (extra) {
+				var at = extra.indexOf('=');
+				if (at > 0) { add(extra.substring(0, at), extra.substring(at + 1)); }
+			}
+
+			var master = clicked.getAttribute('data-swx-master');
+			if (master) { add('master_id', master); }
+
+			if (confirmText) { add('confirm', '1'); }
+
+			var running = clicked.getAttribute('data-swx-running');
+
+			if (running) {
+				if (clicked.textContent !== undefined) { clicked.textContent = running; }
+				else { clicked.innerText = running; }
+			}
+
+			setTimeout(function () {
+				for (var j = 0; j < buttons.length; j++) {
+					buttons[j].disabled = true;
+				}
+			}, 0);
+		};
+	};
+
+	for (var k = 0; k < buttons.length; k++) {
+		buttons[k].onclick = onClick(buttons[k]);
+	}
+
+	// The filter over the re-match list: client side, over what was already
+	// rendered, so there is no request per keystroke against a rate-limited
+	// API. With this script off the full list is simply shown.
+	var filter = document.getElementById('swxFilter');
+
+	if (filter) {
+		filter.onkeyup = function () {
+			var want = this.value.toLowerCase();
+			var rows = form.querySelectorAll('tr.swxChoice');
+
+			for (var n = 0; n < rows.length; n++) {
+				var text = (rows[n].textContent || rows[n].innerText || '').toLowerCase();
+				rows[n].style.display = ( want === '' || text.indexOf(want) !== -1 ) ? '' : 'none';
+			}
+		};
+	}
+})();
+</script>
+
+[% PROCESS settings/footer.html %]

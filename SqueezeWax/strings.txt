@@ -166,3 +166,150 @@ PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH
 
 PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN
 	EN	Discogs did not report how many items your collection holds, so it could not be shown to be complete. Ownership was not updated and nothing was changed.
+
+PLUGIN_SQUEEZEWAX_QUEUE
+	EN	Review queue
+
+PLUGIN_SQUEEZEWAX_QUEUE_DESC
+	EN	Albums SqueezeWax could not decide about on its own, and matches whose album has gone.
+
+PLUGIN_SQUEEZEWAX_QUEUE_OPEN
+	EN	Open the review queue
+
+PLUGIN_SQUEEZEWAX_QUEUE_OPEN_ITEMS
+	EN	%s waiting
+
+PLUGIN_SQUEEZEWAX_QUEUE_EMPTY
+	EN	Nothing to review. Every album is either matched, owned, or neither.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ALBUM
+	EN	Album
+
+PLUGIN_SQUEEZEWAX_QUEUE_ARTIST
+	EN	Artist
+
+PLUGIN_SQUEEZEWAX_QUEUE_REASON
+	EN	Why
+
+PLUGIN_SQUEEZEWAX_REASON_CONFLICT
+	EN	Two tags name different releases.
+
+PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS
+	EN	You own more than one record with this title, and nothing here can choose between them.
+
+PLUGIN_SQUEEZEWAX_REASON_ARTIST_DISAGREE
+	EN	You own a record with this title, but by a different artist.
+
+PLUGIN_SQUEEZEWAX_REASON_ARTIST_ABSENT
+	EN	You own a record with this title, but one side has no artist to compare.
+
+PLUGIN_SQUEEZEWAX_REASON_VARIOUS_GATED
+	EN	Both sides say various artists, which is not evidence that this is the record you own.
+
+PLUGIN_SQUEEZEWAX_REASON_ORPHAN
+	EN	This match belongs to an album that is no longer in your library.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NOW
+	EN	The tags say now
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
+	EN	Conflict recorded, tags no longer readable.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED
+	EN	The tags agree again. The next scan will clear this.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_SKIPPED
+	EN	Too many conflicts to re-read the tags for all of them here. Check the scanner log.
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON
+	EN	Choose from my collection
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON_RUNNING
+	EN	Fetching your collection...
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST
+	EN	This fetches your Discogs collection, the same as Sync collection now.
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE
+	EN	Choose the record you own
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_MATCHING
+	EN	In your collection under this title
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_ALL
+	EN	Everything else in your collection
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_NONE
+	EN	Your collection is empty, so there is nothing to choose from.
+
+PLUGIN_SQUEEZEWAX_QUEUE_FILTER
+	EN	Filter
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON
+	EN	This one
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON_RUNNING
+	EN	Linking...
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELEASE_ID
+	EN	Release ID
+
+PLUGIN_SQUEEZEWAX_QUEUE_TRACKS
+	EN	Tracks
+
+PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION
+	EN	Data provided by Discogs
+
+PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS
+	EN	View on Discogs
+
+PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER
+	EN	The badge changes at the next collection sync, not now.
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINKED
+	EN	Linked.
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECTED
+	EN	Removed.
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINKED
+	EN	Moved onto that album.
+
+PLUGIN_SQUEEZEWAX_QUEUE_FAILED
+	EN	That did not work. Check the server log.
+
+PLUGIN_SQUEEZEWAX_QUEUE_NOT_FOUND
+	EN	That album is no longer there. The page may be out of date; reload it.
+
+PLUGIN_SQUEEZEWAX_QUEUE_CONFIRM_REQUIRED
+	EN	Nothing was removed, because the confirmation was missing.
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON
+	EN	Remove this match
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON_RUNNING
+	EN	Removing...
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_CONFIRM
+	EN	Remove this match? It cannot be undone, and the album will be matched from scratch at the next scan.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS
+	EN	Matches with no album
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_DESC
+	EN	These matches belong to albums that are no longer in your library, usually because files moved. Nothing removes them on its own.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_EMPTY
+	EN	No matches are orphaned.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_MOVE_TO
+	EN	Move it onto
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT
+	EN	No album in your library has the same artist, title and track count, so this can only be removed.
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON
+	EN	Move it here
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON_RUNNING
+	EN	Moving...

@@ -34,6 +34,23 @@ use constant DETECTION_TIMEOUT => 600;
 # and writing it to disk would outlive the library it describes.
 my %detection;
 
+# The queue page is constructed from here, not from Plugin.pm, so that the two
+# pages are registered together and by the one file that already knows about the
+# web UI. Slim/Plugin/OnlineLibrary/Settings.pm:23 constructs its
+# EditGenreMappings the same way, and Spotty's Settings.pm:24 its Auth page.
+#
+# SUPER::new is still called, so THIS page keeps its settings-menu entry; the
+# queue's own `new` deliberately does not, so it appears only through the link
+# on this page (decisions §15.16 part 1).
+sub new {
+	my $class = shift;
+
+	require Plugins::SqueezeWax::Queue;
+	Plugins::SqueezeWax::Queue->new();
+
+	return $class->SUPER::new(@_);
+}
+
 sub name { Slim::Web::HTTP::CSRF->protectName('PLUGIN_SQUEEZEWAX_NAME') }
 
 sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html') }
@@ -552,6 +569,21 @@ sub beforeRender {
 
 	$params->{dbReady} = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
 	$params->{dbError} = Plugins::SqueezeWax::Schema->lastError;
+
+	# The count beside the queue link. One COUNT(*) on a small table, not the
+	# queue's own render - the page walks the library to build its lists, and
+	# doing that here would make every settings page load pay for a page the
+	# user may not open. The predicate is the queue's own, D3's second clause
+	# included, so the number and the list cannot disagree.
+	if ( $params->{dbReady} ) {
+		my ($open) = Slim::Schema->dbh->selectrow_array(
+			q{SELECT COUNT(*) FROM squeezewax.discogs_match
+			   WHERE review_reason IS NOT NULL
+			      OR ( match_tier = 'strict' AND discogs_release_id IS NULL )}
+		);
+
+		$params->{queueOpenItems} = $open || 0;
+	}
 
 	# Required lazily, as _syncNow does: this is the only other reader, and
 	# Async.pm pulls in SimpleAsyncHTTP and Timers for a page that may never
