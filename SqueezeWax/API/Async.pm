@@ -499,6 +499,43 @@ sub _gotIdentity {
 	return;
 }
 
+# One format as a line the user can match against the object in their hand:
+# "Vinyl, LP, Album, Limited Edition" - the medium, then its descriptions.
+#
+# `text` is deliberately dropped. On the fixture's first entry it reads
+# "Signed, Gatefold, Butterfly Effect Splatter", which is free-form seller prose
+# rather than a property of the pressing, and it is long enough to push the
+# release id off a narrow row.
+#
+# `qty` is dropped too: a 2xLP already says "2" in its descriptions where it
+# matters, and a bare "1" on every single-disc record is noise.
+sub _formatLabel {
+	my ($format) = @_;
+
+	return '' unless ref $format eq 'HASH';
+
+	return join ', ',
+		grep { defined && /\S/ }
+		$format->{name}, @{ $format->{descriptions} || [] };
+}
+
+# One label as "Island Records (524 089-2)". The catalogue number is the thing
+# that actually separates two pressings on the same label, so it is never
+# dropped - but a release with no catno gets the bare name rather than an empty
+# bracket.
+sub _labelLabel {
+	my ($label) = @_;
+
+	return '' unless ref $label eq 'HASH';
+
+	my $name  = $label->{name};
+	my $catno = $label->{catno};
+
+	return '' unless defined $name && $name =~ /\S/;
+
+	return ( defined $catno && $catno =~ /\S/ ) ? "$name ($catno)" : $name;
+}
+
 sub _gotPage {
 	my ( $run, $data ) = @_;
 
@@ -526,8 +563,10 @@ sub _gotPage {
 	# Collected, and dropped on the floor when _finish returns. Nothing about a
 	# release reaches the database - §13.2: ownership is a column on
 	# discogs_match, not a mirrored collection, and discogs_collection is not a
-	# v1 table. What the ownership pass needs is the five fields below and
-	# nothing else (§15.13 part 1).
+	# v1 table. The ownership pass needs the first five fields below and nothing
+	# else (§15.13 part 1); the last three exist only for the queue page's
+	# re-match list, which is handed this same list and has no other source for
+	# them (§15.16 part 6). The lifetime is unchanged: one render, then gone.
 	#
 	# Keyed by instance_id, which is the collection ENTRY's identity: the same
 	# release owned twice is two instances, and de-duplicating here would make
@@ -547,6 +586,29 @@ sub _gotPage {
 			master_id   => $basic->{master_id},
 			title       => $basic->{title},
 			artists     => [ map { $_->{name} } @{ $basic->{artists} || [] } ],
+
+			# The three the RE-MATCH LIST needs and the pass ignores (§15.16
+			# part 6). They are here because the page is handed this same list
+			# (_finish below) and there is no second fetch to get them from -
+			# the collection is discarded when the sync ends (§13.2), so a field
+			# not kept here is a field the page cannot show.
+			#
+			# Fixed set, not everything basic_information carries. A user
+			# choosing between two pressings of one record needs the year, the
+			# medium and the catalogue number, and each of those is on the
+			# sleeve in front of them. Nothing else earns its place, and a field
+			# picker is recorded as a future feature rather than built.
+			#
+			# Flattened to plain strings here rather than stored raw, so the
+			# template has no structure to walk and _testFilter's list stays
+			# something a suite can compare with is_deeply.
+			#
+			# thumb and cover_image are deliberately NOT kept: whether Discogs'
+			# terms permit showing them is unverified (§9.9 already records that
+			# image URLs are withheld without authentication).
+			year    => $basic->{year},
+			formats => [ map { _formatLabel($_) } @{ $basic->{formats} || [] } ],
+			labels  => [ map { _labelLabel($_) }  @{ $basic->{labels}  || [] } ],
 		};
 	}
 
@@ -696,11 +758,20 @@ sub _finish {
 	# timestamp advancing, not a second way out: discogsLastSynced means
 	# "ownership last derived", so it may not move for a sync whose conclusions
 	# were never written.
+	# Hoisted out of the ->apply call it used to be built inside, because the
+	# page gets this same list and it must be the SAME one: _testFilter's whole
+	# safety argument is that a release hidden from the pass is hidden
+	# everywhere the pass's conclusions are visible, and a re-match list that
+	# offered a release the pass could not see would let the user link an album
+	# to a record that then refuses to badge, with nothing to say why.
+	my $entries;
+
 	if ( $result->{ok} ) {
 		require Plugins::SqueezeWax::Ownership;
 
-		my $applied = Plugins::SqueezeWax::Ownership->apply(
-			_testFilter( [ values %{ $run->{entries} || {} } ] ) );
+		$entries = _testFilter( [ values %{ $run->{entries} || {} } ] );
+
+		my $applied = Plugins::SqueezeWax::Ownership->apply($entries);
 
 		if ( $applied ne 'ok' ) {
 			$result = { ok => 0, error => $applied };
@@ -727,7 +798,22 @@ sub _finish {
 		$prefs->set( 'discogsLastSyncError', $result->{error} );
 	}
 
-	$run->{cb}->($result);
+	# The second argument, and only here. The other three callback sites -
+	# no_token (:225), already_running (:233) and superseded (:680) - pass one
+	# argument, because none of them has a list and two of them never issued a
+	# request.
+	#
+	# Only when the FINAL result is ok, which means after the pass has also
+	# succeeded: a pass that declined rewrote $result above, and a page that
+	# rendered a re-match list from a sync whose conclusions were never written
+	# would be offering choices against a badge state that does not exist yet.
+	# A pass refusal reaches the page as its existing 'refused' error, which the
+	# settings page already has a string for.
+	#
+	# Nothing is stored and nothing is logged from it. It is dropped when the
+	# callback returns - the same lifetime §15.13 part 1 gives the pass, now
+	# shared with one render (§15.16 part 6).
+	$run->{cb}->( $result, $result->{ok} ? $entries : () );
 
 	return;
 }

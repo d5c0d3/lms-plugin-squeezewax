@@ -382,6 +382,26 @@ sub page_response {
 						master_id => 9000 + $base + $_,
 						title     => 'Album ' . ( $base + $_ ),
 						artists   => [ { name => 'Artist ' . ( $base + $_ ) } ],
+
+						# The three the re-match list reads, in the shape the
+						# captured fixture carries them (collection-page1.json):
+						# formats and labels are lists of hashes, and both
+						# carry fields the page drops - `text` is free-form
+						# seller prose, `qty` is "1" on every single-disc
+						# record, and resource_url is an API address.
+						year    => 1990 + ( ( $base + $_ ) % 30 ),
+						formats => [ {
+							name         => 'Vinyl',
+							qty          => '1',
+							text         => 'Gatefold, Splatter',
+							descriptions => [ 'LP', 'Album' ],
+						} ],
+						labels => [
+							{ name => 'Label One', catno => 'CAT-' . ( $base + $_ ),
+							  id => 500, resource_url => 'https://api.discogs.com/labels/500' },
+							# A label with no catalogue number, which happens.
+							{ name => 'Label Two', catno => '' },
+						],
 					},
 				} } 1 .. $n
 			],
@@ -405,13 +425,20 @@ sub reset_state {
 
 # Run one sync to completion and return its result. Safe because every stub is
 # synchronous: by the time sync() returns, the callback has fired.
+#
+# @CB_ARGS captures the callback's FULL argument list, because step 8 added a
+# second one and "the other callers read only the first" is a claim about this
+# list, not about $result (§15.16 part 6, plan §2.2).
+our @CB_ARGS;
+
 sub run_sync {
 	my (@responses) = @_;
 
 	@RESPONSES = @responses;
+	@CB_ARGS   = ();
 
 	my $result;
-	$A->sync( 'token-abc', sub { $result = shift } );
+	$A->sync( 'token-abc', sub { @CB_ARGS = @_; $result = shift } );
 
 	return $result;
 }
@@ -692,10 +719,11 @@ sub run_sync {
 {
 	reset_state();
 
-	my $result;
-	$A->sync( '', sub { $result = shift } );
+	my ( $result, @args );
+	$A->sync( '', sub { @args = @_; $result = shift } );
 
 	ok( !$result->{ok}, 'a missing token fails immediately' );
+	is( scalar @args, 1, '  ...handing the caller one argument - there is no list' );
 	is( $result->{error}, 'no_token', '...as no_token' );
 	is( scalar @REQUESTS, 0, '...without issuing a request' );
 }
@@ -768,8 +796,9 @@ sub run_sync {
 	# The identity response's handler runs while %sync says running => 1.
 	# Hooking in there is equivalent to a second trigger arriving mid-sync.
 	my $firstResult;
+	my @secondArgs;
 	my $probe = sub {
-		$A->sync( 'token-abc', sub { $second = shift } );
+		$A->sync( 'token-abc', sub { @secondArgs = @_; $second = shift } );
 	};
 
 	# Drive it by wrapping the transport for one call.
@@ -792,6 +821,9 @@ sub run_sync {
 
 	is( $second->{error}, 'already_running',
 		'...distinguishably from a failure, because it is not one' );
+
+	is( scalar @secondArgs, 1,
+		'...and the refused trigger gets one argument: it never issued a request' );
 }
 
 # ---------------------------------------------------------------------------
@@ -828,18 +860,43 @@ sub run_sync {
 	my $entries = $APPLIED[0];
 	is( scalar @$entries, 203, '  ...and is handed every collection entry' );
 
-	# The five fields the pass needs, and no more. A sixth would be a mirrored
-	# collection by accretion, which is what §13.2 rules out.
+	# The five fields the pass needs plus the three the re-match list needs, and
+	# no more. A ninth would be a mirrored collection by accretion, which is
+	# what §13.2 rules out - the bound is the point of asserting the whole key
+	# set rather than spot-checking.
 	my ($one) = grep { $_->{instance_id} == 2001 } @$entries;
 	is_deeply(
 		[ sort keys %$one ],
-		[ sort qw(instance_id id master_id title artists) ],
-		'each entry carries exactly the five fields the pass reads'
+		[ sort qw(instance_id id master_id title artists year formats labels) ],
+		'each entry carries exactly the five fields the pass reads, plus the page\'s three'
 	);
 	is( $one->{id},        1001,       '  ...the release id' );
 	is( $one->{master_id}, 9001,       '  ...the master id, from basic_information' );
 	is( $one->{title},     'Album 1',  '  ...the title' );
 	is_deeply( $one->{artists}, ['Artist 1'], '  ...and the artist names, flattened' );
+
+	# The page's three (§15.16 part 6). Flattened to plain strings here, so the
+	# template has no structure to walk and this list stays something is_deeply
+	# can compare.
+	is( $one->{year}, 1991, '  ...the year, for telling two pressings apart' );
+	is_deeply( $one->{formats}, ['Vinyl, LP, Album'],
+		'  ...the format as medium then descriptions' );
+	is_deeply( $one->{labels}, [ 'Label One (CAT-1)', 'Label Two' ],
+		'  ...and each label with its catalogue number, or bare when it has none' );
+
+	# What the flattening DROPS, asserted rather than assumed: `text` is
+	# free-form seller prose long enough to push the release id off a narrow
+	# row, `qty` is "1" on every single-disc record, and a resource_url is an
+	# API address that no user would follow.
+	unlike( $one->{formats}[0], qr/Gatefold|Splatter/, "  ...and drops the format's free text" );
+	unlike( $one->{formats}[0], qr/\b1\b/,             '  ...and its quantity' );
+	unlike( $one->{labels}[0],  qr/api\.discogs/,      '  ...and the label resource_url' );
+
+	# No image fields. Whether Discogs' terms permit showing thumb or
+	# cover_image is unverified (§9.9), so the sync does not carry them and the
+	# page cannot accidentally grow one.
+	ok( !exists $one->{thumb},       'no thumb is carried - the terms are unverified (§9.9)' );
+	ok( !exists $one->{cover_image}, '  ...nor cover_image' );
 
 	# Entries from the LAST page are there too: the list is the whole
 	# collection, not the page the walk happened to end on.
@@ -848,6 +905,22 @@ sub run_sync {
 
 	ok( $PREFS{discogsLastSynced}, 'discogsLastSynced advances when the pass succeeded' );
 	is( $PREFS{discogsLastSyncItems}, 203, '  ...along with the item count' );
+
+	# --- the list reaches the caller (plan §2.2) --------------------------
+	#
+	# The queue page's re-match list has no other source: the collection is
+	# discarded when the sync ends (§13.2), and a second fetch would be a second
+	# set of requests against a rate-limited API for data we just had.
+	is( scalar @CB_ARGS, 2, 'a successful sync hands its callback two arguments' );
+
+	# The SAME list the pass got, not a copy and not a rebuild. _testFilter's
+	# safety argument is that a release hidden from the pass is hidden wherever
+	# the pass's conclusions are visible; a re-match list built separately could
+	# offer a release the pass could not see, and the album would then refuse to
+	# badge with nothing to say why.
+	is( $CB_ARGS[1], $APPLIED[0],
+		'  ...and the second is the very list the pass was handed, by reference' );
+	is( scalar @{ $CB_ARGS[1] }, 203, '  ...holding every entry' );
 }
 
 # --- the pass declines: the timestamp must not move ------------------------
@@ -867,6 +940,14 @@ for my $outcome (qw(refused failed)) {
 	ok( !$PREFS{discogsLastSynced},
 		'  ...but discogsLastSynced does NOT advance - it means "ownership last derived"' );
 	is( $PREFS{discogsLastSyncError}, $outcome, '  ...and the error is recorded' );
+
+	# No list to the caller. The fetch worked, so there IS one in hand - but a
+	# page rendering a re-match list from a sync whose conclusions were never
+	# written would offer choices against a badge state that does not exist yet.
+	# The page gets the error instead, which the settings page already has a
+	# string for.
+	is( scalar @CB_ARGS, 1,
+		"  ...and a '$outcome' pass hands the caller no list, though the fetch succeeded" );
 }
 
 # --- completeness: the pass is never called on a list that cannot be shown
