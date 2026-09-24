@@ -452,6 +452,25 @@ $K{lapsing}    = album( 13, 'Was Owned',         'Someone' );
 $K{va_equal}   = album( 14, 'Another Compilation', $VA );
 $K{va_literal} = album( 15, 'Third Compilation',   'Various' );
 
+# Step 8's cases.
+#
+# incumbent: the row TODO 2026-09-19 described and no fixture covered. Strict,
+# candidate, a release id that IS in the collection, and a full snapshot - so
+# before §15.16 part 4 it was indistinguishable from a clean identification and
+# the pass would promote it to 'confirmed', silently undoing §3a's demotion.
+# Its title deliberately matches nothing in the collection, so the title route
+# cannot rescue it either and 'absent' is the whole answer.
+$K{incumbent}  = album( 16, 'Contested Pressing', 'Depeche Mode' );
+
+# manual_ambig: a manual link on an album whose title is owned twice. Without
+# D1 this would re-enter the queue as 'ambiguous' at every sync forever, asking
+# the user to decide something they have already decided.
+$K{manual_ambig} = album( 17, 'Ciao Monkey', 'Someone' );
+
+# lapsed: a row the previous pass wrote for a reason that has since gone away.
+# It owns nothing and reviews nothing, so §14.8 says it must not exist.
+$K{lapsed}     = album( 18, 'No Longer Ambiguous', 'Depeche Mode' );
+
 # h_disagree and h_agree share a title deliberately; the byTitle route keys on
 # the title alone and the artist check is what separates them.
 
@@ -489,15 +508,70 @@ matchRow( album_key => $K{f_zero}, lms_album_id => 4, discogs_release_id => 4440
 matchRow( album_key => $K{f_undef}, lms_album_id => 5, discogs_release_id => 5550,
 	match_tier => 'strict', state => 'confirmed', snapshot_track_count => 1 );
 
-# A conflict row: strict, candidate, NULL release id, no snapshot (§3a).
+# A FRESH conflict row: strict, candidate, NULL release id, no snapshot (§3a),
+# and marked, as _recordConflict now marks every conflict it writes.
 matchRow( album_key => $K{conflict}, lms_album_id => 11, match_tier => 'strict',
-	state => 'candidate' );
+	state => 'candidate', review_reason => 'conflict' );
 
 # An ownership-only row whose record has since left the collection.
 matchRow( album_key => $K{lapsing}, lms_album_id => 13, ownership => 'exact' );
 
 # An ownership-only row for an album that is no longer in the library at all.
 matchRow( album_key => 'z' x 32, lms_album_id => 99, ownership => 'version' );
+
+# --- step 8's rows ---------------------------------------------------------
+
+# The incumbent conflict. Release 111 is Violator's, and it IS in the
+# collection - so node D would make this 'exact' and promote it, which is the
+# defect. review_reason is the only column that separates it from d_strict.
+matchRow( album_key => $K{incumbent}, lms_album_id => 16, discogs_release_id => 111,
+	discogs_master_id => 9001, match_tier => 'strict', state => 'candidate',
+	snapshot_track_count => 1, snapshot_artist => 'Depeche Mode',
+	snapshot_album_title => 'Contested Pressing', review_reason => 'conflict' );
+
+# The manual row on an ambiguous title. Its release id is in no collection
+# entry, so node D and node F both miss and it reaches the title route, where
+# 'Ciao Monkey' is owned twice.
+matchRow( album_key => $K{manual_ambig}, lms_album_id => 17, discogs_release_id => 6660,
+	match_tier => 'manual', state => 'confirmed', snapshot_track_count => 1 );
+
+# The row whose reason has lapsed: nothing in the collection is called
+# 'No Longer Ambiguous', so this pass concludes absent with no reason at all.
+matchRow( album_key => $K{lapsed}, lms_album_id => 18, ownership => 'absent',
+	review_reason => 'ambiguous' );
+
+# --- orphans: rows whose album is not in the library -----------------------
+#
+# Three shapes, because the rule treats them differently. All three carry an
+# identification and a snapshot, which is §15.5 part 3's predicate.
+my $ORPHAN_MANUAL   = 'y' x 32;
+my $ORPHAN_STRICT   = 'x' x 32;
+my $ORPHAN_CONFLICT = 'w' x 32;
+
+# A manual orphan - the shape TODO 2026-09-19 found on the reference server
+# (release 888888). D1 keeps a pass reason off a manual row whose album is
+# CURRENT; this one's album is gone, and it is the row recovery exists for.
+matchRow( album_key => $ORPHAN_MANUAL, lms_album_id => 888, discogs_release_id => 888888,
+	match_tier => 'manual', state => 'confirmed', snapshot_track_count => 18,
+	snapshot_artist => 'Amorph', snapshot_album_title => 'Isolar' );
+
+matchRow( album_key => $ORPHAN_STRICT, lms_album_id => 999, discogs_release_id => 999999,
+	match_tier => 'strict', state => 'candidate', snapshot_track_count => 12,
+	snapshot_artist => 'Amorph', snapshot_album_title => 'Unidentified Explorers' );
+
+# An orphan already marked 'conflict'. 'conflict' is sticky and the importer's
+# (R3), so it wins - the album being gone does not settle what the tags said.
+matchRow( album_key => $ORPHAN_CONFLICT, lms_album_id => 777, discogs_release_id => 777777,
+	match_tier => 'strict', state => 'candidate', snapshot_track_count => 7,
+	snapshot_artist => 'Someone', snapshot_album_title => 'Gone And Contested',
+	review_reason => 'conflict' );
+
+# An orphan with an identification but NO snapshot. It cannot be relinked to
+# anything, so the orphan list could offer it nothing but reject, and the pass
+# has no business inviting a deletion it cannot justify. It simply sits.
+my $ORPHAN_NOSNAP = 'v' x 32;
+matchRow( album_key => $ORPHAN_NOSNAP, lms_album_id => 666, discogs_release_id => 666666,
+	match_tier => 'strict', state => 'candidate' );
 
 my $before = matchCount();
 
@@ -544,18 +618,40 @@ is( $agreed->{discogs_release_id}, undef,
 
 ok( !rowFor( $K{h_none} ), 'H: an untagged album owning nothing gets NO ROW (§14.8)' );
 
-ok( !rowFor( $K{h_ambig} ),
-	'H: two different owned releases sharing a title is ambiguous, and writes nothing' );
+# --- the five rows step 8 changed ------------------------------------------
+#
+# Each of these used to assert "no row". That was §14.8's invariant 3 as it
+# stood: a row identifying nothing and owning nothing asserts nothing. §15.16
+# part 9 amends the invariant to allow a third thing worth asserting - a review
+# reason - because these conclusions are about a collection §13.2 requires be
+# discarded, so a queue item not written down now cannot be recomputed later.
+# The row is still worth its existence; it is just worth it for a new reason.
+#
+# What did NOT change is the boundary below at h_none: an album that owns
+# nothing and has nothing to review still gets no row.
+my $ambig = rowFor( $K{h_ambig} );
+ok( $ambig, 'H: two owned releases sharing a title now gets a row, for its reason' );
+is( $ambig->{review_reason}, 'ambiguous', "  ...marked 'ambiguous'" );
+is( $ambig->{ownership},  'absent', '  ...owning nothing, because nothing here chose' );
+is( $ambig->{match_tier}, undef,    '  ...and identifying nothing' );
+is( $ambig->{state},      undef,    '  ...with no state' );
 
-ok( !rowFor( $K{h_various} ),
-	'H: the label against Discogs\' "Various" is gated, not badged' );
+is( rowFor( $K{h_various} )->{review_reason}, 'various-gated',
+	"H: the label against Discogs' \"Various\" is gated, and says so" );
+is( rowFor( $K{h_various} )->{ownership}, 'absent', '  ...still not badged' );
 
 # §15.14, the seam: both sides say 'Various Artists' and it matches by plain
-# equality. Before the ruling this badged. It must not.
-ok( !rowFor( $K{va_equal} ),
+# equality. Before the ruling this badged. It must not - and now it says why.
+is( rowFor( $K{va_equal} )->{review_reason}, 'various-gated',
 	'H: "Various Artists" on both sides is gated too, though it agrees exactly' );
-ok( !rowFor( $K{va_literal} ),
+is( rowFor( $K{va_literal} )->{review_reason}, 'various-gated',
 	'H: an LMS literal "Various" against Discogs\' "Various" is gated' );
+
+# 'various-gated' rather than 'artist-disagree', in the written column as well
+# as in the counts: "we declined to decide" and "these are different artists"
+# call for different things from the user, and the queue page says so.
+isnt( rowFor( $K{h_various} )->{review_reason}, 'artist-disagree',
+	'a gated compilation is not filed as an artist disagreement' );
 
 # All three land in the gated bucket, not in artist-disagree - step 8 needs to
 # tell "we declined to decide" apart from "these are different artists".
@@ -564,8 +660,28 @@ like( summary(), qr/\bgated=3\b/,
 like( summary(), qr/\bartist-disagree=1\b/,
 	'  ...and the genuine artist disagreement is still counted separately' );
 
-ok( !rowFor( $K{h_disagree} ),
-	'H: a title match whose artist disagrees writes nothing' );
+# Step 8: the summary carries two different figures and says which is which.
+# "decided" is the verdict count over every album, including albums whose row
+# already said the same thing. "wrote" is the rows that changed, which is what
+# the queue grew by - and on a second pass over the same inputs it is empty.
+like( summary(), qr/queue decided .*\borphans=3\b/,
+	'the summary counts orphans by §15.5 part 3: an identification AND a snapshot' );
+like( summary(), qr/reasons wrote .*\bambiguous=1\b/,
+	'  ...and reports the reasons it actually wrote' );
+
+# The two figures disagree here, and the disagreement is D1 working: two albums
+# DECIDED ambiguous - h_ambig and the manual link on the same title - and only
+# one row was written, because the user has already answered for the other.
+like( summary(), qr/queue decided .*\bambiguous=2\b/,
+	'two albums decided ambiguous, but only one reason was written (D1)' );
+like( summary(), qr/reasons wrote .*\bvarious-gated=3\b/,
+	'  ...in the queue\'s vocabulary, not the pass\'s buckets' );
+like( summary(), qr/reasons wrote .*\borphan=2\b/,
+	'  ...counting the two orphans it marked, not the one already marked conflict' );
+
+is( rowFor( $K{h_disagree} )->{review_reason}, 'artist-disagree',
+	'H: a title match whose artist disagrees is filed as artist-disagree' );
+is( rowFor( $K{h_disagree} )->{ownership}, 'absent', '  ...and is not badged' );
 
 # §13.10.3 and §15.11: one collection entry, two albums - the rip and the
 # stream - and BOTH badge. This is the case that lands on the ownership pass
@@ -573,12 +689,81 @@ ok( !rowFor( $K{h_disagree} ),
 is( rowFor( $K{remote} )->{ownership}, 'version',
 	'an all-remote album badges from the collection (§13.10.1, §15.11)' );
 
-# --- the conflict row ------------------------------------------------------
+# --- the conflict row, both kinds (§15.16 part 4) ---------------------------
+#
+# A FRESH conflict has a NULL release id, so the release-id test at node C
+# already excluded it before step 8. Nothing about it changes.
 my $conflict = rowFor( $K{conflict} );
 ok( $conflict, 'a conflict row is not deleted by the pass' );
 is( $conflict->{state}, 'candidate',
 	'a conflict row skips C and its state is never written - there is nothing to promote' );
 is( $conflict->{ownership}, 'absent', '  ...and its ownership is absent' );
+is( $conflict->{review_reason}, 'conflict',
+	"  ...and the pass leaves 'conflict' exactly where the importer put it (R3)" );
+
+# An INCUMBENT conflict is the one nothing could see. It is strict, candidate,
+# carries release 111 - which is in the collection - and has a full snapshot,
+# so every column says "clean identification" and node D would make it 'exact'
+# and promote it to 'confirmed', undoing §3a's demotion at the next sync. This
+# is TODO 2026-09-19, and these four assertions are the whole of the fix.
+my $incumbent = rowFor( $K{incumbent} );
+ok( $incumbent, 'an incumbent conflict row survives the pass' );
+is( $incumbent->{state}, 'candidate',
+	'an incumbent conflict is NOT promoted, though its release is owned (§15.16 part 4)' );
+is( $incumbent->{ownership}, 'absent',
+	'  ...and does not badge from the id the tags disagree about' );
+is( $incumbent->{discogs_release_id}, 111,
+	'  ...while keeping the identification - the pass never unmatches an album' );
+is( $incumbent->{review_reason}, 'conflict', "  ...and keeps its mark" );
+
+# The control: the same release id, the same tier, the same state, no mark.
+# This one badges and promotes, which is what makes the row above a decision
+# about review_reason rather than about anything else.
+is( rowFor( $K{d_strict} )->{ownership}, 'exact',
+	'  ...while the identical row WITHOUT the mark still badges exact' );
+is( rowFor( $K{d_strict} )->{state}, 'confirmed', '  ...and is still promoted' );
+
+# --- D1: a manual row on a live album carries no pass reason ---------------
+#
+# 'Ciao Monkey' is owned twice, so the title route calls this ambiguous. The
+# user has already decided; re-asking every sync is not review.
+my $manualAmbig = rowFor( $K{manual_ambig} );
+is( $manualAmbig->{review_reason}, undef,
+	'D1: a manual row on a current album gets no pass reason, however ambiguous' );
+is( $manualAmbig->{match_tier}, 'manual', '  ...and is still manual' );
+is( $manualAmbig->{state}, 'confirmed',
+	"  ...and its state is untouched - a manual link is not cross-checked" );
+
+# --- orphans (§15.16 part 5) -----------------------------------------------
+#
+# The pass is the only thing that sees the whole library and the whole table at
+# once. Nothing sweeps orphans (§2a invariant 4), which is exactly why they
+# must be shown: TODO 2026-09-19 found three sitting on the reference server
+# that nothing would ever have mentioned.
+is( rowFor($ORPHAN_STRICT)->{review_reason}, 'orphan',
+	'a strict orphan carrying an identification and a snapshot is marked' );
+is( rowFor($ORPHAN_STRICT)->{discogs_release_id}, 999999,
+	'  ...and keeps everything else' );
+
+# Manual orphans included. D1 is about a live album; an orphan is not a verdict
+# on one, and a manual row is the row recovery exists for.
+is( rowFor($ORPHAN_MANUAL)->{review_reason}, 'orphan',
+	'a MANUAL orphan is marked too - D1 is about live albums (§15.16 part 5)' );
+is( rowFor($ORPHAN_MANUAL)->{state}, 'confirmed', '  ...with its state untouched' );
+
+is( rowFor($ORPHAN_CONFLICT)->{review_reason}, 'conflict',
+	"an orphan already marked 'conflict' keeps it - sticky beats orphan (R3)" );
+
+is( rowFor($ORPHAN_NOSNAP)->{review_reason}, undef,
+	'an orphan with no snapshot is not marked: nothing could relink it' );
+ok( rowFor($ORPHAN_NOSNAP), '  ...and it is not deleted either' );
+
+# --- a reason that lapses is a row that goes --------------------------------
+#
+# The second half of §15.16 part 9. A row owning nothing and reviewing nothing
+# asserts nothing, and the row must not outlive the reason it was written for.
+ok( !rowFor( $K{lapsed} ),
+	'a row whose only content was a reason is deleted once the reason lapses' );
 
 # --- R5: the second permitted delete ---------------------------------------
 ok( !rowFor( $K{lapsing} ),
@@ -591,8 +776,34 @@ ok( rowFor( $K{d_manual} ),  'R5 never deletes a manual row' );
 ok( rowFor( $K{f_undef} ),   'R5 never deletes a strict row' );
 ok( rowFor( $K{conflict} ),  'R5 never deletes a conflict row' );
 
-cmp_ok( matchCount(), '<', $before + 15,
-	'the pass did not write a row per album' );
+# An exact count rather than a margin. The margin was there to say "not a row
+# per album", and step 8 made the pass write rows it did not write before, so
+# the margin is now loose enough to hide a regression. Every row is accounted
+# for below, which is a stronger statement than any inequality.
+my @finalKeys = sort map { $_->[0] } @{
+	$dbh->selectall_arrayref('SELECT album_key FROM squeezewax.discogs_match')
+};
+
+is_deeply(
+	\@finalKeys,
+	[ sort
+		# identifications, all carried forward
+		$K{d_strict}, $K{d_manual}, $K{f_version}, $K{f_zero}, $K{f_undef},
+		$K{conflict}, $K{incumbent}, $K{manual_ambig},
+		# ownership conclusions
+		$K{h_agree}, $K{remote},
+		# review reasons - step 8's new rows
+		$K{h_ambig}, $K{h_various}, $K{va_equal}, $K{va_literal}, $K{h_disagree},
+		# orphans, which are never swept
+		$ORPHAN_MANUAL, $ORPHAN_STRICT, $ORPHAN_CONFLICT, $ORPHAN_NOSNAP,
+	],
+	'the table holds exactly the rows that are worth their existence, and no others'
+);
+
+# The two that must be absent, named separately so a failure says which rule
+# broke: §14.8's boundary, and the lapsed reason.
+ok( !rowFor( $K{h_none} ), '  ...h_none is not among them (§14.8 still bites)' );
+ok( !rowFor( $K{lapsed} ), '  ...nor the row whose reason lapsed' );
 
 # --- what the pass must never write ----------------------------------------
 my $untouched = rowFor( $K{d_strict} );
@@ -652,7 +863,7 @@ is_deeply(
 
 	my ($identified) = $dbh->selectrow_array(
 		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE match_tier IS NOT NULL' );
-	is( $identified, 6, '  ...while every identification survives' );
+	is( $identified, 12, '  ...while every identification survives' );
 }
 
 done_testing();

@@ -1186,7 +1186,7 @@ Each names its sites so the work is mechanical rather than a search.
       (identification recovers it) and loses a manual row's choice. Same
       shape as the retagged-title hole. Recorded, not solved — revisit if
       seen on hardware.
-- [ ] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
+- [x] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
       part 4: step 7 stores none. An ambiguous or artist-disagreeing album
       is `ownership = 'absent'` if tagged and has NO ROW if untagged, and
       the collection is discarded (§13.2), so step 8 cannot find these
@@ -1214,7 +1214,7 @@ Each names its sites so the work is mechanical rather than a search.
       → 2026-09-24: _prePass treats a NULL-tier row as a key miss, and
       relinkOrphan deletes a regenerable row on its target key first
       (decisions §15.16 part 9). Ticked in commit A2.
-- [ ] **2026-09-19, STEP 8: a conflict row with an incumbent id looks like a
+- [x] **2026-09-19, STEP 8: a conflict row with an incumbent id looks like a
       tagged candidate.** Both are `strict`, `candidate`, non-NULL release id
       (decisions §3a, §13.4). The ownership pass treats it as an
       identification and may promote it to `confirmed`. The queue's "Strict

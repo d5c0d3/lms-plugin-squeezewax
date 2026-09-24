@@ -295,7 +295,7 @@ sub _indexCollection {
 sub _loadRows {
 	return Slim::Schema->dbh->selectall_arrayref(
 		q{SELECT album_key, lms_album_id, discogs_release_id, discogs_master_id,
-		         match_tier, state, ownership, snapshot_track_count
+		         match_tier, state, ownership, snapshot_track_count, review_reason
 		    FROM squeezewax.discogs_match},
 		{ Slice => {} }
 	) || [];
@@ -332,10 +332,29 @@ sub _decide {
 
 	# --- C: is this album tagged? -----------------------------------------
 	#
-	# Tagged means an identification WITH a release id. A conflict row has a
-	# tier but a NULL release id (§3a), so it is not tagged: it falls to H and
-	# its state is never written, because there is nothing to promote.
-	my $tagged = $row && defined $row->{match_tier} && defined $row->{discogs_release_id};
+	# Tagged means an identification WITH a release id, on a row the tags do not
+	# contradict.
+	#
+	# There are two kinds of conflict row and until step 8 only one of them was
+	# handled here. A FRESH conflict has a NULL release id (§3a), so the release
+	# id test alone already excluded it - which is what the comment that used to
+	# stand here said, as though it were the whole story. An INCUMBENT conflict
+	# keeps the release id it had (Match.pm's _recordConflict), and is 'strict'
+	# and 'candidate' like any identification, so nothing here could tell it
+	# apart: the pass treated a contested match as evidence of ownership and
+	# could promote it back to 'confirmed' at :351, undoing §3a's demotion in
+	# the next sync. That is TODO 2026-09-19, and review_reason is what closes
+	# it (§15.16 part 4).
+	#
+	# So a conflict of either kind is untagged: it skips C, D and F, its state
+	# is never written because there is nothing to promote, and the title route
+	# at H alone decides its ownership. The identification is not discarded -
+	# the pass never unmatches an album - it is simply not treated as an answer
+	# while the tags disagree about what the answer is.
+	my $conflict = $row && ( $row->{review_reason} || '' ) eq 'conflict';
+
+	my $tagged = $row && !$conflict
+		&& defined $row->{match_tier} && defined $row->{discogs_release_id};
 
 	# Only a strict row's state is the pass's to move. A manual link "is not
 	# subject to the collection cross-check that governs Strict" (design §3),
@@ -420,6 +439,57 @@ sub _decide {
 	return ( 'absent', $state, $verdict );
 }
 
+# _decide's bucket vocabulary, mapped onto the six values discogs_match's CHECK
+# accepts (§15.16 part 2). The buckets are what the pass thinks in; the reasons
+# are what the queue page reads, and the two are deliberately not the same
+# words: 'various' says what the pass saw, 'various-gated' says what it did
+# about it, and 'lms-absent' and 'discogs-absent' are one thing to the user -
+# nobody could say which side the name was missing from, and nothing different
+# follows from it.
+#
+# Exhaustive over _decide's returns, verified against every return site: the
+# only bucket with no reason is 'undecodable', by D2. A name we cannot decode is
+# a bug in our reading or in the tags, not a decision the user can make on a
+# web page, so it stays a logged count and §13.10.5 does not list it.
+my %REASON = (
+	ambiguous      => 'ambiguous',
+	various        => 'various-gated',
+	disagree       => 'artist-disagree',
+	'lms-absent'   => 'artist-absent',
+	'discogs-absent' => 'artist-absent',
+	undecodable    => undef,
+);
+
+# What review_reason should read on this album's row once the pass is done, or
+# the string 'keep' when the pass may not touch it at all.
+#
+# Three rules, in this order, and the order is what makes them rules rather than
+# preferences:
+#
+# 1. 'conflict' is the importer's, and sticky (§15.16 part 3). The pass never
+#    writes it and never clears it. It is cleared by a clean identification, by
+#    a relink that resolves an 'orphan', or by the user rejecting the row - all
+#    things that happen because something CHANGED, which is exactly what a
+#    re-derivation from the same collection is not.
+#
+# 2. A manual row on a live album carries no pass reason (D1). The user has
+#    already answered; re-asking every sync is not review, it is nagging. A
+#    manual link to a record whose title is shared would otherwise come back as
+#    'ambiguous' at every sync forever. NULL rather than 'keep', so that a stale
+#    'orphan' on an album that has come back is cleared rather than left to
+#    advertise a row nothing can relink.
+#
+# 3. Otherwise the bucket decides, and NULL means "not in the queue".
+sub _reasonFor {
+	my ( $row, $bucket ) = @_;
+
+	return 'keep' if $row && ( $row->{review_reason} || '' ) eq 'conflict';
+
+	return undef if $row && ( $row->{match_tier} || '' ) eq 'manual';
+
+	return defined $bucket ? $REASON{$bucket} : undef;
+}
+
 sub _apply {
 	my ($entries) = @_;
 
@@ -438,7 +508,15 @@ sub _apply {
 	my %count = map { $_ => 0 } qw(
 		albums exact version absent_with_row inserted updated deleted
 		promoted demoted gated ambiguous artist_disagree artist_absent undecodable
+		orphans
 	);
+
+	# What was actually WRITTEN, as opposed to what was decided. The bucket
+	# counts above are decisions - they include albums whose row already said
+	# the same thing - and step 8's queue is sized by rows, not by verdicts.
+	# Keyed by the review_reason value, so the summary reads in the queue's
+	# vocabulary rather than the pass's.
+	my %reasonWritten;
 
 	my ( @insert, @update, @delete );
 	my %seen;
@@ -456,7 +534,7 @@ sub _apply {
 
 		my $row = $row{$key};
 
-		my ( $ownership, $state ) = _decide(
+		my ( $ownership, $state, $bucket ) = _decide(
 			$album, $row, $index, $artists->{ $album->{album_id} },
 			$variousString, \%count
 		);
@@ -465,23 +543,47 @@ sub _apply {
 
 		$count{$ownership}++ if $ownership ne 'absent';
 
-		if ( !$row ) {
-			# §14.8's invariant: absence of a row already means "nothing
-			# known", so a row with NULL state, NULL match_tier and
-			# ownership = 'absent' asserts nothing and must never be written.
-			# Without this the pass would write a row per album.
-			return 1 if $ownership eq 'absent';
+		# The third return value, which until step 8 was discarded here. It is
+		# the only thing that survives the sync: §13.2 requires the collection
+		# be thrown away, so an ambiguity or an artist disagreement that is not
+		# written down now cannot be recomputed later.
+		my $reason = _reasonFor( $row, $bucket );
+		my $keepReason = defined $reason && $reason eq 'keep';
 
-			push @insert, [ $key, $album->{album_id}, $ownership ];
+		if ( !$row ) {
+			# §14.8 as §15.16 part 9 amends it: a row is worth its existence
+			# where there is an identification, an ownership conclusion other
+			# than 'absent', OR a review reason. Absence of a row still means
+			# "nothing known", so an album that owns nothing and has nothing to
+			# review still gets none - which is what keeps this from writing a
+			# row per album, and what the h_none case in the suite pins.
+			return 1 if $ownership eq 'absent' && !defined $reason;
+
+			push @insert, [ $key, $album->{album_id}, $ownership, $reason ];
+
+			$reasonWritten{$reason}++ if defined $reason;
 
 			return 1;
 		}
 
 		$count{absent_with_row}++ if $ownership eq 'absent';
 
+		my $reasonChanged = !$keepReason
+			&& ( $row->{review_reason} || '' ) ne ( $reason || '' );
+
 		# The ownership conclusion has lapsed and the row carries nothing else.
-		# DELETE takes precedence over the update below.
-		if ( $ownership eq 'absent' && _isOwnershipOnly($row) ) {
+		# DELETE takes precedence over the update below - but only if there is
+		# no reason to keep the row for, which is the second half of §15.16 part
+		# 9. A row whose ownership is 'absent' and whose reason is 'ambiguous'
+		# is not "nothing known": it is the queue item.
+		#
+		# The SQL guard in _write is deliberately NOT widened to match. It
+		# protects rows carrying a decision or a snapshot, which is a different
+		# question from this one, and a pass-written reason is neither - it is
+		# re-derived at the next sync. The decision of WHETHER to delete is
+		# made here; the guard is there to stop this sub deleting something it
+		# has no business deleting.
+		if ( $ownership eq 'absent' && !defined $reason && _isOwnershipOnly($row) ) {
 			push @delete, $key;
 
 			return 1;
@@ -490,17 +592,22 @@ sub _apply {
 		my $ownershipChanged = ( $row->{ownership} || '' ) ne $ownership;
 		my $stateChanged     = defined $state && ( $row->{state} || '' ) ne $state;
 
-		return 1 unless $ownershipChanged || $stateChanged;
+		return 1 unless $ownershipChanged || $stateChanged || $reasonChanged;
 
 		if ($stateChanged) {
 			$count{ $state eq 'confirmed' ? 'promoted' : 'demoted' }++;
 		}
 
-		push @update, {
-			album_key => $key,
-			ownership => $ownership,
-			state     => $stateChanged ? $state : undef,
-		};
+		$reasonWritten{$reason}++ if $reasonChanged && defined $reason;
+
+		# Only the keys that were decided. What is not here is not named in the
+		# SQL, which is the discipline _write's comment describes.
+		my %row = ( album_key => $key, ownership => $ownership );
+
+		$row{state}  = $state  if $stateChanged;
+		$row{reason} = $reason if $reasonChanged;
+
+		push @update, \%row;
 
 		return 1;
 	} );
@@ -509,23 +616,72 @@ sub _apply {
 	# recovery's to deal with at the next scan and keeps its last ownership -
 	# it has no tile, so no badge can show either way. An ownership-only row
 	# has nothing to recover.
+	#
+	# Step 8 adds the marking. The pass is the only thing that sees the whole
+	# library and the whole table at once, so it is the only thing that can say
+	# "this row's album is gone" - the importer's pre-pass sees it too, but only
+	# when tag names are configured (§15.8, R11), and only from inside a scan.
+	# Nothing sweeps orphans automatically (§2a invariant 4), which is precisely
+	# why they have to be shown: TODO 2026-09-19 found three sitting on the
+	# reference server that nothing would ever have mentioned.
 	for my $r (@$rows) {
 		next if $seen{ $r->{album_key} };
-		next unless _isOwnershipOnly($r);
 
-		push @delete, $r->{album_key};
+		if ( _isOwnershipOnly($r) ) {
+			push @delete, $r->{album_key};
+
+			next;
+		}
+
+		# §15.5 part 3's predicate: an identification AND a snapshot. Without a
+		# snapshot the row cannot be relinked to anything, so the orphan list
+		# could offer nothing but reject - and it is not the pass's place to
+		# invite a deletion it cannot justify. Such a row simply sits, as it did
+		# before.
+		next unless defined $r->{match_tier} && defined $r->{snapshot_track_count};
+
+		$count{orphans}++;
+
+		# Manual orphans included, deliberately. D1 keeps a pass reason off a
+		# manual row whose album is CURRENT, because the user has already
+		# answered the question the reason would re-ask. An orphan is not a
+		# verdict on a live album - it is the report that the album is gone -
+		# and a manual row is the one recovery exists for, so leaving it unmarked
+		# would hide exactly the row the user most wants back.
+		#
+		# 'conflict' still wins, because it is sticky and the importer's (R3).
+		next if ( $r->{review_reason} || '' ) eq 'conflict';
+		next if ( $r->{review_reason} || '' ) eq 'orphan';
+
+		push @update, { album_key => $r->{album_key}, reason => 'orphan' };
+
+		$reasonWritten{orphan}++;
 	}
 
 	_write( \@insert, \@update, \@delete, \%count );
+
+	# Two different figures, and the summary says which is which because they
+	# disagree and a reader would otherwise assume one of them was wrong.
+	#
+	# "decided" is the verdict count, over every album the pass looked at. It
+	# includes albums whose row already said the same thing, so it is stable
+	# from sync to sync and is what the measurement scripts compare against.
+	#
+	# "wrote" is the rows that CHANGED, which is what the queue grew or shrank
+	# by. On a second sync over the same inputs it is empty, which is §13.2's
+	# determinism showing up in the log.
+	my $written = join ', ',
+		map { "$_=$reasonWritten{$_}" } sort keys %reasonWritten;
 
 	main::INFOLOG && $log->is_info && $log->info(
 		"ownership pass: $count{albums} albums, exact=$count{exact} "
 		. "version=$count{version} absent-with-row=$count{absent_with_row}; "
 		. "wrote inserted=$count{inserted} updated=$count{updated} "
 		. "deleted=$count{deleted} promoted=$count{promoted} demoted=$count{demoted}; "
-		. "queue-to-be gated=$count{gated} ambiguous=$count{ambiguous} "
+		. "queue decided gated=$count{gated} ambiguous=$count{ambiguous} "
 		. "artist-disagree=$count{artist_disagree} artist-absent=$count{artist_absent} "
-		. "undecodable=$count{undecodable}"
+		. "undecodable=$count{undecodable} orphans=$count{orphans}; "
+		. 'reasons wrote ' . ( $written eq '' ? 'nothing' : $written )
 	);
 
 	return 'ok';
@@ -545,13 +701,19 @@ sub _write {
 	$dbh->begin_work;
 
 	eval {
-		# Only the three columns. Everything else stays NULL, which is what
-		# makes this row readable as "an ownership conclusion, no
-		# identification" - and what keeps the importer's lookups, which filter
-		# on match_tier IS NOT NULL, from ever seeing it (§15.13 part 6).
+		# Only the four columns. Everything else stays NULL, which is what makes
+		# this row readable as "an ownership conclusion and/or a review reason,
+		# no identification" - and what keeps the importer's lookups, which
+		# filter on match_tier IS NOT NULL, from ever seeing it (§15.13 part 6).
+		#
+		# review_reason joined the list at step 8 and is why such a row may now
+		# exist with ownership = 'absent', which §14.8 previously forbade:
+		# §15.16 part 9 amends the invariant to "an identification, an ownership
+		# conclusion other than absent, OR a review reason". The row still
+		# asserts something; it just asserts a different thing.
 		my $ins = $dbh->prepare_cached(
-			'INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
-			 VALUES (?,?,?)'
+			'INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
+			 VALUES (?,?,?,?)'
 		);
 
 		for my $row (@$insert) {
@@ -561,34 +723,51 @@ sub _write {
 
 		$ins->finish;
 
-		# Two statements rather than one with a conditional SET: the pass must
-		# never write state on a row whose state is not its to move, and "do not
-		# name the column" is a stronger guarantee than "pass the old value".
+		# A statement per column set, rather than one with a conditional SET: the
+		# pass must never write state on a row whose state is not its to move,
+		# nor a review reason on a row whose reason is not its to write, and "do
+		# not name the column" is a stronger guarantee than "pass the old value".
 		#
-		# Neither names source_timestamp, any snapshot_* column,
+		# Until step 8 that was two hand-written statements, ownership and
+		# ownership+state. There are now three columns the pass may write and an
+		# orphan mark that writes only one of them, which is five combinations -
+		# five named statements and a five-way branch to pick between them, each
+		# a place to name one column too many. So the SET list is built from the
+		# keys _apply actually put on the row, which makes the guarantee
+		# structural: a column that was not decided is not in the hash, so it
+		# cannot be in the SQL. The three names come from a fixed table below,
+		# never from the data.
+		#
+		# prepare_cached keys on the SQL text, so this is at most five cached
+		# handles for the whole pass, the same as five named ones.
+		#
+		# None of them names source_timestamp, any snapshot_* column,
 		# discogs_release_id, discogs_master_id or match_tier. The pass derives
-		# ownership; it never identifies, never snapshots (§15.4), and never
-		# touches the skip contract (Importer.pm:397-408).
-		my $updOwnership = $dbh->prepare_cached(
-			'UPDATE squeezewax.discogs_match SET ownership = ? WHERE album_key = ?'
-		);
-		my $updBoth = $dbh->prepare_cached(
-			'UPDATE squeezewax.discogs_match SET ownership = ?, state = ? WHERE album_key = ?'
+		# ownership and, since step 8, a review reason; it never identifies,
+		# never snapshots (§15.4), and never touches the skip contract
+		# (Importer.pm:397-408).
+		my @COLUMNS = (
+			[ ownership => 'ownership' ],
+			[ state     => 'state' ],
+			[ reason    => 'review_reason' ],
 		);
 
 		for my $row (@$update) {
-			if ( defined $row->{state} ) {
-				$updBoth->execute( $row->{ownership}, $row->{state}, $row->{album_key} );
-			}
-			else {
-				$updOwnership->execute( $row->{ownership}, $row->{album_key} );
-			}
+			my @set = grep { exists $row->{ $_->[0] } } @COLUMNS;
+
+			next unless @set;
+
+			my $sql = 'UPDATE squeezewax.discogs_match SET '
+				. join( ', ', map { "$_->[1] = ?" } @set )
+				. ' WHERE album_key = ?';
+
+			my $sth = $dbh->prepare_cached($sql);
+
+			$sth->execute( ( map { $row->{ $_->[0] } } @set ), $row->{album_key} );
+			$sth->finish;
 
 			$count->{updated}++;
 		}
-
-		$updOwnership->finish;
-		$updBoth->finish;
 
 		# The predicate is repeated in SQL rather than trusted from the read.
 		# Between the load and the write the importer cannot have run - a scan
