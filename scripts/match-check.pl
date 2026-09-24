@@ -1110,6 +1110,173 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( $onKey, 1, '  ...and exactly one row on the key, not a collision' );
 }
 
+# --- recordManual: the queue page's confirm (step 8, §15.16 part 6) --------
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $key = 'm' x 32;
+
+	my $album = {
+		album_key        => $key,
+		album_id         => 7,
+		title            => 'Kind of Blue',
+		artist           => 'Miles Davis',
+		source_timestamp => 900,
+		local_tracks     => 5,
+	};
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	is( $M->recordManual( $album, 4242, 99 ), 1, 'recordManual writes a row' );
+
+	my $r = row($key);
+	is( $r->{match_tier},         'manual',    '  ...at tier manual' );
+	is( $r->{state},              'confirmed', '  ...state confirmed, written here, not by the pass' );
+	is( $r->{discogs_release_id}, 4242,        '  ...with the release the user chose' );
+	is( $r->{discogs_master_id},  99,          '  ...and its master' );
+	is( $r->{lms_album_id},       7,           '  ...and the current lms_album_id' );
+	is( $r->{source_timestamp},   900,         '  ...and the album\'s source timestamp, so it skips' );
+	ok( $r->{matched_at},                      '  ...and a matched_at' );
+	is( $r->{review_reason},      undef,       '  ...and no review reason: confirming IS the answer' );
+
+	# D5 / §15.4: a manual link is an identification, so it snapshots. Manual
+	# rows are precisely what recovery exists for - the tags could not name this
+	# pressing, so re-identification after a move would not reproduce it.
+	is( $r->{snapshot_album_title}, 'Kind of Blue', '  ...with the recovery snapshot: title' );
+	is( $r->{snapshot_track_count}, 5,              '  ...track count' );
+	is( $r->{snapshot_artist},      'Miles Davis',  '  ...and artist, as bytes' );
+
+	# The badge is the pass's. recordManual must not name the column, so an
+	# existing conclusion survives and a new row takes the schema default.
+	is( $r->{ownership}, 'absent', 'recordManual leaves ownership at the default on a new row' );
+
+	$dbh->do( "UPDATE squeezewax.discogs_match SET ownership = 'version'" );
+	is( $M->recordManual( $album, 5555, 0 ), 1, 'a second confirm over the same album works' );
+	is( row($key)->{ownership}, 'version',
+		'  ...and does not touch ownership - the badge is the pass\'s (§15.16 part 6)' );
+	is( row($key)->{discogs_release_id}, 5555, '  ...while recording the new choice' );
+
+	# Both of Discogs' "no master" forms collapse to NULL, the same guard
+	# _indexCollection applies: a master_id of 0 taken at face value makes every
+	# masterless release collide on one key at node F.
+	is( row($key)->{discogs_master_id}, undef, "  ...and a master_id of 0 becomes NULL" );
+	$M->recordManual( $album, 5555, undef );
+	is( row($key)->{discogs_master_id}, undef, '  ...as does an absent one' );
+
+	# Invariant 1: an album cannot be matched and not-matched at once.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_no_match (album_key, tier, checked_at)
+		 VALUES (?, 'strict', 1)", undef, $key
+	);
+	is( $M->recordManual( $album, 4242, 99 ), 1, 'a confirm over a no-match row works' );
+	is( noMatchRow($key), undef, '  ...and clears the no-match row (invariant 1)' );
+
+	# Both ids come off a form. A non-integer release id stored in an INTEGER
+	# column keeps its text affinity in SQLite, would never match the collection
+	# index, and the album would stop badging with nothing to say why.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	for my $bad ( undef, '', 'r4242', '42.5', '-1', 0, ' 42' ) {
+		is( $M->recordManual( $album, $bad, 99 ), 0,
+			'recordManual refuses a release id of ' . ( defined $bad ? "'$bad'" : 'undef' ) );
+	}
+	is( row($key), undef, '  ...and wrote nothing on any of them' );
+
+	# And it is behind _writeOk like every other write.
+	local $main::SCANNING = 1;
+	is( $M->recordManual( $album, 4242, 99 ), 0, 'recordManual refuses during a scan' );
+	is( row($key), undef, '  ...and writes nothing' );
+}
+
+# --- rejectRow: the third permitted deletion (step 8, §15.16 part 7) -------
+#
+# §2a invariant 2 governs AUTOMATIC deletion from the one table that is not
+# regenerable. This is user-invoked, confirmed on the page, and one row named by
+# its key - so the predicate is the whole of the rule, and what it REFUSES
+# matters as much as what it deletes.
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $key = 'j' x 32;
+
+	my $seed = sub {
+		my (%col) = @_;
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+		my %row = ( album_key => $key, lms_album_id => 7, %col );
+		my @names = sort keys %row;
+		$dbh->do(
+			'INSERT INTO squeezewax.discogs_match (' . join( ',', @names ) . ') VALUES ('
+				. join( ',', ('?') x @names ) . ')',
+			undef, map { $row{$_} } @names
+		);
+	};
+
+	# --- the four rejectable shapes ---------------------------------------
+	$seed->( match_tier => 'manual', state => 'confirmed', discogs_release_id => 4242,
+		snapshot_album_title => 'Kind of Blue', snapshot_track_count => 5 );
+	is( $M->rejectRow($key), 1, 'reject deletes a manual row - the user undoing their own choice' );
+	is( row($key), undef, '  ...and it is gone' );
+
+	$seed->( match_tier => 'strict', state => 'candidate', discogs_release_id => 4242,
+		review_reason => 'conflict', snapshot_track_count => 5 );
+	is( $M->rejectRow($key), 1,
+		'reject deletes an INCUMBENT conflict - the one _recordNoMatch cannot reach' );
+
+	$seed->( match_tier => 'manual', state => 'confirmed', discogs_release_id => 888888,
+		review_reason => 'orphan', snapshot_track_count => 18 );
+	is( $M->rejectRow($key), 1, 'reject deletes an orphan - nothing sweeps them (§2a invariant 4)' );
+
+	$seed->( match_tier => 'strict', state => 'candidate' );
+	is( $M->rejectRow($key), 1,
+		"reject deletes a fresh conflict by §3a's own predicate, with no mark (D3)" );
+
+	# --- and what it refuses ----------------------------------------------
+	#
+	# A computed item carries no user decision to undo: the next sync re-derives
+	# it from the same inputs, so deleting the row changes nothing and the item
+	# comes back. This is why there is no stored dismiss.
+	for my $reason (qw(ambiguous artist-disagree artist-absent various-gated)) {
+		$seed->( ownership => 'absent', review_reason => $reason );
+		is( $M->rejectRow($key), 0, "reject refuses a computed '$reason' row" );
+		ok( row($key), '  ...and leaves it where it is' );
+	}
+
+	# A plain strict identification is not a queue item at all. 305 of the
+	# reference server's 329 candidates are this shape.
+	$seed->( match_tier => 'strict', state => 'candidate', discogs_release_id => 4242,
+		snapshot_album_title => 'Kind of Blue', snapshot_track_count => 5 );
+	is( $M->rejectRow($key), 0, 'reject refuses a plain strict identification' );
+	is( row($key)->{discogs_release_id}, 4242, '  ...and leaves it intact' );
+
+	# A row the pass wrote and nothing else. Regenerable, but not the user's to
+	# reject - it is not a queue item, so the page never offers it.
+	$seed->( ownership => 'exact' );
+	is( $M->rejectRow($key), 0, 'reject refuses an ownership-only row' );
+
+	# One row, named by its key, and nothing near it.
+	$seed->( match_tier => 'manual', state => 'confirmed', discogs_release_id => 4242 );
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, match_tier, state,
+		  discogs_release_id) VALUES (?,8,'manual','confirmed',7777)", undef, 'p' x 32
+	);
+	is( $M->rejectRow($key), 1, 'reject deletes the row it was given' );
+	ok( row( 'p' x 32 ), '  ...and no other, though it is the same shape' );
+
+	is( $M->rejectRow( 'q' x 32 ), 0, 'reject of a key with no row deletes nothing' );
+	is( $M->rejectRow('too-short'), 0, 'reject refuses a key that is not 32 characters' );
+	is( $M->rejectRow(undef), 0, '  ...and an undefined one' );
+
+	local $main::SCANNING = 1;
+	$seed->( match_tier => 'manual', state => 'confirmed', discogs_release_id => 4242 );
+	is( $M->rejectRow($key), 0, 'reject refuses during a scan' );
+	ok( row($key), '  ...and the row survives' );
+}
+
 # --- R6: the importer ignores ownership-only rows (§15.13 part 6) ----------
 #
 # Since migration 3, match_tier is nullable and a NULL one means "no

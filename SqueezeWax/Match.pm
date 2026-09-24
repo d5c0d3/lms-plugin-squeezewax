@@ -825,6 +825,164 @@ sub _recordNoMatch {
 	return 'none';
 }
 
+=head2 recordManual( \%album, $releaseId, $masterId )
+
+Record the user's own choice of release for one album. Returns 1 if a row was
+written, 0 otherwise.
+
+The queue page's confirm action, and the only writer of C<match_tier = 'manual'>
+(§15.16 part 6). It writes C<state = 'confirmed'> directly, which C<_recordMatch>
+may not: design §3 exempts a manual link from the collection cross-check that
+governs Strict, so there is nothing for the ownership pass to confirm and
+nothing for it to demote. C<Ownership::_decide> honours that by moving C<state>
+only on a C<'strict'> row.
+
+It captures the recovery snapshot, because a manual link IS an identification
+(§15.4) and manual rows are exactly what orphan recovery exists for: the user
+chose this pressing because the tags could not name it, so re-identification
+after a folder move would not reproduce the choice (§15.5). C<snapshot_artist> is
+C<< $album->{artist} >> as the iterator supplied it - bytes, never decoded, since
+recovery compares it against the same bytes (§11.4).
+
+It never names C<ownership>. The badge is the pass's to write and changes at the
+next sync, which is what the page tells the user (§15.16 part 6).
+
+C<review_reason> is written NULL: confirming is the answer to whatever put the
+album in the queue.
+
+=cut
+
+sub recordManual {
+	my ( $class, $album, $releaseId, $masterId ) = @_;
+
+	return 0 unless $class->_writeOk;
+
+	# Both ids come off a form, so both are validated here rather than trusted.
+	# A non-integer release id would be stored as text in an INTEGER column -
+	# SQLite's type affinity keeps a non-numeric string as-is - and would then
+	# never match the collection index, so the album would silently stop
+	# badging with nothing to show why.
+	return 0 unless defined $releaseId && $releaseId =~ /^[0-9]+$/ && $releaseId > 0;
+
+	# Both of Discogs' "no master" forms collapse to NULL, the same guard
+	# Ownership::_indexCollection applies to the same field (:271-275): a
+	# master_id of 0 taken at face value makes every masterless release collide
+	# on one key at node F.
+	$masterId = undef
+		unless defined $masterId && $masterId =~ /^[0-9]+$/ && $masterId > 0;
+
+	my $dbh = Slim::Schema->dbh;
+	my $key = $album->{album_key};
+
+	$dbh->do(
+		q{
+			INSERT INTO squeezewax.discogs_match
+				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
+				 match_tier, state, matched_at, source_timestamp,
+				 snapshot_album_title, snapshot_track_count, snapshot_artist,
+				 review_reason)
+			VALUES (?,?,?,?,'manual','confirmed',?,?,?,?,?,NULL)
+			ON CONFLICT(album_key) DO UPDATE SET
+				lms_album_id         = excluded.lms_album_id,
+				discogs_release_id   = excluded.discogs_release_id,
+				discogs_master_id    = excluded.discogs_master_id,
+				match_tier           = excluded.match_tier,
+				state                = excluded.state,
+				matched_at           = excluded.matched_at,
+				source_timestamp     = excluded.source_timestamp,
+				snapshot_album_title = excluded.snapshot_album_title,
+				snapshot_track_count = excluded.snapshot_track_count,
+				snapshot_artist      = excluded.snapshot_artist,
+				review_reason        = excluded.review_reason
+		},
+		undef,
+		$key, $album->{album_id}, $releaseId, $masterId,
+		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		$album->{artist}
+	);
+
+	_clearNoMatch( $dbh, $key );
+
+	return 1;
+}
+
+=head2 rejectRow( $albumKey )
+
+Delete one C<discogs_match> row at the user's explicit request. Returns the
+number of rows deleted: 1, or 0 if the row was not one this may delete.
+
+The THIRD permitted deletion in C<discogs_match> (§15.16 part 7), after
+C<_recordNoMatch>'s narrow predicate and the ownership pass's regenerable-row
+sweep. §2a's invariant 2 governs AUTOMATIC deletion - the table is the one thing
+here that is not regenerable, so nothing may quietly decide a decision has
+lapsed. This one is none of those things: it is user-invoked, confirmed on the
+page, and one row named by its key.
+
+The predicate is the whole of the rule, and it is narrower than "whatever the
+page asked for". Four shapes are rejectable, and each because there is something
+for the user to undo or be rid of:
+
+=over
+
+=item * a B<manual> row - their own earlier choice;
+
+=item * a row marked C<'conflict'> - the incumbent kind, which
+C<_recordNoMatch> cannot reach and which otherwise advertises a conflict
+forever (TODO 2026-09-07 ground (a));
+
+=item * a row marked C<'orphan'> - a match for an album that is gone, which
+nothing sweeps automatically (§2a invariant 4) and which may be a manual row
+the user no longer wants recovered (ground (b));
+
+=item * a fresh conflict by §3a's own predicate, C<'strict'> with a NULL
+release id, which is how a conflict written before migration 4 is found (D3).
+
+=back
+
+Everything else is refused, and the refusal is the point. A computed queue item
+- ambiguous, artist-disagree, artist-absent, various-gated - carries no user
+decision to undo: it is a conclusion the next sync will re-derive from the same
+inputs, so deleting the row would change nothing and the item would return. That
+is why there is no stored dismiss (§15.16 part 7), and why the queue cannot
+become the recovery path for a wrong badge that §14.4 rules out.
+
+=cut
+
+sub rejectRow {
+	my ( $class, $albumKey ) = @_;
+
+	return 0 unless $class->_writeOk;
+
+	return 0 unless defined $albumKey && length $albumKey == 32;
+
+	my $dbh = Slim::Schema->dbh;
+
+	my $sth = $dbh->prepare_cached(
+		q{DELETE FROM squeezewax.discogs_match
+		   WHERE album_key = ?
+		     AND ( match_tier = 'manual'
+		           OR review_reason IN ('conflict','orphan')
+		           OR ( match_tier = 'strict' AND discogs_release_id IS NULL ) )}
+	);
+
+	my $rows = $sth->execute($albumKey);
+	$sth->finish;
+
+	$rows = 0 unless $rows && $rows =~ /^[0-9]+$/;
+
+	# No discogs_no_match row is written to take its place. A no-match row means
+	# "this tier was attempted and produced nothing", which is a statement about
+	# the files; rejecting is a statement about our record of them. Writing one
+	# would also stop the album being re-examined, and a rejected album should
+	# be re-examined - that is how the user gets a different answer.
+	main::INFOLOG && $log->is_info && $log->info(
+		$rows ? "rejected the match row for $albumKey"
+		      : "refused to reject $albumKey: no row, or not a rejectable one"
+	);
+
+	return $rows;
+}
+
 # An album cannot be both matched and not-matched at the same tier (§2a
 # invariant 1).
 sub _clearNoMatch {
