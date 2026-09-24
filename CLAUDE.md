@@ -98,7 +98,9 @@ sits where it does.
    **code complete** (`3b197cb`, wired at `c39acd2`); the plan §5 hardware
    checks are open in `TODO.md`. The completed sync hands the pass its
    collection in memory and never re-fetches (§15.13 part 1)
-8. **Review queue + manual re-match**
+8. **Review queue + manual re-match** — **code complete** (`6b02c95`); the
+   plan §6 hardware checks are open in `TODO.md`. Plan:
+   `plans/build-order-step-8-review-queue.md`; decisions §15.16
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
 

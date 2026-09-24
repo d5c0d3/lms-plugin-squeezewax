@@ -334,7 +334,9 @@ and is not encoded here (§10).
 **`candidate` does not mean "in the review queue".** Most candidates are simply
 albums the user does not own, and nothing needs deciding about them. The queue's
 contents are enumerated in `squeezewax-v1-decisions.md` §13.10.5 and are a much
-smaller set. Anything selecting queue items on `state = 'candidate'` is wrong.
+smaller set. Anything selecting queue items on `state = 'candidate'` is wrong. The queue
+selects on `review_reason` (§10). §13.5's all-tags read, which would have added
+a fourth kind of item, is deferred (§15.16 part 8).
 
 **Badge derivation** (see §4): the badge reads the `ownership` column. There is
 no join and no render-time test — the ownership pass has already decided, and a
@@ -342,10 +344,22 @@ badge paints for `exact` and `version` alike. Confirmation is not required.
 
 ### Confirmation & feedback loops
 
-- The review queue offers search-as-you-type against Discogs to link an album to
-  a specific pressing by hand; confirming writes `match_tier = 'manual'` and
+- The review queue is its own page, reached from Settings. It lists three kinds
+  of item: ambiguous matches, artist disagreement or absence, and Strict tag
+  conflicts. Orphaned matches (§10) are a second list on the same page.
+- **Manual re-match chooses from the user's own Discogs collection.** It never
+  searches the Discogs database and never offers a release the user does not
+  own. Opening it runs a normal collection sync. Your collection's entries
+  whose title matches the album come first, then the whole collection, which
+  you can filter. Confirming writes `match_tier = 'manual'` and
   `state = 'confirmed'`. A manual link is the user's own decision and is not
-  subject to the collection cross-check that governs Strict.
+  subject to the collection cross-check that governs Strict. **The badge
+  changes at the next sync**, not at confirm (`squeezewax-v1-decisions.md`
+  §15.16).
+- **Reject deletes a manual link, a Strict conflict, or an orphan**, at the
+  user's explicit request. There is no "dismiss": an ambiguous or
+  artist-disagreeing album leaves the queue only through a manual link or a
+  change in tags or collection.
 - **The queue must also offer reject / dismiss, not only confirm.** One state
   the importer can create is otherwise terminal: a confirmed match demoted to
   candidate by a tag conflict keeps its adjudicated `discogs_release_id` and its
@@ -353,7 +367,7 @@ badge paints for `exact` and `version` alike. Confirmation is not required.
   tags altogether the importer may not delete it — the row carries a decision,
   and §2a forbids that. Nothing else will clear it, so with a confirm-only queue
   the album would propose a release with no tag behind it forever. A human has
-  to be able to say no.
+  to be able to say no. Reject deletes the row (§15.16 part 7).
 - **A wrongly auto-badged album has no recovery path in v1.** Ownership `version`
   is written without a confirmation step, so such an album never reaches the
   queue and there is nothing to reject. v1 assumes a well-tagged library and a
@@ -772,7 +786,8 @@ weighted. Both were chosen by measurement rather than taste, and exposing them
 would let a user opt into wrong badges
 (`squeezewax-v1-decisions.md` §13.10.3, §13.10.4).
 
-- Review-queue behavior (auto-open after scan? notification?).
+- The review queue is a page linked from Settings, with the count of open items
+  (§3). No auto-open and no notification in v1.
 - Maintenance: **"clear & rebuild matches"** action (§3, re-match triggers).
   **It must clear `discogs_no_match` as well as `discogs_match`** — decisions
   §2a invariant 3. Leaving the negative cache behind would make the rebuild skip
@@ -854,6 +869,13 @@ discogs_match
                        NULL where no identification was made. No default:
                        an omitted state must not silently become
                        "candidate")
+  review_reason       (conflict | ambiguous | artist-disagree | artist-absent |
+                       various-gated | orphan, or NULL. Why the album is in
+                       the review queue or the orphan list. `conflict` is
+                       written and cleared only by the importer, and is
+                       sticky; the rest are re-derived by the ownership pass
+                       at every sync. Never on a manual row whose album is
+                       current — squeezewax-v1-decisions.md §15.16)
   matched_at
   source_timestamp    (MAX(tracks.timestamp) over the album's local tracks at
                        match time; the skip key for a rescan. NULL forces
@@ -916,8 +938,8 @@ always empty together: they describe an identification, and either there is one
 or there is not. It follows that **a row must be worth its existence** — absence
 of a row already means "nothing known", so a row identifying nothing and owning
 nothing asserts nothing and is never written. A row exists where there is an
-identification, or an ownership conclusion other than `absent`
-(`squeezewax-v1-decisions.md` §14.8).
+identification, an ownership conclusion other than `absent`, or a review reason
+(`squeezewax-v1-decisions.md` §14.8, §15.16).
 
 **v1 stores no Discogs Content.** There is no collection table. The sync holds
 each page of the user's collection in memory, matches it against LMS albums
@@ -979,6 +1001,8 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - Triage / library-health page (problem releases only).
 - Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
+- A field picker for the review queue's re-match list.
+- Orphan relink for users with manual links and no tag names configured.
 - Collection value total + price snapshots.
 
 **Not planned:** any write to the Discogs Collection (§5) — adding a release

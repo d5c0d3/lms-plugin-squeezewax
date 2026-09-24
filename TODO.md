@@ -1634,6 +1634,64 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-24: build-order step 8's hardware checks (the review queue and
+      manual re-match).** Plan `plans/build-order-step-8-review-queue.md` §6.
+      Code complete at `6b02c95`; offline-verified (`check-all.sh` 1127
+      assertions, of which `queue-check.pl` 91 are the new seam suite). None of
+      these can be checked without a real server, a real library and a real
+      Discogs collection. Run them in order; 0 must be run BEFORE upgrading.
+      0. **Before upgrading**, read-only against copies of `squeezewax.db` and
+         `library.db`, and record the three figures:
+         (a) fresh conflicts —
+         `SELECT album_key, lms_album_id, match_tier, state, ownership,
+          discogs_master_id, matched_at, source_timestamp
+            FROM discogs_match
+           WHERE match_tier = 'strict' AND discogs_release_id IS NULL
+           ORDER BY album_key;`
+         (b) manual rows —
+         `SELECT album_key, lms_album_id, discogs_release_id, discogs_master_id,
+          state, ownership, matched_at, source_timestamp, snapshot_artist,
+          snapshot_album_title, snapshot_track_count
+            FROM discogs_match WHERE match_tier = 'manual' ORDER BY album_key;`
+         (c) orphans. These CANNOT be found from `squeezewax.db` alone. §15.5
+         part 3's predicate is `match_tier IS NOT NULL AND snapshot_track_count
+         IS NOT NULL` **and the album_key is no longer in the library**, and
+         that last clause exists nowhere in our database — the first two
+         clauses alone return ~479 rows, almost all of them current. Recompute
+         every current `album_key` from `library.db` and anti-join, which is
+         how the 2026-09-19 item found the three. The recipe, from
+         `Library.pm`'s own `$ALBUM_TRACKS_SQL` (:71-81) and digest (:260):
+         connect read-only to `library.db`; `SELECT t.album, t.urlmd5 FROM
+         tracks t WHERE t.album IS NOT NULL AND t.audio = 1 AND t.content_type
+         NOT IN ('cpl','src','ssp','dir') ORDER BY t.album, t.urlmd5`; group by
+         album and take `md5_hex(join '', @urlmd5)` per album — never
+         `md5_hex('')`; then select the rows above from `squeezewax.db` and
+         print those whose key is not in that set. Expect 764 current albums
+         and 3 orphans: releases 999999 (12 tracks, strict), 77777 (12 tracks,
+         strict, album 3633 gone) and 888888 (18 tracks, MANUAL).
+      1. **Upgrade:** `user_version` 3 → 4; 507 rows unchanged; `review_reason`
+         NULL on every row.
+      2. **First sync:** the reasons written match the summary line, which now
+         carries two different figures and says which is which ("queue decided"
+         is verdicts over every album, "reasons wrote" is rows that changed).
+         Expect ambiguous 5, artist-disagree 2, gated 0 (TODO 2026-09-22
+         figures); orphans 3, including the manual row 888888.
+      3. **Queue page:** lists exactly those, plus 0(a)'s fresh conflicts; none
+         of the 305 unowned candidates.
+      4. **Re-match** on one FSOL album (3124 or 3127): requests = 4; the
+         choices include `The Future Sound Of London`'s entry with its year,
+         format and label; confirm → a manual row; the **next** sync → `exact`,
+         and it leaves the list.
+      5. **Reject** the three orphans from 0(c) (999999, 77777, 888888) from
+         the orphan list; the rows are gone; nothing else changed (full
+         `SELECT *` diff against the 0(b)/0(c) capture).
+      6. **Relink** an ambiguous orphan (two copies of one album folder, as
+         step 4 check 6) from the orphan list.
+      7. **Conflict:** retag one owned album with two different ids; scan →
+         `review_reason = 'conflict'`; sync → no promotion, and the badge only
+         via the title route; fix the tags; scan → the reason is cleared.
+      8. **Scanning:** every queue action refused mid-scan.
+
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan
       `plans/build-order-step-6-7-ownership.md` §5. Code complete and
