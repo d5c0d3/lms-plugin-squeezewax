@@ -132,8 +132,26 @@ Shared reminder list. Both I and Claude Code read and update this.
           succeeds"* at info, **once**. The pause works.
           16:11:48 the real token restored, manual sync: 203 items over 4
           requests, error cleared, pause cleared.
-      (4) **NOT OBSERVED, by decision** (prompt D): killing the network
-          mid-sync is not to be run.
+      (4) ~~**NOT OBSERVED, by decision** (prompt D): killing the network
+          mid-sync is not to be run.~~ **RUN AFTER ALL, 2026-09-24, at the
+          owner's request — PASS.** Scoped so only LMS's own outbound HTTPS
+          was dropped (`iptables -m owner --uid-owner squeezeboxserver`), so
+          nothing else on the machine was affected, with cleanup on a trap;
+          the owner ran it and confirmed the rule was gone afterwards.
+          16:19:20.73 the identity request got through, 16:19:21 the drop
+          landed, and 16:19:37.09 — 16.3s later, the 15s request timeout — the
+          sync failed as `no_response`, **logged at warn** via
+          `Settings.pm:310`, not at error via `:283`. So the connection died
+          genuinely mid-sync rather than before it started.
+          `discogsLastSyncError` = `no_response`, `discogsLastSynced`
+          unchanged, `discogs_match` unchanged.
+          **And the pause stayed unset**, which is the half this check exists
+          for and the only part not readable from a pref: a scan finished at
+          16:21:00 and its sync RAN at 16:22:00 and succeeded, with no skip
+          line. The whole log carries exactly one skip line, from 16:07's
+          rejected token. Transient and permanent failures are now
+          distinguishable in behaviour, not just in vocabulary — §14.2's
+          actual requirement.
       **An unplanned 5xx validated the fix further.** At 16:11:07 a manual
       sync with the REAL token failed as `server_error` — a genuine transient
       from Discogs, which the owner saw as "a server error" and which needed a
@@ -1641,8 +1659,11 @@ Shared reminder list. Both I and Claude Code read and update this.
           507-row snapshot. **The error vocabulary does not:** the failure
           came out as `no_response`, logged at **warn**, and the
           `Discogs rejected the token` line appears nowhere in the log. See
-          the `unauthorized`-is-unreachable item above. Killing the network
-          mid-sync is still NOT OBSERVED.
+          the `unauthorized`-is-unreachable item above. ~~Killing the network
+          mid-sync is still NOT OBSERVED.~~ **Both halves of (c) are now
+          observed: see the §15.15 hardware-check item (4), 2026-09-24. The
+          rejected token reports as `unauthorized` at error and pauses; a
+          killed connection reports as `no_response` at warn and does not.**
       (d) **PASS — and this is the one that was load-bearing.** §15.2
           obligation 1 rested on an INFERENCE from `SQLiteHelper`'s
           `_notifyFromScanner` exit branch that had never been observed. It
