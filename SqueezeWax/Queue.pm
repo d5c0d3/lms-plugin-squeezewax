@@ -356,7 +356,13 @@ sub _rematch {
 			return _finishRematch( $class, $client, $params, $callback, $args, $scanning );
 		}
 
-		$params->{rematch} = _choices( $key, $entries );
+		# NOT $params->{rematch}: that key is the form field the button sent,
+		# and it is still set. Writing the list over it would work, but on a
+		# FAILED re-match the field would survive untouched and the template's
+		# `IF choices` would fire on a bare 1 - rendering an empty "choose a
+		# record" panel instead of the queue. A separate key, so the input and
+		# the output of this action cannot be confused for one another.
+		$params->{choices} = _choices( $key, $entries );
 
 		_finishRematch( $class, $client, $params, $callback, $args, $scanning );
 	} );
@@ -403,7 +409,17 @@ sub _choices {
 
 	my ( @matching, @rest );
 
-	for my $entry ( sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @{ $entries || [] } ) {
+	# Title, then release id. The tie-break is not decoration: the entries
+	# arrive as `values %hash`, so without it two records sharing a title come
+	# back in whatever order Perl's hash gives them THIS time, and the shortlist
+	# reshuffles between renders of the same page. A user comparing two
+	# pressings has to be able to look away and look back.
+	my @sorted = sort {
+		   ( $a->{title} || '' ) cmp( $b->{title} || '' )
+		|| ( $a->{id} || 0 ) <=> ( $b->{id} || 0 )
+	} @{ $entries || [] };
+
+	for my $entry (@sorted) {
 		my $row = {
 			release_id => $entry->{id},
 			master_id  => $entry->{master_id},

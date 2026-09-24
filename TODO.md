@@ -139,7 +139,7 @@ Each names its sites so the work is mechanical rather than a search.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
-- [ ] **2026-09-24, BUILD-ORDER OBLIGATION from the stub audit: step 8's plan
+- [x] **2026-09-24, BUILD-ORDER OBLIGATION from the stub audit: step 8's plan
       must name the seam it will test end to end, and say which suite owns
       it.** This is the audit's third finding and the one no stub edit
       addresses. Five stubs were made faithful; none of them tests a *join*,

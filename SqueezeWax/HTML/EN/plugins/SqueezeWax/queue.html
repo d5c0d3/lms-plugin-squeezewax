@@ -22,15 +22,15 @@
     Shown instead of the queue, not beside it: the user pressed a button about
     ONE album and is now choosing for it, and the queue below would be a second
     set of buttons competing for the same attention. %]
-[% IF rematch %]
+[% IF choices %]
 
 	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE" desc="" %]
-		<div><b>[% rematch.album.title | html %]</b>
-			[% IF rematch.album.artist %] &mdash; [% rematch.album.artist | html %][% END %]</div>
+		<div><b>[% choices.album.title | html %]</b>
+			[% IF choices.album.artist %] &mdash; [% choices.album.artist | html %][% END %]</div>
 
 		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER" | string %]</div>
 
-		[% IF rematch.total == 0 %]
+		[% IF choices.total == 0 %]
 			<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_NONE" | string %]</div>
 		[% ELSE %]
 			[%# Client-side, over what was already rendered: no request per
@@ -59,7 +59,7 @@
 							<button type="submit" name="link" class="stdclick swxAction"
 								value="[% c.release_id | html %]"
 								data-swx-field="release_id"
-								data-swx-extra="album_key=[% rematch.album_key | html %]"
+								data-swx-extra="album_key=[% choices.album_key | html %]"
 								data-swx-master="[% c.master_id | html %]"
 								data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON_RUNNING" | string | html %]">[%
 								"PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON" | string %]</button>
@@ -68,14 +68,14 @@
 				[% END %]
 			[% END %]
 
-			[% IF rematch.matching.size %]
+			[% IF choices.matching.size %]
 				<div class="prefHead">[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_MATCHING" | string %]</div>
-				<table>[% PROCESS choiceRows rows = rematch.matching %]</table>
+				<table>[% PROCESS choiceRows rows = choices.matching %]</table>
 			[% END %]
 
-			[% IF rematch.rest.size %]
+			[% IF choices.rest.size %]
 				<div class="prefHead">[% "PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_ALL" | string %]</div>
-				<table>[% PROCESS choiceRows rows = rematch.rest %]</table>
+				<table>[% PROCESS choiceRows rows = choices.rest %]</table>
 			[% END %]
 
 			<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION" | string %]</div>
