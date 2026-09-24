@@ -14,6 +14,41 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ---
 
+## v1 RELEASE CHECKLIST
+
+Things that must happen before v1 ships, and that nothing else will force.
+Each names its sites so the work is mechanical rather than a search.
+
+- [ ] **Remove `discogsTestExcludeReleases`.** A development aid that hides
+      release ids from the ownership pass, so "a record left the collection"
+      can be exercised without altering a real one. It **keeps its place
+      through the build-out** — it proved steps 6-7's check 6 on hardware
+      without touching anyone's collection, and steps 8-10 will want it — but
+      it is a back door into the badging rules and must not ship by inertia.
+      Sites, all of them:
+      - `SqueezeWax/Plugin.pm` — the pref default `discogsTestExcludeReleases
+        => ''` in `$prefs->init`, and the comment above it.
+      - `SqueezeWax/API/Async.pm` — `_testFilter` (the sub, its POD and its
+        header comment) and its one call site inside `_finish`, which becomes
+        `[ values %{ $run->{entries} || {} } ]` again.
+      - `scripts/sync-check.pl` — the "test-only collection filter" block
+        (15 assertions) and the `@WARNINGS`/`$PREFS` uses it introduced.
+      - `docs/dev-repo-workflow.md` §6a — the "On the live server" paragraph
+        and the `pref` command example; keep the offline-harness half, which
+        is not going away.
+      **The removal needs a `$prefs->migrate` step, and this is not optional.**
+      The key CAN be set on a real server: it has no settings-page field, but
+      it is an ordinary pref and LMS's own `pref` command writes it —
+      `["pref","plugin.squeezewax:discogsTestExcludeReleases","..."]`
+      (`Slim/Control/Request.pm:604`), which is exactly how it was set during
+      the 2026-09-22 hardware check. So a server that used it carries the key
+      in `squeezewax.prefs` and would keep it forever. Add
+      `$prefs->migrate(N, sub { $_[0]->remove('discogsTestExcludeReleases'); 1 })`
+      beside the existing `migrate(1)` and `migrate(2)` in `Plugin.pm`, at
+      whatever N is next.
+
+---
+
 ## Blocking — do before build-order step 2
 
 - [x] Add `<importmodule>Plugins::SqueezeWax::Importer</importmodule>` to

@@ -360,6 +360,12 @@ three times against the committed page-1 fixture: as given, minus some release
 ids, then as given again. It needs no token and no network. It proves what the
 pass does with a changed list; it cannot prove a real fetch produces one.
 
+**Build-out only.** `discogsTestExcludeReleases` exists to test the ownership
+pass during the v1 build-out and **is removed before v1 ships** — it is a back
+door into the badging rules, and `TODO.md`'s v1 release checklist names every
+site and the `$prefs->migrate` step the removal needs. The offline harness
+above is not affected; it stays.
+
 **On the live server** — the `discogsTestExcludeReleases` pref. A
 comma-separated list of Discogs release ids, empty by default and with no
 field on the settings page. `API/Async.pm`'s `_testFilter` removes those
