@@ -4143,3 +4143,89 @@ three triggers and §15.2, and sharpens §14.2.
    "Sync collection now" read the stored one and then saved the field, so it synced
    with the old token and stored the new one. Both now use the field, both save, and
    the page says so. Changing the token clears the last sync error.
+
+### 15.16 The review queue, manual re-match, and what the queue does not do
+
+**Decided 2026-09-24 (design chat)**, on the survey and Phase 0 report for
+`plans/build-order-step-8-review-queue.md`. Each part was put as a choice; the
+plan carries the detail, the evidence and the tags. Parts marked DEFAULT were
+not chosen by the user and are open.
+
+1. **The queue is its own plugin web page**, a `Slim::Web::Settings` subclass
+   with no `prefs()` that dispatches on its own action names — the shape of
+   core's `Slim/Web/Settings/Server/Status.pm`. Not a section of the settings
+   page, whose shared form has broken action dispatch twice. Not the LMS menu
+   system. Web UI only.
+2. **One nullable column, `review_reason`**, added by migration 4 with a
+   guarded `ADD COLUMN` and no backfill. Values: `conflict` (written by the
+   importer), and `ambiguous`, `artist-disagree`, `artist-absent`,
+   `various-gated`, `orphan` (written by the ownership pass).
+3. **`conflict` is sticky.** Only the importer writes or clears it; the pass
+   never overwrites it. A clean identification clears it. The importer also
+   clears `orphan` when it relinks a row.
+4. **A conflict row does not badge from its incumbent id.** The pass treats a
+   `conflict` row as untagged: no node C, no `state` write, ownership from the
+   title route only. Amends §15.3. For a fresh conflict (NULL id) this changes
+   nothing; for an incumbent conflict (§3a's demotion) it stops the pass
+   silently re-promoting a contested match, which is what §3a's demotion was
+   for.
+5. **Orphans are a separate list** on the same page. §13.10.5 stays the list
+   for the review queue. Manual orphans are included: the rule that a manual
+   row carries no review reason applies to albums still in the library, and an
+   orphan is not a verdict on a live album.
+6. **Manual re-match chooses from the user's own Discogs collection, never from
+   a Discogs search, and never offers a release the user does not own.**
+   Premise, as in §14.4: a well-maintained collection and well-tagged rips.
+   Opening re-match runs a normal collection sync; the entry list is handed to
+   the page for one render and dropped, the lifetime §15.13 part 1 gives the
+   pass. Title-key matches first, then the whole collection with a client-side
+   filter. Fixed fields: title, artists, year, format, label and catalogue
+   number, release id, and the Discogs link. The sync keeps those three extra
+   fields per entry, and nothing more. A release owned twice shows twice. The
+   badge changes at the next sync, not at confirm. Amends design §3's
+   "search-as-you-type against Discogs".
+7. **Reject deletes the row**: a manual row, an incumbent conflict, a fresh
+   conflict, or an orphan. It is the **third permitted deletion** in
+   `discogs_match`, justified as §10.4 justifies clear & rebuild: §2a's
+   invariant 2 governs automatic deletion, and this one is explicit, confirmed
+   and single-row. The first deletion (`_recordNoMatch`'s narrow predicate) is
+   unchanged. **There is no stored dismiss.** A computed item leaves the queue
+   only through a manual link or a change in tags or collection, so the queue
+   is not a recovery path for a wrong badge, which §14.4 rules out.
+8. **§13.5's all-tags read is deferred past step 8, possibly for good.** v1's
+   queue holds three contents: ambiguous matches, artist disagreement or
+   absence, and Strict conflicts. Amends §13.5 and §13.10.5. §15.13 part 7's
+   gap becomes v1's accepted gap. Revisit trigger: a wrong `exact` badge seen.
+9. **A row carrying only an ownership conclusion and/or a pass-written reason
+   is regenerable and may be deleted freely.** It carries no decision and no
+   snapshot. §2a's governing rule and the three-NULL delete guard are
+   unchanged. The pass deletes such a row when its new ownership is `absent`
+   and its new reason is NULL. A relink deletes one standing on its target key.
+   **Amends §14.8 invariant 3:** a row exists where there is an
+   identification, an ownership conclusion other than `absent`, **or a review
+   reason**. **Amends §15.13 part 5** accordingly.
+10. **The seam test is queue → sync → link → pass**, in a new suite,
+    `scripts/queue-check.pl`, with honest transport and prefs stubs. This
+    discharges the stub audit's build-order obligation (TODO 2026-09-24).
+    Three seam defects are a pattern, not a law.
+11. **Relink for users with manual links and no tag names is not built.** The
+    importer's `use` gate is unchanged (§15.8). Such a user loses their manual
+    links when a folder moves. Accepted for now and recorded as a possible
+    future feature.
+12. **DEFAULT — clear & rebuild (§10)** is decided, unbuilt, and not step 8's.
+    It is recorded in `TODO.md` for a later step.
+13. **DEFAULT — an orphan that fits no current album can only be rejected.**
+    Relinking it to an album of the user's choosing is future work.
+
+#### Where the evidence is thin
+
+- **The discogs.com link** is built as `https://www.discogs.com/release/{id}`.
+  Observed by the user to redirect to the canonical page, and corroborated by
+  the `uri` field of captured release payloads. Not documented as a stable
+  address.
+- **Whether collection images may be shown** is unverified against Discogs'
+  terms, so the re-match list shows none.
+- **`ADD COLUMN` with a CHECK on SQLite 3.22.0** is confirmed from the SQLite
+  documentation, not from a run on a 3.22 build.
+- **Incumbent conflicts written before migration 4 cannot be found.** Nothing
+  recorded them. They surface when their files next change.

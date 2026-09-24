@@ -158,6 +158,9 @@ Each names its sites so the work is mechanical rather than a search.
       defects is a pattern, not a law. The fourth may be somewhere else
       entirely, and an integration suite aimed at the last three failures can
       be precise about the past and blind to the next one.
+      → 2026-09-24: named. Queue → sync → link → pass, owned by
+      scripts/queue-check.pl (step 8 plan §3.2, decisions §15.16 part 10).
+      Ticked in commit C2.
 - [ ] **2026-09-24, STUB AUDIT #5, not fixed: the Scheduler task is recorded
       but never run.** `settings-check.pl` stubs
       `Slim::Utils::Scheduler::add_task`/`remove_task` as counters, so
@@ -167,6 +170,9 @@ Each names its sites so the work is mechanical rather than a search.
       Scheduler task** (§15.2 obligation 2 requires that shape). Right now the
       only task is tag detection, whose logic `tags-check.pl` covers directly;
       the scheduling is the untested part and it carries little.
+      → 2026-09-24: step 8 does not put work in a Scheduler task after all
+      (decisions §15.16 part 8), so this revisit trigger does not fire at
+      step 8. Stays parked.
 - [ ] **2026-09-24, STUB AUDIT #8, DECIDED not to fix: the plain DBI
       connection.** `Slim::Schema::dbh` is stubbed as a plain `DBI` handle in
       `library-check.pl`, `match-check.pl`, `ownership-check.pl` and
@@ -411,6 +417,9 @@ Each names its sites so the work is mechanical rather than a search.
       not the queue). The queue selects §13.10.5's four contents only; on this
       run that is 5 ambiguous + 2 artist-disagree, plus Strict conflicts and
       (later) tag disagreements.
+      → 2026-09-24: honoured by the step 8 plan (§0.3). The queue selects
+      on review_reason, never on state. Three contents in v1, not four
+      (decisions §15.16 part 8). Ticked in commit C1.
 - [x] **2026-09-22, DECIDED (design chat): settings-page action buttons
       disable and relabel on click**, client side, showing the existing
       running string. A polling interim page is recorded, not designed:
@@ -903,6 +912,10 @@ Each names its sites so the work is mechanical rather than a search.
       Recorded three times over — corrected 2026-09-07; previously miscounted
       as four, with two cases that don't actually belong (see below):
       (a) **A confirmed match demoted to candidate by a tag conflict** keeps
+      → 2026-09-24: this is today's step 8. Reject deletes the row; there
+      is no stored dismiss (decisions §15.16 part 7). Ground (a) is the
+      incumbent conflict only: a fresh one already deletes itself. Ticked in
+      commit C1.
           its adjudicated `discogs_release_id` and its snapshots (decisions
           §3a); if the user then removes the tags entirely, the importer may
           not delete the row — it carries a decision, and §2a forbids that —
@@ -947,10 +960,6 @@ Each names its sites so the work is mechanical rather than a search.
       The two knock-ons this item could not settle were ruled on rather than
       coded: re-derivation of existing rows is the ownership pass's (§15.3),
       and snapshot capture stays at identification (§15.4).
-- [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
-      owned and tagged). It now runs server-side in a Scheduler task
-      (decisions §15.2), so its size bounds how long the ownership pass takes.
-      Unmeasured.
 - [ ] **2026-09-15: build-order rewrite from step 4 — in progress, NOT
       decided.** ~~The design chat has proposed a sequence; no plan file exists
       yet.~~ **2026-09-19: the sequence is decided (decisions §15.9, and
@@ -1151,11 +1160,13 @@ Each names its sites so the work is mechanical rather than a search.
       Comment-only except strings.txt:68. Sweep in step 5's first commit.
       Also: Importer.pm _prePass uses `my $b` as a loop variable, which masks
       sort's $b in that scope — rename in the same commit.
-- [ ] **2026-09-19: the orphan relink runs only in the importer, which runs
+- [x] **2026-09-19: the orphan relink runs only in the importer, which runs
       only when tag names are configured** (`Importer.pm`'s `use` gate, kept
       by §15.8). A user with manual matches and no tag names gets no relink.
       INFERRED from reading. Step 8 must place the relink so manual-only
       users are covered, or record why not.
+      → 2026-09-24: RECORDED WHY NOT. Accepted for now, a possible future
+      feature (decisions §15.16 part 11). Ticked in commit P.
 - [ ] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
       Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
       one-to-one fits. An orphan fitting several new albums, or a new album
@@ -1163,6 +1174,8 @@ Each names its sites so the work is mechanical rather than a search.
       in the importer's summary. Step 8's review queue must offer it,
       pre-filled with the previous answer (decisions §2). Until then those
       rows stay orphaned: no loss, no automatic relink.
+      → 2026-09-24: offered from the orphan list (step 8 plan R5, D4).
+      Ticked in commit C1.
 - [ ] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
       albums with no album artist.** VERIFIED at slimserver `a670a38`:
       `Slim::Schema::_createOrUpdateAlbum` sets `albums.contributor` per
@@ -1186,11 +1199,9 @@ Each names its sites so the work is mechanical rather than a search.
       0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0. Step 7's pass
       already counts all four buckets in its summary, so the queue's size is
       known before it is built.
-- [ ] **2026-09-19, STEP 8: decisions §13.5's all-tags read.** Moved out of
-      step 7 by §15.13 part 7: its only product is a queue item. Runs as a
-      Scheduler task (§15.2 obligation 2). Accepted gap until then: an owned,
-      tagged album whose tracks 3..N carry a different release id can badge
-      `exact`. Size still unmeasured (the 2026-09-15 item).
+      → 2026-09-24: six values, not four. conflict and orphan are added by
+      decisions §15.16 parts 2, 3 and 5. Migration 4 in commit A1, written
+      by the pass in B1. Ticked in B1.
 - [ ] **2026-09-19, STEP 8: an ownership-only row blocks a later relink.**
       `Importer::_prePass` treats any `discogs_match` row as "not a key
       miss", so once a sync has written an ownership-only row (NULL
@@ -1200,11 +1211,17 @@ Each names its sites so the work is mechanical rather than a search.
       tag names — since the pass runs after the scan. The ambiguous-relink
       work must delete that row first (§15.13 part 5's predicate), or
       `relinkOrphan`'s UPDATE hits the primary key and dies in the scanner.
+      → 2026-09-24: _prePass treats a NULL-tier row as a key miss, and
+      relinkOrphan deletes a regenerable row on its target key first
+      (decisions §15.16 part 9). Ticked in commit A2.
 - [ ] **2026-09-19, STEP 8: a conflict row with an incumbent id looks like a
       tagged candidate.** Both are `strict`, `candidate`, non-NULL release id
       (decisions §3a, §13.4). The ownership pass treats it as an
       identification and may promote it to `confirmed`. The queue's "Strict
       conflicts" entry (§13.10.5) has no way to select these rows today.
+      → 2026-09-24: the importer marks every conflict review_reason =
+      'conflict', and the pass treats such a row as untagged (decisions
+      §15.16 parts 3-4). Ticked in commit B1.
 - [x] **2026-09-19, MEASURE BEFORE STEP 7 SHIPS: the auto-badge split under
       the step-7 rules.** Decisions §15.13 parts 2–3: artist source as
       measured, but artists at L2 rather than the script's L5. Re-run
@@ -1273,6 +1290,34 @@ Each names its sites so the work is mechanical rather than a search.
       is ever added, or drop the index by its own ruling.
 
 ## Open design questions
+
+- [ ] **2026-09-24: clear & rebuild (decisions §10) is decided and has never
+      been built, and no step owns it.** It was item 9 of the stale step-4
+      Structural plan, and dropped out when the build order was renumbered.
+      Decisions §10.1 called it "not a convenience": §3b's coverage gap relies
+      on it as the escape hatch, and design §9 names it as the only thing that
+      clears orphaned `discogs_no_match` rows. DEFAULT (decisions §15.16 part
+      12): a later step of its own, after step 8. Not decided which.
+- [ ] **2026-09-24: the discogs.com link format.** The re-match list links
+      each release as `https://www.discogs.com/release/{id}`. OBSERVED by the
+      user to redirect to the canonical page
+      (`…/release/14590709-Depeche-Mode-Violator?redirected=true`), and
+      corroborated by captured payloads' `uri`. NOT documented as a stable
+      address. Revisit if it stops resolving; the fix is one format string.
+- [ ] **2026-09-24: may collection images be shown?** `basic_information`
+      carries `thumb` and `cover_image`. Unverified against Discogs' terms, and
+      decisions §9.9 already records that image URLs are withheld without
+      authentication. The step 8 re-match list shows none. Not decided.
+- [ ] **2026-09-24: an orphan that fits no current album can only be
+      rejected.** DEFAULT (decisions §15.16 part 13). Relinking one to an album
+      the user picks is future work. Revisit if a manual row is lost this way.
+- [ ] **2026-09-24: incumbent conflicts written before migration 4 cannot be
+      found.** Nothing recorded them and `scanner.log` is rewritten each scan.
+      They get `conflict` when their files next change. Fresh ones are found by
+      §3a's own predicate. Recorded, not solvable.
+- [ ] **2026-09-24: design §9's "Review-queue behavior (auto-open after scan?
+      notification?)"** — not v1. The queue is a page the user opens. Revisit
+      only on request.
 
 - [x] **2026-09-13: v1's configurable tag names are promised twice and
       specified nowhere.** Design §11 lists "Configurable Discogs tag names"
@@ -1809,6 +1854,9 @@ Each names its sites so the work is mechanical rather than a search.
       three rows were deleted with the other test data. Nothing sweeps orphans
       in v1 (§2a invariant 4); make sure the step 8 review queue shows them
       rather than growing them silently.
+      → 2026-09-24: the pass marks orphans, manual included, and the queue
+      page lists them (decisions §15.16 part 5). Ticked in commit C1.
+      Hardware check 5 rejects the three test rows.
 - [ ] **2026-09-19: test albums for future hardware checks.** The local
       `Music/` folder is now empty. A repeatable setup is documented by
       what worked here: copy albums off the read-only NAS with `cp`, retag the
@@ -2149,6 +2197,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-09-24: `Plugin.pm:90-97` is a comment about the removed interval
+      pref's floor and `intlimit`, with no code under it.** The pref hash closes
+      above it and the next code is `DEBOUNCE_AFTER_RESCAN`. Delete the eight
+      lines. Found by the step 8 survey; verified by Phase 0.
+- [ ] **2026-09-24, minor: `SqueezeWax/Settings.pm:47` cites
+      `Slim/Web/Settings.pm:135-176`.** The base handler's save loop runs to
+      `:182` (Phase 0, step 8). Correct the citation.
+
 - [ ] **2026-09-19: `decisions §9.4` / `design §9` state a documented default
       for the collection listing that the documentation does not state.** Both
       say the endpoint "defaults to `sort=label&sort_order=asc`". The API
@@ -2415,6 +2471,22 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
+      owned and tagged). It now runs server-side in a Scheduler task
+      (decisions §15.2), so its size bounds how long the ownership pass takes.
+      Unmeasured.
+      → 2026-09-24: DEFERRED past step 8, possibly for good (decisions §15.16
+      part 8). v1's queue holds three contents. Revisit trigger: a wrong
+      `exact` badge seen on hardware.
+- [ ] **2026-09-19, STEP 8: decisions §13.5's all-tags read.** Moved out of
+      step 7 by §15.13 part 7: its only product is a queue item. Runs as a
+      Scheduler task (§15.2 obligation 2). Accepted gap until then: an owned,
+      tagged album whose tracks 3..N carry a different release id can badge
+      `exact`. Size still unmeasured (the 2026-09-15 item).
+      → 2026-09-24: DEFERRED past step 8, possibly for good (decisions §15.16
+      part 8). v1's queue holds three contents. Revisit trigger: a wrong
+      `exact` badge seen on hardware.
+
 - **2026-09-20: `invalidateStrict`'s tier scoping is untested in v1.** With
   `discogs_no_match` narrowed to `CHECK (tier IN ('strict'))` (§15.6), no second
   tier exists to prove the DELETE's `WHERE tier = 'strict'`. The v1 assertion is
@@ -2469,3 +2541,7 @@ Each names its sites so the work is mechanical rather than a search.
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.
 - Not planned: any write to the Discogs Collection.
+- Future: a field picker for the re-match list (decisions §15.16 part 6). v1
+  shows a fixed set.
+- Future: orphan relink for users with manual links and no tag names
+  (decisions §15.16 part 11).
