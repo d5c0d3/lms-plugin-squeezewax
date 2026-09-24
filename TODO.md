@@ -104,6 +104,22 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [x] **2026-09-24: the Test token button's rejected-token path is verified end
+      to end** — the last piece of shipped code that had no evidence behind it.
+      `settings-check.pl`'s transport never called its callbacks, so
+      `_tokenTested` and the third-argument status read inside `_testToken`
+      were unreachable offline; the button was also never checked on hardware
+      with a wrong token in a way anyone recorded.
+      Now both. Offline: a 401 classifies as `unauthorized` and selects
+      `PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED` (with the fix reverted,
+      that assertion and four others fail). On hardware at 0.0.0.8 the page
+      shows *"Discogs rejected this token. Check that it was copied correctly
+      and has not been revoked."*
+      **What it used to show:** *"Got no response from Discogs. Check this
+      server's network connection."* — so the button sent users to debug their
+      network for a token problem, on the one control whose entire job is
+      telling those two apart. §14.2's complaint, rendered.
+
 - [x] **2026-09-24: decisions §15.15's hardware checks, at 0.0.0.7 and 0.0.0.8.**
       Prompt D's post-install list. Three pass, one not observed by decision,
       and one regression was found and fixed between the two versions.
