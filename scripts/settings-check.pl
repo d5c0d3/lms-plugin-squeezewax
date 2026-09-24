@@ -64,6 +64,24 @@ BEGIN {
 	);
 }
 
+# Every token defined in strings.txt, loaded before anything can ask for one.
+our %STRINGS;
+our @MISSING_STRINGS;
+
+BEGIN {
+	my $path = "$Bin/../SqueezeWax/strings.txt";
+
+	open my $fh, '<', $path or die "could not read $path: $!\n";
+
+	while ( my $line = <$fh> ) {
+		$STRINGS{$1} = 1 if $line =~ /^(PLUGIN_\S+)\s*$/;
+	}
+
+	close $fh;
+
+	die "no strings loaded from $path\n" unless keys %STRINGS;
+}
+
 our %CALLS;
 our %PREFS;
 our @EVENTS;   # ordered, because ORDER is what broke
@@ -132,8 +150,28 @@ BEGIN {
 	};
 
 	# The string token is returned unchanged, so an assertion can name the
-	# string a branch chose rather than its English text.
-	*{'Slim::Utils::Strings::string'} = sub { $_[0] };
+	# string a branch chose rather than its English text - but a token that
+	# does NOT exist is recorded rather than passed through silently.
+	#
+	# Until 2026-09-24 this returned its argument whatever it was, so a typo'd
+	# or deleted token was indistinguishable from a real one and would reach
+	# the page as a bare PLUGIN_SQUEEZEWAX_... at the moment the user most
+	# needs a sentence (stub audit 2026-09-24, entry 5.1 / 6).
+	#
+	# Known limitation, stated rather than hidden: a value sprintf'd INTO a
+	# string is still invisible here, because what comes back is the token and
+	# not the text with its %s. Asserting the rendered sentence would mean
+	# returning real EN text and rewriting every assertion that names a token,
+	# which is a bigger change than this gap justifies. The two places it
+	# matters are marked at their assertions.
+	*{'Slim::Utils::Strings::string'} = sub {
+		my ($token) = @_;
+
+		push @main::MISSING_STRINGS, $token
+			unless exists $main::STRINGS{ $token // '' };
+
+		return $token;
+	};
 	*{'Slim::Utils::Strings::import'} = sub {
 		my $caller = caller;
 		no strict 'refs';
@@ -942,6 +980,53 @@ is( token_test( { code => 200, content => 'not json at all' } ),
 	)) {
 		like( $strings, qr/^\Q$t\E\n\tEN\t\S/m, "$t exists with EN text" );
 	}
+}
+
+# ---------------------------------------------------------------------------
+# Every string token must exist (stub audit 2026-09-24, entry 5.1 / 6)
+# ---------------------------------------------------------------------------
+
+diag('string tokens');
+
+is_deeply( [ sort keys %{ { map { $_ => 1 } @MISSING_STRINGS } } ], [],
+	'every token this run asked string() for exists in strings.txt' );
+
+# The run above only covers tokens on paths these tests reach. This scan covers
+# the rest: every PLUGIN_SQUEEZEWAX_* referenced anywhere in the shipped plugin
+# - modules and templates - must be defined. It catches a typo on a branch no
+# suite exercises, which is where one would survive longest.
+{
+	my @sources;
+
+	push @sources, glob("$Bin/../SqueezeWax/*.pm"),
+		glob("$Bin/../SqueezeWax/API/*.pm"),
+		"$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/settings.html";
+
+	my %referenced;
+
+	for my $f (@sources) {
+		next unless -f $f;
+
+		open my $fh, '<', $f or die "could not read $f: $!\n";
+		local $/;
+		my $text = <$fh>;
+		close $fh;
+
+		$referenced{$1}{$f} = 1 while $text =~ /\b(PLUGIN_SQUEEZEWAX_[A-Z0-9_]+)\b/g;
+	}
+
+	ok( scalar keys %referenced, 'the scan found string tokens to check' );
+
+	my @undefined;
+
+	for my $t ( sort keys %referenced ) {
+		next if $STRINGS{$t};
+
+		push @undefined, "$t (" . join( ', ', map { s{.*/}{}r } sort keys %{ $referenced{$t} } ) . ')';
+	}
+
+	is_deeply( \@undefined, [],
+		'every PLUGIN_SQUEEZEWAX_* referenced by the plugin is defined in strings.txt' );
 }
 
 done_testing();
