@@ -104,6 +104,59 @@ Shared reminder list. Both I and Claude Code read and update this.
       while the pass reaches node H only for albums no tag resolved first.
       Those compilations are tagged, so they never reach the gate. The
       script's figures bound the title route, not the pass.
+- [ ] **2026-09-24, BUILD-ORDER OBLIGATION from the stub audit: step 8's plan
+      must name the seam it will test end to end, and say which suite owns
+      it.** This is the audit's third finding and the one no stub edit
+      addresses. Five stubs were made faithful; none of them tests a *join*,
+      and all three regressions of 2026-09-22..24 were joins — the browser
+      against the dispatcher, the click against the form submission, the sync
+      against the pref write. Each suite asserted something true about the
+      piece it owned while the seam went untested.
+      Step 8 touches `Settings.pm`, `API/Async.pm` and the queue at once, so it
+      is where this stops being avoidable. Two candidates are already on
+      record: a **browser-level check of the settings page** (that page's
+      dispatch has been broken twice by facts no server-side test can reach),
+      and a **join-level check of sync → pass → pref writes** (the 0.0.0.7
+      shape). The plan must pick one, or name a third, and say which file
+      owns it — not leave it as a wish.
+      **Caveat, recorded so it is weighed rather than assumed:** three seam
+      defects is a pattern, not a law. The fourth may be somewhere else
+      entirely, and an integration suite aimed at the last three failures can
+      be precise about the past and blind to the next one.
+- [ ] **2026-09-24, STUB AUDIT #5, not fixed: the Scheduler task is recorded
+      but never run.** `settings-check.pl` stubs
+      `Slim::Utils::Scheduler::add_task`/`remove_task` as counters, so
+      `_detectionTick` is never driven by its real driver — a tick that dies,
+      or never terminates, looks identical to one that works.
+      **Revisit when step 8, or §13.5's all-tags read, puts real work in a
+      Scheduler task** (§15.2 obligation 2 requires that shape). Right now the
+      only task is tag detection, whose logic `tags-check.pl` covers directly;
+      the scheduling is the untested part and it carries little.
+- [ ] **2026-09-24, STUB AUDIT #8, DECIDED not to fix: the plain DBI
+      connection.** `Slim::Schema::dbh` is stubbed as a plain `DBI` handle in
+      `library-check.pl`, `match-check.pl`, `ownership-check.pl` and
+      `ownership-offline-check.pl`. It does not model LMS's own connection
+      settings — notably `sqlite_use_immediate_transaction`
+      (`Slim/Utils/SQLiteHelper.pm:358`), which makes `BEGIN` take a write lock
+      on **every attached database**. A defect hiding there would be lock
+      contention against a running scanner: finding 2b, the whole reason
+      `_writeOk` exists.
+      **Recorded as a decision, not an omission.** A faithful version costs
+      more than it protects: the refusal it would test is already asserted by
+      overriding `_writeOk`, and the real lock behaviour was observed on
+      hardware in build-order step 6-7's check 4 — the pass was refused
+      mid-scan, at info, exactly as designed. Revisit only if a lock-related
+      defect appears that `_writeOk` does not explain.
+- [ ] **2026-09-24, STUB AUDIT #9, not fixed: the `readTags` fixtures.**
+      `tags-check.pl` builds tag hashrefs by hand and stubs `Slim::Formats`
+      entirely, so nothing proves `Slim::Formats->readTags`
+      (`Slim/Formats.pm:153`) returns what we assume. A defect there looks like
+      a real tagger whose output is shaped differently from every fixture.
+      Not cheap, and the designed answer already exists: the settings page's
+      **Detect tag names** button reads real files on a real library and
+      reports what it found. Revisit if detection ever disagrees with the
+      fixtures.
+
 - [x] **2026-09-24: the Test token button's rejected-token path is verified end
       to end** — the last piece of shipped code that had no evidence behind it.
       `settings-check.pl`'s transport never called its callbacks, so
