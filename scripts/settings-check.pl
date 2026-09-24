@@ -67,6 +67,8 @@ BEGIN {
 our %CALLS;
 our %PREFS;
 our @EVENTS;   # ordered, because ORDER is what broke
+our @RESPONSES; # canned HTTP responses, consumed in order by the transport
+our @REQUESTS;  # every request the transport was asked to issue
 
 # ---------------------------------------------------------------------------
 # Stubs, at the module's real boundaries
@@ -217,11 +219,87 @@ our $SCANNING = 0;
 	sub is_debug { 0 }
 }
 
-# The two transports, stubbed at their boundary.
+# The transport, modelled on the real routing rather than counted.
+#
+# Until 2026-09-24 this counted the request and returned WITHOUT CALLING EITHER
+# CALLBACK, so _tokenTested, _tokenTestFailureString and the status fix inside
+# _testToken's own $done closure were unreachable: the suite proved a request
+# was issued and nothing about what came back. That fix shipped in 0.0.0.8 with
+# no evidence behind it anywhere (stub audit 2026-09-24, entry 1.1).
+#
+# The routing is the same one sync-check.pl models, for the same reason:
+# refs/slimserver/Slim/Networking/Async/HTTP.pm:434-436 sends every status that
+# is not 2xx or 3xx to _http_error, which reaches SimpleAsyncHTTP's onError
+# (:76-101). onError sets neither code nor content on the object and passes the
+# HTTP::Response as its THIRD argument (:96); only onBody sets them (:112-114)
+# and then calls the success callback.
 {
 	package Slim::Networking::SimpleAsyncHTTP;
-	sub new { my ( $c, $ok, $err, $opt ) = @_; return bless { ok => $ok }, $c }
-	sub get { $CALLS{http_get}++; return 1 }
+
+	sub new {
+		my ( $class, $cb, $ecb, $args ) = @_;
+
+		return bless { cb => $cb, ecb => $ecb, args => $args }, $class;
+	}
+
+	sub get {
+		my ( $self, $url, @headers ) = @_;
+
+		$CALLS{http_get}++;
+		push @REQUESTS, { url => $url, headers => \@headers };
+
+		my $canned = shift @RESPONSES;
+
+		# No canned response queued: behave as the old stub did and simply
+		# return, so a test that only cares that a request was issued still
+		# works without inventing an outcome for it.
+		return 1 unless $canned;
+
+		# A connection that never produced a status at all - no response
+		# object either. The only thing that should classify as no_response.
+		if ( !defined $canned->{code} ) {
+			$self->{ecb}->( $self, 'connection failed', undef );
+
+			return 1;
+		}
+
+		my $response = Test::StubResponse->new($canned);
+
+		if ( $canned->{code} !~ /^[23]\d\d$/ ) {
+			$self->{ecb}->( $self, "HTTP $canned->{code}", $response );
+
+			return 1;
+		}
+
+		$self->{code}    = $canned->{code};
+		$self->{content} = $canned->{content};
+
+		$self->{cb}->($self);
+
+		return 1;
+	}
+
+	sub code    { $_[0]->{code} }
+	sub content { $_[0]->{content} }
+	sub headers { $_[0]->{headers} }
+}
+
+# What onError hands over as its third argument.
+{
+	package Test::StubResponse;
+
+	sub new {
+		my ( $class, $canned ) = @_;
+
+		return bless {
+			code    => $canned->{code},
+			content => $canned->{content},
+		}, $class;
+	}
+
+	sub code    { $_[0]->{code} }
+	sub content { $_[0]->{content} }
+	sub headers { undef }
 }
 
 my $incdir;
@@ -292,8 +370,9 @@ our $DB_READY = 1;
 sub submit {
 	my (%extra) = @_;
 
-	%CALLS  = ();
-	@EVENTS = ();
+	%CALLS     = ();
+	@EVENTS    = ();
+	@REQUESTS  = ();
 
 	my $params = { saveSettings => 1, %extra };
 	my @cbArgs;
@@ -734,6 +813,126 @@ diag('a rejected pause must survive the save that follows it');
 	ok( !$CALLS{clear_rejected},
 		'  ...so the pause-clearing hook does not fire for it either' );
 	ok( $CALLS{async_sync}, '  ...and the sync still runs' );
+}
+
+# ---------------------------------------------------------------------------
+# The token test's RESULT path (stub audit 2026-09-24, entry 1.1)
+# ---------------------------------------------------------------------------
+#
+# Every assertion below was unreachable until the transport above started
+# calling its callbacks. _tokenTested, _tokenTestFailureString and the
+# third-argument status read inside _testToken's $done closure had no test at
+# all - and that status read shipped in 0.0.0.8.
+#
+# string() returns the token name here, so each assertion names the string the
+# page would render rather than its English text.
+
+diag('the token test result path - previously unreachable');
+
+sub token_test {
+	my (@canned) = @_;
+
+	@RESPONSES = @canned;
+
+	$PREFS{discogsToken} = 'a-token';
+
+	my ($params) = submit( testToken => 1 );
+
+	return $params->{tokenTestResult};
+}
+
+# --- the success shapes ----------------------------------------------------
+# The two branches are distinguishable by string token, which is what matters
+# here. The username itself is sprintf'd INTO the string, and string() returns
+# the bare token, so the substitution is invisible to this suite - see the stub
+# audit's entry 6 / 5.1.
+is( token_test( { code => 200, content => '{"username":"deschman"}' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK',
+	'a 200 with a username takes the OK branch' );
+
+is( token_test( { code => 200, content => '{}' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER',
+	'a 200 without a username has its own string' );
+
+# --- THE one that matters: a rejected token --------------------------------
+#
+# 401 takes the ERROR path, where the object carries no code at all. Before
+# 0.0.0.8 this classified as no_response and the page said "could not reach
+# Discogs" for a token Discogs had actively rejected - §14.2's exact
+# complaint, on the one button whose entire job is to tell them apart.
+is( token_test( { code => 401, content => '{"message":"Invalid consumer token."}' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED',
+	'a 401 reports the token as REJECTED, not as unreachable' );
+
+# --- the rest of the error vocabulary, all via the error path ---------------
+is( token_test( { code => 404, content => '' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND', 'a 404 has its own string' );
+
+is( token_test( { code => 429, content => '' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED', 'a 429 likewise' );
+
+is( token_test( { code => 500, content => '' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR', 'a 5xx likewise' );
+
+# The code is sprintf'd in, so it is invisible here for the same reason.
+is( token_test( { code => 418, content => '' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN',
+	'an unmapped status falls back to the unknown string' );
+
+# --- and the one that must STILL be no_response -----------------------------
+is( token_test( { code => undef } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE',
+	'a connection that never answered is still reported as unreachable' );
+
+# --- 200s that are not usable ----------------------------------------------
+is( token_test( { code => 200, content => '' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY',
+	'a 200 with no body is distinguishable' );
+
+is( token_test( { code => 200, content => 'not json at all' } ),
+	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON',
+	'  ...as is a 200 whose body will not parse' );
+
+# The request itself still carries the token being tested, not the stored one.
+{
+	@RESPONSES = ( { code => 200, content => '{"username":"x"}' } );
+	$PREFS{discogsToken} = 'stored';
+
+	%CALLS = (); @EVENTS = (); @REQUESTS = ();
+	Plugins::SqueezeWax::Settings->handler( undef,
+		{ saveSettings => 1, testToken => 1, pref_discogsToken => 'typed' },
+		sub { 1 }, 'ARG1' );
+
+	is( scalar @REQUESTS, 1, 'the test issues exactly one request' );
+	ok( ( grep { /typed/ } @{ $REQUESTS[0]{headers} } ),
+		'  ...carrying the token from the FIELD in its headers' );
+	like( $REQUESTS[0]{url}, qr{/oauth/identity},
+		'  ...to the identity endpoint (decisions §9.7)' );
+}
+
+# Every string the failure map can produce must exist, or the page renders a
+# raw token at the moment the user most needs a sentence.
+{
+	my $strings = do {
+		open my $fh, '<', $STRINGS or die "could not read $STRINGS: $!\n";
+		local $/;
+		<$fh>;
+	};
+
+	for my $t (qw(
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
+		PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
+	)) {
+		like( $strings, qr/^\Q$t\E\n\tEN\t\S/m, "$t exists with EN text" );
+	}
 }
 
 done_testing();
