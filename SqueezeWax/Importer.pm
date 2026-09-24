@@ -320,6 +320,21 @@ sub _prePass {
 
 		my $row = $match{$key};
 
+		# A row with no match_tier is not an identification - it is the
+		# ownership pass's row, an ownership conclusion and/or a review reason
+		# and nothing else (§15.13 part 6). So it is not evidence that this album
+		# has been examined, and it must not disqualify the album as a relink
+		# target. snapshotRows is deliberately unfiltered (its own comment says
+		# so, and match-check asserts it), because the ORPHAN side of the test
+		# below already requires a tier; this is the MISS side, which did not.
+		#
+		# Without this, one completed sync writing an ownership-only row on a
+		# newly-appeared album would permanently stop an orphan relinking onto
+		# it - TODO 2026-09-19, the half that is reachable from the scanner.
+		# relinkOrphan's pre-delete is the other half, for the PK collision that
+		# follows.
+		undef $row if $row && !defined $row->{match_tier};
+
 		if ( !$row ) {
 			# A key miss is "no row in EITHER table" (plan §0.4). An album with
 			# a no-match row has been examined and produced nothing, so it is

@@ -1202,7 +1202,7 @@ Each names its sites so the work is mechanical rather than a search.
       → 2026-09-24: six values, not four. conflict and orphan are added by
       decisions §15.16 parts 2, 3 and 5. Migration 4 in commit A1, written
       by the pass in B1. Ticked in B1.
-- [ ] **2026-09-19, STEP 8: an ownership-only row blocks a later relink.**
+- [x] **2026-09-19, STEP 8: an ownership-only row blocks a later relink.**
       `Importer::_prePass` treats any `discogs_match` row as "not a key
       miss", so once a sync has written an ownership-only row (NULL
       `match_tier`) on a new album, an orphan can no longer relink onto it.

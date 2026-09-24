@@ -436,6 +436,10 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( row($key)->{snapshot_track_count}, undef, '  ...snapshot_track_count is NULL' );
 	is( row($key)->{snapshot_artist},      undef, '  ...snapshot_artist is NULL' );
 
+	# Step 8: the row is findable. Before this, a fresh conflict was identifiable
+	# only by its NULL release id and an incumbent one not at all (§15.16 part 2).
+	is( row($key)->{review_reason}, 'conflict', "  ...and review_reason is 'conflict'" );
+
 	# a conflict whose tags then disappear: the row is DELETED and a no-match
 	# written. This is §2a's one permitted deletion.
 	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'none',
@@ -469,6 +473,31 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'  ...and the identification\'s snapshot_album_title is carried through' );
 	is( row($key)->{snapshot_track_count}, 5,  '  ...along with snapshot_track_count' );
 	is( row($key)->{snapshot_artist}, 'Miles Davis', '  ...and snapshot_artist' );
+
+	# THE ROW TODO 2026-09-19 COULD NOT FIND. strict, candidate, a non-NULL
+	# release id and a full snapshot - identical in every column to a clean
+	# identification. review_reason is the only thing that separates them, and
+	# B1's pass reads it to decline promoting this row (§15.16 part 4).
+	is( row($key)->{review_reason}, 'conflict',
+		"  ...and an INCUMBENT conflict is marked 'conflict' too" );
+
+	# A clean identification over it clears the mark: the tags now agree, so
+	# there is nothing left to review (§15.16 part 3).
+	$M->recordStrict( $album, { id => 456 }, $M->strictState($key) );
+	is( row($key)->{review_reason}, undef,
+		'a clean identification clears review_reason' );
+	is( row($key)->{discogs_release_id}, 456, '  ...and records the new id' );
+
+	# Tags removed from an INCUMBENT conflict: the narrow delete does not reach
+	# it (it has a release id and a snapshot), so it takes the 'kept' path and
+	# keeps its mark until the user rejects it - TODO 2026-09-07 ground (a),
+	# §15.16 part 7. A FRESH conflict in the same situation is deleted outright,
+	# asserted above.
+	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'conflict'" );
+	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'kept',
+		'an incumbent conflict whose tags are gone is kept, not deleted' );
+	is( row($key)->{review_reason}, 'conflict',
+		"  ...and keeps 'conflict' - the kept path names no reason column" );
 
 	# manual is outside all of it
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
@@ -777,6 +806,70 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	is( $M->relinkOrphan( $old, $new, 42 ), 0,
 		'a relink that matches no row reports failure rather than counting it' );
+
+	# --- review_reason across the relink (step 8, §15.16 parts 3 and 9) ----
+	#
+	# The relink is what resolves 'orphan', so it clears it. It must clear
+	# nothing else: 'conflict' belongs to the importer's identification path and
+	# a moved folder is not an answer to contradictory tags.
+	$seedOrphan->();
+	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'orphan'" );
+	is( $M->relinkOrphan( $old, $new, 42 ), 1, 'an orphan-marked row relinks' );
+	is( row($new)->{review_reason}, undef, "  ...and the relink clears 'orphan'" );
+
+	$seedOrphan->();
+	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'conflict'" );
+	is( $M->relinkOrphan( $old, $new, 42 ), 1, 'a conflict-marked row relinks too' );
+	is( row($new)->{review_reason}, 'conflict',
+		"  ...and keeps 'conflict' - the importer owns it, and a move settles nothing" );
+
+	# --- the pre-delete on the target key (R13) ----------------------------
+	#
+	# TODO 2026-09-19's PK collision. The ownership pass writes a row for an
+	# album it has a conclusion or a reason about; album_key is the primary key;
+	# so without the delete this UPDATE fails, inside the scanner, silently.
+	my $seedBlocker = sub {
+		my (%col) = @_;
+		$dbh->do(
+			'INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
+			 VALUES (?,?,?,?)',
+			undef, $new, 42, $col{ownership} // 'absent', $col{review_reason}
+		);
+	};
+
+	$seedOrphan->();
+	$seedBlocker->( ownership => 'exact' );
+	is( $M->relinkOrphan( $old, $new, 42 ), 1,
+		'a relink onto an album carrying an ownership-only row succeeds' );
+	is( row($new)->{discogs_release_id}, 4242,
+		"  ...and it is the ORPHAN's row that survives, not the blocker" );
+	my ($afterBlock) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $afterBlock, 1, '  ...leaving exactly one row on the key' );
+
+	# The same, with the blocker carrying a pass-written reason. R13: a reason
+	# the pass wrote is re-derived at the next sync, so it is not a decision and
+	# does not protect the row.
+	$seedOrphan->();
+	$seedBlocker->( review_reason => 'ambiguous' );
+	is( $M->relinkOrphan( $old, $new, 42 ), 1,
+		'a blocker carrying a pass reason does not stop the relink either (R13)' );
+	is( row($new)->{snapshot_artist}, 'Miles Davis', "  ...the orphan's snapshot is what remains" );
+
+	# And what the pre-delete must NOT reach: a real identification standing on
+	# the target key fails all three clauses, so the relink fails loudly rather
+	# than overwriting someone else's decision.
+	$seedOrphan->();
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match
+		 (album_key, lms_album_id, discogs_release_id, match_tier, state,
+		  snapshot_album_title, snapshot_track_count, snapshot_artist)
+		 VALUES (?,?,?,'strict','candidate',?,?,?)",
+		undef, $new, 42, 7777, 'Other', 9, 'Someone Else'
+	);
+	is( $M->relinkOrphan( $old, $new, 42 ), 0,
+		'a relink onto a key holding a real identification fails rather than clobbering it' );
+	is( row($new)->{discogs_release_id}, 7777, '  ...and that identification is untouched' );
+	ok( row($old), '  ...and the orphan is still where it was' );
 }
 
 # --- the backfill: one column, only where it is NULL -----------------------
@@ -961,6 +1054,60 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	is( $again->{relinked},   0, 'a second pre-pass relinks nothing' );
 	is( $again->{orphaned},   0, '  ...has no orphans left' );
 	is( $again->{backfilled}, 0, '  ...and backfills nothing' );
+
+	# --- TODO 2026-09-19, end to end: an ownership-only row on the target ---
+	#
+	# Both halves of the fix in one run, through the real _prePass rather than
+	# through relinkOrphan directly. The album that the orphan fits already
+	# carries a row the ownership pass wrote - which before step 8 made it "not
+	# a key miss" (so it was never offered) and, had it been offered, would have
+	# collided on the primary key.
+	#
+	# The reason on the blocker is deliberate: a pass reason does not protect a
+	# row (R13), and the queue is where this album would otherwise sit forever.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match
+		 (album_key, lms_album_id, discogs_release_id, match_tier, state,
+		  matched_at, source_timestamp, snapshot_album_title,
+		  snapshot_track_count, snapshot_artist)
+		 VALUES (?,?,?,'manual','confirmed',?,?,?,?,?)",
+		undef, $orphanKey, 999, 4242, 500, $byId{1}{source_timestamp},
+		'Kind of Blue', 2, 'Miles Davis'
+	);
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
+		 VALUES (?,?,'absent','ambiguous')",
+		undef, $byId{1}{album_key}, 1
+	);
+
+	# Album 3 is still a decoy, and still disqualified by its no-match row.
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+		 VALUES (?, 'strict', ?, ?)",
+		undef, $byId{3}{album_key}, $byId{3}{source_timestamp}, 1
+	);
+
+	my $blocked = Plugins::SqueezeWax::Importer::_prePass();
+	is( $blocked->{relinked}, 1,
+		'an album carrying only a pass row is still a relink target (TODO 2026-09-19)' );
+	is( $blocked->{orphaned}, 0, '  ...so the orphan is resolved, not left counted' );
+
+	my $landed = row( $byId{1}{album_key} );
+	is( $landed->{discogs_release_id}, 4242, '  ...the manual row landed on it' );
+	is( $landed->{match_tier}, 'manual',     '  ...still manual' );
+	is( $landed->{review_reason}, undef,
+		"  ...and the blocker's 'ambiguous' went with the blocker" );
+	is( row($orphanKey), undef, '  ...with nothing left under the old key' );
+
+	my ($onKey) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, $byId{1}{album_key}
+	);
+	is( $onKey, 1, '  ...and exactly one row on the key, not a collision' );
 }
 
 # --- R6: the importer ignores ownership-only rows (§15.13 part 6) ----------
@@ -1050,9 +1197,11 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'  ...and keeps the ownership conclusion too' );
 
 	# snapshotRows is deliberately NOT filtered: the orphan filter lives in
-	# _prePass and already requires match_tier (Importer.pm:355-359). What that
-	# means in practice is that an ownership-only row still blocks a relink onto
-	# its album - recorded for step 8 in TODO.md, not fixed here.
+	# _prePass and already requires match_tier (Importer.pm:355-359). Step 8 put
+	# the SAME test on the miss side - _prePass now treats a NULL-tier row as a
+	# key miss - which is why this stays unfiltered rather than being narrowed
+	# here. Narrowing it would put the rule in two places and leave the orphan
+	# side reading a list that had already had its own inputs removed.
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	$dbh->do(
 		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
