@@ -231,6 +231,24 @@ sub _syncNow {
 
 	require Plugins::SqueezeWax::API::Async;
 
+	# Saved BEFORE the sync, not after, and the order is the whole point.
+	#
+	# The shared form saves every scalar pref in _finishSyncNow, via
+	# SUPER::handler - which runs from the SYNC'S OWN CALLBACK, so it lands
+	# after the sync has finished. Plugin.pm's setChange on discogsToken clears
+	# the rejection pause, because a new token deserves a new chance (§15.15
+	# parts 2 and 3). Put together, a sync that was rejected set the pause and
+	# the save that followed it immediately wiped it: observed on the reference
+	# server 2026-09-24, where a wrong token was rejected at 14:37:02 and the
+	# next finished scan synced anyway rather than being skipped.
+	#
+	# Writing it here makes the order what it reads as: the token changes, the
+	# pause clears, the sync runs, and a rejection sticks. SUPER::handler's
+	# later write is then a no-op - Slim/Utils/Prefs/Base.pm:94-97 suppresses a
+	# scalar set that does not change the value, onchange included - so the
+	# hook cannot fire twice either.
+	$prefs->set( 'discogsToken', $token );
+
 	Plugins::SqueezeWax::API::Async->sync( $token, sub {
 		my ($result) = @_;
 

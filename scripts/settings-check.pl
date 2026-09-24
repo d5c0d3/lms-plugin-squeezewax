@@ -66,6 +66,7 @@ BEGIN {
 
 our %CALLS;
 our %PREFS;
+our @EVENTS;   # ordered, because ORDER is what broke
 
 # ---------------------------------------------------------------------------
 # Stubs, at the module's real boundaries
@@ -160,7 +161,35 @@ our $SCANNING = 0;
 	package Test::StubPrefs;
 	sub new { bless {}, shift }
 	sub get { return $PREFS{ $_[1] } }
-	sub set { $PREFS{ $_[1] } = $_[2]; $CALLS{"pref_set_$_[1]"}++; return 1 }
+	# Models two real behaviours that a naive stub hides, and whose interaction
+	# shipped a regression on 2026-09-24:
+	#
+	#   1. Slim/Utils/Prefs/Base.pm:94-97 suppresses a scalar set that does not
+	#      change the value - onchange included.
+	#   2. Plugin.pm registers setChange on discogsToken to clear the rejection
+	#      pause (§15.15 parts 2 and 3). Plugin.pm is not loaded here, so the
+	#      hook is mirrored rather than imported; if that hook moves, this stub
+	#      is a lie and the comment says where to look.
+	sub set {
+		my ( $self, $pref, $new ) = @_;
+
+		my $old = $PREFS{$pref};
+
+		return 1 if !ref $new
+			&& defined $new
+			&& defined $old
+			&& $new eq $old;
+
+		$PREFS{$pref} = $new;
+		$CALLS{"pref_set_$pref"}++;
+		push @EVENTS, "set:$pref";
+
+		if ( $pref eq 'discogsToken' ) {
+			Plugins::SqueezeWax::API::Async->clearTokenRejected;
+		}
+
+		return 1;
+	}
 
 	# init/migrate/setValidate/setChange run at file scope in Tags.pm and
 	# Plugin.pm. They establish defaults and validators, which this suite
@@ -216,6 +245,7 @@ BEGIN {
 		my ( $class, $token, $cb ) = @_;
 		$CALLS{async_sync}++;
 		$CALLS{async_sync_token} = $token;
+		push @EVENTS, 'sync';
 		$cb->( { ok => 1, items => 203, requests => 4 } );
 		return 1;
 	};
@@ -224,6 +254,7 @@ BEGIN {
 	};
 	*{'Plugins::SqueezeWax::API::Async::clearTokenRejected'} = sub {
 		$CALLS{clear_rejected}++;
+		push @EVENTS, 'clear_pause';
 		return;
 	};
 	*{'Plugins::SqueezeWax::API::Async::tokenRejected'} = sub { 0 };
@@ -261,7 +292,8 @@ our $DB_READY = 1;
 sub submit {
 	my (%extra) = @_;
 
-	%CALLS = ();
+	%CALLS  = ();
+	@EVENTS = ();
 
 	my $params = { saveSettings => 1, %extra };
 	my @cbArgs;
@@ -651,6 +683,57 @@ diag('§15.15 part 3: both buttons act on the token on the page');
 	ok( $uses >= 2, 'the page states what the buttons act on, beside both of them' );
 	like( $strings, qr/^PLUGIN_SQUEEZEWAX_ACTIONS_HINT\n\tEN\t\S/m,
 		'  ...and the string exists with EN text' );
+}
+
+# ---------------------------------------------------------------------------
+# The token is saved BEFORE the sync, not after (2026-09-24 regression)
+# ---------------------------------------------------------------------------
+#
+# The shared form saves through SUPER::handler in _finishSyncNow, which runs
+# from the SYNC'S OWN CALLBACK - so the save lands after the sync finishes.
+# Plugin.pm's setChange on discogsToken clears the rejection pause. Together:
+# a rejected sync set the pause and the save that followed wiped it, so the
+# next finished scan synced anyway instead of being skipped. Observed on the
+# reference server, 0.0.0.7, 2026-09-24.
+#
+# Neither suite could see it - settings-check stubbed Async wholesale, and
+# sync-check never goes through the save path. The StubPrefs above now models
+# the dispatch, so the order is testable here.
+
+diag('a rejected pause must survive the save that follows it');
+
+{
+	$PREFS{discogsToken} = 'old-token';
+
+	my ($params) = submit( syncNow => 1, pref_discogsToken => 'new-token' );
+
+	my ($setAt)   = grep { $EVENTS[$_] eq 'set:discogsToken' } 0 .. $#EVENTS;
+	my ($syncAt)  = grep { $EVENTS[$_] eq 'sync' }             0 .. $#EVENTS;
+	my ($clearAt) = grep { $EVENTS[$_] eq 'clear_pause' }      0 .. $#EVENTS;
+
+	ok( defined $setAt,  'a new token in the field is written to the pref' );
+	ok( defined $syncAt, '  ...and a sync runs' );
+
+	ok( defined $setAt && defined $syncAt && $setAt < $syncAt,
+		'the token is saved BEFORE the sync starts' );
+
+	ok( defined $clearAt && defined $syncAt && $clearAt < $syncAt,
+		'  ...so the pause is cleared BEFORE the sync, never after it' );
+}
+
+# The same token twice must not re-fire the hook at all: Base.pm:94-97
+# suppresses a scalar set that changes nothing, which is what makes the later
+# SUPER::handler write harmless.
+{
+	$PREFS{discogsToken} = 'same-token';
+
+	my ($params) = submit( syncNow => 1, pref_discogsToken => 'same-token' );
+
+	ok( !( grep { $_ eq 'set:discogsToken' } @EVENTS ),
+		'saving an unchanged token is suppressed' );
+	ok( !$CALLS{clear_rejected},
+		'  ...so the pause-clearing hook does not fire for it either' );
+	ok( $CALLS{async_sync}, '  ...and the sync still runs' );
 }
 
 done_testing();
