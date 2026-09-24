@@ -259,7 +259,7 @@ is_deeply(
 	[ sort keys %matchColumns ],
 	[ sort qw(album_key mb_album_id lms_album_id discogs_release_id discogs_master_id
 	          match_tier state ownership matched_at snapshot_artist snapshot_album_title
-	          snapshot_track_count source_timestamp) ],
+	          snapshot_track_count source_timestamp review_reason) ],
 	'discogs_match carries exactly the v1 column set'
 );
 ok( $matchColumns{source_timestamp}, 'discogs_match has source_timestamp' );
@@ -338,6 +338,35 @@ ok( $insertMatch->( album_key => 'e' x 32, match_tier => undef ),
 	'match_tier CHECK accepts NULL (an ownership-only row)' );
 ok( $insertMatch->( album_key => 'f' x 32, state => undef ),
 	'state CHECK accepts NULL' );
+
+# --- migration 4: review_reason's CHECK -----------------------------------
+#
+# All six values, one at a time, because the queue's whole selection is this
+# column: a value the CHECK silently refused would be a row that never reaches
+# the page, and the pass would log a write it did not make.
+for my $reason (qw(conflict ambiguous artist-disagree artist-absent various-gated orphan)) {
+	ok( $insertMatch->( album_key => substr( $reason . ( 'z' x 32 ), 0, 32 ),
+			review_reason => $reason ),
+		"review_reason CHECK accepts '$reason'" );
+}
+
+ok( !$insertMatch->( album_key => 'g' x 32, review_reason => 'bogus' ),
+	"review_reason CHECK rejects 'bogus'" );
+ok( !$insertMatch->( album_key => 'g' x 32, review_reason => 'Conflict' ),
+	"review_reason CHECK rejects 'Conflict' - the values are case-sensitive" );
+ok( $insertMatch->( album_key => 'h' x 32, review_reason => undef ),
+	'review_reason CHECK accepts NULL (not in the queue)' );
+
+# An INSERT that never names the column leaves it NULL. This is what every
+# existing writer does, and what keeps migration 4 a no-op for them: the
+# importer's and the pass's INSERTs are not rewritten except where §1.2 and
+# §2.1 say so.
+ok( $insertMatch->( album_key => 'i' x 32 ), 'a row that omits review_reason inserts' );
+my ($omitted) = $dbh->selectrow_array(
+	'SELECT review_reason FROM squeezewax.discogs_match WHERE album_key = ?',
+	undef, 'i' x 32
+);
+is( $omitted, undef, '  ...and review_reason is NULL on it' );
 
 # (c) and N1: what an insert that names neither column actually writes. state
 # must come out NULL - a DEFAULT 'candidate' here would drop an auto-badged
@@ -505,7 +534,8 @@ sub match_fingerprint {
 	);
 	is( scalar @$beforeRows, 3, 'the version-2 fixture holds three rows' );
 
-	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-2 file to 3' )
+	ok( eval { $S->_migrate($up); 1 },
+		"_migrate takes a populated version-2 file all the way to $target" )
 		or diag($@);
 	is( version_of($up), $target, "  ...and it reports version $target" );
 
@@ -603,6 +633,97 @@ for my $tier (qw(structural fuzzy)) {
 	ok( $badTables{discogs_collection},
 		'  ...and has not begun the drops either (the refusal is first)' );
 	ok( !$badTables{discogs_match_new}, '  ...and left no scratch table behind' );
+}
+
+# --- migration 4: the upgrade path from a populated version-3 database -----
+#
+# The same shape as the migration-3 block above and for the same reason: the
+# only interesting case is a file that already holds rows. A real upgrade meets
+# version 3 with a full discogs_match, and the one thing migration 4 must do to
+# it is add a column that is NULL everywhere - R9's "no backfill", asserted
+# rather than assumed.
+sub version_3_dbh {
+	my $h = version_2_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_3($h);
+	$h->do('PRAGMA squeezewax.user_version = 3');
+
+	return $h;
+}
+
+{
+	my $up = version_3_dbh();
+
+	is( version_of($up), 3, 'the version-3 fixture reports user_version 3' );
+
+	my %before = map { $_->{name} => 1 } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+	ok( !$before{review_reason}, '  ...and has no review_reason column yet' );
+
+	my $fingerprint = match_fingerprint($up);
+	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $beforeCount, 3, '  ...and holds three rows' );
+
+	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-3 file to 4' )
+		or diag($@);
+	is( version_of($up), 4, '  ...and it reports version 4' );
+
+	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
+
+	# Every other column, row for row. An ALTER should touch nothing else, and
+	# this is the cheapest way to say so.
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'  ...and every pre-existing column is byte-for-byte what it was' );
+
+	my ($nonNull) = $up->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE review_reason IS NOT NULL'
+	);
+	is( $nonNull, 0, 'review_reason is NULL on every existing row (R9: no backfill)' );
+
+	# The CHECK is carried into the stored DDL by the ALTER, not merely applied
+	# once. Before SQLite 3.37.0 an added CHECK is not tested against existing
+	# rows at all, so this - a write after the fact - is the assertion that
+	# holds on every bundled version.
+	ok( !eval { $up->do( 'UPDATE squeezewax.discogs_match SET review_reason = ?', undef, 'bogus' ); 1 },
+		"the CHECK rejects 'bogus' on a later UPDATE" );
+	ok( eval { $up->do( 'UPDATE squeezewax.discogs_match SET review_reason = ? WHERE album_key = ?',
+			undef, 'conflict', 'b' x 32 ); 1 },
+		"  ...and accepts 'conflict'" );
+
+	# --- re-run safety ----------------------------------------------------
+	#
+	# ADD COLUMN is the one statement in the whole schema that throws on a
+	# re-run, so the guard is the migration. Both forms: the sub called again
+	# directly, and _migrate over a completed migration with the marker forced
+	# back.
+	my $marked = match_fingerprint($up);
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_4($up); 1 },
+		'migration 4 runs a second time without dying' ) or diag($@);
+	is_deeply( match_fingerprint($up), $marked, '  ...and changes nothing' );
+
+	my ($stillConflict) = $up->selectrow_array(
+		'SELECT review_reason FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'b' x 32
+	);
+	is( $stillConflict, 'conflict', '  ...and does not blank a reason already written' );
+
+	$up->do('PRAGMA squeezewax.user_version = 3');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed ADD COLUMN with user_version forced back to 3' )
+		or diag($@);
+	is( version_of($up), 4, '  ...and reaches version 4' );
+
+	# A version-4 file must refuse a plugin that only knows three migrations.
+	# _migrate's existing behaviour, re-asserted at the new version because
+	# that is where the next upgrade will meet it.
+	$up->do('PRAGMA squeezewax.user_version = 5');
+	ok( !eval { $S->_migrate($up); 1 }, 'a version-5 file refuses this four-migration plugin' );
+	like( $@, qr/newer than this plugin/, '  ...and says why' );
 }
 
 done_testing();

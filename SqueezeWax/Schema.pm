@@ -33,6 +33,7 @@ my @MIGRATIONS = (
 	\&_migration_1,
 	\&_migration_2,
 	\&_migration_3,
+	\&_migration_4,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -627,6 +628,65 @@ sub _migration_3 {
 
 	main::INFOLOG && $log->is_info
 		&& $log->info('dropped discogs_collection; recreated discogs_no_match at tier strict');
+
+	return 1;
+}
+
+# Migration 4: the review queue's one column (§15.16 part 2, step 8 plan §1.1).
+#
+# review_reason answers "why is this album in the queue", which nothing else in
+# the schema can answer. state cannot: since §13.4 an identified row is
+# 'candidate' whether it is contested or not, and on the reference server 305 of
+# 329 candidates are simply albums the user does not own. Nor can the pass
+# recompute it - four of the six values are conclusions about a collection that
+# §13.2 requires be discarded at the end of every sync.
+#
+# Six values under one column rather than two, because they are one fact with
+# one consumer. Their writers differ and do not overlap: 'conflict' is the
+# importer's alone and is sticky (§15.16 part 3); the other five are the
+# ownership pass's and are re-derived every sync. NULL means "not in the queue".
+#
+# No backfill (R9). A pass reason is re-derived at the next sync, so backfilling
+# one would be writing what the pass is about to write anyway; 'conflict' cannot
+# be backfilled at all, because nothing before this recorded which rows were
+# contested (§15.16, "where the evidence is thin").
+#
+# No index: the queue reads ~500 rows once per page render, and an index on a
+# column that is NULL in almost every row would earn nothing.
+#
+# ALTER TABLE ADD COLUMN is not idempotent - it throws "duplicate column name"
+# on a re-run - so the column list is checked first, exactly as _migration_2 and
+# _migration_3 do. The guard is `SELECT name FROM pragma_table_info(?)` rather
+# than `PRAGMA squeezewax.table_info(...)` so the table name stays a bind
+# parameter, which is the form both existing guards use.
+#
+# A CHECK on an added column is permitted (sqlite.org/lang_altertable.html: the
+# restrictions are PRIMARY KEY/UNIQUE, a non-constant default, NOT NULL without
+# a default, REFERENCES under enforced foreign keys, and GENERATED ... STORED -
+# a CHECK is none of them). Testing it against pre-existing rows arrived in
+# SQLite 3.37.0, and LMS bundles 3.22.0 for perl 5.20-5.30 - which changes
+# nothing here, since every existing row takes NULL and `NULL IN (...)` is NULL,
+# which a CHECK treats as satisfied. OBSERVED on 3.50.6, schema-qualified, on an
+# attached database; INFERRED for 3.22.0 from the documentation.
+sub _migration_4 {
+	my $dbh = shift;
+
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	return 1 if $columns{review_reason};
+
+	$dbh->do(q{
+		ALTER TABLE squeezewax.discogs_match ADD COLUMN review_reason TEXT
+			CHECK (review_reason IN ('conflict','ambiguous','artist-disagree',
+			                         'artist-absent','various-gated','orphan'))
+	});
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('added discogs_match.review_reason (NULL on every existing row)');
 
 	return 1;
 }
