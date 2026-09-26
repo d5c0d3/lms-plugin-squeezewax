@@ -218,8 +218,11 @@ PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED
 	EN	The tags agree again. The next scan will clear this.
 
-PLUGIN_SQUEEZEWAX_QUEUE_TAGS_SKIPPED
-	EN	Too many conflicts to re-read the tags for all of them here. Check the scanner log.
+PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON
+	EN	Show tags
+
+PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON_RUNNING
+	EN	Reading tags...
 
 PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON
 	EN	Choose from my collection

@@ -64,13 +64,6 @@ my %SYNC_FAILURE = (
 	count_unknown   => 'PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN',
 );
 
-# How many conflict rows have their tags re-read per render. §3a stores no
-# conflict_note, so the only way to show a user WHICH tags disagree is to read
-# the files again - and that is disk I/O inside a page render. A maintained
-# collection has a handful of conflicts, not hundreds; past this bound the page
-# says the reason without the detail rather than making the server unresponsive.
-use constant MAX_TAG_REREADS => 25;
-
 sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/queue.html') }
 
 # No `name`, and no SUPER::new. Together those keep the page out of the settings
@@ -114,6 +107,9 @@ sub handler {
 	}
 	elsif ( $params->{relink} ) {
 		_relink( $params, $scanning );
+	}
+	elsif ( $params->{showtags} ) {
+		_showTags( $params, $scanning );
 	}
 
 	$params->{scanning} = $scanning;
@@ -199,6 +195,30 @@ sub _albumFor {
 	} );
 
 	return $found;
+}
+
+# Show the tags of ONE conflict row, because the user asked.
+#
+# Writes nothing, and issues no Discogs request. It only records which album
+# the render should expand; _reviewList does the reading, for that album alone.
+#
+# Refused while scanning like every other action (§15.17 part 1). It touches no
+# database and would be harmless mid-scan, but a page where three buttons
+# refuse and a fourth quietly works is a page whose rules the user cannot
+# learn - and check 8 asserts all of them uniformly.
+sub _showTags {
+	my ( $params, $scanning ) = @_;
+
+	return if _refused( $params, $scanning );
+
+	my $key = _actionKey( $params, 'showtags' );
+
+	if ( !$key ) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_QUEUE_NOT_FOUND');
+		return;
+	}
+
+	$params->{showTagsFor} = $key;
 }
 
 # Confirm: the user has chosen a release from their own collection.
@@ -525,7 +545,7 @@ sub beforeRender {
 		push @review, $row;
 	}
 
-	$params->{review}  = _reviewList( \@review, \%album );
+	$params->{review}  = _reviewList( \@review, \%album, $params->{showTagsFor} );
 	$params->{orphans} = _orphanList( \@orphans, \%album );
 
 	$params->{openItems} = scalar @{ $params->{review} } + scalar @{ $params->{orphans} };
@@ -534,10 +554,9 @@ sub beforeRender {
 }
 
 sub _reviewList {
-	my ( $rows, $album ) = @_;
+	my ( $rows, $album, $showFor ) = @_;
 
 	my @out;
-	my $reread = 0;
 
 	for my $row (@$rows) {
 		my $a = $album->{ $row->{album_key} };
@@ -555,16 +574,23 @@ sub _reviewList {
 			release_id => $row->{discogs_release_id},
 		};
 
-		# §3a stores no conflict_note, so the only way to tell the user WHICH
-		# tags disagree is to read the files again. Bounded, because this is
-		# disk I/O inside a page render.
-		if ( $reason eq 'conflict' ) {
-			if ( $reread++ < MAX_TAG_REREADS ) {
-				$item->{tags} = _readTags($a);
-			}
-			else {
-				$item->{tagsSkipped} = 1;
-			}
+		# The list reads NO files. §3a stores no conflict_note, so the only way
+		# to show WHICH tags disagree is to read them again - but doing that
+		# per render cost up to ~7 s on the reference server, whose library is
+		# a CIFS mount: 19-137 ms per file, up to 25 rows x 2 candidates, all
+		# of it synchronous in a single-threaded server (decisions §15.17 part
+		# 1, measured 2026-09-26). The build that did this was a deviation from
+		# the plan's "re-read when opened", recorded at the time with its cost
+		# marked INFERRED small. It was not small.
+		#
+		# So the row carries a flag saying it CAN show tags, and the showtags
+		# action reads that one album's candidates - at most two files - when
+		# the user asks. The bound went with the behaviour it bounded: there is
+		# nothing left to bound.
+		$item->{canShowTags} = 1 if $reason eq 'conflict';
+
+		if ( $reason eq 'conflict' && defined $showFor && $showFor eq $row->{album_key} ) {
+			$item->{tags} = _readTags($a);
 		}
 
 		push @out, $item;

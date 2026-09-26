@@ -111,6 +111,7 @@ our @LOG;
 our @WARNINGS;
 our %CALLS;
 our $SCANNING = 0;
+our $READ_TAGS = 0;   # every Slim::Formats->readTags call, so file I/O is countable
 
 # ---------------------------------------------------------------------------
 # Stubs, at LMS's boundary and nowhere else.
@@ -360,7 +361,7 @@ my $VA = 'Various Artists';
 	# suite has no audio. readTags returns nothing, which is how the queue page
 	# renders "tags no longer readable" - and that case is asserted rather than
 	# worked around.
-	*Slim::Formats::readTags = sub { return {} };
+	*Slim::Formats::readTags = sub { $main::READ_TAGS++; return {} };
 }
 
 # Only the columns Library reads. Types from SQL/SQLite/schema_16_up.sql.
@@ -502,6 +503,7 @@ sub press {
 	my (%params) = @_;
 
 	@REQUESTS        = ();
+	$READ_TAGS       = 0;
 	@LOG             = ();
 	@WARNINGS        = ();
 	%CALLS           = ();
@@ -910,14 +912,57 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 	is( $unmarked->{reason}, 'conflict',
 		"D3: an unmarked fresh conflict is found by §3a's own predicate and reads as one" );
 
-	# The tag re-read. There are no real files behind these fixtures, so
-	# readTags returns nothing for every candidate - which is exactly the "the
-	# files are no longer readable" case, and the page has a sentence for it.
+	# --- §15.17 part 1: the LIST READS NO FILES -----------------------------
+	#
+	# This is the assertion the whole change exists for. On the reference
+	# server's CIFS library a single tag read cost 19-137 ms, and the previous
+	# build did up to 50 of them per render - about 7 s of synchronous I/O in a
+	# single-threaded server. Counting the calls at the LMS boundary is the only
+	# way to state "no file I/O" as a fact rather than a hope.
+	is( $READ_TAGS, 0,
+		'rendering the list with conflict rows reads NO tag files (§15.17 part 1)' );
+
 	my ($marked) = grep { $_->{album_key} eq $K{conflict} } @{ $params->{review} };
-	is( $marked->{tags}{read}, 0,
-		'a conflict whose files give up no tags reports zero read' );
+	ok( !$marked->{tags}, '  ...so no conflict row carries tags on a plain render' );
+	ok( $marked->{canShowTags}, '  ...but it offers to show them' );
 
 	is( $params->{openItems}, 2, 'the open-item count is what the page shows' );
+
+	# --- showtags: the per-entry read (§15.17 part 1) ---------------------
+	#
+	# At most two files, and only for the album asked about - the primary
+	# candidate and one fallback, which is what _readTags reads.
+	my $shown = press( showtags => 1, album_key => $K{conflict} );
+
+	cmp_ok( $READ_TAGS, '<=', 2,
+		'showtags reads at most two files - the album\'s own candidates' );
+	ok( $READ_TAGS > 0, '  ...and it does actually read' );
+
+	my ($expanded) = grep { $_->{album_key} eq $K{conflict} } @{ $shown->{review} };
+	ok( $expanded->{tags}, '  ...the asked-for row now carries its tags' );
+
+	# The fixtures have no audio behind them, so readTags gives nothing back -
+	# which is precisely the "files no longer readable" branch, now reachable
+	# only after the button is pressed.
+	is( $expanded->{tags}{read}, 0,
+		'  ...and an unreadable conflict reports zero read, as before' );
+
+	my ($other) = grep { $_->{album_key} ne $K{conflict} } @{ $shown->{review} };
+	ok( !$other->{tags}, 'showtags expands ONLY the album it was given' );
+
+	# Refused while scanning, like every other action - check 8 stays uniform.
+	{
+		local $main::SCANNING = 1;
+		my $busy = press( showtags => 1, album_key => $K{conflict} );
+		is( $busy->{warning}, 'PLUGIN_SQUEEZEWAX_BUSY_SCANNING',
+			'showtags is refused while scanning, like the other four' );
+		is( $READ_TAGS, 0, '  ...and reads nothing' );
+	}
+
+	# The 0.0.0.3 defect, asked of the fifth action too.
+	my $both = press( saveSettings => 1, showtags => 1, album_key => $K{conflict} );
+	my ($still) = grep { $_->{album_key} eq $K{conflict} } @{ $both->{review} };
+	ok( $still->{tags}, 'a saveSettings beside showtags does not swallow it' );
 
 }
 

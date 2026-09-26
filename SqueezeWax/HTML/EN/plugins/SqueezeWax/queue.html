@@ -105,11 +105,12 @@
 				<td>
 					[% item.reasonText | html %]
 
-					[%# A conflict stores no note (§3a), so the detail is the tags
-					    as they read right now. %]
-					[% IF item.tagsSkipped %]
-						<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_SKIPPED" | string %]</div>
-					[% ELSIF item.tags %]
+					[%# A conflict stores no note (§3a), so the detail is the tags as
+					    they read right now - but reading them costs real time on a
+					    networked library, so it happens only when the user presses
+					    "Show tags" (decisions §15.17 part 1). The list itself reads
+					    no files at all. %]
+					[% IF item.tags %]
 						[% IF item.tags.read == 0 %]
 							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE" | string %]</div>
 						[% ELSIF item.tags.resolved %]
@@ -128,6 +129,13 @@
 							value="[% item.album_key | html %]"
 							data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON_RUNNING" | string | html %]">[%
 							"PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON" | string %]</button>
+
+						[% IF item.canShowTags && !item.tags %]
+							<button type="submit" name="showtags" class="stdclick swxAction"
+								value="[% item.album_key | html %]"
+								data-swx-running="[% "PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON_RUNNING" | string | html %]">[%
+								"PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON" | string %]</button>
+						[% END %]
 
 						[%# Only a row with something to undo is rejectable.
 						    rejectRow refuses a computed item anyway, and the page
