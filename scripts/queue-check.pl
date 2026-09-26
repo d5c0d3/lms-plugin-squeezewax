@@ -1155,6 +1155,102 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 }
 
 # ===========================================================================
+# 9b. The page as a human reads it (§15.17 part 6)
+#
+# Four defects from the first real look at the page, on 2026-09-26.
+# ===========================================================================
+{
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	# A non-ASCII album, stored the way LMS stores one: UTF-8 bytes.
+	my $bjork = album( 40, "Gling-Gl\xc3\xb3", "Bj\xc3\xb6rk" );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
+		 VALUES (?, 40, 'absent', 'artist-disagree')", undef, $bjork );
+
+	my $params = press();
+
+	# 1. A template comment must not leak onto the page.
+	#
+	# Asserted over the template SOURCE, not a rendered page: there is no
+	# Template Toolkit here, and the source check is the stronger one anyway -
+	# it catches the whole class of bug rather than the one instance seen on
+	# the screenshot. The first close marker inside a [%# comment ends it, and
+	# everything after it is emitted as text.
+	{
+		my $open  = '[' . '%#';
+		my $close = '%' . ']';
+
+		for my $t ( glob("$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/*.html") ) {
+			open my $fh, '<', $t or die "could not read $t: $!\n";
+			local $/;
+			my $text = <$fh>;
+			close $fh;
+
+			my $leaked = 0;
+			my $at     = 0;
+
+			while ( ( $at = index( $text, $open, $at ) ) >= 0 ) {
+				my $end  = index( $text, $close, $at );
+
+				# The body is what sits BETWEEN the opener and the first close
+				# marker - the opener itself is not part of it, or every
+				# comment would match.
+				my $body = $end >= 0 ? substr( $text, $at + 3, $end - $at - 3 ) : '';
+
+				# An opener inside that body means the author wrote template
+				# syntax in the comment, so this close marker is not the one
+				# they meant to end it with: the rest reaches the page.
+				$leaked++ if $body =~ /\[%/;
+
+				$at = $end >= 0 ? $end + 2 : length $text;
+			}
+
+			is( $leaked, 0, "no comment in " . ( $t =~ s{.*/}{}r ) . " closes early and leaks to the page" );
+		}
+	}
+
+	# 2. Non-ASCII renders as characters, not as UTF-8 bytes read as Latin-1.
+	my ($item) = @{ $params->{review} };
+	is( $item->{title},  "Gling-Gl\x{00f3}", 'a non-ASCII title is decoded for display' );
+	is( $item->{artist}, "Bj\x{00f6}rk",     '  ...and so is the artist' );
+	isnt( $item->{title}, "Gling-Gl\xc3\xb3",
+		'  ...not handed over as raw bytes, which render as "Gling-GlA3"' );
+
+	# Display only: the database still holds what it held.
+	my ($storedTitle) = $dbh->selectrow_array(
+		'SELECT title FROM albums WHERE id = 40' );
+	is( $storedTitle, "Gling-Gl\xc3\xb3",
+		'  ...and nothing in the database changed (§15.12, D5)' );
+
+	# A string that will not decode is shown as stored rather than dropped.
+	is( Plugins::SqueezeWax::Queue::_display("\xff\xfe bad"), "\xff\xfe bad",
+		'an undecodable string is shown as stored, not dropped' );
+	is( Plugins::SqueezeWax::Queue::_display(undef), undef, '  ...and undef stays undef' );
+
+	# 4. The review queue's description no longer covers the orphan list.
+	#    Read from strings.txt, because string() here returns the token.
+	{
+		open my $fh, '<', "$Bin/../SqueezeWax/strings.txt" or die $!;
+		local $/;
+		my $all = <$fh>;
+		close $fh;
+
+		my ($desc) = $all =~ /^PLUGIN_SQUEEZEWAX_QUEUE_DESC\n\tEN\t([^\n]*)/m;
+
+		ok( $desc, 'PLUGIN_SQUEEZEWAX_QUEUE_DESC has EN text' );
+		unlike( $desc, qr/orphan|album has gone/i,
+			'  ...and it does not describe the orphan list as well' );
+
+		my ($hint) = $all =~ /^PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST\n\tEN\t([^\n]*)/m;
+		like( $hint, qr/takes a few seconds/,
+			'the re-match hint reads as a warning, not a status line' );
+	}
+}
+
+# ===========================================================================
 # 10. Every string token the page asked for exists
 # ===========================================================================
 #

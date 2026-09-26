@@ -2,10 +2,14 @@
 [% PROCESS settings/header.html %]
 
 [%# nosubmit, as settings/server/status.html:44 does. The footer's visible Save
-    button sits inside [% IF NOT nosubmit %] (settings/footer.html:38); its
+    button sits inside an IF NOT nosubmit test (settings/footer.html:38); its
     hidden saveSettings at :39 is emitted either way and is harmless here,
     because this page declares no prefs() and the base handler's save loop
-    therefore runs zero times (Slim/Web/Settings.pm:150-182). %]
+    therefore runs zero times (Slim/Web/Settings.pm:150-182).
+
+    Nothing in this comment may contain a template close marker: the first one
+    ends the comment, and everything after it lands on the page as text. That
+    is what happened here, seen on the 2026-09-26 screenshot. %]
 [% nosubmit = 1 %]
 
 [% IF !dbReady %]
@@ -99,7 +103,8 @@
 		<table>
 			<tr>
 				<th>[% "PLUGIN_SQUEEZEWAX_QUEUE_ALBUM" | string %]</th>
-				<th>[% "PLUGIN_SQUEEZEWAX_QUEUE_REASON" | string %]</th>
+				<th>[% "PLUGIN_SQUEEZEWAX_QUEUE_REASON" | string %]<br />
+					<span class="prefDesc">[% "PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST" | string %]</span></th>
 				<th></th>
 			</tr>
 		[% FOREACH item = review %]
@@ -159,7 +164,6 @@
 		[% END %]
 		</table>
 
-		<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST" | string %]</div>
 	[% END %]
 [% END %]
 

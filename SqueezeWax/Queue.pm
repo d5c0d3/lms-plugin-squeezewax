@@ -144,6 +144,31 @@ sub _refused {
 	return 0;
 }
 
+# Bytes to characters, for DISPLAY ONLY (§15.17 part 6).
+#
+# Everything this page shows comes out of the database or the iterator as raw
+# bytes: contributors.name is a blob, nothing under Slim/ sets sqlite_unicode,
+# and the snapshots deliberately store bytes so orphan recovery compares like
+# with like (§15.12, D5). Handed to the template unchanged, UTF-8 bytes are
+# rendered as Latin-1 and "Gling-Gló / Björk" reaches the user as
+# "Gling-GlÃ³ / BjÃ¶rk" - seen on the 2026-09-26 screenshot.
+#
+# Nothing written to the database changes. The re-match screen already decodes
+# this way (_choices), so this is that rule applied to the two lists.
+#
+# A string that will not decode is shown AS STORED rather than dropped: a
+# mangled title is still enough to recognise an album by, and a missing row is
+# not. _decode returns undef on failure, which is the signal to fall back.
+sub _display {
+	my ($bytes) = @_;
+
+	return undef unless defined $bytes;
+
+	my $decoded = Plugins::SqueezeWax::Ownership::_decode($bytes);
+
+	return defined $decoded ? $decoded : $bytes;
+}
+
 # An album_key off a form is 32 hex characters or it is nothing. Checked before
 # it reaches a query, so a malformed one is a refusal rather than a row that
 # happens not to match.
@@ -518,6 +543,9 @@ sub beforeRender {
 	require Plugins::SqueezeWax::API::Async;
 	$params->{tokenPaused} = Plugins::SqueezeWax::API::Async->tokenRejected ? 1 : 0;
 
+	# _display needs it, and both lists below use _display.
+	require Plugins::SqueezeWax::Ownership;
+
 	return unless $params->{dbReady};
 
 	my $rows = Slim::Schema->dbh->selectall_arrayref( $QUEUE_SQL, { Slice => {} } ) || [];
@@ -581,8 +609,8 @@ sub _reviewList {
 
 		my $item = {
 			album_key  => $row->{album_key},
-			title      => $a->{title},
-			artist     => $a->{artist},
+			title      => _display( $a->{title} ),
+			artist     => _display( $a->{artist} ),
 			reason     => $reason,
 			reasonText => string( $REASON_STRING{$reason} || 'PLUGIN_SQUEEZEWAX_REASON_CONFLICT' ),
 			release_id => $row->{discogs_release_id},
@@ -667,6 +695,21 @@ sub _readTags {
 	};
 }
 
+# The albums an orphan may be moved onto, as the template needs them: the key
+# to submit, and a title and artist a human can read (§15.17 part 6). Sorted on
+# the DECODED title, so the order is the one the user sees.
+sub _forDisplay {
+	my ($albums) = @_;
+
+	my @out = map { {
+		album_key => $_->{album_key},
+		title     => _display( $_->{title} ),
+		artist    => _display( $_->{artist} ),
+	} } @{ $albums || [] };
+
+	return [ sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @out ];
+}
+
 sub _orphanList {
 	my ( $rows, $album ) = @_;
 
@@ -744,8 +787,8 @@ sub _orphanList {
 			album_key  => $row->{album_key},
 			release_id => $row->{discogs_release_id},
 			match_tier => $row->{match_tier},
-			artist     => $row->{snapshot_artist},
-			title      => $row->{snapshot_album_title},
+			artist     => _display( $row->{snapshot_artist} ),
+			title      => _display( $row->{snapshot_album_title} ),
 			tracks     => $row->{snapshot_track_count},
 			url        => 'https://www.discogs.com/release/'
 				. ( $row->{discogs_release_id} // '' ),
@@ -754,12 +797,12 @@ sub _orphanList {
 			# to an album of the user's choosing is recorded as future work,
 			# because an arbitrary relink is a manual match by another name and
 			# would want the re-match flow rather than this list.
-			candidates => [ sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @candidates ],
+			candidates => _forDisplay( \@candidates ),
 
 			# Albums that fit but identify themselves. Only ever shown when
 			# there are no eligible targets at all - otherwise the user is
 			# choosing, not being told why they cannot (§15.17 part 3).
-			identified => [ sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @ineligible ],
+			identified => _forDisplay( \@ineligible ),
 		};
 	}
 
