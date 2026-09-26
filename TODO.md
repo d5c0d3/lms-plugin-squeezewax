@@ -405,11 +405,13 @@ Each names its sites so the work is mechanical rather than a search.
       assertions). **Before v1 ships, decide whether it stays.** It is a
       back door into the badging rules that no user should ever need, and its
       only defence is that it warns.
-- [ ] **2026-09-22, NAMED COST of decisions §15.13 part 3 (artists at L2): two
+- [x] **2026-09-22, NAMED COST of decisions §15.13 part 3 (artists at L2): two
       correct badges lost on the reference library** — Future Sound Of London,
       albums 3124 and 3127, against Discogs `The Future Sound Of London`.
       §13.10.4's trade, accepted; these reach the review queue (step 8).
       Revisit only if the pattern repeats.
+      → 2026-09-26: resolved itself. FSOL albums 3124 and 3127 now badge
+      exact and are not queue items (step 8 hardware report §2.5).
 - [x] **2026-09-22, STEP 8 CONSTRAINT, restated with a number:** after the
       first real pass the reference server has 329 `strict`/`candidate` rows,
       of which 305 are ownership `absent` — tagged albums the user does not
@@ -1291,7 +1293,11 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
+- [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
+      count of 0.** Recorded, not changed (decisions §15.17). Its fit key
+      (artist, title, 0) is shared by every all-remote copy of the album.
+      Revisit if a relink ever pairs the wrong one.
+- [x] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
       queue re-reads conflict tags on every list render, not when an entry is
       opened.** Plan §3.1 said "re-read … when opened" (§3a). `Queue.pm:562`
       re-reads up to `MAX_TAG_REREADS` (25, `:72`) conflict rows per render,
@@ -1300,27 +1306,38 @@ Each names its sites so the work is mechanical rather than a search.
       handful, so the cost is INFERRED small. Decide: accept as built (record
       it in the plan), or move the re-read behind a per-entry action. Revisit
       at hardware check 7, and time a page render there.
-- [ ] **2026-09-24: `MAX_TAG_REREADS = 25` is a judgement, not a
+      → 2026-09-26: MEASURED 19–137 ms per NAS file, up to ~7 s per render.
+      Reversed: re-read on demand, decisions §15.17 part 1, commit E1
+      db88c68.
+- [x] **2026-09-24: `MAX_TAG_REREADS = 25` is a judgement, not a
       measurement** (`Queue.pm:67-72`). Past it the page shows the reason
       without which tags disagree. Revisit only if a real library shows more
       than 25 conflicts.
-- [ ] **2026-09-24: "tags unreadable" is inferred, not detected.**
+      → 2026-09-26: superseded. The constant is removed with the per-render
+      re-read (§15.17 part 1, E1 db88c68).
+- [x] **2026-09-24: "tags unreadable" is inferred, not detected.**
       `Tags->readTrack` catches its own failure and returns `{}`
       (`Tags.pm:290-297`), so an unreadable file and a file with no tags look
       the same. The queue page infers unreadable from "no candidate gave up any
       tags at all". Honest, but unverified. Test on hardware with a conflict
       row whose files were then deleted (a variant of check 7).
-- [ ] **2026-09-24: link and relink walk the library a second time.**
+      → 2026-09-26: OBSERVED to work on hardware. With the files unreadable
+      the page said "tags no longer readable"; restoring permissions
+      restored the tag list.
+- [x] **2026-09-24: link and relink walk the library a second time.**
       `Queue::_albumFor` walks once per action, on top of the render's walk,
       so a link costs two walks. Plan D6 said one walk per render; an action is
       not a render. INFERRED fine (the whole pass, which does the same walk
       plus its writes, measured 39–50 ms on 764 albums). Time it at hardware
       check 4.
+      → 2026-09-26: MEASURED. A full walk is 26 ms over 764 albums; a link
+      POST including both walks, 66–70 ms. Fine.
 - [ ] **2026-09-24: an album that vanished since the page rendered is
       reported only after the user presses.** A link or relink on an
       `album_key` no longer in the library answers "that album is no longer
       there" and writes nothing. Correct and fail-safe; recorded as a UX note,
       not a defect.
+      → 2026-09-26: not triggered on hardware. Stays open as a UX note.
 - [ ] **2026-09-24: clear & rebuild (decisions §10) is decided and has never
       been built, and no step owns it.** It was item 9 of the stale step-4
       Structural plan, and dropped out when the build order was renumbered.
@@ -1671,6 +1688,25 @@ Each names its sites so the work is mechanical rather than a search.
       these can be checked without a real server, a real library and a real
       Discogs collection. Run them in order; 0 must be run BEFORE upgrading.
       0. **Before upgrading**, read-only against copies of `squeezewax.db` and
+      → 2026-09-26, on 0.0.0.9 (`850ed09`): checks 0, 1, 2, 3, 4, 5, 7 and 8
+      PASS. Check 2's figures matched exactly: ambiguous 5, artist-disagree 2,
+      gated 0, orphans 3 (manual 888888 included); 507 → 510 rows, the 3 being
+      reason-only. Check 3: the page's keys and the database's reason rows were
+      identical sets (10). Check 4: 4 requests, 2.72 s, all fields rendered,
+      next sync `exact`. Check 5: 3 rows removed, nothing else changed. Check
+      7: the conflicted copy stayed `candidate` / `version` beside an `exact`
+      control. That is §15.16 part 4 observed. Check 0(a) found 0 fresh
+      conflicts. **Check 6 could not pass as written**: the orphan relink was
+      unreachable after a scan (decisions §15.17 part 2). Re-run check 6 after
+      E2, as: copy one untagged album folder twice, rescan, delete the
+      original, rescan; the orphan list offers both copies; relink onto one;
+      it has one match row and no no-match row. Also time a queue render
+      with one NAS conflict (expect no file I/O) and one "Show tags" press.
+      After the first sync on the new build, also record which of the four
+      "Greatest Hits" items left the queue and why (§15.17 part 5: badged
+      `version`, or not owned), and confirm "Gling-Gló / Björk" renders
+      correctly with no comment text at the top of the page.
+      Tick this item when that passes.
          `library.db`, and record the three figures:
          (a) fresh conflicts —
          `SELECT album_key, lms_album_id, match_tier, state, ownership,

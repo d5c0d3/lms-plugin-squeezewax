@@ -517,3 +517,12 @@ release id as `https://www.discogs.com/release/{id}`.
    `conflict`; sync → no promotion, badge only via the title route; fix the
    tags; scan → reason cleared.
 8. **Scanning:** every queue action refused mid-scan.
+
+## §7. After the hardware checks (2026-09-26)
+
+Decisions §15.17. The conflict tag re-read is on demand (§3.1's "when opened"
+restored); an orphan may be moved onto a current album whose rows are all
+regenerable; the zero-fit message distinguishes "none fits" from "fits, but
+identified"; the rejection pause shows on the queue page; the title route
+narrows by artist before calling a title ambiguous; four page fixes. Check 6 is
+re-specified in `TODO.md`'s step 8 hardware item.

@@ -4229,3 +4229,57 @@ not chosen by the user and are open.
   documentation, not from a run on a 3.22 build.
 - **Incumbent conflicts written before migration 4 cannot be found.** Nothing
   recorded them. They surface when their files next change.
+
+### 15.17 Step 8 hardware findings: tags on demand, relink targets, a visible pause, artist before ambiguity
+
+**Decided 2026-09-26 (design chat)**, on the step 8 hardware report
+(reference server, 0.0.0.9). Checks 0–5, 7 and 8 passed. Check 6 exposed part 2.
+
+1. **Conflict tags are re-read only when the user asks, one entry at a time.**
+   The build re-read them on every list render, bounded at 25 rows. That was a
+   deviation from the plan, recorded with its cost marked inferred small.
+   Measured on the reference server's CIFS-mounted library: 19–137 ms per
+   file, so up to about 7 s of synchronous I/O per page view. The list now
+   reads no files, and a "Show tags" action reads at most two. The bound is
+   removed with the behaviour it bounded. The plan's original "when opened" was
+   right.
+2. **An orphan may be moved onto a current album whose rows are all
+   regenerable** — a no-match row, and/or an ownership-only or reason-only
+   row, or none — and the relink deletes those rows first. An album with its
+   own identification is not a target: its tags already rebuild its match
+   (§15.5), so the orphan is rejected instead. Without this the page could
+   never offer a relink after a scan, because the scan that creates the
+   situation gives every album a row (report §2.2). §2a invariant 1 holds: the
+   no-match row goes before the match row lands. Deleting a no-match row is
+   within §2a invariant 3, since that table is regenerable.
+3. **The page never says "no album fits" when one does.** It distinguishes "no
+   album fits" from "albums fit, but their own tags already identify them".
+4. **The rejection pause is shown on the queue page as well as in Settings.**
+   §15.15 part 2 pauses scan-triggered syncs while Discogs rejects the token.
+   New albums then stay unbadged indefinitely, and the only signal was the
+   settings page's last error. Observed on the reference server, where a
+   leftover wrong token 401'd every sync.
+
+5. **The title route narrows by artist before calling a title ambiguous.**
+   §13.10.3 badges on "exactly one collection entry agreeing on both title and
+   artist". The pass counted title matches first, so owning two records with
+   a title put every LMS album of that title in the queue, whoever it was by.
+   On the reference server that was four "Greatest Hits" by four different
+   artists. §13.10.3's single measured ambiguous case was two pressings by one
+   artist, which is why the difference never showed. Now: two or more
+   candidates agreeing on artist is ambiguous; exactly one badges; none
+   agreeing with a single title candidate is "artist disagrees" (queue, as
+   before, the spelling case); none agreeing among several title candidates is
+   not owned, with no queue item, unless the LMS artist is absent. The Various
+   gate (§15.14) is unchanged.
+6. **Queue page fixes from the first look at it:** a template comment that
+   leaked onto the page; non-ASCII titles and artists shown undecoded; a hint
+   under the list that read like a stale status message; and the review
+   queue's description covering the orphan list as well. Display only.
+
+#### Recorded, not changed
+
+- **A manual link on an all-remote album snapshots a track count of 0**, and
+  a NULL `source_timestamp`. Correct for the data: all-remote albums are the
+  pass's, not the importer's (§15.11). But the fit key becomes (artist, title,
+  0), which every all-remote copy of that album shares. Low risk.
