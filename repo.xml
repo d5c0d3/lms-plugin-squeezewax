@@ -4,14 +4,14 @@
 		<title lang="EN">d5c0d3 plug-in repository</title>
 	</details>
 	<plugins>
-		<plugin name="SqueezeWax" version="0.0.0.9" minTarget="8.4" maxTarget="*">
+		<plugin name="SqueezeWax" version="0.0.0.10" minTarget="8.4" maxTarget="*">
 			<title lang="EN">SqueezeWax</title>
 			<desc lang="EN">Links your physical record collection to your LMS library.</desc>
 			<creator>d5c0d3</creator>
 			<category>musicservices</category>
-			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/dist/SqueezeWax_0_0_0_9.zip</url>
+			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/dist/SqueezeWax_0_0_0_10.zip</url>
 			<link>https://github.com/d5c0d3/lms-plugin-squeezewax/issues</link>
-			<sha>af799ec982c219056c7497a92dcba4362e3136f5</sha>
+			<sha>173a2e7ecaf1074e98990751eda175ce29ae0da0</sha>
 		</plugin>
 	</plugins>
 </extensions>
