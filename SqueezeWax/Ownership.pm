@@ -399,18 +399,10 @@ sub _decide {
 
 	my @ids = keys %$candidates;
 
-	if ( @ids > 1 ) {
-		# §13.10.3's ambiguous direction: two different owned releases share
-		# this title and nothing here can choose between them. Step 7 stores no
-		# marker for it (§15.13 part 4); the count is what tells step 8 how big
-		# its queue will be before it is built.
-		$count->{ambiguous}++;
-
-		return ( 'absent', $state, 'ambiguous' );
-	}
-
-	my $artists = $candidates->{ $ids[0] };
-	my $artist  = defined $artistBytes ? _decode($artistBytes) : undef;
+	# The artist is decoded ONCE, before the loop: it is a property of the LMS
+	# album, not of any candidate, and an undecodable one is a fact about our
+	# reading rather than about the collection (D2).
+	my $artist = defined $artistBytes ? _decode($artistBytes) : undef;
 
 	if ( defined $artistBytes && !defined $artist ) {
 		$count->{undecodable}++;
@@ -418,25 +410,76 @@ sub _decide {
 		return ( 'absent', $state, 'undecodable' );
 	}
 
-	my $verdict = _artistsAgree( $artist, $artists, $variousString );
+	# §13.10.3 badges on "exactly one collection entry agreeing on BOTH title
+	# and artist". Until §15.17 part 5 this counted TITLE matches first and
+	# called any tie ambiguous before the artist was ever consulted - so owning
+	# two records that happen to share a title put every LMS album of that title
+	# into the queue, whoever it was by. On the reference server that was four
+	# "Greatest Hits", by The Cure, Falco, Leonard Cohen and Red Hot Chili
+	# Peppers, none of them genuinely ambiguous.
+	#
+	# It never showed in the measurement because §13.10.3's single ambiguous
+	# case was two PRESSINGS of one record by one artist, where title-first and
+	# artist-first give the same answer.
+	#
+	# So the verdict is taken per candidate release, and the counting is done on
+	# artists.
+	my %verdict;
 
-	if ( $verdict eq 'agree' ) {
+	for my $id (@ids) {
+		my $v = _artistsAgree( $artist, $candidates->{$id}, $variousString );
+
+		push @{ $verdict{$v} }, $id;
+	}
+
+	my $agreeing = scalar @{ $verdict{agree} || [] };
+
+	# Two or more entries agree on artist as well as title. THIS is §13.10.3's
+	# ambiguity - two pressings of one record - and nothing here can choose.
+	if ( $agreeing > 1 ) {
+		$count->{ambiguous}++;
+
+		return ( 'absent', $state, 'ambiguous' );
+	}
+
+	# Exactly one agrees on both. The badge case, unchanged.
+	if ( $agreeing == 1 ) {
 		return ( 'version', $state, undef );
 	}
 
-	if ( $verdict eq 'various' ) {
-		# The compilation gate (§15.13 part 8, widened by §15.14). Both sides
-		# name a various-artists compilation, however each spells it, so the
-		# artists agreeing carries almost no evidence that this is the record
-		# the user owns. No badge until the pages 2-3 measurement reports.
+	# The compilation gate (§15.13 part 8, widened by §15.14). Both sides name a
+	# various-artists compilation, however each spells it, so the artists
+	# agreeing carries almost no evidence that this is the record the user owns.
+	if ( @{ $verdict{various} || [] } ) {
 		$count->{gated}++;
 
 		return ( 'absent', $state, 'various' );
 	}
 
-	$count->{ $verdict eq 'disagree' ? 'artist_disagree' : 'artist_absent' }++;
+	# Nothing agrees and nothing is a compilation. With ONE title candidate the
+	# disagreement is worth reviewing: it is the artist-spelled-differently
+	# case, which is what put FSOL in the queue at §13.10.4's L2 rung.
+	if ( @ids == 1 ) {
+		my ($only) = grep { @{ $verdict{$_} || [] } } qw(disagree lms-absent discogs-absent);
 
-	return ( 'absent', $state, $verdict );
+		$count->{ $only eq 'disagree' ? 'artist_disagree' : 'artist_absent' }++;
+
+		return ( 'absent', $state, $only );
+	}
+
+	# Several title candidates, none by this artist. An LMS album with no artist
+	# cannot be narrowed by one, so it still goes to the queue.
+	if ( @{ $verdict{'lms-absent'} || [] } ) {
+		$count->{artist_absent}++;
+
+		return ( 'absent', $state, 'lms-absent' );
+	}
+
+	# Several records share this title and none is by this artist: the title is
+	# generic - "Greatest Hits" - and a disagreeing artist carries no signal at
+	# all. Not owned, and NOT a queue item: there is nothing here for a user to
+	# decide (§15.17 part 5).
+	return ( 'absent', $state, undef );
 }
 
 # _decide's bucket vocabulary, mapped onto the six values discogs_match's CHECK

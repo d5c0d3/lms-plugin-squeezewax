@@ -452,6 +452,24 @@ $K{lapsing}    = album( 13, 'Was Owned',         'Someone' );
 $K{va_equal}   = album( 14, 'Another Compilation', $VA );
 $K{va_literal} = album( 15, 'Third Compilation',   'Various' );
 
+# §15.17 part 5's cases: the title route narrows by ARTIST before calling a
+# title ambiguous. h_ambig above is the genuine ambiguity - two pressings of
+# one record by one artist - and the collection below gives both entries that
+# artist. These four are the cases that distinguish the new rule from the old.
+#
+# one_agrees: two entries share the title, only one is by this artist. The old
+# rule called this ambiguous on the title alone; it is a badge.
+$K{one_agrees} = album( 30, 'Split Decision', 'Right Artist' );
+
+# generic: three entries share the title, none by this artist. "Greatest Hits"
+# on the reference server, four times over by four different artists. Not owned
+# and NOT a queue item - there is nothing for a user to decide.
+$K{generic}    = album( 31, 'Greatest Hits', 'Nobody Special' );
+
+# no_artist: the same shape, but the LMS album has no artist at all, so nothing
+# can narrow it. Still a queue item.
+$K{no_artist}  = album( 32, 'Greatest Hits', undef );
+
 # Step 8's cases.
 #
 # incumbent: the row TODO 2026-09-19 described and no fixture covered. Strict,
@@ -485,8 +503,20 @@ my @collection = (
 	entry( 1004, 444, 0,     'Masterless Zero',   'Depeche Mode' ),
 	entry( 1005, 555, undef, 'Masterless Undef',  'Depeche Mode' ),
 	entry( 1006, 666, 9006, 'Isolar',            'Amorph' ),
-	entry( 1007, 777, 9007, 'Ciao Monkey',       'Band One' ),
-	entry( 1008, 888, 9008, 'Ciao Monkey',       'Band Two' ),
+	# §13.10.3's measured ambiguity: two PRESSINGS of one record, one artist.
+	# Both entries are by the album's own artist, which is what makes it a real
+	# ambiguity rather than a shared title (§15.17 part 5).
+	entry( 1007, 777, 9007, 'Ciao Monkey',       'Someone' ),
+	entry( 1008, 888, 9008, 'Ciao Monkey',       'Someone' ),
+
+	# Two share 'Split Decision'; exactly one is by 'Right Artist'.
+	entry( 1012, 1212, 9212, 'Split Decision',   'Right Artist' ),
+	entry( 1013, 1313, 9313, 'Split Decision',   'Someone Else' ),
+
+	# Three share 'Greatest Hits', none by 'Nobody Special'.
+	entry( 1014, 1414, 9414, 'Greatest Hits',    'The Cure' ),
+	entry( 1015, 1515, 9515, 'Greatest Hits',    'Falco' ),
+	entry( 1016, 1616, 9616, 'Greatest Hits',    'Leonard Cohen' ),
 	entry( 1009, 999, 9009, 'A Compilation',      'Various' ),
 	entry( 1010, 1110, 9110, 'Another Compilation', 'Various Artists' ),
 	entry( 1011, 1111, 9111, 'Third Compilation',   'Various' ),
@@ -794,6 +824,9 @@ is_deeply(
 		$K{h_agree}, $K{remote},
 		# review reasons - step 8's new rows
 		$K{h_ambig}, $K{h_various}, $K{va_equal}, $K{va_literal}, $K{h_disagree},
+		# §15.17 part 5: one badges, one has no artist to narrow by. The
+		# generic-title album gets NO row at all and is asserted below.
+		$K{one_agrees}, $K{no_artist},
 		# orphans, which are never swept
 		$ORPHAN_MANUAL, $ORPHAN_STRICT, $ORPHAN_CONFLICT, $ORPHAN_NOSNAP,
 	],
@@ -804,6 +837,32 @@ is_deeply(
 # broke: §14.8's boundary, and the lapsed reason.
 ok( !rowFor( $K{h_none} ), '  ...h_none is not among them (§14.8 still bites)' );
 ok( !rowFor( $K{lapsed} ), '  ...nor the row whose reason lapsed' );
+ok( !rowFor( $K{generic} ),
+	'  ...nor a generic title owned by other artists (§15.17 part 5)' );
+
+# --- §15.17 part 5: the title route narrows by artist --------------------
+#
+# The old rule counted TITLE matches and called any tie ambiguous before the
+# artist was consulted. On the reference server that put four "Greatest Hits",
+# by four different artists, into the queue. §13.10.3's measured ambiguous case
+# was two pressings by ONE artist, which is why title-first and artist-first
+# gave the same answer there and the difference never showed.
+is( rowFor( $K{h_ambig} )->{review_reason}, 'ambiguous',
+	'two entries agreeing on title AND artist is still ambiguous (§13.10.3)' );
+
+is( rowFor( $K{one_agrees} )->{ownership}, 'version',
+	'two entries share a title, one is by this artist -> it badges' );
+is( rowFor( $K{one_agrees} )->{review_reason}, undef,
+	'  ...and it is not a queue item' );
+
+ok( !rowFor( $K{generic} ),
+	'three entries share a title, none by this artist -> not owned, no row' );
+
+is( rowFor( $K{no_artist} )->{review_reason}, 'artist-absent',
+	'  ...but with no LMS artist to narrow by, it still reaches the queue' );
+
+is( rowFor( $K{h_disagree} )->{review_reason}, 'artist-disagree',
+	'a SINGLE entry whose artist disagrees is unchanged - the spelling case' );
 
 # --- what the pass must never write ----------------------------------------
 my $untouched = rowFor( $K{d_strict} );

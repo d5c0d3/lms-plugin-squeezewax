@@ -540,9 +540,13 @@ $K{quiet} = album( 3, 'Nothing Owned', 'Nobody' );
 # The relink target: a key miss, standing where an orphan's snapshot points.
 $K{target} = album( 4, 'Isolar', 'Amorph', tracks => 2 );
 
+# Both 'Ciao Monkey' entries are by the album's OWN artist. Since §15.17 part 5
+# the title route narrows by artist before calling a title ambiguous, so two
+# entries by DIFFERENT artists would be a generic shared title and no queue item
+# at all - which is not the fixture this suite needs.
 my @COLLECTION = (
-	[ 2001, 1001, 9001, 'Ciao Monkey', 'Band One' ],
-	[ 2002, 1002, 9002, 'Ciao Monkey', 'Band Two' ],
+	[ 2001, 1001, 9001, 'Ciao Monkey', 'Someone' ],
+	[ 2002, 1002, 9002, 'Ciao Monkey', 'Someone' ],
 	[ 2003, 1003, 9003, 'Something Else', 'Third Band' ],
 );
 
@@ -606,7 +610,7 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 	# R6's fixed field set, flattened by the sync and rendered by the page.
 	my ($first) = @{ $params->{choices}{matching} };
 	is( $first->{title},   'Ciao Monkey', 'a choice carries its title' );
-	is( $first->{artists}, 'Band One',    '  ...its artists' );
+	is( $first->{artists}, 'Someone',     '  ...its artists' );
 	is( $first->{year},    1990,          '  ...its year' );
 	is( $first->{formats}, 'Vinyl, LP',   '  ...its format' );
 	is( $first->{labels},  'A Label (CAT-1001)', '  ...and its label with catalogue number' );
