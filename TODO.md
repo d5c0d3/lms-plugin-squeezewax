@@ -1291,6 +1291,36 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
+      queue re-reads conflict tags on every list render, not when an entry is
+      opened.** Plan §3.1 said "re-read … when opened" (§3a). `Queue.pm:562`
+      re-reads up to `MAX_TAG_REREADS` (25, `:72`) conflict rows per render,
+      synchronously in the server: up to 50 file reads per page view on a
+      library with many conflicts. On a maintained collection conflicts are a
+      handful, so the cost is INFERRED small. Decide: accept as built (record
+      it in the plan), or move the re-read behind a per-entry action. Revisit
+      at hardware check 7, and time a page render there.
+- [ ] **2026-09-24: `MAX_TAG_REREADS = 25` is a judgement, not a
+      measurement** (`Queue.pm:67-72`). Past it the page shows the reason
+      without which tags disagree. Revisit only if a real library shows more
+      than 25 conflicts.
+- [ ] **2026-09-24: "tags unreadable" is inferred, not detected.**
+      `Tags->readTrack` catches its own failure and returns `{}`
+      (`Tags.pm:290-297`), so an unreadable file and a file with no tags look
+      the same. The queue page infers unreadable from "no candidate gave up any
+      tags at all". Honest, but unverified. Test on hardware with a conflict
+      row whose files were then deleted (a variant of check 7).
+- [ ] **2026-09-24: link and relink walk the library a second time.**
+      `Queue::_albumFor` walks once per action, on top of the render's walk,
+      so a link costs two walks. Plan D6 said one walk per render; an action is
+      not a render. INFERRED fine (the whole pass, which does the same walk
+      plus its writes, measured 39–50 ms on 764 albums). Time it at hardware
+      check 4.
+- [ ] **2026-09-24: an album that vanished since the page rendered is
+      reported only after the user presses.** A link or relink on an
+      `album_key` no longer in the library answers "that album is no longer
+      there" and writes nothing. Correct and fail-safe; recorded as a UX note,
+      not a defect.
 - [ ] **2026-09-24: clear & rebuild (decisions §10) is decided and has never
       been built, and no step owns it.** It was item 9 of the stale step-4
       Structural plan, and dropped out when the build order was renumbered.
