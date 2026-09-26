@@ -504,6 +504,20 @@ sub beforeRender {
 	$params->{dbReady} = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
 	$params->{dbError} = Plugins::SqueezeWax::Schema->lastError;
 
+	# §15.17 part 4. While Discogs is rejecting the token, §15.15 part 2 skips
+	# scan-triggered syncs - so a newly scanned album is identified but never
+	# badged, and the queue silently stops growing, for as long as the token
+	# stays wrong. The only signal was the settings page's last-error line,
+	# which is a different page from the one showing the consequences.
+	#
+	# Observed on the reference server 2026-09-26: a wrong token left over from
+	# earlier testing 401'd every sync, and nothing on this page said so.
+	#
+	# Required lazily, as _rematch does - Async.pm drags in SimpleAsyncHTTP and
+	# Timers for a page that may never trigger a sync.
+	require Plugins::SqueezeWax::API::Async;
+	$params->{tokenPaused} = Plugins::SqueezeWax::API::Async->tokenRejected ? 1 : 0;
+
 	return unless $params->{dbReady};
 
 	my $rows = Slim::Schema->dbh->selectall_arrayref( $QUEUE_SQL, { Slice => {} } ) || [];

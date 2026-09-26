@@ -173,6 +173,9 @@ PLUGIN_SQUEEZEWAX_QUEUE
 PLUGIN_SQUEEZEWAX_QUEUE_DESC
 	EN	Albums SqueezeWax could not decide about on its own, and matches whose album has gone.
 
+PLUGIN_SQUEEZEWAX_QUEUE_TOKEN_PAUSED
+	EN	Discogs rejected the access token, so automatic collection syncs are paused. New albums will not be badged until you fix the token in Settings or press "Sync collection now".
+
 PLUGIN_SQUEEZEWAX_QUEUE_OPEN
 	EN	Open the review queue
 

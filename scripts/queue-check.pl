@@ -873,6 +873,43 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 }
 
 # ===========================================================================
+# 7a. The rejection pause is visible on the queue page (§15.17 part 4)
+#
+# Driven through the REAL Async state, set by a real 401 through the honest
+# transport - not a stubbed flag. That join is the point: §15.15 part 2 sets
+# the pause inside _finish, and this page has to read the same state the
+# scan-triggered sync consults. A stubbed boolean would prove the template
+# works and nothing about whether the two halves agree.
+# ===========================================================================
+{
+	# Clean state first, so the notice's absence means something.
+	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	press( rematch => 1, album_key => $K{conflict} );
+
+	my $before = press();
+	ok( !$before->{tokenPaused}, 'no pause notice after a successful sync' );
+
+    # A real 401, through the transport that routes non-2xx to the error
+    # callback, which is what sets the flag at Async's single exit.
+	@RESPONSES = ( { code => 401, headers => healthy_headers(), content => '{}' } );
+	press( rematch => 1, album_key => $K{conflict} );
+
+	ok( Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a real 401 sets the rejection pause in Async (§15.15 part 2)' );
+
+	my $paused = press();
+	ok( $paused->{tokenPaused},
+		'  ...and the queue page shows the pause notice (§15.17 part 4)' );
+
+	# It clears the way the settings page clears it: a sync that works.
+	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	press( rematch => 1, album_key => $K{conflict} );
+
+	my $after = press();
+	ok( !$after->{tokenPaused}, '  ...and it clears once a sync succeeds again' );
+}
+
+# ===========================================================================
 # 8a. Which albums an orphan may be moved onto (§15.17 part 2 and 3)
 #
 # Report §2.2's matrix, driven through the real page. The old rule - "a key
