@@ -311,6 +311,9 @@ PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_MOVE_TO
 PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT
 	EN	No album in your library has the same artist, title and track count, so this can only be removed.
 
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED
+	EN	These albums have the same artist, title and track count, but their own tags already identify them, so this match is not needed there. Remove it:
+
 PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON
 	EN	Move it here
 

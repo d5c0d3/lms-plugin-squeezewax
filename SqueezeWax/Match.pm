@@ -449,8 +449,13 @@ Never an INSERT, and never a DELETE of the row being relinked. An
 INSERT-plus-DELETE would be the same result by a route that can lose the row if
 it fails between the two, on the one table that is not regenerable (§2a).
 
-It does delete one OTHER row first: a regenerable row standing on the target
-C<album_key>. Since step 7 the ownership pass writes a row for an album it has
+It does delete two OTHER rows first, both on the TARGET key and both
+regenerable: a C<discogs_match> row carrying no decision, and a strict
+C<discogs_no_match> row (§15.17 part 2). The first is a primary-key collision,
+the second an §2a invariant 1 violation; both would otherwise land on the
+scanner with nobody to tell.
+
+On the first of those: Since step 7 the ownership pass writes a row for an album it has
 a conclusion or a review reason about and nothing else - NULL tier, NULL release
 id, NULL snapshot - and C<album_key> is the primary key, so such a row on the
 target makes the UPDATE below fail with a constraint violation, in the scanner,
@@ -503,6 +508,26 @@ sub relinkOrphan {
 			     AND match_tier IS NULL
 			     AND discogs_release_id IS NULL
 			     AND snapshot_track_count IS NULL},
+			undef, $newKey
+		);
+
+		# And the target's strict no-match row, for the same reason one clause
+		# further out (§15.17 part 2). §2a invariant 1 forbids an album holding
+		# a match row and a no-match row at once, so this has to go before the
+		# UPDATE lands the match row - not after, and not instead.
+		#
+		# Deleting it costs nothing that cannot be rebuilt: discogs_no_match is
+		# regenerable in full (its own migration comment says so), and the worst
+		# case is one album re-read at the next scan. That is what puts it
+		# inside §2a invariant 3 rather than against it.
+		#
+		# The SCANNER never reaches this: _prePass excludes no-match albums from
+		# its key misses, so it offers no such target and its behaviour is
+		# unchanged. This clause exists for the queue page, which decides after
+		# the scan, when every current album already has a row of some kind.
+		$dbh->do(
+			q{DELETE FROM squeezewax.discogs_no_match
+			   WHERE album_key = ? AND tier = 'strict'},
 			undef, $newKey
 		);
 

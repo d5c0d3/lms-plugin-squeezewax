@@ -855,6 +855,33 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'a blocker carrying a pass reason does not stop the relink either (R13)' );
 	is( row($new)->{snapshot_artist}, 'Miles Davis', "  ...the orphan's snapshot is what remains" );
 
+	# --- §15.17 part 2: a strict no-match row on the target -----------------
+	#
+	# The queue page decides AFTER a scan, by which time an untagged album has
+	# been examined and carries a no-match row. Without this delete the UPDATE
+	# would land a match row beside it and break §2a invariant 1; with it, the
+	# relink the page offers actually works.
+	$seedOrphan->();
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+		 VALUES (?, 'strict', 900, 1)", undef, $new
+	);
+	ok( noMatchRow($new), 'the target carries a strict no-match row' );
+
+	is( $M->relinkOrphan( $old, $new, 42 ), 1,
+		'a relink onto an album carrying a no-match row succeeds (§15.17 part 2)' );
+	is( noMatchRow($new), undef, '  ...and the no-match row is gone (invariant 1)' );
+	is( row($new)->{discogs_release_id}, 4242, '  ...with the orphan\'s match row on the key' );
+
+	my ($onTarget) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $new );
+	is( $onTarget, 1, '  ...exactly one match row there' );
+
+	# strictState is what the importer reads; it must see the match, not a
+	# contradiction.
+	is( $M->strictState($new)->{src}, 'match',
+		'  ...and strictState sees a match row, not a no-match row' );
+
 	# And what the pre-delete must NOT reach: a real identification standing on
 	# the target key fails all three clauses, so the relink fails loudly rather
 	# than overwriting someone else's decision.

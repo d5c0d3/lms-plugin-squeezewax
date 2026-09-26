@@ -192,6 +192,15 @@
 										"PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON" | string %]</button>
 								</div>
 							[% END %]
+						[% ELSIF o.identified.size %]
+							[%# Albums DO fit; their own tags identify them, so the
+							    match is not needed there. Saying "nothing fits"
+							    here would be untrue (§15.17 part 3). %]
+							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED" | string %]</div>
+							[% FOREACH c = o.identified %]
+								<div>[% c.title | html %]
+									[% IF c.artist %] &mdash; [% c.artist | html %][% END %]</div>
+							[% END %]
 						[% ELSE %]
 							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT" | string %]</div>
 						[% END %]

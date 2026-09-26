@@ -873,6 +873,113 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 }
 
 # ===========================================================================
+# 8a. Which albums an orphan may be moved onto (§15.17 part 2 and 3)
+#
+# Report §2.2's matrix, driven through the real page. The old rule - "a key
+# miss, no row in EITHER table" - was right for the scanner and wrong here,
+# because the page renders AFTER the scan that gives every album a row. Cases
+# B, C and D are the ones that used to offer nothing.
+# ===========================================================================
+{
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	my $orphanKey = 'ab' x 16;
+
+	# Two current albums that both fit the orphan's snapshot exactly.
+	my $fitA = album( 20, 'Relink Target', 'Testband', tracks => 2 );
+	my $fitB = album( 21, 'Relink Target', 'Testband', tracks => 2 );
+
+	my $seedOrphan = sub {
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+		$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+		$dbh->do(
+			"INSERT INTO squeezewax.discogs_match
+			 (album_key, lms_album_id, discogs_release_id, match_tier, state, matched_at,
+			  source_timestamp, snapshot_album_title, snapshot_track_count, snapshot_artist,
+			  review_reason)
+			 VALUES (?, 99, 888888, 'manual', 'confirmed', 500, 900, 'Relink Target', 2, 'Testband', 'orphan')",
+			undef, $orphanKey );
+	};
+
+	my $offered = sub {
+		my $p = press();
+		my ($o) = grep { $_->{album_key} eq $orphanKey } @{ $p->{orphans} };
+		return ( $o, $p );
+	};
+
+	# --- A: two fresh copies, no rows at all -----------------------------
+	$seedOrphan->();
+	my ($oA) = $offered->();
+	is( scalar @{ $oA->{candidates} }, 2, 'A: two fresh copies are both offered' );
+	is( scalar @{ $oA->{identified} }, 0, '  ...and none is withheld as identified' );
+
+	# --- B: after a scan, both untagged -> strict no-match rows ----------
+	#
+	# THE case report §2.2 found. This offered nothing before.
+	$seedOrphan->();
+	$dbh->do("INSERT INTO squeezewax.discogs_no_match (album_key,tier,checked_at) VALUES (?,'strict',1)",
+		undef, $_ ) for $fitA, $fitB;
+	my ($oB) = $offered->();
+	is( scalar @{ $oB->{candidates} }, 2,
+		'B: untagged copies carrying no-match rows are offered (§15.17 part 2)' );
+
+	# --- C: after a scan, both tagged -> identification rows -------------
+	$seedOrphan->();
+	$dbh->do("INSERT INTO squeezewax.discogs_match (album_key,lms_album_id,discogs_release_id,match_tier,state)
+	          VALUES (?,?,4242,'strict','candidate')", undef, $_->[0], $_->[1] )
+		for [ $fitA, 20 ], [ $fitB, 21 ];
+	my ( $oC, $pC ) = $offered->();
+	is( scalar @{ $oC->{candidates} }, 0, 'C: albums that identify themselves are NOT targets' );
+	is( scalar @{ $oC->{identified} }, 2, '  ...but they are reported as fitting' );
+
+	# §15.17 part 3: the page must not claim nothing fits when something does.
+	my $html = $pC->{_html} // '';
+	ok( ( grep { $_ eq 'PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED' } @MISSING_STRINGS ) == 0,
+		'  ...and the identified-fit string exists' );
+
+	# --- D: a reason-only row (three NULLs) ------------------------------
+	$seedOrphan->();
+	$dbh->do("INSERT INTO squeezewax.discogs_match (album_key,lms_album_id,ownership,review_reason)
+	          VALUES (?,?,'absent','ambiguous')", undef, $_->[0], $_->[1] )
+		for [ $fitA, 20 ], [ $fitB, 21 ];
+	my ($oD) = $offered->();
+	is( scalar @{ $oD->{candidates} }, 2, 'D: reason-only rows are regenerable, so still targets' );
+
+	# --- no fit at all ----------------------------------------------------
+	$seedOrphan->();
+	$dbh->do( "UPDATE squeezewax.discogs_match SET snapshot_album_title='Nothing Fits This'" );
+	my ($oNone) = $offered->();
+	is( scalar @{ $oNone->{candidates} }, 0, 'an orphan fitting nothing offers no target' );
+	is( scalar @{ $oNone->{identified} }, 0, '  ...and reports no fitting-but-identified album either' );
+
+	# --- the relink from case B actually lands ---------------------------
+	$seedOrphan->();
+	$dbh->do("INSERT INTO squeezewax.discogs_no_match (album_key,tier,checked_at) VALUES (?,'strict',1)",
+		undef, $_ ) for $fitA, $fitB;
+
+	my $done = press( relink => 1, album_key => $orphanKey, target_key => $fitA );
+	like( $done->{actionResult}, qr/PLUGIN_SQUEEZEWAX_QUEUE_RELINKED/,
+		'a relink from case B succeeds end to end' );
+	like( $done->{actionResult}, qr/PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER/,
+		'  ...and still says the badge waits for the next sync' );
+
+	my $moved = rowFor($fitA);
+	is( $moved->{discogs_release_id}, 888888, '  ...the orphan landed on the target' );
+	is( $moved->{review_reason}, undef, "  ...with 'orphan' cleared" );
+
+	my ($nm) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_no_match WHERE album_key = ?', undef, $fitA );
+	is( $nm, 0, '  ...and no no-match row left on the key (invariant 1)' );
+
+	my ($cnt) = $dbh->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $fitA );
+	is( $cnt, 1, '  ...exactly one match row there' );
+
+	is( rowFor($orphanKey), undef, '  ...and nothing under the old key' );
+}
+
+# ===========================================================================
 # 9. The review list as the page renders it
 # ===========================================================================
 {

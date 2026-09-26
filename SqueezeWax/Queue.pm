@@ -658,33 +658,55 @@ sub _orphanList {
 
 	return [] unless @$rows;
 
-	# Which albums an orphan may be relinked to: the key misses, by §15.5's fit
-	# key. A key miss is an album with no row in EITHER table - one with a
-	# no-match row has been examined and produced nothing, and relinking onto it
-	# would put a match row and a no-match row on one album_key, breaking §2a's
-	# invariant 1. The same test _prePass makes, for the same reason.
+	# Which albums an orphan may be moved onto (§15.17 part 2).
+	#
+	# The rule used to be "a key miss - no row in EITHER table", copied from
+	# _prePass. That is right for the SCANNER, which decides during the scan,
+	# but wrong for this page, which renders afterwards: the same scan that
+	# orphans a row also examines every current album and gives each one a row -
+	# a match row if its tags identify it, a no-match row if they do not. So by
+	# render time nothing was ever eligible, and the page could not offer a
+	# relink at all. Report §2.2 proved it three ways offline and once by
+	# accident on hardware, where an album with the same artist, title AND track
+	# count was silently withheld.
+	#
+	# The rule that works is about what a row COSTS to lose, not whether one
+	# exists. An album is eligible when everything it carries is regenerable:
+	#   - a strict discogs_no_match row - regenerable in full, and relinkOrphan
+	#     deletes it so §2a invariant 1 holds when the match row lands;
+	#   - an ownership-only or reason-only discogs_match row - the three NULLs
+	#     of §15.16 part 9, which the next sync rebuilds;
+	#   - or no rows at all.
+	# An album carrying its own IDENTIFICATION is not eligible: its tags already
+	# rebuild its match (§15.5), so the orphan is not needed there and moving it
+	# would overwrite a decision.
+	#
+	# The ineligible fits are collected too, because the page has to tell those
+	# two cases apart: "nothing fits" and "things fit, but they identify
+	# themselves" are different facts about the library, and saying the first
+	# when the second is true is a lie (§15.17 part 3).
 	my $taken   = Plugins::SqueezeWax::Match->snapshotRows;
 	my $noMatch = Plugins::SqueezeWax::Match->noMatchKeys;
 
 	my %hasRow = map { $_->{album_key} => $_ } @$taken;
 
-	my %fits;
+	my ( %fits, %identified );
 
 	for my $key ( keys %$album ) {
-		# A NULL-tier row is the ownership pass's, not an identification, so it
-		# does not make the album taken - _prePass treats it as a key miss too,
-		# and relinkOrphan deletes it out of the way (§15.16 part 9).
-		my $row = $hasRow{$key};
-
-		next if $row && defined $row->{match_tier};
-		next if $noMatch->{$key};
-
 		my $a = $album->{$key};
 
 		my $fit = Plugins::SqueezeWax::Match::_fitKey(
 			$a->{artist}, $a->{title}, $a->{local_tracks} );
 
 		next unless defined $fit;
+
+		# An identification of its own. Not a target, but it DOES fit, and the
+		# message depends on knowing that.
+		if ( defined $hasRow{$key} && defined $hasRow{$key}{match_tier} ) {
+			push @{ $identified{$fit} }, $a;
+
+			next;
+		}
 
 		push @{ $fits{$fit} }, $a;
 	}
@@ -702,6 +724,7 @@ sub _orphanList {
 		# offering the user a choice between two is the whole point (§15.5 part
 		# 4, D4).
 		my @candidates = defined $fit ? @{ $fits{$fit} || [] } : ();
+		my @ineligible = defined $fit ? @{ $identified{$fit} || [] } : ();
 
 		push @out, {
 			album_key  => $row->{album_key},
@@ -718,6 +741,11 @@ sub _orphanList {
 			# because an arbitrary relink is a manual match by another name and
 			# would want the re-match flow rather than this list.
 			candidates => [ sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @candidates ],
+
+			# Albums that fit but identify themselves. Only ever shown when
+			# there are no eligible targets at all - otherwise the user is
+			# choosing, not being told why they cannot (§15.17 part 3).
+			identified => [ sort { ( $a->{title} || '' ) cmp( $b->{title} || '' ) } @ineligible ],
 		};
 	}
 
