@@ -4327,6 +4327,42 @@ not chosen by the user and are open.
   pass's, not the importer's (§15.11). But the fit key becomes (artist, title,
   0), which every all-remote copy of that album shares. Low risk.
 
+#### Observed on hardware, 2026-09-27 (0.0.0.10, reference server)
+
+Everything §15.17 decided is now observed, with two exceptions named below.
+
+- **Part 2 works, and it needed both deletes.** The relink removed the target's
+  regenerable match row *and* its strict `discogs_no_match` row, landed the
+  orphan's release id, cleared the `orphan` reason, and the next sync promoted
+  the result to `strict` / `confirmed` / `exact`. Before E2 the same situation
+  offered no target at all.
+- **Part 5's rule 6 is the one that fired, on all four cases.** None of the
+  four "Greatest Hits" albums badged `version`; all four were decided "not
+  owned, no reason, no queue", because each shared its title with several
+  collection entries and none of those entries agreed on artist. So the
+  measured §13.10.3 case (two pressings by one artist) and the measured
+  real-library case (one title, four artists) are genuinely different cases,
+  which is the whole point of part 5. `ambiguous` went 4 → 0 in one sync,
+  `updated=3 deleted=1`, and the diff was exactly those four rows.
+- **§15.16 part 9's amended invariant, observed in the delete direction.**
+  Three of the four kept their strict identification rows with the reason
+  cleared. The fourth (Red Hot Chili Peppers) held a reason-only row, so once
+  the reason lapsed the row asserted nothing and was deleted. That is the
+  invariant working, not a data loss: nothing regenerable was in it.
+- **Part 1 is observed as a non-cost.** A queue render takes 0.031–0.034 s
+  whether or not a conflict is present, so the list really does read no files;
+  "Show tags" on local files costs 0.033–0.037 s.
+- **R3's stickiness, incidentally confirmed.** When a conflicted copy's album
+  vanished, its row kept `review_reason = 'conflict'` rather than becoming
+  `orphan`: the pass does not overwrite a conflict mark.
+
+**Not exercised, and recorded as such in `TODO.md`:** part 4's rejection-pause
+notice, because no 401 occurred and forcing one would have meant breaking a
+working token; and the worst case of part 1, because a NAS-backed conflict
+cannot be created on that server. The NAS figure behind part 1's reasoning was
+re-measured at 58.6 ms min / 97.5 ms mean for two files, the same order as the
+19–137 ms that decided it.
+
 ### 15.18 The collection sync and the ownership pass move inside the scan
 
 **Decided 2026-09-26 (design chat)**, recorded 2026-09-27. **This reverses

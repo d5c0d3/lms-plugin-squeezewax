@@ -1698,32 +1698,13 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-24: build-order step 8's hardware checks (the review queue and
+- [x] **2026-09-24: build-order step 8's hardware checks (the review queue and
       manual re-match).** Plan `plans/build-order-step-8-review-queue.md` §6.
       Code complete at `6b02c95`; offline-verified (`check-all.sh` 1127
       assertions, of which `queue-check.pl` 91 are the new seam suite). None of
       these can be checked without a real server, a real library and a real
       Discogs collection. Run them in order; 0 must be run BEFORE upgrading.
       0. **Before upgrading**, read-only against copies of `squeezewax.db` and
-      → 2026-09-26, on 0.0.0.9 (`850ed09`): checks 0, 1, 2, 3, 4, 5, 7 and 8
-      PASS. Check 2's figures matched exactly: ambiguous 5, artist-disagree 2,
-      gated 0, orphans 3 (manual 888888 included); 507 → 510 rows, the 3 being
-      reason-only. Check 3: the page's keys and the database's reason rows were
-      identical sets (10). Check 4: 4 requests, 2.72 s, all fields rendered,
-      next sync `exact`. Check 5: 3 rows removed, nothing else changed. Check
-      7: the conflicted copy stayed `candidate` / `version` beside an `exact`
-      control. That is §15.16 part 4 observed. Check 0(a) found 0 fresh
-      conflicts. **Check 6 could not pass as written**: the orphan relink was
-      unreachable after a scan (decisions §15.17 part 2). Re-run check 6 after
-      E2, as: copy one untagged album folder twice, rescan, delete the
-      original, rescan; the orphan list offers both copies; relink onto one;
-      it has one match row and no no-match row. Also time a queue render
-      with one NAS conflict (expect no file I/O) and one "Show tags" press.
-      After the first sync on the new build, also record which of the four
-      "Greatest Hits" items left the queue and why (§15.17 part 5: badged
-      `version`, or not owned), and confirm "Gling-Gló / Björk" renders
-      correctly with no comment text at the top of the page.
-      Tick this item when that passes.
          `library.db`, and record the three figures:
          (a) fresh conflicts —
          `SELECT album_key, lms_album_id, match_tier, state, ownership,
@@ -1774,6 +1755,53 @@ Each names its sites so the work is mechanical rather than a search.
          `review_reason = 'conflict'`; sync → no promotion, and the badge only
          via the title route; fix the tags; scan → the reason is cleared.
       8. **Scanning:** every queue action refused mid-scan.
+      → 2026-09-26, on 0.0.0.9 (`850ed09`): checks 0, 1, 2, 3, 4, 5, 7 and 8
+      PASS. Check 2's figures matched exactly: ambiguous 5, artist-disagree 2,
+      gated 0, orphans 3 (manual 888888 included); 507 → 510 rows, the 3 being
+      reason-only. Check 3: the page's keys and the database's reason rows were
+      identical sets (10). Check 4: 4 requests, 2.72 s, all fields rendered,
+      next sync `exact`. Check 5: 3 rows removed, nothing else changed. Check 7:
+      the conflicted copy stayed `candidate` / `version` beside an `exact`
+      control — §15.16 part 4 observed. Check 0(a) found 0 fresh conflicts.
+      **Check 6 could not pass as written**: the orphan relink was unreachable
+      after a scan (decisions §15.17 part 2).
+      → 2026-09-27, re-run on 0.0.0.10 (`b6773ef`): **check 6 PASS**, and every
+      other check that E1–E5 touched. One tagged original plus two copies with
+      the release-id tag stripped scanned as `examined 3, identified 1, no tag
+      2`, no-match rows 100 → 102; deleting the original orphaned its row with
+      snapshot (Aphex Twin, Windowlicker, 3). The orphan list then offered
+      **both** untagged copies, where 0.0.0.9 offered none. The relink left the
+      target with one match row and **no** no-match row, cleared the `orphan`
+      reason, and the next sync promoted it to `strict` / `confirmed` / `exact`.
+      §2a invariant 1 held. Queue render is flat with and without a conflict
+      (0.031–0.034 s either way), which is E1 observed: the page reads no files.
+      "Show tags" on local files 0.033–0.037 s. All four "Greatest Hits" items
+      left the queue as **not owned**, not badged — §15.17 part 5's rule 6 on
+      real data (decisions §15.17, hardware addendum). "Gling-Gló / Björk"
+      renders correctly and no template comment leaks. Check 8 re-run with the
+      fifth action: all five refused mid-scan, database byte-identical.
+      Two things could not be exercised and have items of their own below: a
+      NAS-backed conflict, and the rejection-pause notice.
+
+- [ ] **2026-09-27: the rejection-pause notice on the queue page has never
+      been seen on hardware.** Decisions §15.17 part 4, commit `7be7323`.
+      The 2026-09-27 re-run could not exercise it: no 401 occurred, and
+      breaking a working token to force one was rightly declined. It is
+      covered offline against real `API::Async` state
+      (`queue-check.pl`), which is the stronger test of the *logic* — but
+      nobody has yet seen the notice render. Fold it into the next hardware
+      round that has a reason to change the token.
+
+- [ ] **2026-09-27: a NAS-backed conflict cannot be created on the reference
+      server, so the worst-case "Show tags" is still inferred.** The NAS mount
+      is read-only, and `squeezewax.db` is mode 644 owned by
+      `squeezeboxserver` while the checks run as `denny`, so neither a real
+      conflicting tag nor a synthetic conflict row can be written for a NAS
+      album. Measured instead: two NAS files read in 58.6 ms min / 97.5 ms
+      mean, against a 33 ms render — so a NAS "Show tags" is inferred at
+      roughly 95–135 ms, paid once on request rather than on every render
+      (§15.17 part 1). To settle it, a future round needs write access as
+      `squeezeboxserver`, or a writable copy of one album on a slow mount.
 
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan

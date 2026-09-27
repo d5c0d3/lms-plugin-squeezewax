@@ -526,3 +526,11 @@ regenerable; the zero-fit message distinguishes "none fits" from "fits, but
 identified"; the rejection pause shows on the queue page; the title route
 narrows by artist before calling a title ambiguous; four page fixes. Check 6 is
 re-specified in `TODO.md`'s step 8 hardware item.
+
+## §8. Hardware result (2026-09-27)
+
+All of §6's checks pass on 0.0.0.10, including check 6 as re-specified after
+E2. Details in `TODO.md`'s step 8 hardware item and, for what the checks
+established rather than merely confirmed, in decisions §15.17's hardware
+addendum. Two things could not be exercised on that server and are open items:
+the rejection-pause notice, and a NAS-backed conflict.
