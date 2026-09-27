@@ -4733,3 +4733,195 @@ the plan did not make, and one interpretation of a rule it did.
   whether anything changed (`Slim/Music/Import.pm:404-406`).
 - **The seam suite is spread across C1–C3** rather than added whole in C3, because
   each commit is required to test its own branches.
+
+#### Observed on hardware, 2026-09-27 (0.0.0.11, reference server)
+
+Eleven checks, nine run. `plans/build-order-step-8b-sync-in-scan.md` §9 has the
+figures; what follows is what the run *settled*, and the three places it
+corrected this record.
+
+**Part 1's claim holds.** A scan that picked up a new album finished with the
+badge already correct — read at the instant `rescan ?` first returned 0, the row
+was `confirmed` / `exact`, and the marker was already written. No sixty-second
+wait. The log shows both importers' Starting/Completed pairs, the sync's summary
+line, two `['rescan','done']` notifications, and **one** `_syncTick` sixty seconds
+later skipping with its reason. Reproduced on every scan of the run.
+
+**The fetch sees a collection that changed.** Run by the owner by hand, the half
+the server could not do for itself: adding a record on the Discogs site made the
+next scan report **204** items, and removing it again made the one after report
+**203**. Both directions, both visible the moment the scan finished.
+
+**Part 3 holds exactly.** With a deliberately broken token, the scan-time sync
+failed at the identity request, logged one error line in the scanner log, and
+left the settings page and the queue page **byte-identical** to their captures
+from before the break. The fallback then failed the same way sixty seconds later
+and recorded its own error, as it always did. A user watching either page would
+not have known the scan-time sync had failed.
+
+**Parts 7 and 8 hold.** Migration 5 ran 4 → 5 in one step with every
+`discogs_match` row byte-identical; `$prefs->migrate(3)` retired both prefs; the
+absent marker row renders as "Last synced: Never"; a scan writes `source = 'scan'`
+and the button turns the same row into `'server'`. An aborted scan wrote **no**
+marker, and the next scan's pass rewrote all 765 albums.
+
+**Part 16 holds.** `rescan playlists` issued no Discogs request at all;
+`rescan onlinelibrary` issued one sync, and the pass covers the 186 albums with
+no local track — §13.10.1 and §15.11 observed on real data.
+
+**Step 8's open item is closed.** The rejection-pause notice (§15.17 part 4)
+renders on the queue page when the fallback's 401 sets the pause, and the page
+returns byte-identical to its baseline when the token is restored.
+
+##### Three corrections to this record
+
+1. **Part 2's amendment understates how many installs reach our importer.**
+   `Slim/Control/Commands.pm:2719-2728` forces an external scan when **any**
+   registered importer whose class matches `/(?:Plugin|Slim::Music::Virtual
+   Libraries)/` has `use` set — not FullTextSearch specifically. On the reference
+   server `Plugins::Spotty::Importer` forces it, and a plain rescan with FTS
+   disabled still ran both our importers. So the amendment's direction was right
+   and its size was wrong: almost any enabled plugin with a server-side importer
+   is enough, and the FTS-off install it worried about is rarer than it implied.
+   What has **not** changed, and was re-verified: **SqueezeWax registers no
+   importer in the server.** `Plugin.pm` and `Settings.pm` never mention
+   `Importer` or `ScanSync`, and `Slim/Utils/PluginManager.pm:196-207` loads
+   import modules only in the scanner's pass. We depend on another plugin to
+   force the external scan; we do not force one ourselves, and §0.1 ruling 12
+   still refuses to.
+2. **Part 12's progress row does not show what it was chosen to show.** While it
+   runs, the row reads "0 of 0" for about three seconds, in both the default skin
+   and Material; it then completes at 768 of 768 (1 identity + 3 pages + 764
+   albums) and reads correctly. **The cause is not the five-second throttle**, as
+   first reported: `Slim/Utils/Progress.pm:154-160`'s `total` writes to the table
+   immediately and unthrottled. It is the scanner's uncommitted transaction —
+   under WAL another connection cannot see our writes until a commit, which is
+   the same problem `Importer.pm:165`'s comment already documents for this row.
+   **Inferred from reading, not observed.** Decided 2026-09-27: **no code
+   change.** A `forceCommit` after the total is set would make it read "n of 768"
+   instead of "0 of 0" and still be nearly static, because the work is 2.5–3.3 s
+   and the done counter is throttled to five. So the design chat's reason for
+   choosing one row over both halves — that the 2.72 s fetch should be visible —
+   **did not survive contact with the hardware**, and is recorded as wrong rather
+   than quietly dropped. The row keeps its place for the reason that did survive:
+   it is the only abort point during the fetch, and check 8 aborted through it in
+   0.43 s. Dropping it (the survey's Q5(b)) would leave a fetch bounded at 120 s
+   with no way to interrupt it.
+3. **The rejection pause has two exits, and they do not cover the same case.**
+   §15.15 part 2 says the pause lifts "until the token changes or a manual sync
+   succeeds". Both are kept, and which covers what is now known:
+   `Plugin.pm:67-72` clears the pause on any `discogsToken` change, and
+   `Settings.pm:251-260` saves the pref **before** running a sync, so whichever
+   button restores a token clears the pause first. `API/Async.pm:605-607`'s
+   clear-on-success can therefore only ever lift a pause that was set while the
+   token stayed the same — that is, after a **transient 401 from Discogs**.
+   Reachable in principle, not provokable on demand, and **unobserved**. Recorded
+   rather than claimed as tested.
+
+##### A named cost this run exposed
+
+**HTTPS from the scanner is platform-dependent, and its absence is quiet.** It
+works here, but `IO::Socket::SSL` and `Net::SSLeay` come from the **Debian system
+perl**, not from LMS's `CPAN/`, which bundles them for darwin only;
+`LWP::Protocol::https` is the one of the three LMS supplies. On a platform whose
+system perl lacks them, `Slim/Networking/SimpleSyncHTTP.pm:22-41`'s `hasSSL`
+merely **warns**, so the scan-time sync would fail on every scan with nothing but
+a warning in the scanner log, and the fallback would silently do all the work.
+Not a defect of this step — it is LMS's behaviour — but it is the one condition
+under which 8b does nothing and says almost nothing. Recorded in `TODO.md` as an
+open question: whether `ScanSync` should check `hasSSL` itself and log at error.
+
+### 15.19 Two findings from the title-route checks: rule 3 works, and node F cannot fire
+
+**Found 2026-09-28** on the reference server (0.0.0.11), from two checks aimed at
+§15.17 part 5. Neither is caused by step 8b; the first confirms a rule, the second
+exposes a defect that has been present since the master arm was written.
+
+#### Rule 3 is observed on real data, for the first time
+
+§15.17 part 5 gave the title route five outcomes. Until now hardware had seen only
+rule 6 — several title candidates, none by this artist, not owned — which is what
+the four "Greatest Hits" albums took. Rule 3, "exactly one collection entry agrees
+on both title and artist, so badge `version`", is the rule that produces a badge,
+and it had never run outside the offline suite.
+
+Method: a copy of an album on local disk, the NAS original left untouched as the
+control, one variable changed. The copy reproduced the queue's `artist-disagree`
+item first (the baseline), then its `albumartist` alone was changed from `Björk`
+to the release's credited `Björk Guðmundsdóttir`. The next scan moved it to
+`ownership = version`, cleared its `review_reason`, and left the queue; `version`
+went 50 → 51 and `artist-disagree` 3 → 2. It was **`version` and not `exact`**,
+because the tagged release is still not in the collection — so the decision came
+from the title route, not from node D. `state` stayed `candidate`: the title route
+never promotes. The control did not move through any of the three scans.
+
+**The normalisation is not implicated.** The two keys are `björk` and
+`björk guðmundsdóttir` — a shorter name, not a spelling difference — so no rung of
+§13.10.4's ladder would or should merge them. §13.10.3 stands.
+
+#### Node F cannot fire, and it is mislabelling albums the user owns
+
+**Verified**, by reading: `discogs_master_id` is written in exactly two places,
+`Match.pm:663` and `:910`, and both take it from a `DISCOGS_MASTER_ID`-family
+**tag** (`Tags.pm:49-57`). Nothing anywhere resolves a release id to its master;
+`API.pm:393` keeps `master_id` only for **collection** entries, which is the
+index's other side. So node F (`Ownership.pm:377-381`) compares a column that is
+NULL on all but 2 of 506 rows on the reference library. **Node F has never fired
+there, and all 50 `version` badges came from the title route.**
+
+The demonstrated case is *Gling-Gló*: the owner's collection holds release 28711,
+the ripped files are tagged release 1990647, and **both are master 1884**. Design
+§3 node F exists precisely for this — owning one pressing and ripping another —
+and the correct answer is `version` with a badge. What the plugin produced instead
+was `ownership = absent`, no badge, and a review-queue item asking the user to
+adjudicate a question their own collection already answers. That is a **false
+not-owned**, and it is the mirror of the failure `TODO.md` 2026-09-12 names.
+
+Two things worth keeping from how it was found. The album needed **either** of two
+routes to work: node F via the master, or the title route via the artist. Both
+failed, for unrelated reasons, and retagging repaired only the second — which is
+why rule 3 was finally observed on an album that should never have been in the
+queue at all. And `TODO.md` 2026-09-07 already asserted that the master arm is
+"required, not a fallback"; it has simply never had data to be required by.
+
+#### Decided 2026-09-28: measure before designing
+
+The scale is **unmeasured**. One case is confirmed; how many of the 305
+`candidate` / `absent` rows are the same story is unknown, and a fix designed
+without that number is a mechanism built for a guess. So: a one-off measurement
+first, run as a script by the owner, looking up the master of each identified
+album whose release the collection does not hold and counting how many share a
+master with something owned. `TODO.md` carries it.
+
+What the fix is **not** allowed to be, when it comes: it cannot live inside the
+scan-time sync, which §15.18 part 10 bounds at 120 s, because the one-off pass
+over this library alone is roughly 481 requests, or eight minutes at Discogs'
+documented 60 a minute. It wants a throttled, resumable, server-side backfill,
+cached in `discogs_release_cache` — a table that exists, holds 0 rows, and was
+put in the schema for something like this. It is a step of its own, and its
+decision record must answer §13.8 directly rather than around it: §13.8 rejected
+a per-album lookup **per sync**, and this would be one lookup per release, once,
+cached. That is a different trade, but it is close enough in shape that the
+difference has to be argued rather than assumed.
+
+#### Recorded, not decided: `anv`
+
+The collection carries an `anv` — the artist name as credited on that release — in
+`basic_information.artists[]`, which we already fetch and discard at
+`API.pm:393-395`. It is non-empty on **11 of 203** entries in the owner's
+collection, and nine of those are abbreviations or article drops: `The Orb` →
+`Orb`, `The Future Sound Of London` → `FSOL`, `Aphex Twin` → `AFX`,
+`Oliver Lieb` → `O. Lieb`. Keeping it would cost **no requests at all**.
+
+It would **not** have helped *Gling-Gló*: `anv` is the empty string on both the
+owned entry and the tagged release. What matches there is
+`aliases = ['Björk']` on artist 517951, which costs one `/artists/{id}` per
+artist — the expensive branch, not the free one. The same artist carries **48**
+`namevariations`, all misspellings and transliterations, which is a caution in
+itself: an alias is a distinct Discogs entity, a name variation is not, and
+matching on the latter would widen the badge rule a long way.
+
+So `anv` and aliases are **two separate decisions**, and this album argues only
+for the second. Both are recorded in `TODO.md` and neither is taken here. Note
+also that this run proved rule 3 for a *longer* name and abbreviated nothing, so
+the family `anv` would serve is still untested.

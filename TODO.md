@@ -1298,6 +1298,93 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-28, MEASUREMENT BEFORE DESIGN: how many albums does node F's gap
+      mislabel?** Decisions §15.19. `discogs_master_id` comes only from a tag, so
+      node F has never fired and at least one album the owner demonstrably owns a
+      pressing of is reported `absent` with a queue item. Before any fix is
+      designed, measure: for each `discogs_match` row with a release id the
+      collection does not hold, look up that release's master and count how many
+      share a master with an owned entry. ~305 requests on the reference library,
+      one-off, read-only, run as a script by the owner (the session's credential
+      guard refuses collection reads; `tmp/17-check-a-fetch.py` is the working
+      shape). The same lookups are the data a backfill would cache, so nothing is
+      wasted either way. **The fix is a step of its own** and cannot sit inside
+      the scan-time sync (§15.18 part 10 bounds it at 120 s; ~481 requests is
+      about eight minutes at 60/minute). `discogs_release_cache` exists and holds
+      0 rows.
+
+- [ ] **2026-09-28: keep `anv`?** Decisions §15.19. The collection already
+      carries the artist name as credited per release, in
+      `basic_information.artists[]`, and we discard it at `API.pm:393-395`. It is
+      non-empty on 11 of 203 entries on the reference collection, nine of them
+      abbreviations or article drops (`The Orb` → `Orb`,
+      `The Future Sound Of London` → `FSOL`). Costs no requests. It is an
+      ownership-rule change (§13.10.3 territory) and the family it would serve is
+      **untested**: the 2026-09-28 run proved rule 3 for a longer name and
+      abbreviated nothing.
+
+- [ ] **2026-09-28: match on Discogs aliases?** Decisions §15.19. Separate from
+      `anv` and much more expensive: one `/artists/{id}` per artist. It is what
+      would have matched *Gling-Gló* — `aliases = ['Björk']` on artist 517951 —
+      and the owner's file is tagged with Discogs' own alias. Caution: the same
+      artist carries 48 `namevariations`, all misspellings; an alias is a
+      distinct entity and a name variation is not, so any rule must take the
+      former and refuse the latter. Decide only after the node F measurement,
+      since fixing the master arm removes this album from the queue without
+      touching artist matching at all.
+
+- [ ] **2026-09-28: §15.14's compilation gate has no testable album.** The
+      queue's second item, *Blood Sugar Sex Magik*, cannot be exercised by
+      retagging: all 19 of its tracks are `spotify:track:…` URLs, so there are no
+      tags and no files to copy. Its reason is `artist-disagree` and **not** the
+      gate — LMS has it as `compilation = 1` with contributor `Various Artists`,
+      but the gate needs the **Discogs** side to be various too
+      (`Ownership.pm:200-204`) and the collection credits it to the band. Any
+      future check of the gate on real data needs a different album.
+
+- [ ] **2026-09-28, FOR THE NEXT HARDWARE ROUND: two environment facts that cost
+      a session time.** There is no system `sqlite3` and no system `DBD::SQLite`
+      on the reference server; the `sqlite3` on `PATH` is under
+      `/home/denny/android/platform-tools` and `sudo`'s `secure_path` cannot see
+      it. The route that works is
+      `sudo -u squeezeboxserver python3 -c "import sqlite3; …"` — as that user
+      rather than root, because the server holds the file open in WAL and root
+      would leave `-wal`/`-shm` unwritable by it. Separately, a Claude Code
+      session's credential guard refuses the Discogs token, the username, and
+      even the account-scoped collection URL unauthenticated, so any check
+      needing a collection read must ship as a script for the owner to run.
+
+- [ ] **2026-09-27: five things the reference server cannot provoke.** All from
+      the step 8b hardware run; none is blocked on a decision, and none should be
+      marked passed.
+      (a) **The timeout** (plan §7 check 7). No passwordless `sudo`, so no
+      firewall rule and no `/etc/hosts` entry for `api.discogs.com`. `webproxy`
+      is not a route: it is read by `Async/HTTP.pm` and friends but **not** by
+      `SimpleSyncHTTP`/`LWP::UserAgent`, which would need `env_proxy` and does
+      not call it. So the 15 s inactivity bound against the 120 s whole-sync
+      budget is unobserved.
+      (b) **The reach case** (plan §7 check 10). With FullTextSearch disabled the
+      scan still forked the external scanner, because Spotty's importer forces it
+      too. Reaching it would mean disabling the owner's Spotty.
+      (c) **An abort inside the pass** rather than the fetch. The pass runs in
+      41–46 ms and its abort point is a throttled `update`, so there is no window
+      to aim at from outside the process. The pass's rollback is covered only by
+      `scan-sync-check.pl`.
+      (d) **A badge appearing on a newly arrived remote album.** Needs the
+      streaming library itself to gain an album on demand.
+      (e) **The pause clearing on a successful sync** rather than on a token
+      change. Probably reachable only after a transient 401 — decisions §15.18's
+      hardware addendum, correction 3.
+
+- [ ] **2026-09-27: should `ScanSync` check `hasSSL` itself?** On a platform
+      whose system perl lacks `IO::Socket::SSL` and `Net::SSLeay`, LMS's
+      `Slim/Networking/SimpleSyncHTTP.pm:22-41` only **warns**, so every
+      scan-time sync would fail with nothing but a warning in the scanner log
+      while the fallback quietly did all the work. The reference server gets both
+      modules from Debian's system perl, not from LMS's `CPAN/`, which bundles
+      them for darwin only. Cheap options: log at error once when `hasSSL` is
+      false, or skip the scan-time path outright and say so. Neither is built.
+
 - [ ] **2026-09-27: the skip window can span two scans, on servers with
       auto-rescan enabled.** Decisions §15.18's as-built note. The auto-rescan
       is in-process (`Slim/Utils/AutoRescan.pm:126`, `:205` →
@@ -1843,7 +1930,7 @@ Each names its sites so the work is mechanical rather than a search.
       Two things could not be exercised and have items of their own below: a
       NAS-backed conflict, and the rejection-pause notice.
 
-- [ ] **2026-09-27: the rejection-pause notice on the queue page has never
+- [x] **2026-09-27: the rejection-pause notice on the queue page has never
       been seen on hardware.** Decisions §15.17 part 4, commit `7be7323`.
       The 2026-09-27 re-run could not exercise it: no 401 occurred, and
       breaking a working token to force one was rightly declined. It is
@@ -1851,6 +1938,12 @@ Each names its sites so the work is mechanical rather than a search.
       (`queue-check.pl`), which is the stronger test of the *logic* — but
       nobody has yet seen the notice render. Fold it into the next hardware
       round that has a reason to change the token.
+      → 2026-09-27: SEEN. With the token deliberately broken, the fallback's 401
+      set the pause and the queue page gained exactly one line — the notice —
+      with nothing else changed; after the token was restored the page was
+      byte-identical to its pre-break baseline. Decisions §15.18's hardware
+      addendum records which of the pause's two exits did the clearing, and why
+      the other one is still unobserved.
 
 - [ ] **2026-09-27: a NAS-backed conflict cannot be created on the reference
       server, so the worst-case "Show tags" is still inferred.** The NAS mount
@@ -1863,7 +1956,7 @@ Each names its sites so the work is mechanical rather than a search.
       (§15.17 part 1). To settle it, a future round needs write access as
       `squeezeboxserver`, or a writable copy of one album on a slow mount.
 
-- [ ] **2026-09-27: build-order step 8b's hardware checks (the sync and the
+- [x] **2026-09-27: build-order step 8b's hardware checks (the sync and the
       ownership pass inside the scan).** Plan
       `plans/build-order-step-8b-sync-in-scan.md` §7, eleven checks. Check 5 is
       the one that can stop the step working at all: no HTTPS request has ever
@@ -1873,6 +1966,22 @@ Each names its sites so the work is mechanical rather than a search.
       how the scan UI and the Material skin render a progress row whose total is
       0 and is set later. Run check 2 first — it is §15.18 part 1's whole claim,
       that the badges are right the moment the scan finishes.
+      → 2026-09-27, on 0.0.0.11 (`9b397c2`): checks 0, 1, 2, 3, 4, 5, 6, 8, 9
+      and 11 **PASS**; 7 and 10 could not be provoked (see the grouped item
+      below). Check 5, the stop condition, passed: the scanner's perl resolves
+      `IO::Socket::SSL` 2.085 and `Net::SSLeay` 1.94 from the Debian system
+      perl, `hasSSL` is true, and a live `GET https://api.discogs.com/` returned
+      200 in 0.690 s — then eight real scanner fetches over the run. Check 2:
+      the badge was already `confirmed`/`exact` at the instant the scan reported
+      finished, with the marker written, and the fallback skipped sixty seconds
+      later; its other half was closed by the owner on 2026-09-28, adding a
+      record to the collection (203 → **204**) and removing it again (→ **203**),
+      each visible as the scan finished. Check 4: the row reads "0 of 0" while
+      running and completes at 768 of 768; no skin breaks (decisions §15.18's
+      hardware addendum, correction 2). Check 6: the scan-time failure left both
+      pages byte-identical, and the rejection-pause notice rendered and cleared.
+      Timings: fetch 2.49–3.30 s, pass 41–46 ms over 764–765 albums, four
+      requests per sync, the whole ownership importer 3–12 % of a scan.
 
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan
@@ -2708,6 +2817,10 @@ Each names its sites so the work is mechanical rather than a search.
       `d5c0d3.github.io/...` `<url>` instead of a raw one, and give
       `SqueezeWax/install.xml`'s `<version>` its first real value instead of
       the placeholder `0.1.0`. See `docs/dev-repo-workflow.md` §2.
+      Also bump the extension repo URL's `?v=` cache-buster, which still reads
+      `?v=0.0.0.8` on the reference server. GitHub happened to serve 0.0.0.11
+      through it anyway, so it did not bite — but it is now stale and will not
+      bust anything next time. Cheapest at the next package build.
 
 ## Deferred by decision — not forgotten
 

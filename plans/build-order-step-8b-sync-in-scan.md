@@ -605,3 +605,22 @@ and `API/Async.pm` and `Settings.pm` still had comments naming the removed
 interval timer. All corrected.
 
 §7's checks are open and need 0.0.0.11 installed from the pushed `repo.xml`.
+
+## §9. Hardware result (2026-09-27, 0.0.0.11)
+
+Nine of eleven checks pass; 7 (timeout) and 10 (reach) could not be provoked on
+this server, and both are in `TODO.md` rather than marked passed. Check 2's other
+half — a collection that actually changed — was closed by the owner on
+2026-09-28: 203 → 204 → 203 across two rescans. Details and the figures are in
+`TODO.md`'s step 8b hardware item; what the run *settled*, and the three places it
+corrected the record, are in decisions §15.18's hardware addendum.
+
+Timings, against §7 check 11's baselines of 2.72 s and 40–48 ms: fetch
+2.49–3.30 s, pass 41–46 ms over 764–765 albums, four requests per sync, the whole
+ownership importer 2.7–3.4 s, or 3–12 % of a scan. A sync that fails on a
+rejected token costs 0.35–0.50 s, because it aborts at the identity request — a
+scan whose sync fails is not measurably slower than one with no sync at all.
+
+Two further checks on 2026-09-28, aimed at §15.17 part 5 rather than at this
+plan, observed rule 3 on real data and found that node F cannot fire at all.
+Decisions §15.19.
