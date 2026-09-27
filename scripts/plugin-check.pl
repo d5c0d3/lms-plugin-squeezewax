@@ -50,6 +50,11 @@ BEGIN {
 	);
 }
 
+# A controllable clock for the skip rule's window. Installed before Plugin.pm
+# is compiled, so its time() calls resolve here; undef means the real clock.
+our $NOW;
+BEGIN { *CORE::GLOBAL::time = sub () { defined $main::NOW ? $main::NOW : CORE::time() } }
+
 our @TIMERS;      # every setTimer call
 our @KILLS;       # every killTimers call
 our @SUBSCRIBED;  # every Slim::Control::Request::subscribe call
@@ -194,9 +199,14 @@ our @LOG;
 
 our %VALIDATED;
 
+# The marker (decisions §15.18 part 7) is the one database read Plugin.pm
+# makes, and only for the skip rule. Driven from $main::MARKER.
+our $MARKER;
+
 {
 	package Plugins::SqueezeWax::Schema;
 	sub init { 1 }
+	sub syncState { $main::MARKER }
 }
 BEGIN { $INC{'Plugins/SqueezeWax/Schema.pm'} = 1 }
 
@@ -253,6 +263,9 @@ sub reset_state {
 	$SCANNING = 0;
 	$REJECTED = 0;
 	$SKIP_FIRST = 1;
+	$MARKER   = undef;
+	$NOW      = undef;
+	@LOG      = ();
 }
 
 # ---------------------------------------------------------------------------
@@ -569,6 +582,168 @@ diag('changing the token clears what described the old one');
 	is( scalar @CLEARED, 0, '  ...so it does not clear a live rejection' );
 	is( $PREFS{discogsLastSyncError}, 'unauthorized',
 		'  ...nor the error that explains it' );
+}
+
+# ---------------------------------------------------------------------------
+# The skip rule (decisions §15.18 part 8)
+# ---------------------------------------------------------------------------
+#
+# The fallback skips only for a 'scan' marker written between the previous
+# scan's rescan-done and this one's. Every other case syncs: the rule errs
+# toward syncing. The window is driven through the real _initSync and
+# _rescanDone, and the marker is placed relative to the times they recorded, so
+# the assertions do not depend on the wall clock moving; $NOW drives it.
+
+diag('§15.18 part 8: the fallback skips only when this scan synced');
+
+# Open a window: init at 1000, one rescan-done at 1100. Returns both times.
+sub open_window {
+	$NOW = 1000;
+	Plugins::SqueezeWax::Plugin::_initSync();
+
+	$NOW = 1100;
+	Plugins::SqueezeWax::Plugin::_rescanDone();
+
+	return ( 1000, 1100 );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	my ( $init, $done ) = open_window();
+	$MARKER = { last_synced => $done, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 0, "a 'scan' marker inside the window skips the fallback" );
+	ok( ( grep { /scan already synced.*marker at $done/ } @LOG ),
+		'  ...and logs why, with the marker\'s time' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	my ( $init, $done ) = open_window();
+	$MARKER = { last_synced => $done, items => 203, source => 'server' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1,
+		"a 'server' marker inside the window does NOT skip - a manual sync saw the library before this scan" );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	open_window();
+	$MARKER = undef;
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1, 'no marker does not skip' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	my ( $init, $done ) = open_window();
+
+	# Written at init or before: a marker from a previous run of this server,
+	# whose rescan-done this process never saw.
+	$MARKER = { last_synced => $init - 1, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1, 'a marker from before initPlugin does not skip' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	my ( $init, $done ) = open_window();
+
+	# After this rescan-done: not written during the scan that just finished.
+	$MARKER = { last_synced => $done + 30, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1, "a 'scan' marker after the window does not skip" );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	# Two scans. The first one's marker lies in the FIRST window; the second
+	# scan did not sync (its importer did not run), so its tick must sync.
+	my ( $init, $first ) = open_window();
+	Plugins::SqueezeWax::Plugin::_syncTick();    # closes the first window
+	@SYNCS = ();
+
+	$NOW = 1300;
+	Plugins::SqueezeWax::Plugin::_rescanDone();
+
+	$MARKER = { last_synced => $first, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 1,
+		"a 'scan' marker from the PREVIOUS scan's window does not skip this one" );
+}
+
+# A scan can notify two or three times (observed 2026-09-22: three in 2.7 s). A
+# duplicate must not move the window's lower bound, or the marker written
+# during the scan - before the first notification - falls outside it.
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+
+	my ( $init, $first ) = open_window();
+
+	# The marker was written during the scan, before the first notification.
+	$MARKER = { last_synced => $first - 40, items => 203, source => 'scan' };
+
+	$NOW = $first + 2;
+	Plugins::SqueezeWax::Plugin::_rescanDone();    # the duplicate
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 0,
+		'a duplicate rescan-done moves only the upper bound, so the skip still holds' );
+}
+
+# Order: after the token check, before the rejection pause.
+{
+	reset_state();
+	delete $PREFS{discogsToken};
+
+	my ( $init, $done ) = open_window();
+	$MARKER = { last_synced => $done, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	ok( ( grep { /no Discogs token/ } @LOG ) && !( grep { /scan already synced/ } @LOG ),
+		'with no token the tick stops at the token check, before the marker is consulted' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 1;
+
+	my ( $init, $done ) = open_window();
+	$MARKER = { last_synced => $done, items => 203, source => 'scan' };
+
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SKIPS, 0,
+		'a healthy scan-time sync skips before the rejection pause is consulted' );
+	is( scalar @SYNCS, 0, '  ...and starts no sync' );
 }
 
 done_testing();

@@ -97,18 +97,27 @@ $prefs->init({
 	discogsTestExcludeReleases => '',
 });
 
-# The interval field is user-editable, so it needs a floor: a typo of 60 would
-# poll hourly, and 0 or a non-integer would make the timer arithmetic nonsense.
-# 3600 is the low bound rather than something smaller because nothing about a
-# record collection changes faster than that, and the Discogs budget is shared
-# with every other thing the plugin will eventually do. intlimit is core's own
-# validator (Slim/Utils/Prefs/Namespace.pm:114-135, the same call shape
-# Slim/Utils/Prefs.pm:317-322 uses for httpport and bufferSecs); an out-of-range
-# value is refused and the previous one kept.
 # Long enough to absorb a duplicate ['rescan','done'] and let LMS settle after a
 # scan, short enough that a user who rescans to pick up a new record does not
 # wait noticeably for the badge. Not a measured figure.
 use constant DEBOUNCE_AFTER_RESCAN => 60;
+
+# The skip rule's window (decisions §15.18 part 8): when the last scan finished,
+# and when the one before it did. _syncTick skips the fallback only for a 'scan'
+# marker written between the two - "a sync happened during the scan that just
+# finished". Server process only, and in memory: the scanner is another process
+# and learns nothing from these, which is why the marker is a table row.
+#
+# $windowOpen is what makes "the previous rescan-done" mean the previous SCAN
+# rather than the previous notification. A scan can notify two or three times
+# (see _rescanDone), and a duplicate arriving 2 s after the first would
+# otherwise shrink the window to those 2 s and miss a marker written during the
+# scan - so a notification that arrives while a tick is still armed moves only
+# the upper bound, exactly as it restarts the debounce rather than stacking a
+# second sync. The tick closes the window when it runs.
+my $lastRescanDone;
+my $prevRescanDone;
+my $windowOpen = 0;
 
 sub initPlugin {
 	my $class = shift;
@@ -137,14 +146,28 @@ sub initPlugin {
 # with a user attached; this one is here because it has to run on a headless
 # server, which never loads Settings.pm (decisions §15.12 part 3).
 #
-# Nothing here decides whether to sync. API/Async.pm's guard does, so a rescan
-# finishing while a manual sync is already running costs one sync, not two.
+# Since step 8b this trigger is the FALLBACK (decisions §15.18 part 5). The
+# sync and the pass normally run inside the scan, from ScanSync; this path
+# covers the scans our importer did not run - an in-process rescan, a
+# `rescan album`, the auto-rescan - and a scan-time sync that failed.
+#
+# Nothing here decides whether to sync. _syncTick's checks do - the scan having
+# already synced among them (§15.18 part 8) - and API/Async.pm's guard makes a
+# rescan finishing while a manual sync is already running cost one sync, not
+# two.
 #
 # NO TIMER IS ARMED HERE. There is no startup sync and no interval (§15.15 part
 # 1): a fresh install syncs for the first time at the first finished scan, or
 # when the user presses the button. That is a recorded consequence, not an
 # oversight - see TODO.md, 2026-09-22.
 sub _initSync {
+	# Before the first rescan-done of this server's life the window's lower
+	# bound is now, which refuses to skip on a marker left by a previous run
+	# (§15.18 part 8): that scan's rescan-done was never seen here.
+	$lastRescanDone = time();
+	$prevRescanDone = $lastRescanDone;
+	$windowOpen     = 0;
+
 	# Keyed by the stringified coderef (refs/slimserver/Slim/Control/Request.pm:
 	# 788-809, %listeners), so subscribing the same named sub twice replaces its
 	# own entry rather than adding a second. A re-initPlugin cannot double this
@@ -167,9 +190,16 @@ sub _initSync {
 #
 # The wait also exists for its own sake: a sync immediately after a scan would
 # contend with LMS still settling, and nothing about the answer is urgent.
+#
+# It also records the skip rule's window - see $windowOpen above for why a
+# duplicate notification moves only the upper bound.
 sub _rescanDone {
+	$prevRescanDone = $lastRescanDone unless $windowOpen;
+	$lastRescanDone = time();
+	$windowOpen     = 1;
+
 	main::INFOLOG && $log->is_info
-		&& $log->info('library scan finished; scheduling a collection sync');
+		&& $log->info('library scan finished; scheduling a fallback collection sync');
 
 	_scheduleSync(DEBOUNCE_AFTER_RESCAN);
 
@@ -195,12 +225,16 @@ sub _scheduleSync {
 	return;
 }
 
-# The debounced tick. Reached only from _rescanDone (§15.15 part 1 removed the
-# interval re-arm that used to stand at the top of this sub), so every path out
-# of here simply returns: there is nothing to re-arm, and the retry for anything
-# that fails is the next finished scan or the button (§14.2 as §15.15 sharpens
-# it).
+# The debounced tick - the fallback's (§15.18 part 5). Reached only from
+# _rescanDone (§15.15 part 1 removed the interval re-arm that used to stand at
+# the top of this sub), so every path out of here simply returns: there is
+# nothing to re-arm, and the retry for anything that fails is the next finished
+# scan or the button (§14.2 as §15.15 sharpens it).
 sub _syncTick {
+	# The window closes whatever this tick decides. The next rescan-done opens a
+	# new one starting where this one ended.
+	$windowOpen = 0;
+
 	my $token = $prefs->get('discogsToken');
 
 	if ( !defined $token || $token eq '' ) {
@@ -210,10 +244,47 @@ sub _syncTick {
 		return;
 	}
 
+	# The scan already synced (decisions §15.18 part 8). Exact, not a time
+	# window after the fact: the scan-time sync runs at importer weight 130 and
+	# is followed by the artwork importers, the precache and optimizeDB
+	# (Slim/Music/Import.pm:462-484), an unbounded tail, so "the marker is less
+	# than N seconds old" would be a guess that fails on exactly the large
+	# libraries that need it. Instead: a marker written BETWEEN the previous
+	# scan's end and this one's is one written during this scan.
+	#
+	# `source` is load-bearing. A manual sync pressed during the scan, or between
+	# scans, also lands inside that window - and it derived ownership for the
+	# library as it was BEFORE this scan wrote its albums, so it must not
+	# suppress the fallback. Only a 'scan' marker does.
+	#
+	# Failure bias, chosen deliberately: a needless sync costs four requests and
+	# ~2.7 s; a wrong skip costs stale badges until the next scan. Every
+	# uncertain case - no marker, a server marker, a marker outside the window,
+	# a database that is not ready - falls through and syncs.
+	#
+	# After the token check, because with no token there is nothing to decide;
+	# before the rejection pause, because a healthy scan-time sync should not
+	# consult a pause that governs only this path (§15.18 part 4).
+	my $marker = Plugins::SqueezeWax::Schema->syncState;
+
+	if (   $marker
+		&& ( $marker->{source} || '' ) eq 'scan'
+		&& $marker->{last_synced} > $prevRescanDone
+		&& $marker->{last_synced} <= $lastRescanDone )
+	{
+		main::INFOLOG && $log->is_info
+			&& $log->info( 'the scan already synced the collection (marker at '
+				. $marker->{last_synced} . '); skipping the fallback sync' );
+
+		return;
+	}
+
 	# Paused, not deferred and not retried: Discogs has rejected this token, and
 	# nothing a scan does changes that (§15.15 part 2). Logged once, at info -
 	# the error that caused the pause was already logged at error, and repeating
 	# it at every scan would bury it. The button is the remedy and always runs.
+	# The pause is this fallback's alone; the scan-time sync has nowhere to keep
+	# one and retries at every scan (§15.18 part 4).
 	require Plugins::SqueezeWax::API::Async;
 
 	if ( Plugins::SqueezeWax::API::Async->tokenRejected ) {
