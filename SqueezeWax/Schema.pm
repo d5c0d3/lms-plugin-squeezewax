@@ -34,6 +34,7 @@ my @MIGRATIONS = (
 	\&_migration_2,
 	\&_migration_3,
 	\&_migration_4,
+	\&_migration_5,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -687,6 +688,44 @@ sub _migration_4 {
 
 	main::INFOLOG && $log->is_info
 		&& $log->info('added discogs_match.review_reason (NULL on every existing row)');
+
+	return 1;
+}
+
+# Migration 5: discogs_sync_state, the one "last synced" marker. Decisions
+# §15.18 part 7.
+#
+# One row or none. Both sync paths write it - the server's after its pass
+# commits, the scanner's inside the pass's own transaction - and
+# API::Async->status reads it for the settings page. It replaces the prefs
+# discogsLastSynced and discogsLastSyncItems, because the scanner cannot persist
+# a pref at all (Slim/Utils/Prefs/Namespace.pm:303): a page reading prefs would
+# show "last synced" going stale on a server where the scan-time sync works.
+#
+# No row is inserted. An absent row means "never synced", which is what the
+# retired discogsLastSynced => 0 default expressed. The single-row shape is the
+# database's to enforce, not the writers': CHECK (id = 0), and both writers use
+# INSERT OR REPLACE with id 0.
+#
+# source is load-bearing, not decoration: Plugin::_syncTick skips the fallback
+# only for a 'scan' marker written during the scan that just finished, and a
+# manual sync in the same window must not suppress it (§15.18 part 8). It is
+# recorded and not displayed.
+#
+# CREATE TABLE IF NOT EXISTS is re-runnable as it stands, which is migration
+# 1's form. _migration_4's pragma_table_info guard exists for ADD COLUMN and is
+# not needed here.
+sub _migration_5 {
+	my $dbh = shift;
+
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_sync_state (
+			id          INTEGER PRIMARY KEY CHECK (id = 0),
+			last_synced INTEGER NOT NULL,
+			items       INTEGER,
+			source      TEXT    NOT NULL CHECK (source IN ('server','scan'))
+		)
+	});
 
 	return 1;
 }

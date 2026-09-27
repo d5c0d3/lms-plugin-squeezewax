@@ -238,7 +238,7 @@ my %tables = map { $_->[0] => 1 } @{
 };
 
 for my $t (qw(discogs_match discogs_release_cache discogs_price_snapshot
-              discogs_no_match)) {
+              discogs_no_match discogs_sync_state)) {
 	ok( $tables{$t}, "table $t exists" );
 }
 
@@ -667,9 +667,9 @@ sub version_3_dbh {
 	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 	is( $beforeCount, 3, '  ...and holds three rows' );
 
-	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-3 file to 4' )
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-3 file to $target" )
 		or diag($@);
-	is( version_of($up), 4, '  ...and it reports version 4' );
+	is( version_of($up), $target, "  ...and it reports version $target" );
 
 	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
@@ -716,13 +716,89 @@ sub version_3_dbh {
 	ok( eval { $S->_migrate($up); 1 },
 		'_migrate re-runs over a completed ADD COLUMN with user_version forced back to 3' )
 		or diag($@);
-	is( version_of($up), 4, '  ...and reaches version 4' );
+	is( version_of($up), $target, "  ...and reaches version $target" );
+}
 
-	# A version-4 file must refuse a plugin that only knows three migrations.
+# --- migration 5: discogs_sync_state -----------------------------------------
+#
+# The marker of decisions §15.18 part 7. The interesting case is again a file
+# that holds rows: a real upgrade meets version 4 with a full discogs_match, and
+# migration 5 must create one table and touch nothing else.
+sub version_4_dbh {
+	my $h = version_3_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_4($h);
+	$h->do('PRAGMA squeezewax.user_version = 4');
+
+	return $h;
+}
+
+{
+	my $up = version_4_dbh();
+
+	is( version_of($up), 4, 'the version-4 fixture reports user_version 4' );
+
+	my ($absent) = $up->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.sqlite_master WHERE name = 'discogs_sync_state'}
+	);
+	is( $absent, 0, '  ...and has no discogs_sync_state yet' );
+
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-4 file to 5' )
+		or diag($@);
+	is( version_of($up), 5, '  ...and it reports version 5' );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'every discogs_match row is untouched by migration 5' );
+
+	my @columns = map { $_->{name} } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_sync_state'
+		)
+	};
+	is_deeply( \@columns, [qw(id last_synced items source)],
+		'discogs_sync_state has exactly id, last_synced, items, source' );
+
+	# No row is inserted: an absent row is "never synced" (§15.18 part 7).
+	my ($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 0, '  ...and holds no row - absent means never synced' );
+
+	my $put = sub {
+		my ( $id, $source ) = @_;
+		return eval {
+			$up->do( 'INSERT OR REPLACE INTO squeezewax.discogs_sync_state
+				(id, last_synced, items, source) VALUES (?, ?, ?, ?)',
+				undef, $id, 1_000_000, 203, $source );
+			1;
+		};
+	};
+
+	ok( $put->( 0, 'scan' ),   "the CHECKs accept id 0, source 'scan'" );
+	ok( $put->( 0, 'server' ), "  ...and source 'server', replacing the row" );
+	($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 1, '  ...leaving one row, not two' );
+	ok( !$put->( 1, 'scan' ),   'the CHECK rejects id 1 - one row, enforced by the database' );
+	ok( !$put->( 0, 'manual' ), "the CHECK rejects source 'manual'" );
+	ok( !$put->( 0, undef ),    'source is NOT NULL' );
+
+	# --- re-run safety ----------------------------------------------------
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_5($up); 1 },
+		'migration 5 runs a second time without dying' ) or diag($@);
+	my ($kept) = $up->selectrow_array('SELECT source FROM squeezewax.discogs_sync_state WHERE id = 0');
+	is( $kept, 'server', '  ...and keeps the row already written' );
+
+	$up->do('PRAGMA squeezewax.user_version = 4');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 5 with user_version forced back to 4' )
+		or diag($@);
+	is( version_of($up), 5, '  ...and reaches version 5' );
+
+	# A version-6 file must refuse a plugin that only knows five migrations.
 	# _migrate's existing behaviour, re-asserted at the new version because
 	# that is where the next upgrade will meet it.
-	$up->do('PRAGMA squeezewax.user_version = 5');
-	ok( !eval { $S->_migrate($up); 1 }, 'a version-5 file refuses this four-migration plugin' );
+	$up->do('PRAGMA squeezewax.user_version = 6');
+	ok( !eval { $S->_migrate($up); 1 }, 'a version-6 file refuses this five-migration plugin' );
 	like( $@, qr/newer than this plugin/, '  ...and says why' );
 }
 
