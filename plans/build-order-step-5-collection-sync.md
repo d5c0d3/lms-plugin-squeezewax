@@ -2,6 +2,12 @@ plans/build-order-step-5-collection-sync.md
 
 # Build order step 5 — collection sync
 
+> **Partly superseded by decisions §15.18 and
+> `plans/build-order-step-8b-sync-in-scan.md`.** This plan's "server-side,
+> asynchronous" sync is now one of two paths and, after step 8b, the fallback.
+> What it records about the fetch, the completeness gate and the entry list is
+> unchanged.
+
 ## §0. What this step is, and is not
 
 - **Server-side, async** fetch of the user's Discogs collection, on three

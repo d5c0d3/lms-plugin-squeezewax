@@ -4504,3 +4504,164 @@ Read at slimserver `a670a38c2b14ad42b86a39884bcb842121b35571`, the same pin as
 - The two importer-skipping paths were found by grepping LMS's own tree. A
   third-party skin or plugin calling `rescan album <id>` would skip our
   importer without appearing in that grep.
+
+#### Parts 7–16: decided 2026-09-27, on the step 8b survey and Phase 0
+
+The survey's eight questions and Phase 0's five. Two of the survey's own
+recommendations are answered against, and one is withdrawn outright; each says
+so.
+
+7. **The marker is a one-row table in `squeezewax.db`, and it becomes the single
+   "last synced".** Migration 5 adds `discogs_sync_state (id, last_synced,
+   items, source)`. Both sync paths write it, `API::Async->status` reads it, and
+   `discogsLastSynced` / `discogsLastSyncItems` retire by `$prefs->migrate(3)`.
+   *Why one source of truth rather than a marker beside the prefs:* the scanner
+   cannot persist a pref at all (`Slim/Utils/Prefs/Namespace.pm:303`), so a
+   settings page reading prefs would show "last synced" going stale on a server
+   where syncing works perfectly. This also means the page keeps its existing
+   meaning, "ownership last derived", because the marker is written only after
+   the pass's writes commit. *Cost:* a migration and a pref migration, which is
+   scope beyond "move the sync" and is named rather than discovered.
+8. **The rule that decides whether the server's fallback still syncs is exact,
+   not a time window.** `Plugin::_rescanDone` records when it fired, keeping the
+   previous value; `_syncTick` skips only when the marker's `source` is `'scan'`
+   **and** its timestamp falls between the previous rescan-done and this one.
+   **This withdraws the survey's `time() - last_synced <= DEBOUNCE + grace`.**
+   That rule cannot work: our importer runs at weight 130, and after it come the
+   artwork importers, the artwork precache and `optimizeDB`
+   (`Slim/Music/Import.pm:462-484`), an unbounded tail — so on a large library
+   the marker is minutes old when the tick fires, and any fixed grace is a guess
+   that fails on exactly the servers that need it. The `source` column is
+   load-bearing: a **manual** sync also falls inside that window, and it must not
+   suppress the fallback, because it derived ownership for the library as it was
+   *before* this scan. *Failure bias, chosen deliberately:* a needless sync costs
+   four requests and about 2.7 s; a wrong skip costs stale badges until the next
+   scan. The rule errs toward syncing.
+9. **`Importer.pm`'s `use` gate does not change.** §15.8 stands unamended.
+   **This answers the survey's own recommendation against it**: the survey
+   proposed `@tagNames || $token`, which was right only while the sync had no
+   importer of its own. Under part 13 it would give a token-only user an
+   identification importer with nothing to do — a dead progress row and an
+   orphan "Starting … scan" pair, which `Importer.pm:83-95` exists to prevent.
+   A consequence: the survey's restructuring of `startScan`'s four early returns
+   is not needed either, so step 4's code is untouched by 8b.
+10. **Timeouts: 15 s per request, 120 s for the whole sync.** 15 s is what
+    `API/Async.pm:417` already passes and what the reference plugin uses
+    (`refs/lms-plugin-tidal/API/Sync.pm:104-105`), so a slow response behaves
+    alike on both paths. The whole-sync bound is **our own clock, checked
+    between requests**: `LWP::UserAgent`'s timeout measures inactivity, not
+    total time (`CPAN/LWP/UserAgent.pm:1565-1568`, documented and read), and
+    nothing can interrupt a request already in flight. So one slow-but-alive
+    response may still exceed 15 s, which no code of ours can prevent and which
+    is on the hardware list. On exceeding either bound: log at error, abandon,
+    let the scan finish.
+11. **The scanner's rate-limit state starts cold, and a computed wait abandons
+    the sync.** `accountRequest` returns a wait as well as a state
+    (`API.pm:177`), and the server honours it with a timer
+    (`API/Async.pm:369-375`). There is no timer in the scanner, so honouring a
+    60 s wait would mean blocking the scan for 60 s. The check happens **before
+    issuing the next request**, so a wait computed after the last page costs
+    nothing. `backoffFor` is never called on this path, so a 429 fails the sync
+    once. *Named cost:* a scan begun within a minute of a manual sync spends
+    budget the fresh process cannot see; Discogs answers 429, the scan-time sync
+    fails and logs, and the remedy is the fallback sixty seconds later.
+12. **One progress row covers both halves** — `plugin_squeezewax_ownership`, the
+    fetch ticking per request and the pass per album, with the total set once the
+    page count is known (`Slim/Utils/Progress.pm:154-170`). **The survey's
+    recommendation of a row for the pass alone is answered against**: the pass is
+    40–48 ms measured and the fetch is 2.72 s, so a bar over the pass alone would
+    show a flicker and hide the wait. *Consequences, both stated rather than
+    discovered:* `update` is the abort mechanism in this process
+    (`Slim/Utils/SQLiteHelper.pm:444-459`), so the pass acquires abort points it
+    never had — safe only because they fall in the decide walk, before any write
+    (part 13's ordering) — and there is **no** abort point inside a blocking
+    request, so abort latency during the fetch is the request time plus up to 5 s.
+13. **`Ownership::_write` commits the scanner's pending work first, writes, and
+    leaves the commit to its caller.** The `$ownTxn` conditional of
+    `Match::relinkOrphan` (`Match.pm:497-499`) is **not sufficient on its own**:
+    on the scanner branch nothing is rolled back, so a pass that died halfway
+    would be committed by the next `forceCommit` — §13.7's named half-applied
+    pass. `relinkOrphan` gets away with it because its partial effect is a delete
+    of regenerable rows; the pass's updates to `ownership`, `state` and
+    `review_reason` are not. A leading `Slim::Schema->forceCommit` makes the
+    pass's writes the only uncommitted work, so a rollback discards exactly the
+    pass. The scan-time marker is written after the pass and before the commit,
+    so the two share one fate — which matters because `forceCommit` swallows a
+    failed commit (`Slim/Schema.pm:2380-2384`): if the commit is lost, the marker
+    is lost with it and the fallback re-syncs. A SAVEPOINT would be the textbook
+    answer and was rejected: there is none anywhere in `Slim/`, so it has no
+    in-tree precedent and its behaviour with this DBD::SQLite is unverified.
+    *What this does not claim:* the pass is not atomic against the scan as a
+    whole. It never was — every `COMMIT_EVERY` boundary already commits
+    identification work — and the plan says so rather than implying otherwise.
+14. **A second `post` importer of our own, weight 130, gated on the token
+    alone.** **Verified**, not assumed: `%Importers` is keyed by class name
+    (`Slim/Music/Import.pm:551-556`), `use` is read per entry (`:573`), and
+    `Slim/Plugin/OnlineLibrary/Importer.pm:30-35` and `:41-46` register two
+    `post` importers from one `initPlugin`. 130 is free: in-tree `post` weights
+    run 90–110 and ours is 120, nothing runs after `optimizeDB`, and a
+    third-party post importer with no weight sorts at 1000, after us — other
+    third-party weights are **unverified**. The class is loaded with a `require`
+    inside an `eval`, not a `use`, so a compile error in it cannot take
+    identification down with the whole plugin
+    (`Slim/Utils/PluginManager.pm:323-327`); `Slim/Music/Artwork.pm:771` is the
+    in-tree shape. `install.xml` does not change: the scanner loads only the
+    `<importmodule>` class, so the second one is registered from
+    `Importer::initPlugin`. *Cost:* a token holder now gets two
+    "Starting … scan" / "Completed … Scan" pairs per scan, at error level
+    (`Import.pm:578`, `:710-712`).
+15. **Two new files, one new suite, and the shared parts move to `API.pm`.**
+    `API/Sync.pm` fetches and nothing else; `ScanSync.pm` is the importer class
+    and owns the progress row, the marker and the call into the pass. This makes
+    the design doc's module table true. The pagination helpers, the
+    `basic_information` → entry mapping and `_testFilter` move from
+    `API/Async.pm` into `API.pm`, because two transports carrying two copies of
+    the entry builder is exactly the drift §15.2 reason 1 warned about and a seam
+    test could only ever cover one of them. The seam test is a new suite,
+    `scripts/scan-sync-check.pl`, following step 8's shape — and it is the first
+    suite in this project to open its handle with `AutoCommit => 0`, which is why
+    no scanner transaction branch has ever been exercised offline.
+16. **Scan modes: a playlist-only rescan skips the sync; an online-library-only
+    rescan runs it.** The post-processing loop filters neither
+    (`Slim/Music/Import.pm:452-459` against `:396-401`), and `Import`'s own flags
+    are reset before it (`:409-410`), so the mode is read from the scanner's own
+    `$main::playlists` / `$main::onlineLibrary` (`scanner.pl:112`, `:129-130`).
+    A playlist rescan changes no album, so calling Discogs would be waste. An
+    online-library rescan adds precisely the all-remote albums that only the pass
+    can badge (§15.11), so it is the one mode where skipping would lose badges.
+    Identification's behaviour in those modes is today's and is not changed here;
+    it is recorded in `TODO.md`.
+
+#### Two rulings taken without a question
+
+- **LWP's self-made 500 is classified as `no_response`.** On a timeout, a DNS
+  failure or a refused connection, `LWP::UserAgent` builds its own 500 carrying
+  `Client-Warning: Internal response` (`CPAN/LWP/UserAgent.pm:205-219`,
+  `:1131-1139`, documented at `:1569-1572`; read, not observed). Without reading
+  that header, every timeout would be logged as "Discogs returned a server
+  error" and part 10's "the two paths behave alike" would be false in the log.
+- **The reach of the scan-time path is accepted as it is.** See the amendment to
+  part 2 below.
+
+#### Amendments to parts 1 and 2 of this record
+
+- **Part 1's weakest claim is now verified.** The reference streaming plugin does
+  sync inside its scan step: `refs/lms-plugin-tidal/Importer.pm:21`, `:24`,
+  `:67`, `:90` call its sync from `startScan`, over `SimpleSyncHTTP` with
+  `timeout => 15`. Read at the pinned `refs/`. The "evidence is thin" bullet
+  about it is retired.
+- **Part 2's "every ordinary rescan does run our importer" needs a
+  qualification.** It runs only in scans that go through `scanner.pl`, and a
+  plain `rescan` is sent there only when some importer registered **in the
+  server** has `use` set (`Slim/Control/Commands.pm:2719-2727`). SqueezeWax
+  registers none; on a default install FullTextSearch does
+  (`Slim/Plugin/FullTextSearch/install.xml:13`, `Plugin.pm:190-196`). With FTS
+  off and no virtual library and no streaming plugin, our importer never runs and
+  only the fallback syncs. **Registering a server-side importer of our own to
+  force external scans is refused**, though TIDAL does exactly that
+  (`refs/lms-plugin-tidal/Plugin.pm:71`): it would make every rescan on every
+  user's server fork an external scanner for our convenience. The fallback
+  already covers that install, which is what the fallback is for.
+- **The "evidence is thin" bullet about `LWP`'s timeout is resolved**, in the
+  direction that was feared: the timeout is per operation, so the whole-sync
+  budget of part 10 is not optional. It is replaced by a hardware item.

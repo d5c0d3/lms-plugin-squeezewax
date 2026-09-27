@@ -1,5 +1,11 @@
 # Build-order steps 6–7: migration 3 and the ownership pass
 
+> **Partly superseded by decisions §15.18 and
+> `plans/build-order-step-8b-sync-in-scan.md`.** The ownership pass now also runs
+> inside the scan, in the scanner process, and `Ownership::_write`'s transaction
+> handling is conditional. What this plan records about what the pass *decides*
+> is unchanged.
+
 **Status:** plan, approved in the design chat 2026-09-19; amended 2026-09-20
 after Claude Code's Phase 0 report (§0.5). Code: none yet. Checked against
 `d5c0d3/lms-plugin-squeezewax` `v1-buildout` at `589ed6e`, and slimserver

@@ -416,17 +416,21 @@ a tag (`squeezewax-v1-decisions.md` §13.6). A sync is three requests for a
 203-item collection and takes seconds, so re-deriving every conclusion is
 cheaper than tracking which ones could have moved.
 
-The sync itself has **two** triggers — a library scan **finishing**, and a manual
-"Sync collection now" button in Settings — set out in §9 and
-`squeezewax-v1-decisions.md` §13.7, as corrected by §15.2 (the scan trigger fires
-on `['rescan','done']`, not at scan start) and §15.15 (the configurable interval
-and the startup sync are removed; the plugin makes no unattended call to Discogs
-on a schedule).
+The sync itself has **two** triggers — a library scan, and a manual "Sync
+collection now" button in Settings — set out in §9 and
+`squeezewax-v1-decisions.md` §13.7, as corrected by §15.2 (the scan trigger fired
+on `['rescan','done']`, not at scan start), §15.15 (the configurable interval and
+the startup sync are removed; the plugin makes no unattended call to Discogs on a
+schedule) and §15.18, which moves the scan trigger **inside** the scan: our own
+scan step fetches the collection and derives ownership before the scan ends, and
+the `['rescan','done']` path survives as the fallback for scans our importer did
+not run.
 
 The cost is accepted and stated rather than hidden: a record added to the Discogs
-collection does not badge until the next scan or a press of the button, and a
-missing badge looks the same as a record the user does not own. The last-synced
-timestamp in §9 is the only visible signal.
+collection does not badge until the next scan or a press of the button — since
+§15.18, the scan itself rather than a minute after it — and a missing badge looks
+the same as a record the user does not own. The last-synced timestamp in §9 is the
+only visible signal, and it reflects whichever path synced last (§15.18 part 7).
 
 ### Constraints
 

@@ -55,9 +55,13 @@ plugin without Spotty's helper-binary complexity.
 - LMS is single-threaded.
   - Server-side HTTP → `Slim::Networking::SimpleAsyncHTTP` (async)
   - Scanner/importer-side HTTP → `Slim::Networking::SimpleSyncHTTP` (synchronous)
-    — matches the reference plugin (`refs/lms-plugin-tidal/API/Sync.pm`);
-    gets LMS's own request logging, caching, and timeout conventions for
-    free, unlike bare `LWP::UserAgent`.
+    — matches the reference plugin (`refs/lms-plugin-tidal/API/Sync.pm`), and it
+    is the sanctioned home for that class, which warns when used in the server
+    (`Slim/Networking/SimpleSyncHTTP.pm:11`, `:58`). It gets LMS's own request
+    logging and timeout conventions, unlike bare `LWP::UserAgent`. **Caching is
+    opt-in and the collection must never ask for it** (`cache => 1`,
+    `Slim/Networking/SimpleHTTP/Base.pm:81-95`): a cached page would defeat the
+    sync's completeness gate silently. TIDAL does pass it; we do not.
 - **This plugin never plays audio.** No ProtocolHandler, no streaming URI
   scheme, no transcoding entries. Spotty has all of these — do not copy them.
 - Discogs API rate limit: see `docs/squeezewax-design.md` §13 for the
@@ -87,8 +91,10 @@ sits where it does.
    neither does its `local_tracks` gate — there is nothing to read tags from
    in an all-remote album (§15.11) — **code complete** (`a50c9d0`); the plan §6
    hardware checks are open in `TODO.md`
-5. **Collection sync** — server-side, asynchronous, on `['rescan','done']`
-   plus an interval and a manual button (§15.2, §13.7)
+5. **Collection sync** — two paths since step 8b: synchronous inside our scan
+   step, and asynchronous in the server after `['rescan','done']` as the
+   fallback, plus the manual button. There is no interval (§15.15). (§15.2 as
+   reversed by §15.18, §13.7)
 6. **Migration 3** — the `discogs_match` rebuild. Reviewable on its own,
    but **ships with step 7 and is never merged ahead of it** (§15.9) —
    **code complete** (`e275221`); the plan §5 hardware checks are open in
@@ -102,6 +108,10 @@ sits where it does.
    `076603f`, decisions §15.17); the plan §6 hardware checks **pass** on
    0.0.0.10, 2026-09-27, with two items recorded in `TODO.md`. Plan:
    `plans/build-order-step-8-review-queue.md`; decisions §15.16, §15.17
+8b. **Sync and ownership pass inside the scan** — a second `post` importer of
+   ours fetches the collection and derives ownership during the scan, so the
+   badges are right when the scan finishes; the server-side sync survives as the
+   fallback. Plan: `plans/build-order-step-8b-sync-in-scan.md`; decisions §15.18
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
 

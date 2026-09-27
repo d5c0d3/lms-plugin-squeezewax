@@ -1293,6 +1293,38 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-27: the scan-time sync has no proxy support.**
+      `Slim::Networking::SimpleSyncHTTP` passes no proxy to `LWP::UserAgent`
+      (`:89-93`), while the async stack honours `webproxy`
+      (`Slim/Networking/Async/HTTP.pm:175`). So behind a web proxy the button
+      works and the scan-time sync cannot, failing with `no_response` on every
+      scan. **Unverified** whether any user has that setup. If one does, the
+      remedy is to read `webproxy` and pass it, or to skip the scan-time path
+      when it is set.
+
+- [ ] **2026-09-27: a token entered seconds before a rescan may be invisible to
+      that scan.** The server writes prefs 10 s after a change
+      (`Slim/Utils/Prefs/Namespace.pm:305`) and the scanner reads the file when
+      it starts, so a rescan begun immediately after saving a token can run with
+      no token and skip the scan-time sync. The fallback then syncs 60 s later,
+      so nothing is lost — but the first scan after configuring the plugin may
+      look as though the feature does not work. **Unverified** in practice.
+      Consider whether Settings should `savenow` after a token change.
+
+- [ ] **2026-09-27: identification runs on playlist-only and online-library-only
+      rescans.** Today's behaviour, not introduced by 8b: the post-processing
+      loop filters neither mode (`Slim/Music/Import.pm:452-459`), so a `rescan
+      playlists` walks the whole library reading tags. 8b gates its own sync on
+      the mode (§15.18 part 16) and deliberately leaves identification alone.
+      Measure the cost before deciding; on the reference server a full walk is
+      26 ms but tag reads are 19–137 ms per NAS file.
+
+- [ ] **2026-09-27: the two sync paths share one Discogs budget with no shared
+      state.** The scanner is a fresh process each scan, so its local throttle
+      starts cold (decisions §15.18 part 11). Inferred low risk at three or four
+      requests against 60 a minute; revisit only if a 429 is ever seen on a
+      scan-time sync.
+
 - [ ] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
       Strict identification (steps 3/4) calls buildRequest and
       classifyResponse directly". Nothing in the scanner has called either
@@ -1307,9 +1339,10 @@ Each names its sites so the work is mechanical rather than a search.
       reduced process priority (`scanner.pl:217`) changes any of it. Needs the
       reference server.
 
-- [ ] **2026-09-27: "the streaming plugins sync during the scan" is
+- [x] **2026-09-27: "the streaming plugins sync during the scan" is
       inferred, not read.** It is decisions §15.18 part 1's stated motivation.
       Read `refs/lms-plugin-tidal`'s importer and confirm or correct it.
+      → 2026-09-27: VERIFIED. TIDAL's importer calls its sync from startScan (refs/lms-plugin-tidal/Importer.pm:21, :24, :67, :90) over SimpleSyncHTTP with timeout => 15 (API/Sync.pm:104-105). Decisions §15.18's amendment to part 1 records it; our 15 s is the same figure.
 - [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
       count of 0.** Recorded, not changed (decisions §15.17). Its fit key
       (artist, title, 0) is shared by every all-remote copy of the album.
@@ -1802,6 +1835,17 @@ Each names its sites so the work is mechanical rather than a search.
       roughly 95–135 ms, paid once on request rather than on every render
       (§15.17 part 1). To settle it, a future round needs write access as
       `squeezeboxserver`, or a writable copy of one album on a slow mount.
+
+- [ ] **2026-09-27: build-order step 8b's hardware checks (the sync and the
+      ownership pass inside the scan).** Plan
+      `plans/build-order-step-8b-sync-in-scan.md` §7, eleven checks. Check 5 is
+      the one that can stop the step working at all: no HTTPS request has ever
+      been made from this plugin's scanner process, and `IO::Socket::SSL` is
+      bundled in `CPAN/` only for darwin, so whether it resolves in the
+      scanner's perl on Linux is **unverified**. Check 4 is the other unknown:
+      how the scan UI and the Material skin render a progress row whose total is
+      0 and is set later. Run check 2 first — it is §15.18 part 1's whole claim,
+      that the badges are right the moment the scan finishes.
 
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan
