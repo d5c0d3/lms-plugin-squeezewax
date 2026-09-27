@@ -88,10 +88,64 @@ sub initPlugin {
 		# Slim/Music/ReleaseTypes.pm:32, which gates on its own pref.
 		#
 		# Step 4 does NOT relax this (decisions §15.8). Identification still
-		# reads tags and nothing else does, so "no tag names configured" still
-		# means "nothing for this importer to do". The ownership pass at step 7
-		# is server-side and does not run here.
+		# reads tags and nothing else in THIS importer does, so "no tag names
+		# configured" still means "nothing for this importer to do". The
+		# ownership pass does run in the scanner since step 8b - but from the
+		# second importer below, with its own gate on the token. This gate stays
+		# tag-names-only (§15.8, reaffirmed by §15.18 part 9): widening it to the
+		# token would give a token-only user an identification importer with
+		# nothing to do, a dead progress row and an orphan log pair.
 		use    => scalar @{ $prefs->get('discogsTagNames') || [] },
+	} );
+
+	_addScanSync();
+
+	return 1;
+}
+
+# The second importer: the collection sync and the ownership pass, inside the
+# scan (decisions §15.18 part 14). A class of its own, so it has its own `use`
+# gate - the token - and its own "Starting/Completed ... Scan" pair. The cost,
+# stated: a user with both tag names and a token sees two such pairs per scan,
+# at error level (Slim/Music/Import.pm:578, :710-712).
+#
+# Registered here because the scanner loads only the <importmodule> class
+# (Slim/Utils/PluginManager.pm:204, :207), so install.xml does not change. Two
+# post importers from one initPlugin is in-tree precedent
+# (Slim/Plugin/OnlineLibrary/Importer.pm:30-35, :41-46), and %Importers is keyed
+# by class name (Slim/Music/Import.pm:551-556) with `use` read per entry (:573).
+#
+# Loaded with a require inside an eval, not a `use` at the top of this file: a
+# `use` that failed would fail this whole module, and tryModuleLoad would then
+# disable the plugin (Slim/Utils/PluginManager.pm:323-327) - taking
+# identification down over a problem in the sync. Slim/Music/Artwork.pm:771 is
+# the in-tree shape of a require at the point of use. If it fails, log and
+# register nothing; identification carries on and the server's fallback syncs.
+sub _addScanSync {
+	if ( !eval { require Plugins::SqueezeWax::ScanSync; 1 } ) {
+		$log->error( 'the scan-time collection sync could not be loaded; '
+			. 'the server will sync after each scan instead: ' . ( $@ || 'unknown error' ) );
+
+		return 0;
+	}
+
+	my $token = $prefs->get('discogsToken');
+
+	Slim::Music::Import->addImporter( 'Plugins::SqueezeWax::ScanSync', {
+		type   => 'post',
+
+		# After identification (120), so the pass sees this scan's
+		# identifications. In-tree post weights run 90-110 and nothing runs
+		# after optimizeDB (Slim/Music/Import.pm:462-484), so 130 is free; a
+		# third-party post importer with no weight sorts at 1000, after us.
+		# Other third-party weights are unverified.
+		weight => 130,
+
+		# The token alone. A token-only user - no tag names - still owns
+		# records, and title-route ownership needs no tags at all (§15.18
+		# part 14). Read once, here, like the tag names above: the scanner is a
+		# fresh process each scan and reads the prefs file when it starts.
+		'use'  => ( defined $token && $token ne '' ) ? 1 : 0,
 	} );
 
 	return 1;

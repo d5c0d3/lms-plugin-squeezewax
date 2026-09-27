@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Importer Settings Queue Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Importer ScanSync Settings Queue Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -184,17 +184,22 @@ for scanner in 0 1; do
 		# and Queue.pm only from Settings.pm, one hop further out.
 		# API/Async.pm is the server-side Discogs client - the scanner has no
 		# event loop to run SimpleAsyncHTTP on, which is the entire reason it
-		# exists separately from API.pm. Ownership.pm runs after a scan, in the
-		# server, off a completed collection sync (decisions §15.2), so the
-		# scanner never loads it either.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ] || [ "$m" = "Ownership" ]; }; then
+		# exists separately from API.pm.
+		#
+		# Ownership.pm is checked in BOTH modes since step 8b. It used to be
+		# skipped here on the grounds that the pass ran only in the server; it
+		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
+		# scanner loads it and its scanner-mode compile is the point.
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ]; }; then
 			continue
 		fi
 
-		# API/Sync.pm is the mirror image: the scanner's Discogs client, which
-		# nothing in the server loads - SimpleSyncHTTP warns when it is used
-		# there (Slim/Networking/SimpleSyncHTTP.pm:11, :58).
-		if [ "$scanner" = 0 ] && [ "$m" = "API::Sync" ]; then
+		# API/Sync.pm and ScanSync.pm are the mirror image: the scanner's
+		# Discogs client and the importer that calls it, which nothing in the
+		# server loads - Importer.pm registers ScanSync, and the server never
+		# loads Importer.pm (Slim/Utils/PluginManager.pm:204). SimpleSyncHTTP
+		# warns when it is used there (Slim/Networking/SimpleSyncHTTP.pm:11, :58).
+		if [ "$scanner" = 0 ] && { [ "$m" = "API::Sync" ] || [ "$m" = "ScanSync" ]; }; then
 			continue
 		fi
 
@@ -312,6 +317,19 @@ BEGIN {
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
+				;;
+			ScanSync)
+				# The union of what it pulls in: Ownership.pm's stubs (and with
+				# them Library.pm's and Match.pm's), API/Sync.pm's, and
+				# Importer.pm's Slim::Utils::Progress. Importer.pm's
+				# _addScanSync requires this module at runtime, inside an eval, so
+				# compiling Importer.pm above does not reach it - hence its own
+				# entry here.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB$API_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+}'
+				note=" (Slim::Schema, Import, Info, Progress, Prefs, PluginManager stubbed)"
 				;;
 			Settings|Queue)
 				# Slim::Web::Settings is a web-UI class; stub the base the same

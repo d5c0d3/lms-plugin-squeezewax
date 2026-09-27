@@ -1036,6 +1036,31 @@ is_deeply( [ sort keys %{ { map { $_ => 1 } @MISSING_STRINGS } } ], [],
 		'every PLUGIN_SQUEEZEWAX_* referenced by the plugin is defined in strings.txt' );
 }
 
+# A progress row's label is never named in our code: the scan UI builds it from
+# the row's name, string( $name . '_PROGRESS' ) (Slim/Control/Queries.pm:3727,
+# Slim/Web/Pages/Progress.pm:70). So the scan above cannot see it, and a row
+# whose string is missing renders with a raw token. Step 8b added the second
+# row (decisions §15.18 part 12).
+{
+	my %names;
+
+	for my $f ( glob("$Bin/../SqueezeWax/*.pm"), glob("$Bin/../SqueezeWax/API/*.pm") ) {
+		open my $fh, '<', $f or die "could not read $f: $!\n";
+		local $/;
+		my $text = <$fh>;
+		close $fh;
+
+		$names{$1} = 1 while $text =~ /\bname\s*=>\s*'(plugin_squeezewax_\w+)'/g;
+	}
+
+	is_deeply( [ sort keys %names ],
+		[qw(plugin_squeezewax_match plugin_squeezewax_ownership)],
+		'the plugin creates exactly two progress rows, identification\'s and the scan-time sync\'s' );
+
+	ok( $STRINGS{ uc($_) . '_PROGRESS' }, "  ...and ${\ uc($_)}_PROGRESS labels $_" )
+		for sort keys %names;
+}
+
 # ---------------------------------------------------------------------------
 # "Last synced" on the page (decisions §15.18 part 7)
 # ---------------------------------------------------------------------------
