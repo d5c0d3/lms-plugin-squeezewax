@@ -1426,6 +1426,49 @@ Structural.
   documentation's example headers show lighttpd and Varnish and are a 2014
   snapshot. Do not reason about caching behaviour from them.
 
+### 9.10 Considered and rejected: reusing the Music and Artist Information (MAI) plugin's Discogs client
+
+**Decided 2026-09-27 (design chat).** Checked against
+`michaelherger/MusicArtistInfo` `master` @ `a5ea399` (2026-09-21), by reading
+`Discogs.pm` and `Common.pm`. It was not run.
+
+MAI has a working Discogs client with rate limiting and caching
+(`Plugins::MusicArtistInfo::Discogs`). **SqueezeWax will not call it, copy it
+or depend on it.**
+
+1. **Different calls, different credentials.** MAI's `_call` only reaches
+   `database/search`, `artists/{id}` and `artists/{id}/releases`. It signs them
+   with MAI's own app key, stored base64-encoded in `Common.pm`'s `__DATA__` and
+   returned by `getHeaders('discogs')`. SqueezeWax needs `/oauth/identity` and
+   the user's collection, sent with the user's personal token (§9.1, §9.7). MAI
+   has no collection code to reuse. Its credential model is the one §9.1
+   rejects: an app secret shipped inside the plugin, where encoding it is the
+   "obfuscation" §9.1 calls worse. *Verified.*
+2. **Its caching breaks §9.5 and §13.2.** `_call` forces a 60-day cache of
+   whole responses (`expires => '60d'`). §9.5 quotes the terms: Content more
+   than six hours older than Discogs' copy may not be displayed, and may not be
+   stored longer than necessary. §13.2 keeps no Discogs payload at all.
+   *Verified.* A 60-day-old collection would also give wrong badges.
+   *Inferred.*
+3. **Its rate limiting only runs in the scanner.** The token bucket is created
+   only `if (main::SCANNER)`. Backoff on a 429 error exists only in `Common.pm`
+   `call`'s scanner branch. SqueezeWax's sync runs on the server side (§15.2),
+   where MAI does neither. `API/Async.pm` already does its own rate-limit
+   accounting. *Verified by reading.*
+4. **It would tie SqueezeWax to another plugin.** The package is MAI's internal
+   code, not a published interface. Using it would require MAI to be installed,
+   and MAI's refactors could break SqueezeWax. Copying it instead has an
+   unclear licence: no LICENSE file in the repo root, and none is mentioned in
+   `README.md` or `install.xml`. *Unverified beyond those three places.*
+
+**Nothing is taken from it.** Its one notable detail is a comment in
+`Common.pm` `call` about using a specific User-Agent to comply with Discogs'
+terms. SqueezeWax already meets that requirement its own way (§9.3,
+`API.pm:79`).
+
+**Related, already recorded:** slimserver issue #397. MAI cached on album/artist
+ids that change, a mistake §2 and `TODO.md` cite as a precedent to avoid.
+
 ---
 
 ## 10. "Clear & rebuild matches" preserves manual rows and nothing else

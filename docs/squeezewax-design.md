@@ -22,7 +22,8 @@ being reasoned back into existence.
 - Discogs data currently reaches LMS only indirectly:
   - **Music and Artist Information (MAI)** plugin (Michael Herger) uses Discogs
     as one of several sources (alongside Wikipedia, AllMusic, Last.fm) for
-    artist pictures and metadata.
+    artist pictures and metadata. Its Discogs client is not reused; see
+    `squeezewax-v1-decisions.md` §9.10.
   - **extGUI4LMS** (alternative, now-inactive web interface, last active
     ~2016) offered basic Discogs lookup via a user-supplied API token —
     pulling release/artist metadata and cover art (including back covers)
