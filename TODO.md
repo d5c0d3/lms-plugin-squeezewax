@@ -1293,6 +1293,23 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
+      Strict identification (steps 3/4) calls buildRequest and
+      classifyResponse directly". Nothing in the scanner has called either
+      since decisions §13.8 removed the per-album search. Correct it in step
+      8b, which makes it true again for a different reason.
+
+- [ ] **2026-09-27: no HTTPS request has ever been made from the scanner
+      process.** Step 8b is the first. Unobserved: whether
+      `IO::Socket::SSL` is available there (`Slim/Networking/SimpleSyncHTTP.pm`
+      `hasSSL` only warns if not), how `LWP::UserAgent`'s per-operation
+      timeout behaves against `api.discogs.com`, and whether the scanner's
+      reduced process priority (`scanner.pl:217`) changes any of it. Needs the
+      reference server.
+
+- [ ] **2026-09-27: "the streaming plugins sync during the scan" is
+      inferred, not read.** It is decisions §15.18 part 1's stated motivation.
+      Read `refs/lms-plugin-tidal`'s importer and confirm or correct it.
 - [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
       count of 0.** Recorded, not changed (decisions §15.17). Its fit key
       (artist, title, 0) is shared by every all-remote copy of the album.

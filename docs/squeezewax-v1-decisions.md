@@ -4326,3 +4326,145 @@ not chosen by the user and are open.
   a NULL `source_timestamp`. Correct for the data: all-remote albums are the
   pass's, not the importer's (§15.11). But the fit key becomes (artist, title,
   0), which every all-remote copy of that album shares. Low risk.
+
+### 15.18 The collection sync and the ownership pass move inside the scan
+
+**Decided 2026-09-26 (design chat)**, recorded 2026-09-27. **This reverses
+§15.2's "why not in the scanner".** §15.2's other halves stand: the server-side
+trigger is still `['rescan','done']` and not scan start, and the pass is still
+refused while another process holds the write lock.
+
+1. **The sync and the pass run inside SqueezeWax's importer**, after
+   identification, in the scanner process. The reason is what the user expects
+   of LMS: when a scan finishes, the library is finished, badges included. A
+   badge that appears sixty seconds later, by a mechanism with no progress row
+   and no completion line, reads as a bug. The streaming plugins call their
+   services during the scan too — **inferred** from `CLAUDE.md`'s reference to
+   `refs/lms-plugin-tidal/API/Sync.pm` being the scanner-side transport; not
+   re-verified against that plugin's own importer in this session, and on the
+   TODO list.
+2. **A timeout bounds it, and it fails fast.** `API.pm`'s retry ladder
+   (`MAX_RETRIES`, three waits of `WINDOW_SECONDS`) must not run in the
+   scanner: up to four minutes stalled on one request is four minutes of a
+   scan. `Slim::Networking::SimpleSyncHTTP` honours a caller-supplied timeout —
+   **verified** at `Slim/Networking/SimpleHTTP/Base.pm:99-102`
+   (`$params->{Timeout} || $params->{timeout} || $prefs->get('remotestreamtimeout')`)
+   and `Slim/Networking/SimpleSyncHTTP.pm:84-91`, which passes it to
+   `LWP::UserAgent->new( timeout => ... )`. The value and its scope are
+   decided in the step 8b survey.
+3. **A failure is logged only.** Nothing new on the settings page and nothing
+   new on the queue page. The remedy is the next scan or the "Sync collection
+   now" button. Rationale: the scan-time sync is an accelerator for something
+   that already works, so its failure returns the user to the behaviour of
+   §15.2 rather than to a broken state, and a second error surface for the same
+   condition is a second thing to keep true.
+4. **A rejected token during the scan-time sync is treated as a timeout is**:
+   logged at error, retried at the next scan. A 401 answers instantly, so it
+   costs the scan nothing, and the scanner is a fresh process each time and has
+   nowhere to keep a pause. The in-memory rejection pause of §15.15 part 2
+   therefore governs **only** the server-side fallback from now on, and §15.17
+   part 4's notice on the queue page keeps describing exactly that.
+5. **The server-side sync after `['rescan','done']` survives only as a
+   fallback**, for scans in which our importer did not run. After a scan where
+   it did, the server does nothing. How the server tells the difference is
+   decided in the step 8b survey; it cannot be an in-memory flag, because the
+   two are different processes.
+6. **Built as step 8b, before step 9.**
+
+#### Answering §15.2's four reasons against this
+
+1. *"The manual trigger has no scanner process … two sync implementations under
+   a rule that the pass be deterministic."* **Conceded, and accepted.** There
+   will be two fetch paths and one matching path: `Ownership::apply` is called
+   unchanged from both, and determinism is a property of the matching, not of
+   the transport — a page fetch has no discretion to be inconsistent about.
+   The cost is real: two transports to keep behaving alike, and a seam test is
+   owed for the new one. It is also unavoidable rather than chosen, because of
+   the next point.
+2. *"In-server rescans never reach the importer."* **True, and it is now the
+   reason the fallback stays** rather than a reason against the scanner. Two
+   paths skip our importer, both **verified**: `rescan album|track <id>`
+   (`Slim/Control/Request.pm:607`, `Slim/Control/Commands.pm:2745`; no caller
+   in LMS's own `HTML/`, and whether third-party skins call it is
+   **unverified**), and the automatic on-file-change rescan
+   (`Slim/Utils/AutoRescan.pm:126`, `:205`; pref `autorescan` defaults to 0,
+   `Slim/Utils/Prefs.pm:165`). Every ordinary rescan does run our importer:
+   `Slim/Control/Commands.pm:2736-2743` launches the external scanner, and
+   `:2719-2727` (Bug 17358) forces an external scan whenever any plugin
+   importer is in use.
+3. *"A Discogs stall would stall the scan."* **Answered by part 2 above.** The
+   scan-side path takes a timeout and does not use `backoffFor`.
+4. *"The importer's `use` gate is tied to tag names."* **Still true, and now a
+   problem to solve rather than an argument.** A sync in the scan must run for
+   a user who has a token, whatever their tag names say. Decided in the step 8b
+   survey.
+
+#### Verified in this session, and load-bearing for step 8b
+
+Read at slimserver `a670a38c2b14ad42b86a39884bcb842121b35571`, the same pin as
+`refs/`. Read, not observed running.
+
+- **There is no event loop in the scanner.** `scanner.pl:498` is
+  `sub idleStreams {}`, a no-op stub, and nothing in `scanner.pl` enters an EV
+  or AnyEvent loop. So `Slim::Utils::Timers::setTimer` never fires there and
+  `Slim::Networking::SimpleAsyncHTTP` cannot complete. `API/Async.pm` is built
+  entirely on both. **A second, synchronous fetch path is therefore mandatory,
+  not a preference** — which is what makes §15.2 reason 1 unavoidable.
+- **The scanner cannot persist any preference.**
+  `Slim/Utils/Prefs/Namespace.pm:303` — `save` returns immediately under
+  `main::SCANNER`, before arming its write timer, so `savenow` is never
+  reached either. A `$prefs->set` in the scanner changes the in-memory hash of
+  a process that is about to exit. `scanner.pl:122` additionally marks the
+  `server` namespace read-only. **Consequence: the scanner cannot write
+  `discogsLastSynced`, and the settings page's "last synced" can only ever
+  reflect the server-side sync.** Anything the server must learn from the scan
+  has to go through `squeezewax.db`.
+- **The scanner can read preferences.** `Namespace::new` loads the namespace's
+  file (`Slim/Utils/Prefs/Namespace.pm:85`), which is how `Importer.pm:94`
+  already reads `discogsTagNames`. `discogsToken` and
+  `discogsTestExcludeReleases` are readable the same way.
+- **`Ownership::apply` cannot run in the scanner as written.**
+  `Ownership::_write` opens its transaction with `$dbh->begin_work`.
+  `CPAN/DBI.pm:1716-1719` makes `begin_work` a `set_err` "Already in a
+  transaction" when `AutoCommit` is already off, and `scanner.pl:295` sets
+  `AutoCommit = 0` for the whole scan; `Slim/Schema.pm:273` has
+  `RaiseError => 1`, so that `set_err` dies. `apply`'s own `eval` catches it,
+  logs "the ownership pass failed" and returns `'failed'`. The failure is loud
+  and writes nothing, which is the right direction — but the pass would never
+  once succeed in the scan until this is changed. **Step 8b's first real code
+  question.**
+- **The rest of the pass is scanner-safe.** It reads no files:
+  `Ownership.pm` has no `Tags::readTrack` call, so §15.2 obligation 2's
+  Scheduler requirement has no subject on this path. `Library::eachAlbum`,
+  `albumCount` and `ownershipArtists` go through `Slim::Schema->dbh` only, and
+  `Slim::Music::Info::variousArtistString` (`Slim/Music/Info.pm:1540-1543`) is
+  a pref plus a string lookup, with `Slim::Music::Info` loaded and initialised
+  by `scanner.pl:84`, `:279`.
+- **`Match::_writeOk` already permits the scanner**, unconditionally:
+  `_writeRefusal` returns undef on `$isScanner` (`Match.pm:43-58`), and
+  `_writeOk` does not call `stillScanning` in that process
+  (`Match.pm:60-85`).
+- **This plugin has never made an HTTP request from the scanner.** The only
+  `buildRequest` callers are `Settings.pm:372` (server, own transport) and
+  `API/Async.pm:389` (server, async). `API.pm`'s own file header still claims
+  "the scanner's Strict identification (steps 3/4) calls buildRequest and
+  classifyResponse directly"; that became false when §13.8 removed the
+  per-album scanner search, and the comment is **stale**. Step 8b is the first
+  scanner-side request, so nothing about HTTPS from that process — SSL support,
+  proxy behaviour, `LWP` timeouts under the scanner's priority — has been
+  observed. On the hardware list.
+
+#### Where the evidence is thin
+
+- That the reference streaming plugins sync **during** the scan is inferred
+  from a `CLAUDE.md` sentence about which transport they use, not from reading
+  their importer. It is the stated motivation for part 1 and it is the weakest
+  claim in this record.
+- `Slim::Networking::SimpleSyncHTTP` reaches `LWP::UserAgent`, whose `timeout`
+  is documented as a per-operation limit rather than a whole-request budget.
+  Whether one slow-but-alive response can exceed the timeout repeatedly and
+  still not abort is **unverified**, and it is why the survey asks whether the
+  bound is per request or for the whole sync.
+- The two importer-skipping paths were found by grepping LMS's own tree. A
+  third-party skin or plugin calling `rescan album <id>` would skip our
+  importer without appearing in that grep.
