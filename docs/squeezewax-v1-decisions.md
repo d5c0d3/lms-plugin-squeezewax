@@ -2236,6 +2236,11 @@ conclusions and the freshly-synced collection, costing no file reads at all;
 completes, in the server, not at scan start. The completed-sync rule below is
 unchanged.
 
+**Superseded in part by §15.18.** "In the server" is now the fallback: the scan
+trigger runs inside the scan itself, from our own importer, and the server's
+`['rescan','done']` sync runs only for scans that one did not. The
+completed-sync rule below is unchanged and governs both paths.
+
 **Decided: ~~three triggers — the start of a music scan, the interval pref, and a
 manual "Sync collection now" button.~~** **Corrected 2026-09-22 — see §15.2 and
 §15.15.** Two triggers: a music scan **finishing** (`['rescan','done']`,
@@ -3088,6 +3093,13 @@ badge but node F would.
 
 **Decided 2026-09-15 (design chat).** Corrects §13.7's first trigger.
 
+> **Superseded in part by §15.18 (2026-09-26).** The sync and the pass now also
+> run inside the scan, from our own second importer, and the server-side path
+> described here survives as the fallback for scans our importer did not run.
+> §15.18 answers this record's four reasons one by one; its `['rescan','done']`
+> trigger and its refusal while another process holds the write lock stand.
+> This section records what was decided then and is not rewritten.
+
 **Decided: all three sync triggers run the sync and the ownership pass in the
 server process, over asynchronous HTTP. The scan trigger fires on
 `['rescan','done']`, debounced, not at scan start.**
@@ -3671,7 +3683,9 @@ Read at slimserver `a670a38c2b14ad42b86a39884bcb842121b35571` (`public/9.1`,
 
 The importer's `use` gate is `scalar @{discogsTagNames}`. Identification is
 tag-driven and nothing else runs in the importer, so gating on tag names is
-exactly right and needs no revision.
+exactly right and needs no revision. (True of the identification importer class
+only since §15.18: the scan-time sync is a second importer class with its own
+gate on the token, and §15.18 part 9 reaffirms this gate unchanged.)
 
 `plans/build-order-step-4-structural-matching.md` §0.7 prescribed
 `@discogsTagNames || ($maxTier ne 'strict' && $token)`, and `TODO.md` carried an
@@ -3874,8 +3888,9 @@ it decided. Also corrects the gate in §15.7.
 1. **The `local_tracks` gate in `Importer.pm` stays.** §13.10.1's decision —
    all albums, all-remote ones included, are in scope — is unchanged and is
    carried by the **ownership pass** (build-order step 7), which must iterate
-   every album. It is not carried by the importer, which since §15.2 does
-   identification only.
+   every album. It is not carried by the identification importer, which since
+   §15.2 does identification only; since §15.18 the pass also runs in the
+   scanner, from the second importer, and still covers every album there.
 2. **§15.7's gate keys on the equivalence having fired, not on
    `albums.compilation`.** An album whose artist agreement is reached only
    through the `Various` mapping does not auto-badge until the pages 2–3

@@ -287,7 +287,8 @@ sub _ensureWalMode {
 	my ( $class, $dbh ) = @_;
 
 	if (main::SCANNER) {
-		# The scanner never mutates the file - see decisions §2. Read only.
+		# The scanner never changes the file's journal mode - see decisions §2.
+		# Read only. (It does write rows, and since step 8b the pass's too.)
 		my ($mode) = $dbh->selectrow_array( 'PRAGMA ' . DB_SCHEMA . '.journal_mode' );
 
 		if ( !$mode || lc($mode) ne 'wal' ) {

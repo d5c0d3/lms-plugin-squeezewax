@@ -215,8 +215,8 @@ sub _setChanged {
 # server, and this file is loaded only under main::WEBUI.
 #
 # Everything that decides anything lives in API/Async.pm - including the guard
-# that stops this button, the interval timer and ['rescan','done'] from starting
-# three overlapping syncs. This sub renders a result; it does not own one.
+# that stops this button and the ['rescan','done'] fallback from starting two
+# overlapping syncs. This sub renders a result; it does not own one.
 sub _syncNow {
 	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
 
@@ -294,8 +294,8 @@ sub _syncResultString {
 	my $error = $result->{error} || 'unknown';
 
 	# error, not warn, and separately from the rest: this one is not going to
-	# fix itself, and every future interval tick will fail the same way until
-	# the user does something about it.
+	# fix itself, and every future sync will fail the same way until the user
+	# does something about it.
 	if ( $error eq 'unauthorized' ) {
 		$log->error('collection sync failed: Discogs rejected the token');
 

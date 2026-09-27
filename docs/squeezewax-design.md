@@ -746,8 +746,12 @@ or unreachable:
   `error` for a token Discogs rejected, which will not. There is no retry timer
   (`squeezewax-v1-decisions.md` §15.15): the next library scan to finish, or a
   press of "Sync collection now", is the retry. While a token is rejected,
-  scan-triggered syncs are skipped until the token changes or a manual sync
-  succeeds, because retrying a rejected token cannot succeed. **A
+  the server's scan-triggered fallback is skipped until the token changes or a
+  manual sync succeeds, because retrying a rejected token cannot succeed. The
+  scan-time sync (`squeezewax-v1-decisions.md` §15.18) cannot keep that pause -
+  the scanner is a fresh process each scan - so it logs every failure at
+  `error`, a rejection included, and tries again at the next scan; its
+  failures never reach the settings page or the queue page. **A
   failed or partial sync leaves the previous ownership conclusions untouched**
   — it never clears a badge it could not reconfirm. A badge that silently
   vanishes is the same class of failure as one that is silently wrong, and the
@@ -834,8 +838,9 @@ would let a user opt into wrong badges
   (`squeezewax-v1-decisions.md` §15.15):** there is no scheduled sync and no
   interval setting. Wantlist sync is v2 (§11).
 - **"Sync collection now"** — a manual trigger, alongside the one automatic
-  trigger in §3, a library scan finishing
-  (`squeezewax-v1-decisions.md` §13.7, §15.2, §15.15). Both this button and
+  trigger in §3, a library scan: inside the scan since
+  `squeezewax-v1-decisions.md` §15.18, with the server's sync after the scan
+  finishes as the fallback (§13.7, §15.2, §15.15, §15.18). Both this button and
   "Test token" act on the token **currently on the page**, and both save it
   (§15.15 part 3); the page says so.
 - **Last-synced timestamp**, displayed. When the badges look wrong this is the

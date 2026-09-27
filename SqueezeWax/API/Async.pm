@@ -70,11 +70,17 @@ use constant SYNC_TIMEOUT => 3600;
 # This lives here rather than in Settings.pm - which is where %detection's
 # equivalent lives, and where step 5's plan put it - because Settings.pm is
 # loaded only under main::WEBUI (Plugin.pm's initPlugin, following
-# refs/lms-plugin-tidal/Plugin.pm:60-66). Two of the three triggers this guard
-# exists to serialise, the interval timer and ['rescan','done'], are server-wide
-# and must work on a headless server, which never loads Settings.pm at all -
-# decisions §15.12 part 3, the same trap Plugin.pm's own $prefs->migrate comment
-# records. The guard belongs with the thing it guards.
+# refs/lms-plugin-tidal/Plugin.pm:60-66). One of the two triggers this guard
+# exists to serialise, ['rescan','done'], is server-wide and must work on a
+# headless server, which never loads Settings.pm at all - decisions §15.12 part
+# 3, the same trap Plugin.pm's own $prefs->migrate comment records. The guard
+# belongs with the thing it guards. (There were three triggers until §15.15
+# part 1 removed the interval timer.)
+#
+# It does NOT serialise the scan-time sync (decisions §15.18). That one runs in
+# the scanner, a separate process this flag cannot see; the two cannot overlap
+# on the database anyway, because the server path's pass is refused while a
+# scan holds the write lock (Match::_writeOk).
 #
 # `id` is what makes a superseded run harmless: a stale run's in-flight HTTP
 # request cannot be cancelled and will still call back, so _finish compares the
@@ -397,8 +403,8 @@ sub _handle {
 		}
 
 		# Out of retries. API.pm's MAX_RETRIES comment has the reasoning: this
-		# is no longer ordinary pacing, and the right response is to fail the
-		# sync for this interval rather than retry forever.
+		# is no longer ordinary pacing, and the right response is to fail this
+		# sync rather than retry forever.
 	}
 
 	return _fail( $run, $result ) unless $result->{ok};
@@ -538,8 +544,8 @@ sub _fail {
 # working collection look like it vanished.
 #
 # Which log level is the caller's decision, not this one's: only the caller
-# knows whether a failure followed a button press the user is watching or a
-# background interval tick.
+# knows whether a failure followed a button press the user is watching or the
+# unattended fallback after a scan.
 sub _finish {
 	my ( $run, $result ) = @_;
 
