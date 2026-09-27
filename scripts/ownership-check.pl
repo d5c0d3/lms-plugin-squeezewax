@@ -925,4 +925,197 @@ is_deeply(
 	is( $identified, 12, '  ...while every identification survives' );
 }
 
+# ===========================================================================
+# The pass inside the scanner's transaction (decisions §15.18 part 13)
+# ===========================================================================
+#
+# The first assertions in this project against a handle with AutoCommit off -
+# the scanner's shape, set exactly as scanner.pl:295 sets it, after connect.
+# Until step 8b every suite opened its handle with AutoCommit => 1, so no
+# scanner transaction branch had ever run offline.
+#
+# Two connections to the same files: $sdbh is the scanner, $dbh the observer.
+# What the observer can see is what is COMMITTED, which is the whole question.
+# SQLite locking means the observer may only write while the scanner has
+# nothing open, so settle() commits the scanner side first.
+
+diag('§15.18 part 13: the pass on the scanner\'s transaction');
+
+my $sdbh = DBI->connect( "dbi:SQLite:dbname=$dir/library.db", '', '', {
+	RaiseError => 1, PrintError => 0, AutoCommit => 1,
+} );
+$sdbh->do('PRAGMA foreign_keys = ON');
+$sdbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax");
+$sdbh->{AutoCommit} = 0;
+
+# Scan work the pass must never take down with it: stands in for identification
+# rows written earlier in the same scan. A table of our own, so the pass's
+# queries cannot touch it.
+$sdbh->commit;
+$dbh->do('CREATE TABLE scan_work (n INTEGER)');
+
+our @FORCE_COMMITS;
+
+{
+	no warnings 'redefine', 'once';
+
+	# Slim/Schema.pm:2364-2388: commit when not AutoCommit, SWALLOWING a
+	# failure with a warning. Modelled, not simplified - the swallow is why the
+	# marker rides the same transaction (§15.18 part 13).
+	*Slim::Schema::forceCommit = sub {
+		my $h = Slim::Schema->dbh;
+		push @FORCE_COMMITS, 1;
+		eval { $h->commit } if !$h->{AutoCommit};
+		return;
+	};
+}
+
+sub settle { $sdbh->commit if !$sdbh->{AutoCommit}; return }
+
+sub allRows {
+	my $h = shift;
+	return $h->selectall_arrayref(
+		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
+}
+
+sub scanWork {
+	my $h = shift;
+	my ($n) = $h->selectrow_array('SELECT COUNT(*) FROM scan_work');
+	return $n;
+}
+
+# A progress handle that records, at each tick, how many rows this connection
+# had changed so far. If any tick saw a change the pass made, a tick fell inside
+# (or after) the writes.
+{
+	package Test::StubProgress;
+	sub new { my ( $class, $h ) = @_; bless { h => $h, ticks => [] }, $class }
+	sub update {
+		my $self = shift;
+		my ($changes) = $self->{h}->selectrow_array('SELECT total_changes()');
+		push @{ $self->{ticks} }, $changes;
+		return;
+	}
+}
+
+# Start from the empty-collection state the section above left, committed.
+my $emptyState = allRows($dbh);
+
+# --- success: scan work committed first, the pass left to the caller ------
+{
+	no warnings 'redefine', 'once';
+	local *Slim::Schema::dbh = sub { $sdbh };
+
+	settle();
+	@FORCE_COMMITS = ();
+
+	$sdbh->do('INSERT INTO scan_work VALUES (1)');
+	is( scanWork($dbh), 0, 'scan work written in the scanner is not yet visible outside it' );
+
+	my ($changesBefore) = $sdbh->selectrow_array('SELECT total_changes()');
+	my $progress = Test::StubProgress->new($sdbh);
+
+	is( $O->apply( \@collection, $progress ), 'ok', 'the pass runs on an AutoCommit-off handle' );
+
+	is( scalar @FORCE_COMMITS, 1, '  ...committing exactly once, the leading forceCommit' );
+	is( scanWork($dbh), 1, '  ...which made the scan\'s earlier work durable' );
+	ok( !$sdbh->{AutoCommit}, '  ...and did not open a transaction of its own (no begin_work)' );
+
+	is_deeply( allRows($dbh), $emptyState,
+		'  ...and committed NOTHING of the pass: the caller commits (§15.18 part 13)' );
+	is( rowFor_on( $sdbh, $K{d_strict} )->{ownership}, 'exact',
+		'  ...though the scanner\'s own transaction sees the pass\'s writes' );
+
+	my ($albums) = summary() =~ /^ownership pass: (\d+) albums/;
+	is( scalar @{ $progress->{ticks} }, $albums, 'the progress row is ticked once per album' );
+	ok( !( grep { $_ != $changesBefore } @{ $progress->{ticks} } ),
+		'  ...and every tick came before the pass wrote anything (none inside _write)' );
+
+	$sdbh->commit;
+	is( rowFor( $K{d_strict} )->{ownership}, 'exact', 'the caller\'s commit makes the pass durable' );
+}
+
+my $fullState = allRows($dbh);
+
+# --- determinism and the refused guard, on the scanner handle --------------
+{
+	no warnings 'redefine', 'once';
+	local *Slim::Schema::dbh = sub { $sdbh };
+
+	settle();
+
+	is( $O->apply( \@collection ), 'ok', 'a second pass on the scanner handle runs' );
+	$sdbh->commit;
+	is_deeply( allRows($dbh), $fullState, '  ...and changes nothing - determinism holds here too' );
+
+	@FORCE_COMMITS = ();
+	local *Plugins::SqueezeWax::Match::_writeOk = sub { 0 };
+
+	is( $O->apply( [] ), 'refused', 'a refused write on the scanner handle reports refused' );
+	is( scalar @FORCE_COMMITS, 0, '  ...commits nothing' );
+	$sdbh->commit;
+	is_deeply( allRows($dbh), $fullState, '  ...and changes nothing' );
+}
+
+# --- a die mid-write leaves nothing of the pass, and keeps the scan's work --
+#
+# From the full state to the empty collection is updates AND deletes. The
+# trigger fires on the delete phase, after every update has landed - so a pass
+# without the leading forceCommit, or without the rollback, would leave half of
+# itself behind for the next commit.
+{
+	settle();
+
+	# Any ownership-only row is deleted by an empty-collection pass.
+	my ($victim) = $dbh->selectrow_array(
+		q{SELECT album_key FROM squeezewax.discogs_match
+		   WHERE match_tier IS NULL AND discogs_release_id IS NULL
+		     AND snapshot_track_count IS NULL AND review_reason IS NULL
+		   ORDER BY album_key DESC LIMIT 1} );
+	ok( $victim, 'the fixture has an ownership-only row for the empty pass to delete' );
+
+	$dbh->do( qq{CREATE TRIGGER squeezewax.boom BEFORE DELETE ON discogs_match
+		WHEN OLD.album_key = '$victim'
+		BEGIN SELECT RAISE(ABORT, 'injected mid-write failure'); END} );
+
+	for my $side ( [ scanner => $sdbh ], [ server => $dbh ] ) {
+		my ( $name, $h ) = @$side;
+
+		no warnings 'redefine', 'once';
+		local *Slim::Schema::dbh = sub { $h };
+
+		settle();
+		my $workBefore = scanWork($dbh);
+
+		$h->do('INSERT INTO scan_work VALUES (2)') if $name eq 'scanner';
+
+		is( $O->apply( [] ), 'failed', "$name handle: a die inside _write reports failed" );
+
+		settle();
+
+		is_deeply( allRows($dbh), $fullState,
+			"  ...and after the rollback no partial pass is visible - not one update" );
+
+		if ( $name eq 'scanner' ) {
+			is( scanWork($dbh), $workBefore + 1,
+				'  ...while the scan\'s earlier work, committed first, survives the rollback' );
+
+			# And a later forceCommit - the next COMMIT_EVERY, endImporter, or
+			# the abort path's cleanup - has nothing of the pass left to commit.
+			local *Slim::Schema::dbh = sub { $sdbh };
+			Slim::Schema->forceCommit;
+			is_deeply( allRows($dbh), $fullState,
+				'  ...and a later forceCommit commits nothing of the failed pass' );
+		}
+	}
+
+	$dbh->do('DROP TRIGGER squeezewax.boom');
+}
+
+sub rowFor_on {
+	my ( $h, $key ) = @_;
+	return $h->selectrow_hashref(
+		'SELECT * FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key );
+}
+
 done_testing();

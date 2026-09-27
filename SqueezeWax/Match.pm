@@ -489,11 +489,16 @@ sub relinkOrphan {
 	# (scanner.pl:295, quoted in Importer.pm's COMMIT_EVERY comment), so both
 	# statements already ride it and begin_work would die with "already in a
 	# transaction". In the server the handle is AutoCommit = 1
-	# (Slim/Schema.pm:274) and there is nothing to ride, so one is opened here -
-	# the same shape Ownership::_write uses, which only ever runs server-side.
+	# (Slim/Schema.pm:274) and there is nothing to ride, so one is opened here.
 	#
 	# Hence the conditional rather than an unconditional begin_work: the
 	# guarantee is "one transaction", not "a transaction this sub opened".
+	#
+	# Ownership::_write branches the same way since step 8b, when the pass began
+	# running in the scanner too - and needs one thing more than this shape: a
+	# leading forceCommit on the scanner branch, so that its rollback discards
+	# only the pass (decisions §15.18 part 13). This sub does without it because
+	# its partial effect is a delete of regenerable rows (see the die below).
 	my $ownTxn = $dbh->{AutoCommit} ? 1 : 0;
 
 	$dbh->begin_work if $ownTxn;

@@ -214,10 +214,18 @@ sub _artistsAgree {
 # The pass itself.
 # ---------------------------------------------------------------------------
 
-=head2 apply( \@entries )
+=head2 apply( \@entries [, $progress ] )
 
 Re-derive C<ownership> for B<every> album from a completed collection sync, and
 write the result. Returns C<'ok'>, C<'refused'> or C<'failed'>.
+
+C<$progress>, when given, is a C<Slim::Utils::Progress> ticked once per album
+during the decide walk and never during the writes. The scan-time sync passes
+its row (decisions §15.18 part 12); the server passes nothing.
+
+On an C<AutoCommit> handle (the server) the pass commits its own writes. On the
+scanner's handle it commits the scan's pending work first, writes, and leaves
+the commit to the caller - see C<_write>.
 
 C<\@entries> is the sync's own in-memory list, one hashref per collection item:
 C<instance_id>, C<id> (release), C<master_id>, C<title>, C<artists>. Nothing
@@ -228,17 +236,21 @@ truth to keep correct.
 =cut
 
 sub apply {
-	my ( $class, $entries ) = @_;
+	my ( $class, $entries, $progress ) = @_;
 
-	# Rule one, before anything is read: the pass is a server-side writer, so
-	# it is refused while a scan holds the write lock (Match.pm:43-85). Checked
-	# up front rather than at the writes, because walking the whole library to
-	# then throw the answer away is the expensive way to find out.
+	# Rule one, before anything is read. The pass writes from either process
+	# since step 8b (decisions §15.18 part 1), and _writeOk (Match.pm:43-85)
+	# answers for both: in the server it refuses while a scan holds the write
+	# lock; in the scanner it permits, because there the scan IS the caller -
+	# the pass runs from our own importer, after identification has finished.
+	# Both refuse a schema that is not ready. Checked up front rather than at
+	# the writes, because walking the whole library to then throw the answer
+	# away is the expensive way to find out.
 	if ( !Plugins::SqueezeWax::Match->_writeOk ) {
 		return 'refused';
 	}
 
-	my $result = eval { _apply($entries) };
+	my $result = eval { _apply( $entries, $progress ) };
 
 	if ( !$result ) {
 		$log->error( 'the ownership pass failed: ' . ( $@ || 'unknown error' ) );
@@ -534,7 +546,7 @@ sub _reasonFor {
 }
 
 sub _apply {
-	my ($entries) = @_;
+	my ( $entries, $progress ) = @_;
 
 	my $index = _indexCollection($entries);
 	my $rows  = _loadRows();
@@ -571,6 +583,14 @@ sub _apply {
 	Plugins::SqueezeWax::Library->eachAlbum( sub {
 		my $album = shift;
 		my $key   = $album->{album_key};
+
+		# One tick per album, here in the decide walk and nowhere in _write.
+		# In the scanner, update() is the abort mechanism: an abort exits from
+		# inside it (Slim/Utils/Progress.pm:221-245 -> SQLiteHelper.pm:444-459)
+		# into cleanup's forceCommit. Every abort point therefore has to fall
+		# where nothing of the pass is written yet, and this walk writes nothing
+		# (§15.18 part 12).
+		$progress->update if $progress;
 
 		$seen{$key} = 1;
 		$count{albums}++;
@@ -730,10 +750,48 @@ sub _apply {
 	return 'ok';
 }
 
-# One transaction for the whole pass. Every album is decided before anything is
-# written, so what lands is a complete conclusion rather than a prefix of one -
-# a half-applied pass would show some badges from this sync and some from the
-# last, which is §13.7's named failure.
+# One transaction for the whole pass's writes. Every album is decided before
+# anything is written, so what lands is a complete conclusion rather than a
+# prefix of one - a half-applied pass would show some badges from this sync and
+# some from the last, which is §13.7's named failure.
+#
+# Which transaction depends on the handle, not on the process (decisions §15.18
+# part 13) - branched on AutoCommit, as Match::relinkOrphan does, so a suite can
+# exercise both sides:
+#
+# - AutoCommit on (the server, Slim/Schema.pm:274): nothing is open, so this
+#   opens one, commits it, and rolls it back on failure.
+#
+# - AutoCommit off (the scanner, scanner.pl:295): one long transaction is open
+#   for the whole scan, begin_work would die "Already in a transaction"
+#   (CPAN/DBI.pm:1716-1719), and so the writes ride it. That alone is NOT
+#   enough, and is why this does more than relinkOrphan's conditional: whatever
+#   else is uncommitted rides it too, so a rollback after a failed write would
+#   also throw away the scan's own work - and NOT rolling back would leave half
+#   a pass for the next forceCommit, or the abort path's (scanner.pl:450, traced
+#   in Importer.pm's COMMIT_EVERY comment), to make durable. relinkOrphan can live with that because its partial effect is a
+#   delete of regenerable rows; the pass's partial effect is badges.
+#
+#   So the scan's pending work is committed FIRST, with the same
+#   Slim::Schema->forceCommit the importer uses. After it the pass's writes are
+#   the only uncommitted work, a rollback discards exactly the pass, and the
+#   error is re-thrown so apply reports 'failed'. On success this returns WITHOUT
+#   committing: the caller writes the marker and then commits, so the marker and
+#   the pass share one fate. forceCommit swallows a failed commit
+#   (Slim/Schema.pm:2380-2384), and if that commit is lost the marker is lost
+#   with it and the server's fallback re-syncs.
+#
+#   A SAVEPOINT would be the textbook answer and was rejected: there is none
+#   anywhere in Slim/, so it has no in-tree precedent, and its behaviour with
+#   this DBD::SQLite is unverified.
+#
+#   What this does not claim: the pass is not atomic against the scan as a
+#   whole. It never was - every COMMIT_EVERY boundary in the importer already
+#   commits identification work - and the leading forceCommit is one more such
+#   boundary.
+#
+# No $progress->update in here, ever. In the scanner update() can exit into
+# cleanup's forceCommit, which would make half a pass durable.
 sub _write {
 	my ( $insert, $update, $delete, $count ) = @_;
 
@@ -741,7 +799,14 @@ sub _write {
 
 	my $dbh = Slim::Schema->dbh;
 
-	$dbh->begin_work;
+	my $ownTxn = $dbh->{AutoCommit} ? 1 : 0;
+
+	if ($ownTxn) {
+		$dbh->begin_work;
+	}
+	else {
+		Slim::Schema->forceCommit;
+	}
 
 	eval {
 		# Only the four columns. Everything else stays NULL, which is what makes
@@ -813,10 +878,12 @@ sub _write {
 		}
 
 		# The predicate is repeated in SQL rather than trusted from the read.
-		# Between the load and the write the importer cannot have run - a scan
-		# would have made _writeOk refuse - but the row is the one thing in this
-		# database that is not disposable, and the cost of the extra clauses is
-		# nothing.
+		# Between the load and the write the importer cannot have run: in the
+		# server a scan would have made _writeOk refuse, and in the scanner the
+		# pass runs from our own later importer, after identification's loop has
+		# finished (Slim/Music/Import.pm:452-459 runs post importers one after
+		# another, by weight). But the row is the one thing in this database
+		# that is not disposable, and the cost of the extra clauses is nothing.
 		my $del = $dbh->prepare_cached(
 			q{DELETE FROM squeezewax.discogs_match
 			   WHERE album_key = ?
@@ -831,7 +898,7 @@ sub _write {
 
 		$del->finish;
 
-		$dbh->commit;
+		$dbh->commit if $ownTxn;
 
 		1;
 	} or do {
