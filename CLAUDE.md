@@ -111,7 +111,9 @@ sits where it does.
 8b. **Sync and ownership pass inside the scan** — a second `post` importer of
    ours fetches the collection and derives ownership during the scan, so the
    badges are right when the scan finishes; the server-side sync survives as the
-   fallback. Plan: `plans/build-order-step-8b-sync-in-scan.md`; decisions §15.18
+   fallback. Plan: `plans/build-order-step-8b-sync-in-scan.md`; decisions §15.18 —
+   **code complete** (`cc43158`, packaged as 0.0.0.11); the plan §7 hardware
+   checks are open in `TODO.md`
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
 
