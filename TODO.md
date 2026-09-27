@@ -1298,6 +1298,25 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-27: the skip window can span two scans, on servers with
+      auto-rescan enabled.** Decisions §15.18's as-built note. The auto-rescan
+      is in-process (`Slim/Utils/AutoRescan.pm:126`, `:205` →
+      `Slim::Utils::Scanner::Local->rescan`), so our importer does not run, but
+      it still notifies `['rescan','done']`. If one finishes within
+      `DEBOUNCE_AFTER_RESCAN` of an ordinary scan, the ordinary scan's marker
+      suppresses the fallback the auto-rescan needed, and its albums stay
+      unbadged until the next scan or the button. The `autorescan` pref defaults
+      to 0 (`Slim/Utils/Prefs.pm:165`). Accepted 2026-09-27; the remedy, if this
+      is ever seen, is the one-timestamp rule recorded in §15.18's as-built
+      note. **Not observed.**
+
+- [ ] **2026-09-27: `ownership-offline-check.pl` cannot reach the pass's scanner
+      branch.** It opens its handle with `AutoCommit => 1`, like every suite
+      before `scan-sync-check.pl`, so `Ownership::_write`'s scanner path is
+      exercised only by the new suite's fixtures and never against a copy of a
+      real database. If that script is ever run again on real data, give it a
+      second pass with `AutoCommit => 0`.
+
 - [ ] **2026-09-27: the scan-time sync has no proxy support.**
       `Slim::Networking::SimpleSyncHTTP` passes no proxy to `LWP::UserAgent`
       (`:89-93`), while the async stack honours `webproxy`

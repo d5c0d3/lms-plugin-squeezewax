@@ -587,3 +587,21 @@ The motivation is part 1's claim, so check that first.
 
 Anything that cannot be provoked goes to `TODO.md` rather than being marked
 passed.
+
+## §8. Build result (2026-09-27)
+
+Built in §6's order at `7a8f8d7`..`5ce85a9`, packaged as 0.0.0.11. Suites 1181 →
+1459. Every anchor matched once. Each of §6's three risk areas has a test that
+was confirmed to fail when the code was broken on purpose: the marker written
+before the pass, `_write`'s leading `forceCommit` removed, its rollback removed,
+and either abandon check moved after the response. The plan's one assumption that
+did not hold is recorded in decisions §15.18's as-built note: "the previous
+rescan-done" had to mean the previous scan rather than the previous notification.
+
+The sweep found four places beyond §12.12's list — the settings page's sync
+description still advertised "the interval below", design §8 and §9 still placed
+the trigger in the server and the rejection pause on every scan-triggered sync,
+and `API/Async.pm` and `Settings.pm` still had comments naming the removed
+interval timer. All corrected.
+
+§7's checks are open and need 0.0.0.11 installed from the pushed `repo.xml`.

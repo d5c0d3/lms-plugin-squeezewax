@@ -4680,3 +4680,56 @@ so.
 - **The "evidence is thin" bullet about `LWP`'s timeout is resolved**, in the
   direction that was feared: the timeout is per operation, so the whole-sync
   budget of part 10 is not optional. It is replaced by a hardware item.
+
+#### As built, 2026-09-27 (`7a8f8d7`..`5ce85a9`, 0.0.0.11)
+
+Built in the plan's order, ten commits, 1181 → 1459 assertions. Four decisions
+the plan did not make, and one interpretation of a rule it did.
+
+- **"The previous rescan-done" means the previous *scan*, not the previous
+  notification.** A scan notifies `['rescan','done']` two or three times within a
+  few seconds, so read literally the rule of part 8 would shrink its window to
+  those seconds and never skip. As built, a notification arriving while a tick is
+  still armed moves only the window's upper end — the same treatment the debounce
+  already gives a duplicate. **Reviewed and confirmed as the rule's intent**, not
+  a deviation from it.
+- **Named cost of that, which the rule cannot avoid:** when two scans'
+  notifications both arrive before the tick runs, the window spans both. If the
+  first ran our importer and the second did not, the first scan's marker
+  suppresses the fallback, and the second scan's new albums stay unbadged until
+  the next scan or the button.
+  *Where that can come from, checked 2026-09-27:* **the auto-rescan**, which is
+  in-process — `Slim/Utils/AutoRescan.pm:126` and `:205` call
+  `Slim::Utils::Scanner::Local->rescan` directly and never launch the external
+  scanner, so our importer does not run, and `Scanner/Local.pm:390-391`,
+  `:662-663` and `:1223-1224` each notify `['rescan','done']` all the same. The
+  pref defaults to 0 (`Slim/Utils/Prefs.pm:165`), so the gap exists only on
+  servers that opted in. `rescan album|track` reaches the same in-process path
+  (`Slim/Control/Request.pm:607`, `Slim/Control/Commands.pm:2745`) but is not a
+  user action: nothing in LMS's own web UI calls it, and it is deliberately not
+  designed around.
+  **Accepted, and the alternatives are recorded so they are not re-proposed.**
+  Closing the window per notification reintroduces the duplicate problem above,
+  which is the common case rather than the rare one. Treating a notification as a
+  duplicate only within ~10 s would fix this case but keeps a guessed number
+  inside the correctness decision. Replacing the window with one remembered
+  timestamp — skip only when a scan marker is newer than the last one the
+  fallback accounted for — would close the gap and delete code, and was
+  **declined on 2026-09-27** as not worth re-opening a mechanism that passes; it
+  is the first thing to reach for if this is ever observed. **Not observed**;
+  recorded in `TODO.md`.
+- **The marker is reached only through `Schema->syncState` and
+  `Schema->recordSync`.** One reader and one writer for a row two processes write,
+  rather than SQL in three files.
+- **A failed marker write is logged, not rolled back.** This does not contradict
+  part 13: part 13 is about a *lost commit*, where the pass goes with the marker.
+  If the marker's own write fails while the pass succeeds, the pass is still
+  correct and the only consequence is that the fallback syncs again sixty seconds
+  later — the same harmless duplicate the skip rule's failure bias already
+  accepts. Rolling back a good pass to keep a bookkeeping row would be the worse
+  trade.
+- **`ScanSync::startScan` returns 1 or 0**, not a change count: `Ownership::apply`
+  returns a status, and `runImporter`'s caller sums the value only to decide
+  whether anything changed (`Slim/Music/Import.pm:404-406`).
+- **The seam suite is spread across C1–C3** rather than added whole in C3, because
+  each commit is required to test its own branches.
