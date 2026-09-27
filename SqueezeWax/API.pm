@@ -1,23 +1,32 @@
 package Plugins::SqueezeWax::API;
 
 # Discogs API request construction, response classification and rate-limit
-# accounting. Pure functions only - this module performs no I/O and owns no
-# transport. Built out over build-order step 4 items 1-3 (token auth, request
-# construction, rate limiting); the synchronous transport it originally
-# carried (sub get, sub _request, wrapping Slim::Networking::SimpleSyncHTTP,
-# shape mirrored from refs/lms-plugin-tidal/API/Sync.pm commit 8df3d452) was
-# deleted at build-order step 5, having never acquired a v1 caller: decisions
-# §13.8 removed the per-album scanner search it was written for, and the
-# collection sync that replaced it is server-side and therefore async.
+# accounting, plus the collection walk's shared pieces. This module performs no
+# network I/O and owns no transport. Built out over build-order step 4 items
+# 1-3 (token auth, request construction, rate limiting); the synchronous
+# transport it originally carried (sub get, sub _request, wrapping
+# Slim::Networking::SimpleSyncHTTP, shape mirrored from
+# refs/lms-plugin-tidal/API/Sync.pm commit 8df3d452) was deleted at build-order
+# step 5, having never acquired a v1 caller: decisions §13.8 removed the
+# per-album scanner search it was written for.
 #
-# Two callers, both supplying their own transport:
+# Two transports since step 8b, one per process, each supplying its own:
 #
-#   - the scanner's Strict identification (steps 3/4) calls buildRequest and
-#     classifyResponse directly;
-#   - API/Async.pm (step 5) wires these same functions, plus accountRequest,
+#   - API/Async.pm (step 5) wires these functions, plus accountRequest,
 #     backoffFor and _parseRateHeaders, to Slim::Networking::SimpleAsyncHTTP
 #     and Slim::Utils::Timers - CLAUDE.md: "Server-side HTTP -> SimpleAsyncHTTP
-#     (async)". Settings.pm's token test predates it and wires its own.
+#     (async)". It is the server's fallback sync and the manual button.
+#   - API/Sync.pm (step 8b) wires the same functions, minus backoffFor, to
+#     Slim::Networking::SimpleSyncHTTP. The scanner calls buildRequest through
+#     it, from our own scan step (decisions §15.18). A second transport is
+#     mandatory there, not chosen: the scanner has no event loop.
+#
+# Settings.pm's token test predates both and wires its own.
+#
+# Until step 8b this header also claimed that "the scanner's Strict
+# identification calls buildRequest and classifyResponse directly". That was
+# false from §13.8 on - identification never talked to Discogs - and is true
+# again now only in the sense above.
 #
 # Keeping the decisions out of the shims is what makes them testable:
 # scripts/api-check.pl covers every function here without constructing a
@@ -51,7 +60,13 @@ use constant WINDOW_SECONDS => 60;
 # a 429 that survives the local throttle three times in a row means
 # something is wrong beyond ordinary pacing (concurrent use of the same
 # token from elsewhere, or a genuinely stuck window), and the right response
-# is to give up and let this sync fail for the interval, not retry forever.
+# is to give up and let this sync fail, not retry forever.
+#
+# Shared by nothing on the scan path. API/Sync.pm never calls backoffFor: four
+# minutes stalled on one request would be four minutes of a scan, and the
+# scanner has no timer to wait on anyway, so a 429 there fails the fetch once
+# and the server's fallback retries a minute after the scan (decisions §15.18
+# parts 2 and 11).
 use constant MAX_RETRIES => 3;
 
 # ---------------------------------------------------------------------------
@@ -66,11 +81,11 @@ use constant MAX_RETRIES => 3;
 #
 # decisions §9.4 pagination hazard: the collection listing and
 # /masters/{id}/versions default to a mutable, non-unique sort, which can
-# shift rows between pages. No paginated endpoint is called by this step
-# (search and collection listing are build-order items 4 and out-of-v1-scope
-# respectively) - recorded here so the first caller that adds one is not the
-# first place this gets decided: pass an explicit sort/sort_order (or
-# equivalent) in $params rather than relying on the endpoint's default.
+# shift rows between pages. The collection listing is paginated and has been
+# called since step 5; its explicit sort is pinned by _collectionParams below,
+# which both transports use. Any further paginated endpoint must do the same:
+# pass an explicit sort/sort_order (or equivalent) in $params rather than
+# relying on the endpoint's default.
 sub buildRequest {
 	my ( $class, $path, $params, $token ) = @_;
 

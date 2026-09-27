@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async Importer Settings Queue Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Importer Settings Queue Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -188,6 +188,13 @@ for scanner in 0 1; do
 		# server, off a completed collection sync (decisions §15.2), so the
 		# scanner never loads it either.
 		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ] || [ "$m" = "Ownership" ]; }; then
+			continue
+		fi
+
+		# API/Sync.pm is the mirror image: the scanner's Discogs client, which
+		# nothing in the server loads - SimpleSyncHTTP warns when it is used
+		# there (Slim/Networking/SimpleSyncHTTP.pm:11, :58).
+		if [ "$scanner" = 0 ] && [ "$m" = "API::Sync" ]; then
 			continue
 		fi
 
@@ -247,6 +254,31 @@ BEGIN {
 				# module the JSON::XS problem lives in.
 				prelude="$API_STUB$TAGS_STUB"
 				note=" (Slim::Utils::PluginManager, Slim::Utils::Prefs stubbed)"
+				;;
+			API::Sync)
+				# Sync.pm pulls API.pm in, hence API.pm's stubs. Its one LMS
+				# dependency of its own, Slim::Networking::SimpleSyncHTTP, is
+				# required at runtime inside _request (the
+				# Slim/Music/Artwork.pm:771 shape), so compiling Sync.pm never
+				# reaches it. It is loaded here instead, for real, and asked for
+				# every method Sync.pm calls - which, unlike SimpleAsyncHTTP's
+				# stub in the case below, does prove those names are spelled
+				# right. Its chain needs three cuts: Slim::Utils::Prefs (TAGS_STUB
+				# supplies preferences()), and Slim::Utils::Cache and
+				# Slim::Utils::Misc, which SimpleHTTP::Base calls only at runtime
+				# and only for cache => 1 or a user-agent string, and which reach
+				# the JSON::XS/Unicode chain every stub here exists to cut.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Utils/Cache.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}  = 1;
+	require Slim::Networking::SimpleSyncHTTP;
+	for my $m (qw(new get code headers content)) {
+		die qq(Slim::Networking::SimpleSyncHTTP cannot $m\n)
+			unless Slim::Networking::SimpleSyncHTTP->can($m);
+	}
+}'
+				note=" (PluginManager, Prefs, Cache, Misc stubbed; SimpleSyncHTTP real)"
 				;;
 			API::Async)
 				# Async.pm pulls API.pm in, hence API_STUB. Its own two LMS

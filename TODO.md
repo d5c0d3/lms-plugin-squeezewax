@@ -30,9 +30,12 @@ Each names its sites so the work is mechanical rather than a search.
         => ''` in `$prefs->init`, and the comment above it.
       - `SqueezeWax/API.pm` — `_testFilter` (the sub, its POD and its
         header comment; moved from `API/Async.pm` at step 8b), and its call
-        site, `API/Async.pm`'s `_finish`, which becomes
-        `[ values %{ $run->{entries} || {} } ]` again.
+        sites: `API/Async.pm`'s `_finish`, which becomes
+        `[ values %{ $run->{entries} || {} } ]` again, and `API/Sync.pm`'s
+        `_fetch`, which becomes `[ values %entries ]`.
       - `scripts/api-check.pl` — the two `_testFilter` assertions.
+      - `scripts/scan-sync-check.pl` — the "test filter, after the gate"
+        block.
       - `scripts/sync-check.pl` — the "test-only collection filter" block
         (15 assertions) and the `@WARNINGS`/`$PREFS` uses it introduced.
       - `docs/dev-repo-workflow.md` §6a — the "On the live server" paragraph
@@ -1327,11 +1330,14 @@ Each names its sites so the work is mechanical rather than a search.
       requests against 60 a minute; revisit only if a 429 is ever seen on a
       scan-time sync.
 
-- [ ] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
+- [x] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
       Strict identification (steps 3/4) calls buildRequest and
       classifyResponse directly". Nothing in the scanner has called either
       since decisions §13.8 removed the per-album search. Correct it in step
       8b, which makes it true again for a different reason.
+      → 2026-09-27: corrected in step 8b's commit C1. The header names both
+      transports and both callers; the scanner calls buildRequest through
+      `API/Sync.pm`.
 
 - [ ] **2026-09-27: no HTTPS request has ever been made from the scanner
       process.** Step 8b is the first. Unobserved: whether
