@@ -130,9 +130,13 @@ BEGIN {
 		push @main::IMPORTERS, [ $importer, $params ];
 		return;
 	};
+	# endImporter commits (Slim/Music/Import.pm:716), and that commit is
+	# modelled: it is exactly the one that would make a half-applied pass
+	# durable if the pass left one behind.
 	*{'Slim::Music::Import::endImporter'} = sub {
 		my ( $class, $importer ) = @_;
 		push @main::EVENTS, "endImporter:$importer";
+		Slim::Schema->forceCommit;
 		return 1;
 	};
 	*{'Slim::Music::Import::stillScanning'} = sub { 1 };
@@ -822,7 +826,7 @@ diag('ScanSync: a successful scan-time sync');
 		'  ...and the pass\'s conclusions are committed with it - the two owned albums badge' );
 
 	is( count_events(qr/^endImporter:Plugins::SqueezeWax::ScanSync$/), 1, 'endImporter is called exactly once' );
-	is( $EVENTS[-1], 'endImporter:Plugins::SqueezeWax::ScanSync', '  ...last' );
+	is( $EVENTS[-2], 'endImporter:Plugins::SqueezeWax::ScanSync', '  ...last, followed only by its own commit' );
 
 	is( $EVENTS[0], 'progress:new:plugin_squeezewax_ownership', 'the progress row is created first' );
 	is( $EVENTS[1], 'commit', '  ...and made visible by a commit before any request' );
@@ -1054,6 +1058,240 @@ require Plugins::SqueezeWax::Importer;
 	is( $IMPORTERS[0][0], 'Plugins::SqueezeWax::Importer', '  ...and only identification' );
 	ok( ( grep { /scan-time collection sync could not be loaded.*syntax error/ } @ERRORS ),
 		'  ...and the failure is logged at error' );
+}
+
+# ===========================================================================
+# The seam (plan §5): where the scanner's transaction, the pass and the marker
+# meet
+# ===========================================================================
+#
+# Three verified hazards meet here, and each is asserted end to end through
+# ScanSync->startScan rather than piecewise: _write's leading forceCommit
+# (ownership-check.pl covers it on its own), the marker's timing, and the
+# abandon rules.
+
+# Identification's work, written earlier in the SAME scan by the importer at
+# weight 120 and still uncommitted when ScanSync starts - what the scanner's
+# long transaction really holds at that point. A no-match row: a table the
+# pass never touches.
+sub pending_identification_work {
+	$sdbh->do( q{INSERT OR REPLACE INTO squeezewax.discogs_no_match (album_key, tier, checked_at)
+		VALUES (?, 'strict', 1)}, undef, $ALBUM_KEY{3} );
+	return;
+}
+
+sub identification_work_committed {
+	my ($n) = $obs->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.discogs_no_match WHERE album_key = ?}, undef, $ALBUM_KEY{3} );
+	return $n;
+}
+
+diag('seam 1: the scanner transaction, the pass and the marker share one fate');
+
+{
+	reset_state();
+	reset_db();
+	$obs->do('DELETE FROM squeezewax.discogs_no_match');
+	$PREFS{discogsToken} = 'token-abc';
+
+	# Nothing is committed by _write itself: at the moment the marker is
+	# written, the observer must see neither the pass's rows nor a marker.
+	my ( $rowsAtMarker, $markerAtMarker );
+
+	no warnings 'redefine', 'once';
+	my $inner = \&Plugins::SqueezeWax::Schema::recordSync;
+	local *Plugins::SqueezeWax::Schema::recordSync = sub {
+		$rowsAtMarker   = committed_rows();
+		$markerAtMarker = committed_marker();
+		return $inner->(@_);
+	};
+
+	pending_identification_work();
+
+	my ($rc) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
+
+	is( $rc, 1, 'a scan-time sync over pending identification work succeeds' );
+	is_deeply( $rowsAtMarker, [], 'when the marker is written, nothing of the pass is committed yet' );
+	ok( !$markerAtMarker, '  ...nor any marker' );
+	is( scalar @{ committed_rows() }, 2, 'after the final commit the pass is durable' );
+	ok( committed_marker(), '  ...and the marker with it' );
+	is( identification_work_committed(), 1, '  ...and identification\'s work too' );
+}
+
+{
+	reset_state();
+	reset_db();
+	$obs->do('DELETE FROM squeezewax.discogs_no_match');
+	$PREFS{discogsToken} = 'token-abc';
+
+	# The final commit is swallowed (Slim/Schema.pm:2380-2384): refused, rolled
+	# back, and nobody told. Because the marker rode the same transaction, it is
+	# lost WITH the pass - there is no marker claiming a sync that never landed,
+	# so the fallback will not believe one (§15.18 part 13).
+	my $commits = 0;
+
+	no warnings 'redefine', 'once';
+	my $inner = \&Slim::Schema::forceCommit;
+	local *Slim::Schema::forceCommit = sub {
+		# The pass's own leading commit is the second; the final one the third.
+		local $main::COMMIT_FAILS = ( ++$commits >= 3 ) ? 1 : 0;
+		return $inner->(@_);
+	};
+
+	pending_identification_work();
+
+	my ($rc) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
+
+	is( $commits, 4,
+		'the run commits four times: visibility, the pass\'s leading one, the final one, endImporter\'s' );
+	ok( !committed_marker(), 'a swallowed final commit leaves NO marker - it went down with the pass' );
+	is_deeply( committed_rows(), [], '  ...and no half of the pass' );
+	is( identification_work_committed(), 1,
+		'  ...while identification\'s work, committed by the pass\'s leading forceCommit, survives' );
+}
+
+{
+	reset_state();
+	reset_db();
+	$obs->do('DELETE FROM squeezewax.discogs_no_match');
+	$PREFS{discogsToken} = 'token-abc';
+
+	# A die inside _write, mid-write, through the whole importer. The trigger
+	# fires on the second of the pass's two inserts, after the first has landed.
+	$obs->do( qq{CREATE TRIGGER squeezewax.boom BEFORE INSERT ON discogs_match
+		WHEN NEW.album_key = '$ALBUM_KEY{2}'
+		BEGIN SELECT RAISE(ABORT, 'injected mid-write failure'); END} );
+
+	pending_identification_work();
+
+	my ($rc) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
+
+	$obs->do('DROP TRIGGER squeezewax.boom');
+
+	is( $rc, 0, 'a die inside _write fails the scan-time sync' );
+	ok( ( grep { /ownership pass failed: .*injected mid-write failure/ } @ERRORS ),
+		'  ...the pass reports it' );
+	ok( ( grep { /ownership pass failed$/ } @ERRORS ), '  ...and ScanSync logs the pass\'s failure' );
+	ok( !committed_marker(), '  ...with no marker' );
+
+	# endImporter's own forceCommit (Import.pm:716) has run by now, as it does
+	# in the real scanner - so anything the pass had left pending would be
+	# committed and visible here.
+	is_deeply( committed_rows(), [], '  ...and no row of the pass visible, even after endImporter\'s commit' );
+	is( identification_work_committed(), 1,
+		'  ...while identification\'s earlier work survives the rollback' );
+	is( count_events(qr/^endImporter:/), 1, '  ...with endImporter called once' );
+}
+
+diag('seam 2: the abandon rules, through the importer');
+
+for my $case (
+	[ 'no rate headers on the first response',
+	  [ identity_response( headers => {} ), page_response( 3, 1, 1, 3 ) ], 'rate_wait', 1 ],
+	[ 'a response past the 120 s budget with a page to go',
+	  [ identity_response( takes => 121 ), page_response( 3, 1, 1, 3 ) ], 'timeout_budget', 1 ],
+	[ 'a 429',
+	  [ identity_response(), { code => 429, headers => healthy_headers(), content => '' },
+	    page_response( 3, 1, 1, 3 ) ], 'rate_limited', 2 ],
+) {
+	my ( $name, $responses, $error, $requests ) = @$case;
+
+	reset_state();
+	reset_db();
+	$PREFS{discogsToken} = 'token-abc';
+
+	my ($rc) = run_scan(@$responses);
+
+	is( $rc, 0, "$name abandons the scan-time sync" );
+	is( scalar @REQUESTS, $requests, "  ...after $requests request(s), before the next" );
+	ok( ( grep { /scan-time collection sync failed: $error/ } @ERRORS ), "  ...logged as $error" );
+	is( count_events(qr/^pass$/), 0, '  ...never reaching the pass' );
+	ok( !committed_marker(), '  ...with no marker' );
+}
+
+{
+	reset_state();
+	reset_db();
+	$PREFS{discogsToken} = 'token-abc';
+
+	# The same spent budget, and the same 125 s, on the LAST response: nothing
+	# follows, so the sync completes.
+	my ($rc) = run_scan(
+		identity_response(),
+		page_response( 3, 1, 1, 3, headers => spent_headers(), takes => 125 ),
+	);
+
+	is( $rc, 1, 'a wait and a budget crossed by the last page cost the scan nothing' );
+	ok( committed_marker(), '  ...and the marker is written' );
+}
+
+diag('seam 3: one error vocabulary in the scanner log');
+
+for my $case (
+	[ { code => 401, headers => healthy_headers(), content => '' }, 'unauthorized' ],
+	[ lwp_internal_500(),                                            'no_response' ],
+	[ { code => 500, headers => healthy_headers(), content => 'x' }, 'server_error' ],
+) {
+	my ( $response, $error ) = @$case;
+
+	reset_state();
+	reset_db();
+	$PREFS{discogsToken} = 'token-abc';
+
+	run_scan($response);
+
+	ok( ( grep { /scan-time collection sync failed: $error / } @ERRORS ),
+		"a $response->{code}" . ( $error eq 'no_response' ? ' from LWP itself' : '' )
+		. " is logged as $error" );
+}
+
+diag('seam 4: the test filter, with the list the pass sees');
+
+{
+	reset_state();
+	reset_db();
+	$PREFS{discogsToken}               = 'token-abc';
+	$PREFS{discogsTestExcludeReleases} = '1001';
+
+	my ($rc) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
+
+	is( $rc, 1, 'a filtered scan-time sync succeeds' );
+	is_deeply( [ sort map { $_->{id} } @{ $APPLIED[0] } ], [ 1002, 1003 ],
+		'  ...and the pass is handed the filtered list' );
+	is_deeply( [ map { $_->{album_key} } grep { ( $_->{ownership} || '' ) eq 'version' } @{ committed_rows() } ],
+		[ $ALBUM_KEY{2} ],
+		'  ...so the hidden release does not badge, here as in the server' );
+	is( committed_marker()->{items}, 3, '  ...while the marker counts the unfiltered collection' );
+	ok( ( grep { /test filter active: hiding 1 releases/ } @WARNINGS ), '  ...and the filter warns' );
+}
+
+diag('seam 5: nothing escapes, and endImporter once, on every path');
+
+{
+	my @paths = (
+		[ 'success',        sub { run_scan( identity_response(), page_response( 3, 1, 1, 3 ) ) } ],
+		[ 'no token',       sub { $PREFS{discogsToken} = ''; run_scan() } ],
+		[ 'playlists mode', sub { local $main::playlists = 1; run_scan() } ],
+		[ 'schema not ready', sub { local $DB_READY = 0; run_scan() } ],
+		[ 'fetch failure',  sub { run_scan( lwp_internal_500() ) } ],
+		[ 'count mismatch', sub { run_scan( identity_response(), page_response( 2, 1, 1, 3 ) ) } ],
+		[ 'transport dies', sub { run_scan() } ],    # no canned response: the stub dies
+	);
+
+	for my $path (@paths) {
+		my ( $name, $run ) = @$path;
+
+		reset_state();
+		reset_db();
+		$PREFS{discogsToken} = 'token-abc';
+
+		my ( $rc, $err ) = $run->();
+
+		is( $err, '', "$name: startScan does not die" );
+		ok( defined $rc && $rc =~ /^[01]$/, "  ...and returns 0 or 1 ($rc)" );
+		is( count_events(qr/^endImporter:Plugins::SqueezeWax::ScanSync$/), 1,
+			'  ...with endImporter called exactly once' );
+	}
 }
 
 done_testing();
