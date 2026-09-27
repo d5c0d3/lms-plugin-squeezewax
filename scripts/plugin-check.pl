@@ -295,7 +295,7 @@ diag('the migration off the interval pref');
 		discogsSyncInterval     => 86400,
 		_ts_discogsSyncInterval => 1789890612,
 		discogsToken            => 'keep-me',
-		discogsLastSynced       => 1790085746,
+		discogsLastSyncError    => 'no_response',
 	);
 
 	$MIGRATIONS{2}->( Test::StubPrefs->new );
@@ -305,7 +305,45 @@ diag('the migration off the interval pref');
 	ok( !exists $PREFS{_ts_discogsSyncInterval},
 		'  ...along with its _ts_ twin (Slim/Utils/Prefs/Base.pm:242-258)' );
 	is( $PREFS{discogsToken},      'keep-me',   '  ...and touches nothing else' );
-	is( $PREFS{discogsLastSynced}, 1790085746,  '  ...including the last-synced time' );
+	is( $PREFS{discogsLastSyncError}, 'no_response', '  ...including the last sync error' );
+}
+
+# ---------------------------------------------------------------------------
+# The migration off the last-synced prefs (decisions §15.18 part 7)
+# ---------------------------------------------------------------------------
+
+diag('§15.18 part 7: last synced is the marker row, not a pref');
+
+{
+	ok( $MIGRATIONS{3}, 'a migrate(3) is registered' );
+
+	local %PREFS = (
+		discogsLastSynced        => 1790085746,
+		_ts_discogsLastSynced    => 1790085746,
+		discogsLastSyncItems     => 203,
+		_ts_discogsLastSyncItems => 1790085746,
+		discogsLastSyncError     => 'no_response',
+		discogsToken             => 'keep-me',
+	);
+
+	$MIGRATIONS{3}->( Test::StubPrefs->new );
+
+	ok( !exists $PREFS{discogsLastSynced},    '  ...and it removes discogsLastSynced' );
+	ok( !exists $PREFS{discogsLastSyncItems}, '  ...and discogsLastSyncItems' );
+	ok( !exists $PREFS{_ts_discogsLastSynced} && !exists $PREFS{_ts_discogsLastSyncItems},
+		'  ...along with their _ts_ twins' );
+	is( $PREFS{discogsLastSyncError}, 'no_response',
+		'  ...but keeps discogsLastSyncError, which is the server\'s alone' );
+	is( $PREFS{discogsToken}, 'keep-me', '  ...and touches nothing else' );
+}
+
+{
+	ok( !exists $PREFS{discogsLastSynced},
+		'discogsLastSynced is not initialised as a default any more' );
+	ok( !exists $PREFS{discogsLastSyncItems},
+		'  ...nor discogsLastSyncItems' );
+	ok( exists $PREFS{discogsLastSyncError},
+		'  ...while discogsLastSyncError still is' );
 }
 
 # ---------------------------------------------------------------------------
@@ -492,14 +530,15 @@ diag('changing the token clears what described the old one');
 
 {
 	reset_state();
-	$PREFS{discogsLastSynced}    = 1790085746;
-	$PREFS{discogsLastSyncItems} = 203;
+	$PREFS{discogsLastSyncError} = 'unauthorized';
 
 	$prefs_under_test->set( 'discogsToken', 'another-token' );
 
-	is( $PREFS{discogsLastSynced}, 1790085746,
-		'  ...but leaves the last-synced time alone' );
-	is( $PREFS{discogsLastSyncItems}, 203, '  ...and the item count' );
+	# The marker is a table row now (§15.18 part 7), which this hook has no
+	# handle on. What is left to pin is that the hook writes the error and
+	# nothing else - a last-synced time is not the old token's to take away.
+	is_deeply( [ grep { $_ ne 'discogsToken' } @WRITES ], ['discogsLastSyncError'],
+		'  ...and writes the error pref and nothing else' );
 }
 
 # The registration itself, not just its body. Deleting the setChange line in

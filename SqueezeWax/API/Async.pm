@@ -1,6 +1,12 @@
 package Plugins::SqueezeWax::API::Async;
 
-# Server-side Discogs client: the collection sync (build-order step 5).
+# Server-side Discogs client: the collection sync (build-order step 5). One of
+# two since step 8b - API/Sync.pm is the other, the fetch the scanner makes
+# inside our own scan step. The split is not a preference: there is no event
+# loop in the scanner (scanner.pl:498, `sub idleStreams {}`), so a timer never
+# fires there and SimpleAsyncHTTP cannot complete (decisions §15.18, "Verified
+# in this session"). Since §15.18 part 5 this path is the FALLBACK after
+# ['rescan','done'] for scans our importer did not run, plus the manual button.
 #
 # API.pm owns every decision this file makes - what a request looks like
 # (buildRequest), what a response means (classifyResponse), how much of the
@@ -24,7 +30,9 @@ package Plugins::SqueezeWax::API::Async;
 # has, so the completed sync HANDS the pass its entry list in memory, the pass
 # runs inside _finish, and the list is dropped when _finish returns. Nothing
 # about a release persists. discogs_match is therefore written during a sync
-# after all - by the pass, never by this module.
+# after all - by the pass, never by this module. The scan-time path hands the
+# pass its list the same way (§15.18 part 1); Ownership::apply is one matching
+# path called from two fetches.
 
 use strict;
 
@@ -36,6 +44,7 @@ use Slim::Utils::Prefs;
 use Slim::Utils::Timers;
 
 use Plugins::SqueezeWax::API;
+use Plugins::SqueezeWax::Schema;
 
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
@@ -98,6 +107,13 @@ my $syncId = 0;
 # sync succeeds (§15.15 part 2). While it is set, scan-triggered syncs are
 # skipped: retrying a token Discogs has rejected cannot succeed, and the only
 # thing a retry produces is another error line in the log.
+#
+# It governs the SERVER FALLBACK ONLY (decisions §15.18 part 4). The scan-time
+# sync runs in a fresh scanner process each scan and has nowhere to keep a
+# pause, so a 401 there is logged and retried at the next scan, as a timeout
+# is - it answers instantly and costs the scan nothing. §15.17 part 4's notice
+# on the queue page describes this flag, so it describes the fallback, which is
+# exactly what it says.
 #
 # In memory, not a pref. It describes this server's last conversation with
 # Discogs, not the user's configuration, and a restart is a perfectly good
@@ -284,13 +300,28 @@ sub isRunning {
 # There is nothing meaningful to show mid-run - a sync is a handful of requests,
 # not a per-album walk like detection - so this is deliberately coarser than
 # %detection's report.
+#
+# "Last synced" is the marker in discogs_sync_state, which both paths write
+# (decisions §15.18 part 7), not a pref: the scanner cannot persist a pref
+# (Slim/Utils/Prefs/Namespace.pm:303), so a pref would go stale on a server
+# whose scan-time sync works perfectly. The key names are the ones the page
+# already reads. An absent row - never synced, or a database that is not ready -
+# is lastSynced 0, which is the value the template tests.
+#
+# lastError stays a pref. It is the server's alone: a scan-time failure is
+# logged only (§15.18 part 3) and never reaches the page.
+#
+# lastSource is returned and not displayed; a display of it is v2.
 sub status {
 	my ($class) = @_;
 
+	my $marker = Plugins::SqueezeWax::Schema->syncState;
+
 	return {
 		running    => $class->isRunning ? 1 : 0,
-		lastSynced => $prefs->get('discogsLastSynced') || 0,
-		lastItems  => $prefs->get('discogsLastSyncItems'),
+		lastSynced => $marker ? $marker->{last_synced} : 0,
+		lastItems  => $marker ? $marker->{items}       : undef,
+		lastSource => $marker ? $marker->{source}      : undef,
 		lastError  => $prefs->get('discogsLastSyncError'),
 	};
 }
@@ -720,11 +751,13 @@ sub _testFilter {
 # (§13.7/§14.2) one rule in one place rather than a convention each caller has
 # to keep.
 #
-# discogsLastSynced advances on success and only on success. A failure records
-# its error - the settings page needs something to show, and §14.2 wants a
-# rejected token to be distinguishable from a dropped connection - but leaves
-# every figure from the last good sync exactly as it was. A transient failure
-# must not make a working collection look like it vanished.
+# The marker (discogs_sync_state, §15.18 part 7) advances on success and only on
+# success, and only after the pass has written - here that means after apply
+# has committed, since the server's handle is AutoCommit. A failure records its
+# error - the settings page needs something to show, and §14.2 wants a rejected
+# token to be distinguishable from a dropped connection - but leaves the marker
+# from the last good sync exactly as it was. A transient failure must not make a
+# working collection look like it vanished.
 #
 # Which log level is the caller's decision, not this one's: only the caller
 # knows whether a failure followed a button press the user is watching or a
@@ -755,9 +788,9 @@ sub _finish {
 	# the prefs and the guard, and it would own the badges too.
 	#
 	# This stays the single exit. The pass is one more condition on the
-	# timestamp advancing, not a second way out: discogsLastSynced means
-	# "ownership last derived", so it may not move for a sync whose conclusions
-	# were never written.
+	# marker advancing, not a second way out: the marker means "ownership last
+	# derived", so it may not move for a sync whose conclusions were never
+	# written.
 	# Hoisted out of the ->apply call it used to be built inside, because the
 	# page gets this same list and it must be the SAME one: _testFilter's whole
 	# safety argument is that a release hidden from the pass is hidden
@@ -790,8 +823,17 @@ sub _finish {
 	}
 
 	if ( $result->{ok} ) {
-		$prefs->set( 'discogsLastSynced',    time() );
-		$prefs->set( 'discogsLastSyncItems', $result->{items} );
+		# source 'server': the fallback's skip rule reads it, and a server sync
+		# must never suppress a fallback (§15.18 part 8).
+		#
+		# A lost marker is logged and does not fail the sync. The pass has
+		# already committed, so the badges are right; what is lost is the page's
+		# timestamp, and the skip rule only ever skips on a 'scan' marker, so it
+		# errs toward syncing whatever happens here.
+		eval { Plugins::SqueezeWax::Schema->recordSync( $result->{items}, 'server' ); 1 }
+			or $log->error( 'ownership was derived but the sync marker was not written: '
+				. ( $@ || 'unknown error' ) );
+
 		$prefs->set( 'discogsLastSyncError', '' );
 	}
 	else {

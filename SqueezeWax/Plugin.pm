@@ -42,6 +42,17 @@ $prefs->migrate(1, sub { $_[0]->remove('discogsMaxTier'); 1 });
 # as migrate(1) above.
 $prefs->migrate(2, sub { $_[0]->remove('discogsSyncInterval'); 1 });
 
+# discogsLastSynced and discogsLastSyncItems are gone: "last synced" is the
+# marker row in discogs_sync_state, which both sync paths write (decisions
+# §15.18 part 7). A pref could not be it - the scanner cannot persist one
+# (Slim/Utils/Prefs/Namespace.pm:303). discogsLastSyncError stays a pref: it is
+# the server's alone. Same pattern, place and reasoning as migrate(1).
+$prefs->migrate(3, sub {
+	$_[0]->remove('discogsLastSynced');
+	$_[0]->remove('discogsLastSyncItems');
+	1;
+});
+
 # A new token is a new chance (§15.15 parts 2 and 3). The last error and the
 # rejection pause both describe the OLD token's last conversation with Discogs,
 # and leaving either in place after the user has fixed the thing they describe
@@ -71,11 +82,10 @@ $prefs->setChange( sub {
 # added to the collection does not badge until the next scan or a press of the
 # button, and staleness is silent.
 #
-# discogsLastSynced is 0, not undef, so "never synced" is a value the template
-# can test rather than a missing key.
+# There is no last-synced pref either (§15.18 part 7). "Never synced" is an
+# absent marker row, which API::Async->status turns into lastSynced 0 - still a
+# value the template can test rather than a missing key.
 $prefs->init({
-	discogsLastSynced    => 0,
-	discogsLastSyncItems => undef,
 	discogsLastSyncError => '',
 
 	# A development aid, not a feature: a comma-separated list of Discogs

@@ -375,7 +375,8 @@ BEGIN {
 		return 1;
 	};
 	*{'Plugins::SqueezeWax::API::Async::status'} = sub {
-		return { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
+		return $main::STATUS
+			|| { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
 	};
 	*{'Plugins::SqueezeWax::API::Async::clearTokenRejected'} = sub {
 		$CALLS{clear_rejected}++;
@@ -407,6 +408,7 @@ require Plugins::SqueezeWax::Settings;
 }
 
 our $DB_READY = 1;
+our $STATUS;
 
 # ---------------------------------------------------------------------------
 # Driving handler()
@@ -1032,6 +1034,43 @@ is_deeply( [ sort keys %{ { map { $_ => 1 } @MISSING_STRINGS } } ], [],
 
 	is_deeply( \@undefined, [],
 		'every PLUGIN_SQUEEZEWAX_* referenced by the plugin is defined in strings.txt' );
+}
+
+# ---------------------------------------------------------------------------
+# "Last synced" on the page (decisions §15.18 part 7)
+# ---------------------------------------------------------------------------
+#
+# status() now reads the marker row, which both sync paths write, and keeps the
+# key names the page already used - so the page itself does not change. What is
+# pinned here is that the page reads those keys and nothing else: a scan-written
+# marker is displayed exactly as a server-written one, and an absent row
+# (lastSynced 0) displays nothing. Until step 8b no assertion bound either.
+
+diag('§15.18 part 7: the page shows the marker, whichever path wrote it');
+
+{
+	# dbReady off, so beforeRender skips the queue count - this suite opens no
+	# database, and the count has nothing to do with the marker.
+	local $DB_READY = 0;
+
+	local $STATUS = { running => 0, lastSynced => 0, lastItems => undef,
+		lastSource => undef, lastError => '' };
+
+	my $params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	ok( !exists $params->{sync}{lastSyncedF},
+		'no marker row: the page formats no last-synced time' );
+
+	$STATUS = { running => 0, lastSynced => 1_790_085_746, lastItems => 203,
+		lastSource => 'scan', lastError => '' };
+
+	$params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	is( $params->{sync}{lastSyncedF}, 'DATE TIME',
+		'a scan-written marker is formatted for the page like any other' );
+	is( $params->{sync}{lastItems}, 203, '  ...with its item count' );
 }
 
 done_testing();

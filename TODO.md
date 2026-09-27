@@ -44,8 +44,8 @@ Each names its sites so the work is mechanical rather than a search.
       the 2026-09-22 hardware check. So a server that used it carries the key
       in `squeezewax.prefs` and would keep it forever. Add
       `$prefs->migrate(N, sub { $_[0]->remove('discogsTestExcludeReleases'); 1 })`
-      beside the existing `migrate(1)` and `migrate(2)` in `Plugin.pm`, at
-      whatever N is next.
+      beside the existing `migrate(1)` to `migrate(3)` in `Plugin.pm`, at
+      N = 4 (3 is step 8b's, which retired the last-synced prefs).
 
 ---
 

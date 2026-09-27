@@ -145,7 +145,7 @@ our @LOG;
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
-	sub error    { }
+	sub error    { shift; push @main::ERRORS, "@_"; return }
 	sub warn     { shift; push @main::WARNINGS, "@_"; return }
 	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
@@ -291,6 +291,8 @@ our @LOG;
 }
 
 use JSON::XS qw(encode_json);
+use DBI;
+use File::Temp qw(tempdir);
 
 # Loaded by file path, as api-check.pl loads API.pm: the repository directory
 # is SqueezeWax/ while the package namespace is Plugins::SqueezeWax:: (CLAUDE.md
@@ -301,6 +303,68 @@ use lib "$Bin/..";
 
 require SqueezeWax::API;
 BEGIN { $INC{'Plugins/SqueezeWax/API.pm'} = 1 }
+
+# The marker (decisions §15.18 part 7) is a row in discogs_sync_state, so this
+# suite now has a database: a scratch file, attached as `squeezewax` and taken
+# through the real migrations, exactly as queue-check.pl does. The ~25
+# assertions that used to read discogsLastSynced / discogsLastSyncItems out of
+# the pref stub read the table instead - same expectations, new home.
+#
+# Schema.pm's file-scope dependencies: Log is already stubbed above; OSDetect is
+# reached only from init/dbFile, which nothing here calls.
+BEGIN {
+	$INC{'Slim/Utils/OSDetect.pm'} = 1;
+	$INC{'Slim/Schema.pm'}         = 1;
+}
+
+require SqueezeWax::Schema;
+BEGIN { $INC{'Plugins/SqueezeWax/Schema.pm'} = 1 }
+
+my $dir = tempdir( CLEANUP => 1 );
+
+my $dbh = DBI->connect( "dbi:SQLite:dbname=$dir/library.db", '', '', {
+	RaiseError => 1, PrintError => 0, AutoCommit => 1,
+} );
+$dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax");
+
+Plugins::SqueezeWax::Schema->_migrate($dbh);
+
+our $DB_READY = 1;
+
+{
+	no warnings 'once', 'redefine';
+
+	*Slim::Schema::dbh = sub { $dbh };
+
+	# The suite migrated directly rather than through postDBConnect, so the
+	# readiness flag was never set. Switchable, for status()'s not-ready case.
+	*Plugins::SqueezeWax::Schema::isReady = sub { $main::DB_READY };
+
+	# The marker write, recorded in the same ordered list as the pref writes and
+	# the pass, then performed for real - so "the pass first, then the marker" is
+	# assertable, and the row the assertions read is the one the code wrote.
+	my $real = \&Plugins::SqueezeWax::Schema::recordSync;
+	*Plugins::SqueezeWax::Schema::recordSync = sub {
+		push @main::WRITES, '<marker>';
+		return $real->(@_);
+	};
+}
+
+# The marker row as a hashref, or undef when there is none.
+sub marker {
+	return $dbh->selectrow_hashref(
+		'SELECT last_synced, items, source FROM squeezewax.discogs_sync_state WHERE id = 0'
+	);
+}
+
+# A marker left by an earlier good sync.
+sub set_marker {
+	my ( $when, $items, $source ) = @_;
+
+	$dbh->do( 'INSERT OR REPLACE INTO squeezewax.discogs_sync_state
+		(id, last_synced, items, source) VALUES (0, ?, ?, ?)',
+		undef, $when, $items, $source || 'server' );
+}
 
 # The ownership pass is exercised in full by scripts/ownership-check.pl. What
 # this suite is about is the WIRING: whether the pass is called at all, what it
@@ -326,6 +390,7 @@ BEGIN {
 
 our @APPLIED;
 our @WARNINGS;
+our @ERRORS;
 our $APPLY_RESULT = 'ok';
 
 require SqueezeWax::API::Async;
@@ -414,9 +479,12 @@ sub reset_state {
 	@RESPONSES    = ();
 	@TIMERS       = ();
 	@KILLS        = ();
-	%PREFS        = ( discogsLastSynced => 0 );
+	%PREFS        = ();
+	$DB_READY     = 1;
+	$dbh->do('DELETE FROM squeezewax.discogs_sync_state');
 	@APPLIED      = ();
 	@WARNINGS     = ();
+	@ERRORS       = ();
 	@LOG          = ();
 	@WRITES       = ();
 	%CHANGES      = ();
@@ -580,14 +648,18 @@ sub run_sync {
 	# nothing a page carried is reachable afterwards. §13.2 - ownership is a
 	# column on discogs_match computed at step 7, not a mirrored collection,
 	# and discogs_collection is not a v1 table.
-	is_deeply( [ sort keys %PREFS ],
-		[ qw(discogsLastSyncError discogsLastSyncItems discogsLastSynced) ],
-		'a completed sync writes exactly three prefs and nothing else - no release survives it' );
+	is_deeply( [ sort keys %PREFS ], [ qw(discogsLastSyncError) ],
+		'a completed sync writes exactly one pref and nothing else - no release survives it' );
 
-	is( $PREFS{discogsLastSyncItems}, 150,
+	my ($rows) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 1, '  ...and exactly one marker row' );
+
+	is( marker()->{items}, 150,
 		'what it keeps is a count' );
 
-	ok( $PREFS{discogsLastSynced} > 0, 'and a timestamp' );
+	ok( marker()->{last_synced} > 0, 'and a timestamp' );
+
+	is( marker()->{source}, 'server', "  ...marked as the server's sync (§15.18 part 8)" );
 
 	is( $PREFS{discogsLastSyncError}, '',
 		'and success clears any previous error' );
@@ -657,8 +729,8 @@ sub run_sync {
 	is( scalar @REQUESTS, 5,
 		'...after MAX_RETRIES + 1 attempts at the page, plus the identity lookup - it gives up rather than retrying forever' );
 
-	is( $PREFS{discogsLastSynced}, 0,
-		'and the timestamp does not move for a sync that did not complete' );
+	ok( !marker(),
+		'and the marker does not move for a sync that did not complete' );
 
 	is( $PREFS{discogsLastSyncError}, 'rate_limited',
 		'...while the failure itself is recorded, so the settings page has something to show' );
@@ -670,8 +742,7 @@ sub run_sync {
 
 {
 	reset_state();
-	$PREFS{discogsLastSynced}    = 1_700_000_000;
-	$PREFS{discogsLastSyncItems} = 203;
+	set_marker( 1_700_000_000, 203 );
 
 	my $result = run_sync( {
 		code    => 401,
@@ -684,16 +755,16 @@ sub run_sync {
 	is( $result->{error}, 'unauthorized',
 		'...distinguishably, so the caller can log it at error level per §14.2' );
 
-	is( $PREFS{discogsLastSynced}, 1_700_000_000,
+	is( marker()->{last_synced}, 1_700_000_000,
 		'the previous timestamp is left exactly as it was' );
 
-	is( $PREFS{discogsLastSyncItems}, 203,
+	is( marker()->{items}, 203,
 		'...and so is the previous count - a transient failure must not make a working collection look like it vanished' );
 }
 
 {
 	reset_state();
-	$PREFS{discogsLastSynced} = 1_700_000_000;
+	set_marker( 1_700_000_000, undef );
 
 	# Page 1 arrives, page 2 does not. The half-finished sync must leave no
 	# trace at all - this is the "a partial scan must never corrupt confirmed
@@ -709,10 +780,10 @@ sub run_sync {
 	is( $result->{error}, 'no_response',
 		'...as no_response, which is what an unanswered request classifies as' );
 
-	is( $PREFS{discogsLastSynced}, 1_700_000_000,
+	is( marker()->{last_synced}, 1_700_000_000,
 		'and it does not advance the timestamp for the pages it did get' );
 
-	ok( !defined $PREFS{discogsLastSyncItems},
+	ok( !defined marker()->{items},
 		'...nor record a count from a partial walk' );
 }
 
@@ -832,7 +903,7 @@ sub run_sync {
 #
 # Decisions §15.13 part 1. The pass is stubbed here; what is under test is that
 # it is called at the right moment, with the whole collection, and that
-# discogsLastSynced advances only when it succeeded - because that timestamp
+# the marker advances only when it succeeded - because that timestamp
 # now means "ownership last derived", not "the collection was read".
 
 {
@@ -903,8 +974,8 @@ sub run_sync {
 	ok( ( grep { $_->{instance_id} == 2201 } @$entries ),
 		'entries from the final page are in the list' );
 
-	ok( $PREFS{discogsLastSynced}, 'discogsLastSynced advances when the pass succeeded' );
-	is( $PREFS{discogsLastSyncItems}, 203, '  ...along with the item count' );
+	ok( marker() && marker()->{last_synced}, 'the marker advances when the pass succeeded' );
+	is( marker()->{items}, 203, '  ...along with the item count' );
 
 	# --- the list reaches the caller (plan §2.2) --------------------------
 	#
@@ -937,8 +1008,8 @@ for my $outcome (qw(refused failed)) {
 	ok( !$result->{ok}, "a sync whose pass returned '$outcome' is not a success" );
 	is( $result->{error}, $outcome, '  ...and reports why' );
 	is( scalar @APPLIED, 1, '  ...having actually called the pass' );
-	ok( !$PREFS{discogsLastSynced},
-		'  ...but discogsLastSynced does NOT advance - it means "ownership last derived"' );
+	ok( !marker(),
+		'  ...but the marker does NOT advance - it means "ownership last derived"' );
 	is( $PREFS{discogsLastSyncError}, $outcome, '  ...and the error is recorded' );
 
 	# No list to the caller. The fetch worked, so there IS one in hand - but a
@@ -966,7 +1037,7 @@ for my $outcome (qw(refused failed)) {
 	ok( !$result->{ok}, 'a count mismatch fails the sync rather than warning' );
 	is( $result->{error}, 'count_mismatch', '  ...as count_mismatch' );
 	is( scalar @APPLIED, 0, '  ...and the pass is never called' );
-	ok( !$PREFS{discogsLastSynced}, '  ...so the timestamp does not advance' );
+	ok( !marker(), '  ...so the marker does not advance' );
 }
 
 {
@@ -1065,8 +1136,9 @@ for my $outcome (qw(refused failed)) {
 	is( scalar @APPLIED, 0, '  ...and never reaches the ownership pass' );
 	# Was `!$PREFS{discogsLastSynced}` - absence of a VALUE, which would also
 	# pass if the pref had been written with a falsy one, and which said
-	# nothing about the other two. Now absence of a WRITE, for all of them.
-	is( scalar @WRITES, 0, '  ...and touches no pref at all' );
+	# nothing about the other two. Now absence of a WRITE, for all of them -
+	# the marker included, since its writes are recorded in the same list.
+	is( scalar @WRITES, 0, '  ...and touches no pref and no marker at all' );
 }
 
 # ---------------------------------------------------------------------------
@@ -1351,27 +1423,26 @@ diag('the single exit: which prefs are written, and when');
 		page_response( 5, 1, 1, 5 ),
 	);
 
-	# §15.13 part 1: the pass runs before any pref is set, so a timestamp can
-	# never claim ownership was derived when it was not.
-	my ($passAt)  = grep { $WRITES[$_] eq '<pass>' }            0 .. $#WRITES;
-	my ($syncAt)  = grep { $WRITES[$_] eq 'discogsLastSynced' } 0 .. $#WRITES;
+	# §15.13 part 1: the pass runs before the marker is written, so a
+	# timestamp can never claim ownership was derived when it was not.
+	my ($passAt)  = grep { $WRITES[$_] eq '<pass>' }   0 .. $#WRITES;
+	my ($syncAt)  = grep { $WRITES[$_] eq '<marker>' } 0 .. $#WRITES;
 
 	ok( defined $passAt, 'a successful sync runs the ownership pass' );
-	ok( defined $syncAt, '  ...and writes discogsLastSynced' );
+	ok( defined $syncAt, '  ...and writes the marker' );
 	ok( defined $passAt && defined $syncAt && $passAt < $syncAt,
-		'  ...the pass FIRST, then the timestamp (§15.13 part 1)' );
+		'  ...the pass FIRST, then the marker (§15.13 part 1, §15.18 part 7)' );
 
 	is_deeply(
 		[ grep { $_ ne '<pass>' } @WRITES ],
-		[qw(discogsLastSynced discogsLastSyncItems discogsLastSyncError)],
-		'  ...and writes exactly those three prefs, in that order'
+		[qw(<marker> discogsLastSyncError)],
+		'  ...and writes exactly the marker and the error pref, in that order'
 	);
 }
 
 {
 	reset_state();
-	$PREFS{discogsLastSynced}    = 1_700_000_000;
-	$PREFS{discogsLastSyncItems} = 203;
+	set_marker( 1_700_000_000, 203 );
 
 	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
 
@@ -1379,7 +1450,7 @@ diag('the single exit: which prefs are written, and when');
 		'a failed sync writes ONLY the error' );
 	ok( !( grep { $_ eq '<pass>' } @WRITES ),
 		'  ...and never reaches the pass' );
-	is( $PREFS{discogsLastSynced}, 1_700_000_000,
+	is_deeply( marker(), { last_synced => 1_700_000_000, items => 203, source => 'server' },
 		'  ...leaving the previous figures exactly as they were' );
 }
 
@@ -1408,6 +1479,59 @@ diag('the single exit: which prefs are written, and when');
 
 	is_deeply( \@fired, ['unauthorized'],
 		'a setChange hook on a pref Async writes does fire, with the new value' );
+}
+
+# ---------------------------------------------------------------------------
+# status(): the page reads the marker (decisions §15.18 part 7)
+# ---------------------------------------------------------------------------
+
+diag('status() reads the marker, whichever path wrote it');
+
+{
+	reset_state();
+
+	my $s = $A->status;
+
+	is( $s->{lastSynced}, 0, 'no marker row reads as lastSynced 0 - "never synced"' );
+	ok( !defined $s->{lastItems}, '  ...with no item count' );
+	ok( !defined $s->{lastSource}, '  ...and no source' );
+
+	set_marker( 1_700_000_123, 203, 'scan' );
+	$PREFS{discogsLastSyncError} = 'no_response';
+
+	$s = $A->status;
+
+	is( $s->{lastSynced}, 1_700_000_123, 'a scan-written marker is what the page shows' );
+	is( $s->{lastItems},  203,           '  ...with its item count' );
+	is( $s->{lastSource}, 'scan',        '  ...and its source, returned though not displayed' );
+	is( $s->{lastError},  'no_response', '  ...while the error is still the pref' );
+
+	# The settings page renders on a server whose database may not be ready.
+	local $DB_READY = 0;
+
+	$s = eval { $A->status };
+	ok( $s, 'status does not die when the schema is not ready' );
+	is( $s->{lastSynced}, 0, '  ...and reads as never synced' );
+}
+
+# A lost marker write: the pass has committed, so the sync is still a success,
+# and the loss is logged at error rather than swallowed.
+{
+	reset_state();
+
+	no warnings 'redefine';
+	local *Plugins::SqueezeWax::Schema::recordSync = sub { die "disk full\n" };
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a marker write that dies does not fail a sync whose pass committed' );
+	ok( !marker(), '  ...no marker is left' );
+	ok( ( grep { /marker was not written.*disk full/ } @ERRORS ),
+		'  ...and the loss is logged at error' );
+	is( $PREFS{discogsLastSyncError}, '', '  ...while the error pref is still cleared' );
 }
 
 done_testing();

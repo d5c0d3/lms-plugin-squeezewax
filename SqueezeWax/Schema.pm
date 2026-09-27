@@ -900,6 +900,67 @@ sub _rebuildMatchTable {
 	return 1;
 }
 
+=head2 syncState()
+
+The "last synced" marker of decisions §15.18 part 7, as a hashref with
+C<last_synced>, C<items> and C<source>; or undef when there is none, which means
+never synced, or when the database is not ready.
+
+=cut
+
+# Both processes read and write discogs_sync_state through these two, so the
+# table's shape is named in one file - this one, which created it.
+#
+# Slim::Schema is called, not `use`d: this file is loaded by suites that have no
+# LMS schema at all, and both processes that load it for real have the database
+# up before any plugin loads (slimserver.pl:437; scanner.pl:230 against :275).
+sub syncState {
+	my $class = shift;
+
+	return undef unless $class->isReady;
+
+	my $row = eval {
+		Slim::Schema->dbh->selectrow_hashref(
+			'SELECT last_synced, items, source FROM ' . DB_SCHEMA
+			. '.discogs_sync_state WHERE id = 0'
+		);
+	};
+
+	if ($@) {
+		$log->error("could not read the sync marker: $@");
+
+		return undef;
+	}
+
+	return $row;
+}
+
+=head2 recordSync( $items, $source [, $when ] )
+
+Write the marker. C<$source> is C<'server'> or C<'scan'>. Dies on failure, so
+the caller decides what a lost marker means for it.
+
+=cut
+
+# INSERT OR REPLACE with id 0: CHECK (id = 0) makes the one-row shape the
+# database's to enforce, and a writer cannot add a second row by mistake.
+#
+# Whether this commits is the handle's business, not this sub's. In the server
+# (AutoCommit on) it is its own statement. In the scanner it rides the pass's
+# open transaction, which is the point: the marker and the pass share one fate
+# (§15.18 part 13).
+sub recordSync {
+	my ( $class, $items, $source, $when ) = @_;
+
+	Slim::Schema->dbh->do(
+		'INSERT OR REPLACE INTO ' . DB_SCHEMA . '.discogs_sync_state
+			(id, last_synced, items, source) VALUES (0, ?, ?, ?)',
+		undef, ( defined $when ? $when : time() ), $items, $source
+	);
+
+	return 1;
+}
+
 =head2 isReady()
 
 True once the database is attached and usable. Every entry point must check
