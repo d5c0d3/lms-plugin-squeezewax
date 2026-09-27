@@ -36,8 +36,6 @@ package Plugins::SqueezeWax::API::Async;
 
 use strict;
 
-use POSIX qw(ceil);
-
 use Slim::Networking::SimpleAsyncHTTP;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
@@ -48,24 +46,6 @@ use Plugins::SqueezeWax::Schema;
 
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
-
-# decisions §9.4, quoting the API docs: "By default, 50 items per page ... To
-# browse different pages, or change the number of items per page (up to 100),
-# use the page and per_page query string parameters." 100 is the documented
-# maximum, and the whole cost model (ceil(items/100) requests; measured 3 for
-# 203 items) rests on asking for it.
-use constant PER_PAGE => 100;
-
-# Folder 0 is the whole collection - the docs' own "If folder_id is not 0..."
-# carve-out for authentication treats 0 as the everything case.
-use constant COLLECTION_FOLDER => 0;
-
-# A bound on the page loop, not a product limit. The loop trusts the server's
-# own pagination.pages to decide when to stop; this is the backstop if that
-# figure is ever absurd or self-contradictory, so a malformed response cannot
-# turn into an unbounded request stream against a rate-limited API. 1000 pages
-# is 100,000 items - far past any real collection, and still finite.
-use constant MAX_PAGES => 1000;
 
 # This process's rate-limit state. Module-level for the same reason API.pm's
 # deleted $rateState was: one Discogs token has one real budget no matter who
@@ -125,84 +105,6 @@ my $syncId = 0;
 # under it - still stays pending for the next notification, which is a different
 # case and unchanged.
 my %rejected = ( token => 0, logged => 0 );
-
-# ---------------------------------------------------------------------------
-# Pure functions. Covered by scripts/sync-check.pl without a transport.
-# ---------------------------------------------------------------------------
-
-# How many requests a collection of $items costs. The figure build-order item
-# 5's hardware check measures (plan §3 check 1), so it lives here as one
-# expression rather than being open-coded into the loop.
-#
-# An empty collection still costs the one request that discovered it was
-# empty; the loop always fetches page 1 before it knows anything at all.
-sub _pageCount {
-	my ( $items, $perPage ) = @_;
-
-	$perPage = PER_PAGE unless defined $perPage && $perPage > 0;
-
-	return 1 unless defined $items && $items =~ /^\d+$/ && $items > 0;
-
-	return ceil( $items / $perPage );
-}
-
-# The collection-listing path for a user. Username is interpolated, not
-# passed as a query parameter, so it is URI-escaped here - Discogs usernames
-# permit characters that are not path-safe.
-sub _collectionPath {
-	my ($username) = @_;
-
-	my $escaped = $username;
-	$escaped =~ s/([^A-Za-z0-9\-_.~])/sprintf('%%%02X', ord($1))/ge;
-
-	return sprintf( '/users/%s/collection/folders/%d/releases',
-		$escaped, COLLECTION_FOLDER );
-}
-
-# Query parameters for one page.
-#
-# decisions §9.4 records the pagination hazard - paging over a mutable,
-# non-unique sort can shift rows between pages, dropping or duplicating them -
-# and instructs: "Pin an explicit stable sort on every paged endpoint, or
-# document the accepted risk." Both halves apply here, because the docs offer
-# no sort key that is actually stable.
-#
-# Read from the archived API documentation (web.archive.org snapshot
-# 20251226151912 of discogs.com/developers; the live page is behind a
-# Cloudflare interstitial), section "Collection Items By Folder". The complete
-# set of valid sort keys is: label, artist, title, catno, format, rating,
-# added, year. There is no id-based key - neither id nor instance_id is
-# offered - so nothing on that list is guaranteed unique.
-#
-# `added` is nonetheless the best of them, and strictly better than the
-# default: every other key except `rating` is release metadata that any
-# Discogs contributor can edit mid-sync, and `rating` is user-mutable. The
-# time an instance entered the collection is not editable at all. The residual
-# risk, documented rather than pretended away: a bulk add gives many instances
-# the same timestamp, and ties within one batch may order arbitrarily between
-# requests.
-#
-# For this step that risk is close to theoretical - the sync discards page
-# contents and reports only a count, and both the count and the request total
-# survive rows being reshuffled. It becomes load-bearing at step 7, which
-# consumes the rows; pinning it now means step 7 inherits the better default
-# rather than rediscovering this.
-#
-# Note also that the "default is sort=label&sort_order=asc" figure in
-# decisions §9.4 is not in the documentation, which states no default for this
-# endpoint at all. It is an observation from this repo's own fixture
-# (scripts/fixtures/collection-page1.json, whose pagination.urls.next carries
-# those parameters). See TODO.md.
-sub _collectionParams {
-	my ($page) = @_;
-
-	return {
-		page       => ( $page && $page > 0 ) ? $page : 1,
-		per_page   => PER_PAGE,
-		sort       => 'added',
-		sort_order => 'asc',
-	};
-}
 
 # ---------------------------------------------------------------------------
 # The sync itself.
@@ -520,51 +422,14 @@ sub _gotIdentity {
 	}
 
 	$run->{username} = $username;
-	$run->{path}     = _collectionPath($username);
+	$run->{path}     = Plugins::SqueezeWax::API::_collectionPath($username);
 
 	main::INFOLOG && $log->is_info
 		&& $log->info("collection sync starting for Discogs user $username");
 
-	_get( $run, $run->{path}, _collectionParams(1), \&_gotPage );
+	_get( $run, $run->{path}, Plugins::SqueezeWax::API::_collectionParams(1), \&_gotPage );
 
 	return;
-}
-
-# One format as a line the user can match against the object in their hand:
-# "Vinyl, LP, Album, Limited Edition" - the medium, then its descriptions.
-#
-# `text` is deliberately dropped. On the fixture's first entry it reads
-# "Signed, Gatefold, Butterfly Effect Splatter", which is free-form seller prose
-# rather than a property of the pressing, and it is long enough to push the
-# release id off a narrow row.
-#
-# `qty` is dropped too: a 2xLP already says "2" in its descriptions where it
-# matters, and a bare "1" on every single-disc record is noise.
-sub _formatLabel {
-	my ($format) = @_;
-
-	return '' unless ref $format eq 'HASH';
-
-	return join ', ',
-		grep { defined && /\S/ }
-		$format->{name}, @{ $format->{descriptions} || [] };
-}
-
-# One label as "Island Records (524 089-2)". The catalogue number is the thing
-# that actually separates two pressings on the same label, so it is never
-# dropped - but a release with no catno gets the bare name rather than an empty
-# bracket.
-sub _labelLabel {
-	my ($label) = @_;
-
-	return '' unless ref $label eq 'HASH';
-
-	my $name  = $label->{name};
-	my $catno = $label->{catno};
-
-	return '' unless defined $name && $name =~ /\S/;
-
-	return ( defined $catno && $catno =~ /\S/ ) ? "$name ($catno)" : $name;
 }
 
 sub _gotPage {
@@ -577,70 +442,30 @@ sub _gotPage {
 		$run->{pages} =
 			( $pagination && $pagination->{pages} && $pagination->{pages} > 0 )
 			? $pagination->{pages}
-			: _pageCount( $run->{items} );
+			: Plugins::SqueezeWax::API::_pageCount( $run->{items} );
 
-		if ( $run->{pages} > MAX_PAGES ) {
+		if ( $run->{pages} > Plugins::SqueezeWax::API::MAX_PAGES ) {
 			# Checked here, on the first page, rather than after the loop: the
 			# point of the bound is to not issue the requests, and a
 			# self-contradictory pagination block should cost one request, not
 			# MAX_PAGES of them against a rate-limited API.
 			$log->warn( "collection reported $run->{pages} pages, more than the "
-				. MAX_PAGES . " this will fetch - treating this sync as failed" );
+				. Plugins::SqueezeWax::API::MAX_PAGES
+				. " this will fetch - treating this sync as failed" );
 
 			return _fail( $run, { ok => 0, error => 'too_many_pages' } );
 		}
 	}
 
 	# Collected, and dropped on the floor when _finish returns. Nothing about a
-	# release reaches the database - §13.2: ownership is a column on
-	# discogs_match, not a mirrored collection, and discogs_collection is not a
-	# v1 table. The ownership pass needs the first five fields below and nothing
-	# else (§15.13 part 1); the last three exist only for the queue page's
-	# re-match list, which is handed this same list and has no other source for
-	# them (§15.16 part 6). The lifetime is unchanged: one render, then gone.
-	#
-	# Keyed by instance_id, which is the collection ENTRY's identity: the same
-	# release owned twice is two instances, and de-duplicating here would make
-	# `counted` disagree with pagination.items and fail the sync. Whether two
-	# instances of one release count as one candidate is the ownership pass's
-	# question, not this one's.
+	# release reaches the database (§13.2). Built by API.pm's entryFromRelease,
+	# which the scan-time fetch shares (§15.18 part 15); keyed by instance_id,
+	# the collection ENTRY's identity - see entryFromRelease for why that must
+	# not de-duplicate.
 	for my $release ( @{ ( $data && $data->{releases} ) || [] } ) {
-		my $instance = $release->{instance_id};
+		my $entry = Plugins::SqueezeWax::API->entryFromRelease($release) or next;
 
-		next unless defined $instance;
-
-		my $basic = $release->{basic_information} || {};
-
-		$run->{entries}{$instance} = {
-			instance_id => $instance,
-			id          => $release->{id},
-			master_id   => $basic->{master_id},
-			title       => $basic->{title},
-			artists     => [ map { $_->{name} } @{ $basic->{artists} || [] } ],
-
-			# The three the RE-MATCH LIST needs and the pass ignores (§15.16
-			# part 6). They are here because the page is handed this same list
-			# (_finish below) and there is no second fetch to get them from -
-			# the collection is discarded when the sync ends (§13.2), so a field
-			# not kept here is a field the page cannot show.
-			#
-			# Fixed set, not everything basic_information carries. A user
-			# choosing between two pressings of one record needs the year, the
-			# medium and the catalogue number, and each of those is on the
-			# sleeve in front of them. Nothing else earns its place, and a field
-			# picker is recorded as a future feature rather than built.
-			#
-			# Flattened to plain strings here rather than stored raw, so the
-			# template has no structure to walk and _testFilter's list stays
-			# something a suite can compare with is_deeply.
-			#
-			# thumb and cover_image are deliberately NOT kept: whether Discogs'
-			# terms permit showing them is unverified (§9.9 already records that
-			# image URLs are withheld without authentication).
-			year    => $basic->{year},
-			formats => [ map { _formatLabel($_) } @{ $basic->{formats} || [] } ],
-			labels  => [ map { _labelLabel($_) }  @{ $basic->{labels}  || [] } ],
-		};
+		$run->{entries}{ $entry->{instance_id} } = $entry;
 	}
 
 	$run->{counted} = scalar keys %{ $run->{entries} };
@@ -648,7 +473,8 @@ sub _gotPage {
 	if ( $run->{page} < $run->{pages} ) {
 		$run->{page}++;
 
-		_get( $run, $run->{path}, _collectionParams( $run->{page} ), \&_gotPage );
+		_get( $run, $run->{path},
+			Plugins::SqueezeWax::API::_collectionParams( $run->{page} ), \&_gotPage );
 
 		return;
 	}
@@ -696,54 +522,6 @@ sub _fail {
 		error => $result->{error} || 'unknown',
 		code  => $result->{code},
 	} );
-}
-
-=head2 _testFilter( \@entries )
-
-The entry list with any release id named by C<discogsTestExcludeReleases>
-removed. A development aid, not a feature.
-
-=cut
-
-# Build-order steps 6-7's hardware check (6) is "remove a record from the
-# Discogs collection and watch the pass react". Doing that for real mutates
-# data this project does not own and cannot restore if a step fails. This
-# makes a release invisible TO THE PASS instead, which is the only place the
-# pass ever sees one.
-#
-# Where it sits is the whole of its safety. It runs AFTER the completeness
-# gate, which compares $run->{counted} against $run->{items} - both computed
-# from the unfiltered list, before this is reached - so hiding a release can
-# never make a sync look incomplete, and can never mask a real short page.
-# Nothing is sent to Discogs and the fetch is untouched: the collection on
-# discogs.com is not altered, read-only or otherwise.
-#
-# There is no settings-page field for the pref on purpose. It is set by hand
-# for a test and cleared afterwards, and a control on the page would invite it
-# being left on.
-#
-# It cannot sit on silently. While the pref is non-empty EVERY sync logs at
-# warn, not info, so a forgotten filter shows up in the log of a server whose
-# owner is wondering why a record stopped badging.
-sub _testFilter {
-	my ($entries) = @_;
-
-	my $raw = $prefs->get('discogsTestExcludeReleases');
-
-	return $entries unless defined $raw && $raw =~ /\S/;
-
-	my %drop = map { $_ => 1 } grep { /^\d+$/ } split /\s*,\s*/, $raw;
-
-	my @kept = grep { !defined $_->{id} || !$drop{ $_->{id} } } @$entries;
-
-	# Logged even when nothing matched: a filter naming ids this collection
-	# does not contain is still a filter that is on, and the count is how its
-	# owner notices it was the wrong id rather than the wrong conclusion.
-	$log->warn( 'test filter active: hiding '
-		. ( scalar(@$entries) - scalar(@kept) )
-		. ' releases from the ownership pass' );
-
-	return \@kept;
 }
 
 # The single exit. Every path out of a sync comes through here, which is what
@@ -802,7 +580,7 @@ sub _finish {
 	if ( $result->{ok} ) {
 		require Plugins::SqueezeWax::Ownership;
 
-		$entries = _testFilter( [ values %{ $run->{entries} || {} } ] );
+		$entries = Plugins::SqueezeWax::API::_testFilter( [ values %{ $run->{entries} || {} } ] );
 
 		my $applied = Plugins::SqueezeWax::Ownership->apply($entries);
 

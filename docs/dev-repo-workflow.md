@@ -368,9 +368,10 @@ above is not affected; it stays.
 
 **On the live server** — the `discogsTestExcludeReleases` pref. A
 comma-separated list of Discogs release ids, empty by default and with no
-field on the settings page. `API/Async.pm`'s `_testFilter` removes those
+field on the settings page. `API.pm`'s `_testFilter` removes those
 releases from the entry list the ownership pass is handed, *after* the
-completeness gate and *before* `Ownership->apply`. The fetch is untouched and
+completeness gate and *before* `Ownership->apply` — on both sync paths, the
+server's and, since step 8b, the scan-time one. The fetch is untouched and
 nothing is sent to Discogs: the collection on discogs.com does not change.
 
 Because the filter sits after the gate, hiding a release can never make a sync

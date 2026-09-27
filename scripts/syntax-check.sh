@@ -241,8 +241,12 @@ BEGIN {
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
 			API)
-				prelude="$API_STUB"
-				note=" (Slim::Utils::PluginManager stubbed)"
+				# TAGS_STUB since step 8b: _testFilter moved here from
+				# API/Async.pm (decisions §15.18 part 15) and brought its
+				# preferences() with it, which is Slim::Utils::Prefs - the
+				# module the JSON::XS problem lives in.
+				prelude="$API_STUB$TAGS_STUB"
+				note=" (Slim::Utils::PluginManager, Slim::Utils::Prefs stubbed)"
 				;;
 			API::Async)
 				# Async.pm pulls API.pm in, hence API_STUB. Its own two LMS

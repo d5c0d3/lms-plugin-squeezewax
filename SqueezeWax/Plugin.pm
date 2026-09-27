@@ -89,7 +89,7 @@ $prefs->init({
 	discogsLastSyncError => '',
 
 	# A development aid, not a feature: a comma-separated list of Discogs
-	# release ids that API/Async.pm's _testFilter hides from the ownership
+	# release ids that API.pm's _testFilter hides from the ownership
 	# pass, so "a record left the collection" can be exercised without
 	# altering anyone's collection. Empty on every normal install, no field on
 	# the settings page, and every sync warns while it is set. Documented in

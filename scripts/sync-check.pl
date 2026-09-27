@@ -516,34 +516,34 @@ sub run_sync {
 # ---------------------------------------------------------------------------
 
 {
-	is( Plugins::SqueezeWax::API::Async::_pageCount(203), 3,
+	is( Plugins::SqueezeWax::API::_pageCount(203), 3,
 		'203 items costs 3 requests - the figure decisions §9.4 measured on real hardware' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(100), 1,
+	is( Plugins::SqueezeWax::API::_pageCount(100), 1,
 		'an exactly-full single page costs 1, not 2' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(101), 2,
+	is( Plugins::SqueezeWax::API::_pageCount(101), 2,
 		'one item past a full page costs 2' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(200), 2,
+	is( Plugins::SqueezeWax::API::_pageCount(200), 2,
 		'an exact multiple of the page size does not round up' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(1), 1,
+	is( Plugins::SqueezeWax::API::_pageCount(1), 1,
 		'a single item costs 1' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(0), 1,
+	is( Plugins::SqueezeWax::API::_pageCount(0), 1,
 		'an empty collection still costs the request that discovered it was empty' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount(undef), 1,
+	is( Plugins::SqueezeWax::API::_pageCount(undef), 1,
 		'...as does a missing item count' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount('lots'), 1,
+	is( Plugins::SqueezeWax::API::_pageCount('lots'), 1,
 		'...and a non-numeric one, rather than dying inside ceil' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount( 203, 50 ), 5,
+	is( Plugins::SqueezeWax::API::_pageCount( 203, 50 ), 5,
 		'the page size is a parameter, so the docs\' 50-item default is expressible' );
 
-	is( Plugins::SqueezeWax::API::Async::_pageCount( 203, 0 ), 3,
+	is( Plugins::SqueezeWax::API::_pageCount( 203, 0 ), 3,
 		'a zero page size falls back to PER_PAGE rather than dividing by zero' );
 }
 
@@ -552,7 +552,7 @@ sub run_sync {
 # ---------------------------------------------------------------------------
 
 {
-	my $params = Plugins::SqueezeWax::API::Async::_collectionParams(1);
+	my $params = Plugins::SqueezeWax::API::_collectionParams(1);
 
 	is( $params->{per_page}, 100,
 		'per_page is the documented maximum, which the whole ceil(items/100) cost model rests on' );
@@ -565,13 +565,13 @@ sub run_sync {
 
 	is( $params->{page}, 1, 'page 1 is page 1' );
 
-	is( Plugins::SqueezeWax::API::Async::_collectionParams(7)->{page}, 7,
+	is( Plugins::SqueezeWax::API::_collectionParams(7)->{page}, 7,
 		'a later page is passed through' );
 
-	is( Plugins::SqueezeWax::API::Async::_collectionParams(0)->{page}, 1,
+	is( Plugins::SqueezeWax::API::_collectionParams(0)->{page}, 1,
 		'page 0 is corrected to 1 - Discogs pages are 1-based' );
 
-	is( Plugins::SqueezeWax::API::Async::_collectionParams(undef)->{page}, 1,
+	is( Plugins::SqueezeWax::API::_collectionParams(undef)->{page}, 1,
 		'...as is a missing page' );
 }
 
@@ -580,15 +580,15 @@ sub run_sync {
 # ---------------------------------------------------------------------------
 
 {
-	is( Plugins::SqueezeWax::API::Async::_collectionPath('deschman'),
+	is( Plugins::SqueezeWax::API::_collectionPath('deschman'),
 		'/users/deschman/collection/folders/0/releases',
 		'folder 0 is the whole collection' );
 
-	is( Plugins::SqueezeWax::API::Async::_collectionPath('a b'),
+	is( Plugins::SqueezeWax::API::_collectionPath('a b'),
 		'/users/a%20b/collection/folders/0/releases',
 		'a username is escaped - it is interpolated into the path, not passed as a parameter' );
 
-	is( Plugins::SqueezeWax::API::Async::_collectionPath('a/b'),
+	is( Plugins::SqueezeWax::API::_collectionPath('a/b'),
 		'/users/a%2Fb/collection/folders/0/releases',
 		'...including a slash, which would otherwise change which endpoint is called' );
 }

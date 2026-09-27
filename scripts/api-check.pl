@@ -57,6 +57,10 @@ BEGIN {
 	$INC{'Slim/Utils/Log.pm'}                     = 1;
 	$INC{'Slim/Utils/PluginManager.pm'}           = 1;
 
+	# Since step 8b API.pm also carries the collection walk's shared pieces
+	# (decisions §15.18 part 15), and _testFilter among them reads a pref.
+	$INC{'Slim/Utils/Prefs.pm'}                   = 1;
+
 	no strict 'refs';
 
 	*{'Slim::Utils::Log::logger'}   = sub { Test::StubLogger->new };
@@ -66,6 +70,13 @@ BEGIN {
 		no strict 'refs';
 		*{"${caller}::logger"}   = \&Slim::Utils::Log::logger;
 		*{"${caller}::logError"} = \&Slim::Utils::Log::logError;
+	};
+
+	*{'Slim::Utils::Prefs::preferences'} = sub { Test::StubPrefs->new };
+	*{'Slim::Utils::Prefs::import'}      = sub {
+		my $caller = caller;
+		no strict 'refs';
+		*{"${caller}::preferences"} = \&Slim::Utils::Prefs::preferences;
 	};
 
 	*{'main::SCANNER'}   = sub () { 0 };
@@ -82,6 +93,13 @@ BEGIN {
 }
 
 our @LOG;
+our %PREFS;
+
+{
+	package Test::StubPrefs;
+	sub new { bless {}, shift }
+	sub get { return $main::PREFS{ $_[1] } }
+}
 
 {
 	package Test::StubLogger;
@@ -419,6 +437,45 @@ sub load_fixture {
 
 	like( $tracks[0]{position}, qr/^\d+-\d{2}$/,
 		'...position format is D-TT (zero-padded), a second convention distinct from release 14772\'s D-T' );
+}
+
+# ---------------------------------------------------------------------------
+# entryFromRelease - the one entry builder both transports share
+# ---------------------------------------------------------------------------
+#
+# Moved here from API/Async.pm at step 8b (decisions §15.18 part 15). Its full
+# behaviour against a canned collection is in sync-check.pl, which reaches it
+# through the server's walk; these are the rows that walk never offers it.
+
+{
+	is( $A->entryFromRelease( { id => 1, basic_information => {} } ), undef,
+		'entryFromRelease: a row with no instance_id is no entry' );
+	is( $A->entryFromRelease(undef), undef, '  ...nor is no row at all' );
+	is( $A->entryFromRelease('junk'), undef, '  ...nor something that is not a hash' );
+
+	my $e = $A->entryFromRelease( { id => 7, instance_id => 70 } );
+	is_deeply(
+		$e,
+		{ instance_id => 70, id => 7, master_id => undef, title => undef,
+		  artists => [], year => undef, formats => [], labels => [] },
+		'  ...and a row with no basic_information is an entry with empty fields, not a die'
+	);
+}
+
+# ---------------------------------------------------------------------------
+# _testFilter, called as both transports call it
+# ---------------------------------------------------------------------------
+
+{
+	my @entries = map { { id => $_ } } 1001, 1002, 1003;
+
+	local %PREFS = ( discogsTestExcludeReleases => '' );
+	is( Plugins::SqueezeWax::API::_testFilter( \@entries ), \@entries,
+		'_testFilter with the pref empty returns the list itself' );
+
+	local %PREFS = ( discogsTestExcludeReleases => '1002' );
+	is_deeply( [ map { $_->{id} } @{ Plugins::SqueezeWax::API::_testFilter( \@entries ) } ],
+		[ 1001, 1003 ], '  ...and with it set, hides exactly the named release' );
 }
 
 done_testing();

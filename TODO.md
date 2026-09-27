@@ -28,9 +28,11 @@ Each names its sites so the work is mechanical rather than a search.
       Sites, all of them:
       - `SqueezeWax/Plugin.pm` — the pref default `discogsTestExcludeReleases
         => ''` in `$prefs->init`, and the comment above it.
-      - `SqueezeWax/API/Async.pm` — `_testFilter` (the sub, its POD and its
-        header comment) and its one call site inside `_finish`, which becomes
+      - `SqueezeWax/API.pm` — `_testFilter` (the sub, its POD and its
+        header comment; moved from `API/Async.pm` at step 8b), and its call
+        site, `API/Async.pm`'s `_finish`, which becomes
         `[ values %{ $run->{entries} || {} } ]` again.
+      - `scripts/api-check.pl` — the two `_testFilter` assertions.
       - `scripts/sync-check.pl` — the "test-only collection filter" block
         (15 assertions) and the `@WARNINGS`/`$PREFS` uses it introduced.
       - `docs/dev-repo-workflow.md` §6a — the "On the live server" paragraph
