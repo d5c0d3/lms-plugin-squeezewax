@@ -5067,3 +5067,105 @@ mind about a terms-of-use question is worth less than one that shows it did.
 Nothing of substance is lost by the correction: the master id is storable, the
 verdict is storable, and the evidence for the verdict was never needed after the
 comparison. The corrected step is smaller than the one first proposed.
+
+### 15.21 Ruling 2 is dropped, and the cross-track rule replaces it
+
+**Decided 2026-09-28**, on two measurements. §15.20's ruling 1 — derive the master
+id — stands unchanged. Ruling 2, the plausibility verdict built from release data,
+is **dropped**, and the identification problem it existed for is solved more
+cheaply and earlier.
+
+#### The criterion, and the answer
+
+Ruling 2 was held pending a measurement with the criterion stated in advance:
+**how many albums carry consistent tags across their candidate tracks, yet name a
+release the album cannot plausibly be?** If near zero, drop it.
+
+**It is zero.** 475 requests over 11 minutes measured 464 consistently-tagged
+albums against the release their own tags name:
+
+| | albums | share |
+|---|---|---|
+| within 10% of the release's track count | 433 | 93.3% |
+| half to 90% | 28 | 6.0% |
+| below half | 2 | 0.4% |
+| more local than release | 1 | 0.2% |
+
+Both below-half albums are **correct**, and both are one *disc* of a multi-disc
+release: *Best Of Blue Note 01* is 12 tracks against a 139-track, 15-disc box
+whose **first disc holds exactly 12**, and *Isolar* is 6 against a 2-disc release
+whose **second disc holds exactly 6**. Of 25 albums where no artist agrees, 22 are
+artefacts of the L2 rung rather than disagreements about which record it is, and
+the 3 genuinely unrelated ones all sit at a **perfect 1.000** track fit — which is
+evidence the identification is right and the artist string unusual.
+
+So a release-fit rule has nothing here to catch. Every threshold below 0.5 flags
+exactly one album, and it is a false positive.
+
+#### The cross-track rule, adopted instead
+
+Measured the same day, with no Discogs requests at all: of 764 albums, **467 have
+both candidate tracks telling the same story, 2 are tagged-then-untagged, 3 carry
+two different release ids**, 82 carry no tag, 24 have a single local track and 186
+are all-remote.
+
+`Importer.pm:479-494` stops at the first candidate that answers, so cross-track
+disagreement is invisible today. Comparing the two candidates — **both halves,
+different ids and tagged-then-untagged alike** — costs five albums on this library
+and catches, at identification time and at zero request cost, the case that
+started this: the `Cover Versions/` folder (album 3421) carries **two different**
+release ids, 793593 and 369197. All four `Cover - …` albums are reached by it.
+
+The measurement's own script had a defect — two conflicting candidates compared
+equal and would have counted as agreeing — found and corrected by Claude Code;
+the corrected script measured zero conflicts and reproduced the original counts
+exactly, so the numbers stand.
+
+#### A premise that was wrong, and survived three hand-offs
+
+Hand-offs 18, 20, 21 and 23 all describe the *Kinetik* discs as "2 and 3 tracks
+against a full release", and treated them as the case any fit rule must not flag.
+**Against the release their tags actually name, the fit is exact** — 2 of 2 and 3
+of 3, ratio 1.000, surviving every threshold. The framing came from hand-off 18,
+which compared those albums to the **collection entry** reached via a shared
+master — a different object from the tagged release — and the design chat carried
+it forward three more times without checking.
+
+Recorded because this project's rule is that an inference must not become a fact
+by repetition, and this one nearly did: it was the "must not flag" case around
+which two hand-offs' rule design was built.
+
+#### Releases disappear: 404 is an ordinary outcome
+
+**New, and it binds step 8c.** Three of 479 identified albums (0.6%) name releases
+Discogs no longer serves: `GET /releases/{id}` returns **404** for releases
+1312977, 1688770 and 2944017, all on `strict` rows. Any release fetch in 8c must
+treat a 404 as an ordinary answer — no master available, no retry, no error state,
+and no reason to look again until the album's release id changes.
+
+#### Two things measured against existing decisions
+
+- **§13.10.4's L2 rung has a number now.** Its recorded cost — stopping below the
+  leading-article rung — is **7 albums** on this library, whose files are tagged
+  `Future Sound Of London, The` (verified as the user's own `contributors.name`,
+  not an LMS artefact). They disagree on artist wherever the title route is
+  consulted. Pre-existing and already accepted; M2 only priced it.
+- **An all-remote album has no track count to compare.** Album 3533 is 18 remote
+  tracks, 0 local, manually linked to a 10-track release, so its "fit" reads 0.00
+  and means nothing. Any future rule keyed on track count must exclude all-remote
+  albums (§15.11).
+
+#### Where the evidence is thin
+
+One library, 464 albums, one person's tagging with one tagger. It says ruling 2
+earns nothing **here**; the failure it would have caught — tags consistent across
+every track yet naming the wrong record — is narrower than "badly tagged" and was
+never observed.
+
+The deeper finding is structural rather than statistical: **the box-set disc is
+the real shape in this data.** 3221, 2919 and both *Kinetik* discs are each one
+LMS album standing for one disc of a larger release. Any rule keyed on track count
+will meet them, and the test that distinguishes a disc from a mis-identification —
+does some single disc of the release hold exactly this album's track count — needs
+the **tracklist**, which §9.5 says we do not keep. So release-fit rules are
+awkward for this project by construction, not merely unnecessary today.

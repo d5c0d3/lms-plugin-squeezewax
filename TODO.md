@@ -1298,6 +1298,27 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-28: `The Baseballs – Strike (Originals)` (album 3396) carries two
+      different release ids.** Found by M1; 12 tracks, outside the
+      `Cover Versions/` folder, so it is the only cross-track disagreement in the
+      library proper. A covers album whose tracks may be tagged with the
+      originals' releases is exactly the shape that misleads a first-track rule.
+      Worth the owner's eyes on the files before step 8c's cross-track rule
+      starts queueing it.
+
+- [ ] **2026-09-28, PROCESS: a session must not read the prefs file.** A hardware
+      session printed the Discogs token into its transcript while looking up pref
+      key names, and the token was rotated. Pref **key names** come from the
+      source (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** is
+      supplied by the owner if it is needed at all. Belongs in
+      `docs/working-agreement.md` at the next edit of that file, not only in
+      hand-offs.
+
+- [ ] **2026-09-28: the one restricted-set album above 110% fit was not
+      identified.** More local tracks than its release has. It falls outside
+      every candidate rule and changes no conclusion, so it was left unchased;
+      the row is in the M2 results if anyone wants it later.
+
 - [ ] **2026-09-28, NEXT STEP: node F, the release cache, and implausible
       identifications.** Decisions §15.20. Needs a survey and a plan before any
       code: where the backfill runs and what triggers it; what "the release
