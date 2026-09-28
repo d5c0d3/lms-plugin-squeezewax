@@ -4896,9 +4896,9 @@ master with something owned. `TODO.md` carries it.
 What the fix is **not** allowed to be, when it comes: it cannot live inside the
 scan-time sync, which §15.18 part 10 bounds at 120 s, because the one-off pass
 over this library alone is roughly 481 requests, or eight minutes at Discogs'
-documented 60 a minute. It wants a throttled, resumable, server-side backfill,
-cached in `discogs_release_cache` — a table that exists, holds 0 rows, and was
-put in the schema for something like this. It is a step of its own, and its
+documented 60 a minute. It wants a throttled, resumable, server-side backfill
+that stores **conclusions** — see the errata below, which corrects what this
+paragraph first said about where they are stored. It is a step of its own, and its
 decision record must answer §13.8 directly rather than around it: §13.8 rejected
 a per-album lookup **per sync**, and this would be one lookup per release, once,
 cached. That is a different trade, but it is close enough in shape that the
@@ -4977,14 +4977,24 @@ review queue's existence, and it decides the two rulings below: we do not widen
 matching rules to absorb bad data, and we do not silently discard an album whose
 data we cannot make sense of — we say so and let the user decide.
 
-#### Ruling 1: cache the release, not just its master
+#### Ruling 1: fetch the release, store only what is ours to store
 
 The fix is one `/releases/{id}` per identified release the collection does not
-hold, caching **master id, track count and credited artists** in
-`discogs_release_cache` — a table that already exists and holds 0 rows. Same
-request count as caching the master id alone; a few more columns.
+hold. What is **kept** is the **master id** — a bare identifier of the same class
+as the release id already in `discogs_match`, which §9.5 calls "not Content in
+any meaningful sense. Unconstrained; kept indefinitely."
 
-The extra columns are what make ruling 2 possible, and they cost nothing.
+Everything else the response carries — the track count, the credited artists, the
+tracklist — is compared **in memory, at fetch time**, and discarded with the
+response. What survives that comparison is a **verdict**: our own observation
+about whether the identification is plausible, which §9.5 makes indefinitely
+storable.
+
+`discogs_release_cache` stays unwritten, as §9.5 requires. Both conclusions land
+on `discogs_match`.
+
+*This ruling was rewritten on 2026-09-28; see the errata at the end of this
+section for what it first said and why it was wrong.*
 
 #### Ruling 2: an identification the release contradicts goes to the queue
 
@@ -5028,3 +5038,32 @@ step's plan must make that argument explicitly rather than assume it.
 One library, one collection, 203 items. Five albums is a small sample to design
 from, and the three shapes they fall into were each seen once. The 2-LP
 double-badge and the covers folder are single observations, not patterns.
+
+#### Errata, 2026-09-28: this section first proposed caching Content
+
+As first written, §15.19 and §15.20 both said the fix would cache release data —
+master id, track count and credited artists — in `discogs_release_cache`. **That
+contradicts §9.5**, which reads the Discogs TOU's "may not cache or store the
+Content longer than is necessary" clause, declines to rely on the CC0 reading
+that might excuse track listings, and concludes:
+
+> **Store conclusions, not Content.** … `discogs_release_cache` — raw payload.
+> Content, unambiguously. **Consequence: `discogs_release_cache` is not written
+> in v1.**
+
+§9.5 had also already prescribed the right shape, in advance and in terms:
+
+> "request count bounded by user actions → live; bounded by library size →
+> background job writing a conclusion" … "one release fetch per matched album is
+> library-size-bounded, so it becomes a background job storing its *comparison
+> result* — our observation, indefinitely storable — not the payload."
+
+**The mistake was the design chat's**, made by proposing a cache shape without
+re-reading §9.5 — which the table's own comment in `Schema.pm` points at. It was
+caught while writing step 8c's survey, before any code existed. Recorded here
+rather than fixed silently, because a decision record that quietly changes its
+mind about a terms-of-use question is worth less than one that shows it did.
+
+Nothing of substance is lost by the correction: the master id is storable, the
+verdict is storable, and the evidence for the verdict was never needed after the
+comparison. The corrected step is smaller than the one first proposed.
