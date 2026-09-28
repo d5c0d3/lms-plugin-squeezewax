@@ -4925,3 +4925,106 @@ So `anv` and aliases are **two separate decisions**, and this album argues only
 for the second. Both are recorded in `TODO.md` and neither is taken here. Note
 also that this run proved rule 3 for a *longer* name and abbreviated nothing, so
 the family `anv` would serve is still untested.
+
+### 15.20 Node F is fixed by caching the release, and an identification the release contradicts goes to the queue
+
+**Decided 2026-09-28**, on the measurement §15.19 called for. Read that first:
+this section is the answer to it, not a restatement.
+
+#### What the measurement found
+
+332 requests, 8 minutes, read-only, on a 506-row library with a 203-item
+collection. The population — identified rows whose release the collection does
+not hold — is 329 rows over 328 distinct releases.
+
+| | |
+|---|---|
+| **node F would badge, we say `absent`** — the defect | **5** |
+| node F would badge, the title route already did | 21 |
+| node F could not help (master not owned, or no master at all) | 303 |
+| population releases Discogs reports with no master | 29 |
+
+Of the five, two are the case design §3 node F was written for — own one
+pressing, ripped another. Two are one physical record filed as two LMS albums (a
+2-LP set), which node F would badge twice; correct per album, and a caution for
+any future count of "records I own that are in my library". **The fifth is not a
+node F case at all**: a curated `Cover Versions/` folder holding three artists'
+recordings of one song, strict-matched to a full album's release id because one
+file carried that tag. Node F would give it a **wrong** badge.
+
+#### The ruling: it must work
+
+The design chat argued for deferral — five albums in 506, one of the five wrong,
+and 303 of the population unhelpable — and was **overruled**. Recorded as a
+disagreement rather than smoothed over, because the reasoning on the other side
+is the one that should govern:
+
+- the design has always said the master arm is required rather than optional
+  (`TODO.md` 2026-09-07, "ownership test needs BOTH sets"), and a route that has
+  never once fired is not a design, it is an intention;
+- a wrong answer at 1% is still a wrong answer, and the user asked for the plugin
+  to be correct rather than cheap;
+- and the 21 in bucket 2 are the real argument: twenty-one correct badges
+  currently rest on the title route happening to agree, on a library where the
+  master arm has never run. One of the five — *Aphex Twin* credited as *AFX* — is
+  a case **no** title-or-artist rule could ever reach.
+
+#### The governing assumption, stated because everything below follows from it
+
+**SqueezeWax assumes a well-tagged library and a well-maintained collection, and
+flags what deviates rather than guessing at it.** That is the sentence behind the
+review queue's existence, and it decides the two rulings below: we do not widen
+matching rules to absorb bad data, and we do not silently discard an album whose
+data we cannot make sense of — we say so and let the user decide.
+
+#### Ruling 1: cache the release, not just its master
+
+The fix is one `/releases/{id}` per identified release the collection does not
+hold, caching **master id, track count and credited artists** in
+`discogs_release_cache` — a table that already exists and holds 0 rows. Same
+request count as caching the master id alone; a few more columns.
+
+The extra columns are what make ruling 2 possible, and they cost nothing.
+
+#### Ruling 2: an identification the release contradicts goes to the queue
+
+With track count and artists in hand, the covers folder answers itself: three
+tracks against ten, *Various Artists* against *The Police*. Such an album gets a
+**review reason** rather than a badge — the plugin says it cannot reconcile the
+tags with the release and lets the user re-match or reject, exactly as it does
+for every other case it will not guess at. It is not silently badged, and it is
+not silently dropped.
+
+What "contradicts" means precisely — how far a track count may differ before it
+is a contradiction, and what to do about artists on a compilation — is the new
+step's survey, not settled here.
+
+#### What is explicitly not being done
+
+- **Reading every track of every album.** Rejected on measured cost: 19–137 ms
+  per file on a NAS, roughly 9,000 reads over this library, ten to fifteen
+  minutes added to every scan. `Library.pm:230-244`'s two-candidate rule and its
+  citation of §3 stand.
+- **Reading tracks until a mismatch appears.** Considered 2026-09-28 and
+  rejected: a consistent album produces no mismatch, so it would read *every*
+  track before concluding nothing is wrong. The well-tagged majority would pay
+  the whole cost and the rare bad folder the least — the wrong distribution.
+- **Matching on Discogs `namevariations`.** §15.19's caution stands: an alias is
+  a distinct entity, a name variation is a misspelling, and 48 of them for one
+  artist is a corpus, not a synonym list.
+
+#### Cost, as measured rather than estimated
+
+475 distinct release ids across all 479 identified rows; 328 of them are already
+looked up and on disk from the measurement. A cold library of this size would pay
+roughly 11.5 minutes of throttled requests, once. **It cannot live in the
+scan-time sync**, which §15.18 part 10 bounds at 120 s; it wants a resumable,
+throttled, off-scan backfill. §13.8 rejected a per-album lookup **per sync**;
+this is one lookup per release, once, cached — a different trade, and the new
+step's plan must make that argument explicitly rather than assume it.
+
+#### Where the evidence is thin
+
+One library, one collection, 203 items. Five albums is a small sample to design
+from, and the three shapes they fall into were each seen once. The 2-LP
+double-badge and the covers folder are single observations, not patterns.

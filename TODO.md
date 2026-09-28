@@ -1298,7 +1298,47 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-09-28, MEASUREMENT BEFORE DESIGN: how many albums does node F's gap
+- [ ] **2026-09-28, NEXT STEP: node F, the release cache, and implausible
+      identifications.** Decisions §15.20. Needs a survey and a plan before any
+      code: where the backfill runs and what triggers it; what "the release
+      contradicts the identification" means in numbers; whether the ownership
+      pass reads the cache directly; whether a cached row ever expires; and the
+      §13.8 argument in full. Sequence it **before step 9**, since the badge step
+      displays what this step corrects.
+
+- [ ] **2026-09-28: one tagged track decides a whole album.**
+      `Importer.pm:479-494` stops at the first candidate carrying a release id,
+      and `Library.pm:230-244` supplies at most two candidates. There is no check
+      that the album resembles the release. That is how a three-track
+      `Cover Versions/` folder came to be strict-matched to a ten-track album
+      (measurement, 2026-09-28). Currently harmless only because node F cannot
+      fire; harmful the moment it can. Decisions §15.20 ruling 2 is the intended
+      answer — the cached release contradicts the identification and the album is
+      queued — so this item closes with that step unless the survey finds
+      otherwise.
+
+- [ ] **2026-09-28: compare the two candidate tracks instead of stopping at the
+      first?** Cheap version of "scan the whole folder", considered 2026-09-28.
+      `_examine` already fetches up to two candidates but stops at the first that
+      answers; always reading both and comparing them would catch a folder whose
+      first two tracks name different releases, at one extra file read per
+      **changed** album — near nothing in steady state, since unchanged albums
+      are skipped. It would **not** catch the covers folder, where only one file
+      is tagged at all. Decide in the next step's survey.
+
+- [ ] **2026-09-28: one physical record, two badges.** A 2-LP set filed as two
+      LMS albums (*Kinetik - Vinyl I* and *Vinyl II*, both master 214725, one
+      owned release 34285) would badge twice once node F works. Correct per
+      album; wrong for any future "how many of my records are in my library"
+      count. Single observation, recorded before it becomes a surprise.
+
+- [ ] **2026-09-28: the measurement's lookup cache needs a home.**
+      `tmp/18-release-masters.tsv` holds 328 `release_id → master_id` pairs and
+      `tmp/` is git-ignored, so a clean deletes it. If the next step wants it as
+      seed data rather than re-fetching, move it somewhere tracked — or accept
+      that re-running the lookups costs about eight minutes.
+
+- [x] **2026-09-28, MEASUREMENT BEFORE DESIGN: how many albums does node F's gap
       mislabel?** Decisions §15.19. `discogs_master_id` comes only from a tag, so
       node F has never fired and at least one album the owner demonstrably owns a
       pressing of is reported `absent` with a queue item. Before any fix is
@@ -1312,6 +1352,13 @@ Each names its sites so the work is mechanical rather than a search.
       the scan-time sync (§15.18 part 10 bounds it at 120 s; ~481 requests is
       about eight minutes at 60/minute). `discogs_release_cache` exists and holds
       0 rows.
+      → 2026-09-28: MEASURED. 332 requests, 8 minutes, read-only. Five albums are
+      mislabelled `absent` where a pressing of the same master is owned; 21 more
+      would be decided by node F and are already correct via the title route; 303
+      of the 329 population rows cannot be helped, and 29 of their releases have
+      no master at all. Decisions §15.20 has the ruling: it is fixed, as its own
+      step, by caching the release rather than only its master. The lookup cache
+      from this run (328 of the 475 release ids) is reusable input.
 
 - [ ] **2026-09-28: keep `anv`?** Decisions §15.19. The collection already
       carries the artist name as credited per release, in
