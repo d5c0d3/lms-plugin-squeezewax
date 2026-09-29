@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Importer ScanSync Settings Queue Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -190,7 +190,7 @@ for scanner in 0 1; do
 		# skipped here on the grounds that the pass ran only in the server; it
 		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
 		# scanner loads it and its scanner-mode compile is the point.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ]; }; then
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
 			continue
 		fi
 
@@ -313,6 +313,24 @@ BEGIN {
 	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
 }'
 				note=" (SimpleAsyncHTTP, Slim::Utils::Misc, Slim::Utils::Prefs stubbed; Timers real)"
+				;;
+			Derive)
+				# Derive.pm (step 8c) is the master arm's backfill, and like
+				# API/Async.pm it is server-only: the scanner has no event loop to
+				# run SimpleAsyncHTTP on, and the scan-time sync is bounded at
+				# 120 s against a job that is 11 minutes cold (§15.18 part 10).
+				#
+				# It pulls in API.pm and Match.pm, hence their stubs, and its own
+				# LMS dependencies are API/Async.pm's two - the transport and the
+				# timers - stubbed and loaded respectively for the reasons that
+				# case documents. Slim::Music::Import comes from Match.pm's chain
+				# (IMPORT_STUB) and is used here only through Match::_writeOk.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$API_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Misc, Prefs, Schema stubbed; Timers real)"
 				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"

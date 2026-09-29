@@ -233,6 +233,18 @@ BEGIN {
 	};
 }
 
+# The master derive job (build-order step 8c). Stubbed, not loaded: the real
+# module pulls in SimpleAsyncHTTP, which reaches the OSDetect/Unicode chain every
+# stub in this file exists to cut, and what is under test here is WHETHER the
+# trigger fires - the job's own behaviour is scripts/derive-check.pl's.
+our @ARMED;
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Derive.pm'} = 1;
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Derive::arm'} = sub { push @ARMED, 1; return 1 };
+}
+
 my $incdir;
 
 BEGIN {
@@ -265,6 +277,7 @@ sub reset_state {
 	$SKIP_FIRST = 1;
 	$MARKER   = undef;
 	$NOW      = undef;
+	@ARMED    = ();
 	@LOG      = ();
 }
 
@@ -619,6 +632,14 @@ sub open_window {
 	is( scalar @SYNCS, 0, "a 'scan' marker inside the window skips the fallback" );
 	ok( ( grep { /scan already synced.*marker at $done/ } @LOG ),
 		'  ...and logs why, with the marker\'s time' );
+
+	# Step 8c, and a DEVIATION from its plan, which triggers the derive job from
+	# _syncDone alone. On a server whose scan-time sync works - the reference
+	# server - this skip is the ONLY path taken after a scan, so _syncDone is
+	# never reached and the job would never run. Group A would ship as dead as
+	# the master arm it exists to wake up.
+	is( scalar @ARMED, 1,
+		'  ...and still arms the master derive job: a sync DID complete, in the scanner' );
 }
 
 {
@@ -744,6 +765,82 @@ sub open_window {
 	is( scalar @SKIPS, 0,
 		'a healthy scan-time sync skips before the rejection pause is consulted' );
 	is( scalar @SYNCS, 0, '  ...and starts no sync' );
+}
+
+# ---------------------------------------------------------------------------
+# The master derive trigger (build-order step 8c, decisions §15.22)
+# ---------------------------------------------------------------------------
+#
+# Two sites, and BOTH matter. The plan names only _syncDone; the skip above is
+# the deviation, and it is the site that actually fires on this project's
+# reference server. Everything else that can end a tick or a sync must NOT arm
+# the job: it is triggered by a completed sync and by nothing else (§15.15 part
+# 1 - no interval, no startup run).
+
+diag('§15.22: the derive job is armed by a completed sync, and by nothing else');
+
+{
+	reset_state();
+
+	Plugins::SqueezeWax::Plugin::_syncDone( { ok => 1, items => 203, requests => 4 } );
+
+	is( scalar @ARMED, 1, 'a successful fallback sync arms the derive job' );
+}
+
+for my $error (qw(unauthorized already_running refused no_response count_mismatch)) {
+	reset_state();
+
+	Plugins::SqueezeWax::Plugin::_syncDone( { ok => 0, error => $error } );
+
+	is( scalar @ARMED, 0, "a sync that failed with '$error' does not arm it" );
+}
+
+{
+	reset_state();
+	delete $PREFS{discogsToken};
+
+	open_window();
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @ARMED, 0, 'a tick with no token arms nothing - there is no collection to badge from' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$REJECTED = 1;
+
+	open_window();
+	$MARKER = undef;
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 0, 'a rejected token pauses the fallback sync' );
+	is( scalar @ARMED, 0, '  ...and arms nothing either: no sync completed' );
+}
+
+{
+	reset_state();
+	$PREFS{discogsToken} = 'a-token';
+	$SCANNING = 1;
+
+	open_window();
+	$MARKER = undef;
+	Plugins::SqueezeWax::Plugin::_syncTick();
+
+	is( scalar @SYNCS, 0, 'a tick during a scan defers the sync' );
+	is( scalar @ARMED, 0, '  ...and arms nothing: the job would be refused its write anyway' );
+}
+
+{
+	reset_state();
+
+	# The subscription and the debounce arm a sync tick, never the derive job.
+	# If this ever fails, something has given the job a schedule of its own.
+	Plugins::SqueezeWax::Plugin::_initSync();
+	Plugins::SqueezeWax::Plugin::_rescanDone();
+
+	is( scalar @ARMED, 0,
+		'initPlugin\'s subscription and the debounce arm no derive run - there is no startup run' );
 }
 
 done_testing();

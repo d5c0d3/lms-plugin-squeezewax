@@ -276,6 +276,23 @@ sub _syncTick {
 			&& $log->info( 'the scan already synced the collection (marker at '
 				. $marker->{last_synced} . '); skipping the fallback sync' );
 
+		# The derive job still runs (build-order step 8c). A DEVIATION from the
+		# step 8c plan, which says the job is triggered "from Plugin::_syncDone on
+		# success, and from nothing else" - taken because on this project's own
+		# reference server that trigger would never fire. The scan-time sync
+		# (§15.18) writes a 'scan' marker, the skip above therefore returns, and
+		# _syncDone is never reached. Group A would have shipped as dead as the
+		# master arm it exists to wake up, which is the same defect §15.19
+		# describes and the same shape of mistake.
+		#
+		# The plan's INTENT is honoured exactly: a sync has just completed, the
+		# collection is what makes ownership interesting, and there is no interval
+		# and no startup run (§15.15 part 1). What is triggered is the completion
+		# of a sync; that this one completed in the scanner rather than here is not
+		# a difference the job can see, and the collection it needs is not the
+		# collection - it is the library's own release ids.
+		_deriveMasters();
+
 		return;
 	}
 
@@ -331,6 +348,8 @@ sub _syncDone {
 			&& $log->info( "collection sync complete: $result->{items} items in "
 				. "$result->{requests} requests" );
 
+		_deriveMasters();
+
 		return;
 	}
 
@@ -359,6 +378,32 @@ sub _syncDone {
 	}
 
 	$log->warn("collection sync failed: $error");
+
+	return;
+}
+
+# Start the master derive job (build-order step 8c, decisions §15.22), from the
+# two places a collection sync has just finished successfully as far as this
+# process is concerned: _syncDone above, and _syncTick's "the scan already
+# synced" skip.
+#
+# ON SUCCESS AND NOTHING ELSE, which is what keeps §15.15 part 1 intact: no
+# startup run, no interval, and a settled library makes the job issue one query
+# and return. The manual button is deliberately NOT a trigger - it has a user
+# waiting on a page, and its callback lives in Settings.pm - so pressing it while
+# a derive run is in flight is the case the job's yielding exists for rather than
+# a second trigger.
+#
+# Required lazily, as the sync is: Derive.pm pulls in SimpleAsyncHTTP and Timers,
+# and a server with no token never reaches here at all.
+#
+# It decides for itself whether there is anything to do. Nothing here tests that,
+# deliberately: a caller that guessed would be a second copy of the selection rule
+# (§15.22's four states), and the one that mattered would go stale.
+sub _deriveMasters {
+	require Plugins::SqueezeWax::Derive;
+
+	Plugins::SqueezeWax::Derive->arm;
 
 	return;
 }
