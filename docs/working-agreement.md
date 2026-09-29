@@ -77,6 +77,31 @@ badges rather than a crash.
   `git archive HEAD`, not the working tree, so an uncommitted edit is silently
   invisible to the dev build. Edit → commit → package → push.
 
+### 4.1 Hardware sessions
+
+Two rules, both learned the hard way on the reference server.
+
+- **Never read the prefs file.** Pref **key names** come from the source
+  (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** comes from the
+  owner, if it is needed at all. A session looking up key names grepped
+  `squeezewax.prefs` on 2026-09-28 and printed the Discogs token into its own
+  transcript, which had to be rotated. A grep for a name does not need the file
+  that holds the values.
+- **A session may install a SqueezeWax package itself**, and should, rather than
+  stopping to ask. Decided 2026-09-29. The sanctioned method, recorded so it is
+  repeated rather than re-invented: drive the Plugins page over localhost HTTP
+  with a GET to read the form, then **one** POST carrying `saveSettings=1`, the
+  page's `rand` token, **every existing repository URL replayed verbatim**, and
+  `update:SqueezeWax=1` — and nothing else. No `auto`, no `useUnsupported`, no
+  `manual:` or `install:` pairs: `Slim/Web/Settings/Server/Plugins.pm:62-98` acts
+  only on parameters that are present, so anything omitted is anything left
+  alone. Restart with the `restartserver` CLI command. **SqueezeWax only** — no
+  other plugin, and the repository list is replayed, never rebuilt.
+
+Anything touching Discogs still ships as a script for the owner to run: a
+session's credential guard refuses the token, the username and the
+account-scoped URLs.
+
 ## 5. The sync loop
 
 `docs/` is mirrored into the claude.ai project via the GitHub connector, which

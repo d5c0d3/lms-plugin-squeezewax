@@ -1343,13 +1343,15 @@ Each names its sites so the work is mechanical rather than a search.
       Worth the owner's eyes on the files before step 8c's cross-track rule
       starts queueing it.
 
-- [ ] **2026-09-28, PROCESS: a session must not read the prefs file.** A hardware
+- [x] **2026-09-28, PROCESS: a session must not read the prefs file.** A hardware
       session printed the Discogs token into its transcript while looking up pref
       key names, and the token was rotated. Pref **key names** come from the
       source (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** is
       supplied by the owner if it is needed at all. Belongs in
       `docs/working-agreement.md` at the next edit of that file, not only in
       hand-offs.
+      → 2026-09-29: written into `docs/working-agreement.md` §4.1, together with
+      the sanctioned install method.
 
 - [ ] **2026-09-28: the one restricted-set album above 110% fit was not
       identified.** More local tracks than its release has. It falls outside
@@ -2021,7 +2023,7 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-29: the logic version's hardware checks (0.0.0.13).** Decisions
+- [x] **2026-09-29: the logic version's hardware checks (0.0.0.13).** Decisions
       §15.24. Short, on the reference server, in order:
       1. **Upgrade and start.** `user_version` 6 → 7, and expect **exactly one
          invalidation** — even though the tag-name trick was already run by hand
@@ -2035,6 +2037,13 @@ Each names its sites so the work is mechanical rather than a search.
          line, and `SELECT value FROM discogs_meta WHERE key = 'logic_version'`
          reads 2. That is the stored version doing its job, and it is the check
          the whole mechanism exists to pass.
+      → 2026-09-29: all three **PASS** on 0.0.0.13. Migration 7 and exactly one
+      invalidation on the first start (578 rows, 47 ms); the next scan
+      re-examined 578 albums in 61.2 s and returned the library to §15.23's
+      recorded state with **one** column changed across 506 rows (`matched_at`);
+      the second restart did nothing and the scan after it examined 0 of 764 in
+      0.079 s. The refusal path is unreachable on a settled install by design and
+      stays covered offline — decisions §15.24's as-observed note says why.
 
 
 - [x] **2026-09-24: build-order step 8's hardware checks (the review queue and

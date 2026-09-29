@@ -5560,3 +5560,33 @@ ever concluded anything here. An ownership-only row (`match_tier` NULL since
 migration 3) answers yes and `hasAnyStrictMatch` answers no, which is why it is
 a second sub rather than a reuse. undef when the schema is unusable: "cannot
 tell", not "no".
+
+#### Observed on hardware, 2026-09-29 (0.0.0.13, reference server)
+
+Three checks, all passing, on the library §15.23 had left in a known state.
+
+- **The upgrade did exactly one thing.** `user_version` 6 → 7, `discogs_meta`
+  created, and a single `_checkLogicVersion` line naming both versions and the
+  578 rows `invalidateStrict` returned — 47 ms from "plugin loaded". Afterwards
+  `source_timestamp` was NULL on all 478 strict rows, `discogs_no_match` empty,
+  and the marker stored at 2. It fired even though the tag-name trick had been
+  run by hand earlier the same day, because the marker did not exist then.
+- **The library came back to where §15.23 left it.** The re-examination took
+  61.2 s (against 63.9 s), recorded the same five cross-track conflicts with the
+  same incumbent ids, and ended at 506 rows, `exact` 150 / `version` 54 /
+  `absent` 302, six queue items. A column-by-column diff of all 506 rows against
+  the pre-upgrade capture found **one** changed column anywhere: `matched_at` on
+  the 473 re-identified rows. `source_timestamp` came back byte-identical, as did
+  every release id, derived column, ownership and reason. That is the property
+  worth having — a forced re-decision that changes only what it must.
+- **The second restart did nothing at all**: no migration, no invalidation, no
+  log line, marker unchanged; and the next scan examined 0 of 764 in 0.079 s. The
+  one-off is a one-off.
+
+**The refusal path is unreachable on a settled install, by design.**
+`_checkLogicVersion` reaches `invalidateStrict` only when the stored version is
+older than the code's, so once the marker is current a restart during a scan
+returns at the "nothing at all" branch and never attempts a write. Provoking it
+would mean hand-writing the marker backwards in a live database. It stays covered
+offline in `plugin-check.pl`, and that is the right and only home for it —
+recorded so "not run" is not later read as "untested".
