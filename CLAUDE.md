@@ -136,6 +136,11 @@ sits where it does.
    `_syncTick`'s "the scan already synced" skip as well as from `_syncDone`,
    because on a server whose scan-time sync works the latter never runs
    (§15.18 part 8) and the job would never have fired at all.
+   **Follow-up, code complete**: a logic version — `Tags::LOGIC_VERSION`,
+   `discogs_meta` (migration 7) and `Plugin::_checkLogicVersion` — so that a
+   change to how identification decides can say "re-decide" instead of being
+   skipped by `_canSkip` forever. Bump `LOGIC_VERSION` whenever the decision
+   rule changes. Decisions §15.23, §15.24; hardware checks open in `TODO.md`.
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
 

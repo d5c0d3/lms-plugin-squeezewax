@@ -5451,3 +5451,112 @@ library it might have gone unnoticed for much longer, which is an argument for
 the finding rather than against it. Whether a wipe-and-rescan would re-examine
 anything is **inferred from reading, not tested**: `album_key` and
 `source_timestamp` both survive a wipecache, so it should not help.
+
+### 15.24 The logic version: how a rule change says "re-decide"
+
+Built 2026-09-29 as step 8c's follow-up, against §15.23's finding. Decided
+there; this records the mechanism as built.
+
+#### The shape
+
+A version for the identification **decision rule**, stored beside the rows it
+describes, and compared at every server start.
+
+- `Plugins::SqueezeWax::Tags::LOGIC_VERSION` — a constant in the code. First
+  value **2**; 1 is everything up to and including 0.0.0.11, before step 8c's
+  cross-track comparison.
+- `discogs_meta`, migration 7 — a two-column key/value table, `key TEXT PRIMARY
+  KEY` and `value TEXT NOT NULL`, with two accessors on `Schema` and no third.
+  The key in use is `logic_version`.
+- `Plugin::_checkLogicVersion`, called from `initPlugin` immediately after
+  `Schema->init` — after, because registering the postDBConnect handler is what
+  forces the reconnect that runs the migrations
+  (`Slim/Utils/SQLiteHelper.pm:396-400`), so `discogs_meta` does not exist
+  before it.
+
+Five cases, each asserted in `scripts/plugin-check.pl`:
+
+| stored | `discogs_match` | what happens |
+|---|---|---|
+| absent | empty | record the current version, silently — a fresh install has nothing to re-decide, and an invalidation line would describe work that did not happen |
+| absent | has rows | treat as 1: invalidate, then record |
+| < current | — | invalidate, then record |
+| = current | — | nothing at all: no write, no log. Every normal start |
+| > current | — | nothing, and warn once. Its rows were decided by a rule this code does not have, and the marker is **not** overwritten with the lower number |
+
+A sixth, added in the build and not in the hand-off: **the schema being unusable
+is unknowable, not a fresh install.** `_checkLogicVersion` returns before
+anything else when `Schema->isReady` is false. Without that test the fresh-install
+branch would catch it — `meta` and `hasAnyRow` both answer undef — and while
+`setMeta` would refuse the write anyway, the reasoning would be an accident
+rather than a decision.
+
+#### Why the constant is in Tags.pm
+
+`Tags.pm` is the rule: `decide`, `candidateKeys` and `examineCandidates` are
+what "how identification decides" means. `Schema.pm` owns storage, and
+`user_version` already versions that; a logic version there would sit beside a
+number that means something else entirely. Both processes load `Tags.pm`
+already, so nothing is paid for the placement.
+
+The constant's comment names what a bump is for — which files are read, how a
+file's tags become a verdict, how several files' verdicts are combined, what
+counts as a disagreement — and what it is not: a message, a log line, a
+refactor that decides identically. Adding a tag *name* is not one either; that
+is a pref, and `Settings.pm` already invalidates when the set changes. A
+needless bump costs every user a full re-examination (63.9 s over 578 albums on
+the reference library) and is recoverable; a missing one leaves wrong
+conclusions with nothing to dislodge them, and is not.
+
+#### Why the marker is in the database and not a pref
+
+A pref would say "already done" beside a `squeezewax.db` restored from before
+the logic change, leaving stale identifications that nothing would ever
+re-examine. The marker has to travel with the rows it describes, and a
+restored database carries its own.
+
+`discogs_meta` is **ours**. A key we chose and a number we wrote are our own
+conclusions, not Content, so §9.5 is not engaged — the same footing as
+`ownership` or `derived_master_id`, and unlike anything a Discogs payload
+carries. Like `discogs_sync_state` (§15.18 part 7), it is a table the design
+doc's §10 does not list: §10 is v1's data model as designed, and these two are
+mechanism added since, recorded here.
+
+#### The rule that matters: record only on success
+
+`Match->invalidateStrict` returns **undef** when `_writeOk` refuses — a scan is
+running, or the schema is not usable (`Match.pm:105`). Recording the version
+after a refusal would skip the invalidation **forever**: the same silent,
+permanent wrong answer §15.23 describes, reached by one extra step. So a
+refusal leaves the stored value alone, logs one info line saying it will be
+retried, and the next start tries again. The suite drives exactly that
+sequence — refuse, assert nothing was stored, allow, assert the invalidation
+happens.
+
+Zero rows is **not** a refusal. An invalidation that touched nothing still
+happened, and its version is recorded; otherwise it would repeat at every start
+for the life of the install.
+
+#### What it does not do
+
+**It does not start a scan.** Invalidation NULLs `source_timestamp` on strict
+rows and deletes the strict no-match rows; the re-examination happens at the
+user's next scan, exactly as a tag-name change behaves today. A plugin that
+started a scan on the user's behalf would be a new behaviour of its own, and
+this was not the place to introduce one. The consequence, stated: between a
+logic-change upgrade and the next scan, the library is un-re-examined and its
+badges are whatever the old rule concluded — better than §15.23's state, where
+that was permanent, and worse than immediate.
+
+It also does not run in the scanner. `Plugin.pm` is never loaded there
+(`Slim/Utils/PluginManager.pm:204`), and repair is the server's job, as DDL
+already is.
+
+#### New this step
+
+`Match->hasAnyRow` — every row of `discogs_match`, not the identified ones
+`hasAnyStrictMatch` asks about, because the question is whether this plugin has
+ever concluded anything here. An ownership-only row (`match_tier` NULL since
+migration 3) answers yes and `hasAnyStrictMatch` answers no, which is why it is
+a second sub rather than a reuse. undef when the schema is unusable: "cannot
+tell", not "no".

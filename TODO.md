@@ -1298,7 +1298,7 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-09-29, NEXT: a logic change to identification has no way to say
+- [x] **2026-09-29, NEXT: a logic change to identification has no way to say
       "re-decide".** Decisions §15.23. `_canSkip` skips unchanged albums, so step
       8c's group B never reached any album identified before it shipped — and
       between 0.0.0.12 landing and a hand-run invalidation, album 3421 was badged
@@ -1307,6 +1307,12 @@ Each names its sites so the work is mechanical rather than a search.
       once when the code's value is newer than the stored one. Built as step 8c's
       follow-up, before step 9. Cost: one full re-examination per logic change,
       measured at 63.9 s over 578 albums.
+      → BUILT 2026-09-29, decisions §15.24: `Tags::LOGIC_VERSION` (first value
+      2), `discogs_meta` and migration 7 with two `Schema` accessors, and
+      `Plugin::_checkLogicVersion` after `Schema->init`. The version is recorded
+      only when `invalidateStrict` returns defined, so a refusal retries at the
+      next start rather than becoming permanent. It does not start a scan.
+      Packaged as 0.0.0.13; hardware checks below.
 
 - [ ] **2026-09-29: a derive session is invisible.** Badges change for up to 25
       minutes after a scan and nothing on any page says why. An informational
@@ -2014,6 +2020,22 @@ Each names its sites so the work is mechanical rather than a search.
       the session starts from a list rather than deriving one.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-09-29: the logic version's hardware checks (0.0.0.13).** Decisions
+      §15.24. Short, on the reference server, in order:
+      1. **Upgrade and start.** `user_version` 6 → 7, and expect **exactly one
+         invalidation** — even though the tag-name trick was already run by hand
+         on 2026-09-29, the `logic_version` key does not exist yet and
+         `discogs_match` has rows. One info line naming 1 → 2, ~500 rows nulled,
+         the strict no-match rows emptied.
+      2. **Rescan.** ~64 s measured; the five conflicts and the four node F
+         badges come back as §15.23 recorded them, and the row and ownership
+         counts land where it says.
+      3. **Restart again and confirm NOTHING happens** — no invalidation, no log
+         line, and `SELECT value FROM discogs_meta WHERE key = 'logic_version'`
+         reads 2. That is the stored version doing its job, and it is the check
+         the whole mechanism exists to pass.
+
 
 - [x] **2026-09-24: build-order step 8's hardware checks (the review queue and
       manual re-match).** Plan `plans/build-order-step-8-review-queue.md` §6.
