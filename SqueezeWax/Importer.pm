@@ -473,24 +473,33 @@ sub _canSkip {
 	return $state->{source_timestamp} == $album->{source_timestamp};
 }
 
-# Read the primary local track, and fall back to one more - never all. A
-# compilation assembled from per-track tagging is not a maintained collection and
-# is not worth paying 12x the file reads to accommodate (decisions §3).
+# Read the primary local track and one more - never all. A compilation assembled
+# from per-track tagging is not a maintained collection and is not worth paying
+# 12x the file reads to accommodate (decisions §3); reading every track was
+# rejected again at step 8c on measured cost - 19-137 ms per file on a NAS, ~9,000
+# reads, ten to fifteen minutes added to every scan.
+#
+# Until step 8c this stopped at the FIRST candidate that answered, which made a
+# cross-track disagreement invisible: an album whose two files name different
+# releases was identified from whichever came first, and the `Cover Versions/`
+# folder acquired a full album's release id from one of its three files. Both are
+# now read and compared, at zero request cost and at identification time, so a
+# folder whose files disagree becomes a conflict rather than a wrong answer
+# (decisions §15.21, §15.22).
+#
+# The comparison itself is Tags::examineCandidates, not inlined here: the queue
+# page's "Show tags" action has to reach the same answer, and a second
+# implementation of it would drift and then show a user tags that do not explain
+# the conflict their scan recorded (§15.17 part 1).
+#
+# Kept as a sub of its own rather than called from the loop above, because it is
+# the seam the offline suite reaches: startScan's body is inside
+# `if (main::SCANNER)` and is constant-folded away in a test process, while this
+# is at file scope.
 sub _examine {
 	my ( $album, $names ) = @_;
 
-	my $decision = {};
-
-	for my $url ( @{ $album->{candidates} } ) {
-		my $tags = Plugins::SqueezeWax::Tags->readTrack($url);
-
-		$decision = Plugins::SqueezeWax::Tags->decide($tags);
-
-		# Anything but "no configured tag present" is an answer.
-		last if $decision->{id} || $decision->{conflict};
-	}
-
-	return $decision;
+	return Plugins::SqueezeWax::Tags->examineCandidates( $album->{candidates} );
 }
 
 1;

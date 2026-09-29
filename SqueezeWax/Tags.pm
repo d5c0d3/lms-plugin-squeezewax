@@ -355,6 +355,151 @@ sub _isMasterKey {
 	return scalar grep { $uc eq uc $_ } @MASTER_KEYS;
 }
 
+=head2 examineCandidates( \@urls )
+
+What an album's candidate tracks say between them, as one decision. Returns the
+same shape C<decide> does, plus:
+
+  read      how many candidate files gave up any tags at all
+  kind      which sort of conflict this is, when there is one:
+            'in-file'       two tags in ONE file disagree, or one will not parse
+            'cross-ids'     two files name DIFFERENT releases
+            'cross-partial' one file carries a Discogs tag and another does not
+  untagged  the files that carried no configured tag, for 'cross-partial'
+
+C<conflict> entries name the file they came from, so a caller can tell the user
+which of their files to go and look at.
+
+=cut
+
+# Build-order step 8c group B, decisions §15.22 and §15.21's cross-track ruling.
+#
+# WHY THIS MOVED HERE. Importer::_examine read the candidates and stopped at the
+# first that answered, so an album whose two files name different releases was
+# identified from whichever came first and the disagreement was INVISIBLE. That is
+# how the `Cover Versions/` folder (album 3421, ids 793593 and 369197) acquired a
+# full album's release id from one of its three files - and node F, once step 8c's
+# group A woke it up, would have badged it wrongly.
+#
+# It lives in Tags.pm rather than in the importer because the queue page needs the
+# SAME answer: its "Show tags" action must show what the importer saw, and
+# Queue::_readTags' own comment already says why a second implementation is not an
+# option - it would drift and then show a user tags that do not explain the
+# conflict their scan recorded (§15.17 part 1).
+#
+# THE COST, stated: one extra file read per EXAMINED album. The importer skips
+# albums whose files have not changed (Importer::_canSkip), so in steady state this
+# is near nothing; on a wipe-and-rescan it is one extra read per album, of the
+# order of a minute on this library's NAS at 19-137 ms a file. It is not one extra
+# read per album in the LIBRARY, and it is not the every-track read §9.5 rejected
+# on measured cost (~9,000 reads, ten to fifteen minutes a scan).
+#
+# BOTH HALVES COUNT AS DISAGREEMENT - two different ids, and one file tagged with
+# another untagged - decided 2026-09-28 on M1's measurement of five albums in 764:
+# 467 agree, 3 carry two different ids, 2 are tagged-then-untagged, 24 have a
+# single local track and cannot disagree with themselves.
+#
+# AN UNREADABLE FILE IS NOT A VOICE. The plan is silent on it and the distinction
+# matters: readTrack catches its own failures and returns an EMPTY hash, while a
+# readable file with no Discogs tag returns a populated one (see decide's POD - a
+# remote URL still yields TITLE and CONTENT_TYPE). Without this test, an album
+# whose second file sits on an unmounted disc would become a cross-track conflict
+# and lose its release id, which is a wrong answer produced by a mount point. So a
+# file that gave up no tags at all is skipped, and an album with one readable
+# candidate is treated as the single-candidate album it has become.
+sub examineCandidates {
+	my ( $class, $urls ) = @_;
+
+	my $read = 0;
+	my @voices;
+
+	for my $url ( @{ $urls || [] } ) {
+		my $tags = $class->readTrack($url);
+
+		# Read nothing at all: not a voice. See the header above.
+		next unless %$tags;
+
+		$read++;
+
+		my $decision = $class->decide($tags);
+
+		# An in-file conflict short-circuits, exactly as it did when the loop
+		# stopped at the first answer: it is a conflict whatever the other file
+		# says, and there is nothing a second opinion could settle. The file is
+		# named anyway, because with two candidates the user still has to know
+		# which one to open.
+		if ( $decision->{conflict} ) {
+			return {
+				read     => $read,
+				kind     => 'in-file',
+				conflict => [ map { _fileLabel($url) . ': ' . $_ } @{ $decision->{conflict} } ],
+				untagged => [],
+			};
+		}
+
+		push @voices, { url => $url, decision => $decision };
+	}
+
+	# Nothing readable, or nothing tagged. Both are "no configured tag present",
+	# which is _recordNoMatch's case, and `read` is how a caller tells them apart.
+	return { read => $read } unless @voices;
+
+	my @tagged   = grep {  $_->{decision}->{id} } @voices;
+	my @untagged = grep { !$_->{decision}->{id} } @voices;
+
+	return { read => $read } unless @tagged;
+
+	# One voice cannot disagree with itself. 24 albums on the reference library
+	# have a single local track, and they must keep working exactly as they did.
+	return { read => $read, %{ $tagged[0]->{decision} } } if @voices == 1;
+
+	my %ids = map { $_->{decision}->{id} => 1 } @tagged;
+
+	# They agree, and every readable file has its say. Identified, as before, from
+	# the first candidate - so the tag name and any master id are the ones the
+	# first-answering file carried, which is what the old loop reported too.
+	return { read => $read, %{ $tagged[0]->{decision} } }
+		if keys(%ids) == 1 && !@untagged;
+
+	# A disagreement. `kind` is on the ids rather than on the untagged list
+	# because with more than two candidates both could be true at once, and
+	# "these name different records" is the more specific thing to say.
+	return {
+		read     => $read,
+		kind     => keys(%ids) > 1 ? 'cross-ids' : 'cross-partial',
+
+		# The values as they APPEARED is decide's rule and it holds here: the user
+		# has to find these strings in their files. The file name is prepended
+		# rather than substituted, so nothing is lost.
+		conflict => [ map {
+			_fileLabel( $_->{url} ) . ': '
+				. $_->{decision}->{tag} . '=' . $_->{decision}->{id}
+		} @tagged ],
+
+		untagged => [ map { _fileLabel( $_->{url} ) } @untagged ],
+	};
+}
+
+# The name a user would recognise, from a file URL: the last path segment,
+# percent-unescaped. Never a full path - the point is to say WHICH of an album's
+# two files, and the directory is the same for both.
+#
+# Falls back to the whole URL rather than the empty string: a label nobody can
+# read is still better than a conflict report with a blank in it.
+sub _fileLabel {
+	my ($url) = @_;
+
+	return '' unless defined $url;
+
+	my $label = $url;
+
+	$label =~ s/[?#].*\z//s;
+	$label =~ s{^.*/}{};
+	$label =~ s/%([0-9A-Fa-f]{2})/chr hex $1/ge;
+
+	return length($label) ? $label : $url;
+}
+
 sub candidateKeys {
 	my ( $class, $tags ) = @_;
 

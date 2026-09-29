@@ -732,6 +732,20 @@ sub _recordConflict {
 		? $state->{discogs_release_id}
 		: undef;
 
+	# Both halves of the detail since step 8c. A cross-track disagreement of the
+	# tagged-then-untagged kind has ONE entry in `conflict`, and a line naming one
+	# file and one id reads as though nothing were wrong - the user cannot see
+	# what it disagreed WITH. So the untagged files are named too, and the
+	# conflict entries carry the file they came from (Tags::examineCandidates).
+	#
+	# §15.17 part 3 is the precedent: a message that tells the user something
+	# untrue about their library is worse than a missing feature.
+	my $detail = join ', ', @{ $decision->{conflict} };
+
+	if ( @{ $decision->{untagged} || [] } ) {
+		$detail .= '; no Discogs tag on ' . join( ', ', @{ $decision->{untagged} } );
+	}
+
 	# The album label is quoted because titles contain colons - a real one from
 	# hardware was "Isolar: Unidentified Explorers", which rendered as
 	# "on Isolar: Unidentified Explorers: TAG=..." with no way to see where the
@@ -739,7 +753,7 @@ sub _recordConflict {
 	$log->warn(
 		'conflicting Discogs tags on "'
 		. Plugins::SqueezeWax::Library->albumLabel($album) . '": '
-		. join( ', ', @{ $decision->{conflict} } )
+		. $detail
 		. ( defined $incumbent ? " (keeping the existing match $incumbent)" : '' )
 	);
 

@@ -97,11 +97,16 @@ BEGIN {
 	*{'main::ISWINDOWS'} = sub () { 0 };
 }
 
+# The configured Discogs tag names, which step 8c's _examine assertions need and
+# nothing before them did. Defaults to the empty list, which is what `get`
+# returned unconditionally until then.
+our @TAG_NAMES = ();
+
 {
 	package Test::StubPrefs;
 	sub new     { bless {}, shift }
 	sub init    { 1 }
-	sub get     { [] }
+	sub get     { return $_[1] eq 'discogsTagNames' ? \@main::TAG_NAMES : [] }
 	sub set     { 1 }
 	sub migrate { 1 }
 }
@@ -1302,6 +1307,309 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	$seed->( match_tier => 'manual', state => 'confirmed', discogs_release_id => 4242 );
 	is( $M->rejectRow($key), 0, 'reject refuses during a scan' );
 	ok( row($key), '  ...and the row survives' );
+}
+
+# --- _examine compares BOTH candidates (step 8c group B, §15.21/§15.22) -----
+#
+# Until step 8c the loop stopped at the first candidate that answered, so an
+# album whose two files name different releases was identified from whichever came
+# first and the disagreement was INVISIBLE. That is how the `Cover Versions/`
+# folder (album 3421, ids 793593 and 369197) acquired a full album's release id
+# from one of its three files - and node F, once group A woke it up, would have
+# badged it wrongly.
+#
+# Every row of the plan's §2.1 table is here, INCLUDING the rows that must not
+# change. 467 of 764 albums on the reference library have two candidates that
+# agree and 24 have a single candidate; the rule adds a disagreement case and must
+# change no other outcome.
+#
+# The comparison lives in Tags::examineCandidates so the queue page can reach the
+# same answer; _examine is the seam the importer calls it through, and it is what
+# is driven here.
+{
+	no warnings 'redefine', 'once';
+
+	local @TAG_NAMES = ('DISCOGS_RELEASE_ID');
+
+	# What each candidate file "contains". A URL absent from this map reads as an
+	# unreadable file - readTrack's own failure case, which returns an EMPTY hash.
+	# A file that is readable but carries no Discogs tag is a POPULATED hash with
+	# no configured key, which is what readTags really returns (Tags::decide's POD
+	# on remote URLs). The distinction is the whole of the unreadable-file rule.
+	our %FILES;
+
+	local *Plugins::SqueezeWax::Tags::readTrack = sub {
+		my ( $class, $url ) = @_;
+
+		return exists $FILES{$url} ? { %{ $FILES{$url} } } : {};
+	};
+
+	# An album as Library::eachAlbum supplies one, for _examine's purposes.
+	my $examine = sub {
+		return Plugins::SqueezeWax::Importer::_examine(
+			{ candidates => [@_] }, \@TAG_NAMES );
+	};
+
+	my $readable = { TITLE => 'Some Track', CONTENT_TYPE => 'flc' };
+
+	%FILES = (
+		'file:///x/01%20-%20One.flac' => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		'file:///x/02%20-%20Two.flac' => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		'file:///x/03%20-%20Odd.flac' => { %$readable, DISCOGS_RELEASE_ID => 369197 },
+		'file:///x/04%20-%20Bare.flac' => { %$readable },
+		'file:///x/05%20-%20Two%20tags.flac' =>
+			{ %$readable, DISCOGS_RELEASE_ID => [ 111, 222 ] },
+	);
+
+	my $ONE  = 'file:///x/01%20-%20One.flac';
+	my $TWO  = 'file:///x/02%20-%20Two.flac';
+	my $ODD  = 'file:///x/03%20-%20Odd.flac';
+	my $BARE = 'file:///x/04%20-%20Bare.flac';
+	my $BOTH = 'file:///x/05%20-%20Two%20tags.flac';
+	my $GONE = 'file:///x/99%20-%20Unmounted.flac';
+
+	# Row 1: id X, id X -> identified, as today.
+	{
+		my $d = $examine->( $ONE, $TWO );
+
+		is( $d->{id}, 793593, 'two candidates agreeing on one id identify the album' );
+		is( $d->{conflict}, undef, '  ...with no conflict' );
+		is( $d->{read}, 2, '  ...having read both files' );
+	}
+
+	# Row 2: id X, id Y -> disagreement. Album 3421's real ids.
+	{
+		my $d = $examine->( $ONE, $ODD );
+
+		is( $d->{id}, undef, 'two candidates naming DIFFERENT releases identify nothing' );
+		ok( $d->{conflict}, '  ...and report a conflict instead' );
+		is( $d->{kind}, 'cross-ids', "  ...of kind 'cross-ids'" );
+
+		is_deeply( $d->{conflict},
+			[ '01 - One.flac: DISCOGS_RELEASE_ID=793593',
+			  '03 - Odd.flac: DISCOGS_RELEASE_ID=369197' ],
+			'  ...naming both ids AND the file each came from' );
+		is_deeply( $d->{untagged}, [], '  ...with nothing untagged' );
+	}
+
+	# Row 3: id X, no Discogs tag -> disagreement (ruling 6, both halves).
+	{
+		my $d = $examine->( $ONE, $BARE );
+
+		is( $d->{id}, undef, 'one file tagged and another not identifies nothing either' );
+		is( $d->{kind}, 'cross-partial', "  ...as 'cross-partial' (§15.21 ruling 6)" );
+		is_deeply( $d->{conflict}, ['01 - One.flac: DISCOGS_RELEASE_ID=793593'],
+			'  ...naming what the tagged file said' );
+		is_deeply( $d->{untagged}, ['04 - Bare.flac'],
+			'  ...and WHICH file carries no tag, which is the only way to see what it disagreed with' );
+	}
+
+	# ...and in the other order, because the old loop was order-dependent and this
+	# must not be.
+	{
+		my $d = $examine->( $BARE, $ONE );
+
+		is( $d->{kind}, 'cross-partial',
+			'the untagged file first is the same disagreement - the rule is not order-dependent' );
+		is( $d->{id}, undef, '  ...and still identifies nothing' );
+	}
+
+	# Row 4: a conflict WITHIN one file -> conflict, as today. It short-circuits:
+	# there is nothing a second opinion could settle.
+	{
+		my $d = $examine->( $BOTH, $ONE );
+
+		is( $d->{kind}, 'in-file', 'two disagreeing tags in ONE file is an in-file conflict' );
+		is( $d->{read}, 1, '  ...and the second file is never read: the answer is already in' );
+		is_deeply( $d->{conflict},
+			[ '05 - Two tags.flac: DISCOGS_RELEASE_ID=111',
+			  '05 - Two tags.flac: DISCOGS_RELEASE_ID=222' ],
+			'  ...naming the file, because with two candidates the user must know which' );
+	}
+
+	# An in-file conflict on the SECOND file still wins over the first's clean id.
+	{
+		my $d = $examine->( $ONE, $BOTH );
+
+		is( $d->{kind}, 'in-file',
+			'an in-file conflict on the second candidate is still a conflict' );
+		is( $d->{id}, undef, '  ...and the first file\'s clean id does not stand' );
+	}
+
+	# Row 5: no tag, no tag -> no tag, as today.
+	{
+		my $d = $examine->( $BARE, $BARE );
+
+		is( $d->{id}, undef, 'two untagged files identify nothing' );
+		is( $d->{conflict}, undef, '  ...and are NOT a conflict - there is nothing to disagree about' );
+		is( $d->{read}, 2, '  ...though both were read' );
+	}
+
+	# Row 6: a single candidate -> identified from it, as today. 24 albums on the
+	# reference library have one local track and cannot disagree with themselves.
+	{
+		my $d = $examine->($ONE);
+
+		is( $d->{id}, 793593, 'a single-candidate album is identified from it' );
+		is( $d->{conflict}, undef, '  ...and cannot disagree with itself' );
+	}
+
+	{
+		my $d = $examine->($BARE);
+
+		is( $d->{id}, undef, 'a single untagged candidate identifies nothing' );
+		is( $d->{conflict}, undef, '  ...and is not a conflict' );
+	}
+
+	# An UNREADABLE file is not a voice. The plan is silent on this and it matters:
+	# without the rule, an album whose second file sits on an unmounted disc would
+	# become a conflict and LOSE ITS RELEASE ID - a wrong answer produced by a
+	# mount point rather than by anything in the tags.
+	{
+		my $d = $examine->( $ONE, $GONE );
+
+		is( $d->{id}, 793593,
+			'an unreadable second file does not make a tagged album a conflict' );
+		is( $d->{read}, 1, '  ...and is not counted as read' );
+	}
+
+	{
+		my $d = $examine->( $GONE, $ONE );
+
+		is( $d->{id}, 793593, '  ...in either order' );
+	}
+
+	{
+		my $d = $examine->( $GONE, $GONE );
+
+		is( $d->{read}, 0, 'an album whose files cannot be read at all reads nothing' );
+		is( $d->{id}, undef, '  ...identifies nothing' );
+		is( $d->{conflict}, undef, '  ...and is not a conflict' );
+	}
+
+	{
+		my $d = $examine->();
+
+		is( $d->{read}, 0, 'an album with no candidates at all is handled rather than dying' );
+		is( $d->{id}, undef, '  ...and identifies nothing' );
+	}
+
+	# The master tag still rides the identification, from the first answering file
+	# as it did before.
+	{
+		local $FILES{$ONE} = { %{ $FILES{$ONE} }, DISCOGS_MASTER_ID => 1884 };
+
+		my $d = $examine->( $ONE, $TWO );
+
+		is( $d->{id}, 793593, 'an agreeing pair still identifies' );
+		is( $d->{master_id}, 1884, '  ...and carries the master tag the first file held' );
+	}
+
+	# --- what a disagreement WRITES (§3a, via the existing _recordConflict) ----
+	#
+	# The route is deliberately the existing one: a cross-track disagreement is a
+	# conflict and nothing about the write is new. What matters is the
+	# CONSEQUENCE, which is the point of the whole rule - with no release id the
+	# album never reaches node C, so no ownership is derived from contested tags
+	# and node F cannot badge it wrongly.
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $album = {
+		album_key        => 'e' x 32,
+		album_id         => 3421,
+		title            => 'Cover Versions',
+		artist           => 'Various Artists',
+		local_tracks     => 3,
+		source_timestamp => 4242,
+		candidates       => [ $ONE, $ODD ],
+	};
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	{
+		my $d = $examine->( @{ $album->{candidates} } );
+
+		is( $M->recordStrict( $album, $d, undef ), 'candidate',
+			'a fresh cross-track disagreement is recorded as a conflict' );
+
+		my $row = row( $album->{album_key} );
+		is( $row->{review_reason}, 'conflict', "  ...marked 'conflict' (one reason value, §15.22)" );
+		is( $row->{discogs_release_id}, undef,
+			'  ...with a NULL release id, so node C skips it and node F cannot badge it' );
+		is( $row->{match_tier}, 'strict', '  ...at tier strict' );
+		is( $row->{state}, 'candidate', '  ...and state candidate' );
+		is( $row->{snapshot_track_count}, undef, '  ...and no snapshot (§15.4)' );
+	}
+
+	# An INCUMBENT survives one, per §3a: preserving a decision already made is
+	# not choosing between the competing tags.
+	{
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+
+		my $clean = $examine->( $ONE, $TWO );
+		$M->recordStrict( $album, $clean, undef );
+		is( row( $album->{album_key} )->{discogs_release_id}, 793593,
+			'an album whose files agreed was identified' );
+
+		my $state = $M->strictState( $album->{album_key} );
+		my $d     = $examine->( $ONE, $ODD );
+
+		is( $M->recordStrict( $album, $d, $state ), 'candidate',
+			'the files then disagree and the album becomes a conflict' );
+
+		my $row = row( $album->{album_key} );
+		is( $row->{discogs_release_id}, 793593,
+			'  ...keeping the incumbent release id (§3a): a decision already made survives' );
+		is( $row->{review_reason}, 'conflict', '  ...and marked' );
+	}
+
+	# Fixing the tags clears it, through _recordMatch and nowhere else (§15.16
+	# part 3): 'conflict' is sticky until something CHANGES, and this is the change.
+	{
+		my $d = $examine->( $ONE, $TWO );
+
+		is( $M->recordStrict( $album, $d, $M->strictState( $album->{album_key} ) ), 'identified',
+			'files that agree again identify the album' );
+
+		my $row = row( $album->{album_key} );
+		is( $row->{review_reason}, undef, "  ...and 'conflict' is cleared" );
+		is( $row->{discogs_release_id}, 793593, '  ...with the agreed release id' );
+		is( $row->{snapshot_track_count}, 3, '  ...and a recovery snapshot, which a conflict has none of' );
+	}
+
+	# A single-candidate album still writes exactly what it always wrote. This is
+	# the row of §2.1's table most likely to be broken silently, because nothing
+	# about it is new.
+	{
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+
+		my $single = { %$album, album_key => 'f' x 32, candidates => [$ONE], local_tracks => 1 };
+		my $d = $examine->( $ONE );
+
+		is( $M->recordStrict( $single, $d, undef ), 'identified',
+			'a single-candidate album is identified exactly as before' );
+		is( row( 'f' x 32 )->{discogs_release_id}, 793593, '  ...with its id' );
+		is( row( 'f' x 32 )->{review_reason}, undef, '  ...and no conflict' );
+	}
+
+	# Two untagged files are still a no-match, not a conflict - the 82 albums on
+	# the reference library that carry no tag at all must not move.
+	{
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+		$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+		my $none = { %$album, album_key => 'g' x 32, candidates => [ $BARE, $BARE ] };
+		my $d = $examine->( $BARE, $BARE );
+
+		is( $M->recordStrict( $none, $d, undef ), 'none',
+			'two untagged files still record a no-match, not a conflict' );
+		is( row( 'g' x 32 ), undef, '  ...and write no discogs_match row' );
+	}
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
 }
 
 # --- R6: the importer ignores ownership-only rows (§15.13 part 6) ----------
