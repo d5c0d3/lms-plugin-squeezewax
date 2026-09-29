@@ -35,6 +35,7 @@ my @MIGRATIONS = (
 	\&_migration_3,
 	\&_migration_4,
 	\&_migration_5,
+	\&_migration_6,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -727,6 +728,79 @@ sub _migration_5 {
 			source      TEXT    NOT NULL CHECK (source IN ('server','scan'))
 		)
 	});
+
+	return 1;
+}
+
+# Migration 6: the derived master arm. Decisions §15.22, build-order step 8c.
+#
+# Node F (Ownership.pm) compares discogs_master_id, which is written only from a
+# DISCOGS_MASTER_ID-family TAG (Match.pm's _recordMatch and recordManual, from
+# Tags.pm's _masterId). Nothing resolved a release id to its master, so on the
+# reference library the column was NULL on all but 2 of 506 rows and node F had
+# never once fired - §15.19. Derive.pm fills these three, and node F reads them.
+#
+# THREE columns, not one, because the pair of the first two has to express four
+# states and the middle one carries most of the weight (§15.22):
+#
+#   all NULL                                 never looked
+#   both ids set                             looked, found a master
+#   derived_from_release_id set, master NULL  LOOKED, AND THERE IS NO MASTER -
+#                                            a 404, or a release Discogs reports
+#                                            with master_id absent or 0. Without
+#                                            this state the 29 masterless
+#                                            releases on the reference library,
+#                                            and the 3 whose releases Discogs
+#                                            has deleted, would be re-fetched on
+#                                            every run forever.
+#   derived_from_release_id <> the row's
+#     current discogs_release_id             stale: the tags now name a
+#                                            different release. Re-derive, and
+#                                            until then node F ignores it.
+#
+# Kept SEPARATE from discogs_master_id, which stays tag-only: a tag is the
+# user's assertion and ours never silently overwrites it, and when tags change we
+# need to know which of the two to re-derive. Both are regenerable, so §2a's
+# "never delete a row carrying a decision or a recovery snapshot" is unaffected -
+# these three constrain nothing.
+#
+# INTEGER, all three. §9.5 permits a bare identifier ("not Content in any
+# meaningful sense. Unconstrained; kept indefinitely") and forbids everything
+# else the release payload carries - no title, no artist, no tracklist, and
+# discogs_release_cache stays unwritten. scripts/derive-check.pl asserts that
+# rather than trusting it.
+#
+# derived_at is for the log and for a human reading the table. Nothing branches
+# on it, deliberately: an age-based re-fetch is exactly the "repeated to keep it
+# fresh" that §15.22 rules out.
+#
+# No CHECK and no index. A master id is an opaque integer with no enumerable
+# domain, and the selection query below is a full scan of ~500 rows once per run.
+#
+# ALTER TABLE ADD COLUMN throws "duplicate column name" on a re-run, so the
+# column list is checked first - _migration_4's pragma_table_info guard, which
+# exists for exactly this and is re-used here rather than re-invented. One guard
+# for all three: they are added together and there is no path that could leave
+# one behind, since SQLite makes DDL on an attached schema transactional and
+# _migrate wraps the sub in an eval that refuses to bump user_version on failure.
+sub _migration_6 {
+	my $dbh = shift;
+
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	return 1 if $columns{derived_master_id};
+
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_master_id INTEGER');
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_from_release_id INTEGER');
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_at INTEGER');
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('added discogs_match.derived_master_id, derived_from_release_id '
+			. 'and derived_at (NULL on every existing row)');
 
 	return 1;
 }

@@ -259,7 +259,8 @@ is_deeply(
 	[ sort keys %matchColumns ],
 	[ sort qw(album_key mb_album_id lms_album_id discogs_release_id discogs_master_id
 	          match_tier state ownership matched_at snapshot_artist snapshot_album_title
-	          snapshot_track_count source_timestamp review_reason) ],
+	          snapshot_track_count source_timestamp review_reason
+	          derived_master_id derived_from_release_id derived_at) ],
 	'discogs_match carries exactly the v1 column set'
 );
 ok( $matchColumns{source_timestamp}, 'discogs_match has source_timestamp' );
@@ -745,9 +746,9 @@ sub version_4_dbh {
 
 	my $fingerprint = match_fingerprint($up);
 
-	ok( eval { $S->_migrate($up); 1 }, '_migrate takes a populated version-4 file to 5' )
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-4 file to $target" )
 		or diag($@);
-	is( version_of($up), 5, '  ...and it reports version 5' );
+	is( version_of($up), $target, "  ...and it reports version $target" );
 
 	is_deeply( match_fingerprint($up), $fingerprint,
 		'every discogs_match row is untouched by migration 5' );
@@ -792,14 +793,110 @@ sub version_4_dbh {
 	ok( eval { $S->_migrate($up); 1 },
 		'_migrate re-runs over a completed migration 5 with user_version forced back to 4' )
 		or diag($@);
-	is( version_of($up), 5, '  ...and reaches version 5' );
+	is( version_of($up), $target, "  ...and reaches version $target" );
 
-	# A version-6 file must refuse a plugin that only knows five migrations.
-	# _migrate's existing behaviour, re-asserted at the new version because
+	# A file from the NEXT schema version must refuse this plugin. _migrate's
+	# existing behaviour, re-asserted at whatever the current target is, because
 	# that is where the next upgrade will meet it.
-	$up->do('PRAGMA squeezewax.user_version = 6');
-	ok( !eval { $S->_migrate($up); 1 }, 'a version-6 file refuses this five-migration plugin' );
+	$up->do( 'PRAGMA squeezewax.user_version = ' . ( $target + 1 ) );
+	ok( !eval { $S->_migrate($up); 1 },
+		'a file one version ahead refuses this plugin' );
 	like( $@, qr/newer than this plugin/, '  ...and says why' );
+}
+
+# --- migration 6: the three derived-master columns (§15.22) ------------------
+#
+# The same shape as the migration-4 block, and for the same reason: the only
+# interesting case is a file that already holds rows. A real upgrade meets
+# version 5 with a full discogs_match, and all migration 6 may do to it is add
+# three columns that are NULL everywhere.
+sub version_5_dbh {
+	my $h = version_4_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_5($h);
+	$h->do('PRAGMA squeezewax.user_version = 5');
+
+	return $h;
+}
+
+my @DERIVED = qw(derived_master_id derived_from_release_id derived_at);
+
+{
+	my $up = version_5_dbh();
+
+	is( version_of($up), 5, 'the version-5 fixture reports user_version 5' );
+
+	my %before = map { $_->{name} => 1 } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+	ok( !$before{$_}, "  ...and has no $_ column yet" ) for @DERIVED;
+
+	my $columnsBefore = scalar keys %before;
+	my $fingerprint   = match_fingerprint($up);
+	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-5 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	my %after = map { $_->{name} => $_ } @{
+		$up->selectall_arrayref(
+			'SELECT name, type FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+
+	# EXACTLY three columns, and exactly these three. A migration that added a
+	# fourth - a verdict column, say, which §15.21 dropped - would pass every
+	# assertion below and fail this one.
+	is( scalar keys %after, $columnsBefore + 3,
+		'migration 6 adds exactly three columns' );
+	ok( $after{$_}, "  ...one of them is $_" ) for @DERIVED;
+
+	# INTEGER, all three. §9.5's line between a bare identifier and Content is
+	# enforced by the column type as well as by the writer: a TEXT column here
+	# would be somewhere a title could land.
+	is( $after{$_}->{type}, 'INTEGER', "  ...and $_ is INTEGER, so no title can land in it" )
+		for @DERIVED;
+
+	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'  ...and every pre-existing column is byte-for-byte what it was' );
+
+	for my $c (@DERIVED) {
+		my ($nonNull) = $up->selectrow_array(
+			"SELECT COUNT(*) FROM squeezewax.discogs_match WHERE $c IS NOT NULL" );
+		is( $nonNull, 0, "$c is NULL on every existing row - no backfill" );
+	}
+
+	# discogs_release_cache is still there and still empty. §9.5 forbids writing
+	# it and nothing in step 8c does; asserted here because "the table exists"
+	# and "the table is written" are different statements and only one of them
+	# is permitted.
+	my ($cached) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_release_cache');
+	is( $cached, 0, 'discogs_release_cache is still unwritten (§9.5)' );
+
+	# --- re-run safety ----------------------------------------------------
+	$up->do( 'UPDATE squeezewax.discogs_match SET derived_master_id = ?, '
+		. 'derived_from_release_id = ?, derived_at = ? WHERE album_key = ?',
+		undef, 1884, 111, 1_700_000_000, 'a' x 32 );
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_6($up); 1 },
+		'migration 6 runs a second time without dying' ) or diag($@);
+
+	my ($kept) = $up->selectrow_array(
+		'SELECT derived_master_id FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'a' x 32 );
+	is( $kept, 1884, '  ...and does not blank a master already derived' );
+
+	$up->do('PRAGMA squeezewax.user_version = 5');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 6 with user_version forced back to 5' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
 }
 
 done_testing();
