@@ -47,14 +47,14 @@ use Plugins::SqueezeWax::Schema;
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
 
-# This process's rate-limit state. Module-level for the same reason API.pm's
-# deleted $rateState was: one Discogs token has one real budget no matter who
-# is asking, and the server is a single long-lived process (CLAUDE.md: LMS is
-# single-threaded), so there is exactly one of these to track. It deliberately
-# outlives an individual sync run - a sync that ends mid-window must not let
-# the next one start as though the budget were fresh.
-my $rateState;
-my $rateWait = 0;
+# The rate-limit state used to live here, as `my $rateState` and `my $rateWait`.
+# It moved to API.pm at build-order step 8c (decisions §15.22), unchanged in
+# behaviour: step 8c adds Derive.pm as a second server-side consumer of the same
+# Discogs budget, and two independent throttles against one budget is how a 429
+# arrives that nobody can explain. This file now reads API->rateWait before a
+# request and calls API->noteResponse after one; the decision about what a
+# response means for the budget was always API.pm's, and now the memory of it is
+# too.
 
 # A run that has not finished in this long is treated as dead, so a wedged sync
 # cannot block every future trigger for the life of the server. Deliberately
@@ -304,6 +304,10 @@ sub abort {
 sub _get {
 	my ( $run, $path, $params, $next ) = @_;
 
+	# The shared budget (§15.22), so a derive run that spent the window defers
+	# this page exactly as one of our own pages would have.
+	my $rateWait = Plugins::SqueezeWax::API->rateWait;
+
 	if ($rateWait) {
 		main::INFOLOG && $log->is_info
 			&& $log->info("rate budget spent, deferring $path by ${rateWait}s");
@@ -382,9 +386,8 @@ sub _handle {
 	# Account for the request whatever it returned - a 429 costs budget too,
 	# and an error response that carries no rate headers is precisely the case
 	# accountRequest's degradation ladder exists for (API.pm §3.4).
-	( $rateState, $rateWait ) = Plugins::SqueezeWax::API->accountRequest(
-		Plugins::SqueezeWax::API::_parseRateHeaders($headers),
-		time(), $rateState );
+	Plugins::SqueezeWax::API->noteResponse(
+		Plugins::SqueezeWax::API::_parseRateHeaders($headers), time() );
 
 	if ( ( $result->{error} || '' ) eq 'rate_limited' ) {
 		my $retryWait = Plugins::SqueezeWax::API->backoffFor( $run->{attempt} );

@@ -329,6 +329,52 @@ for my $headers ( undef, {}, { limit => 60 }, { limit => 'sixty', used => 12, re
 }
 
 # ---------------------------------------------------------------------------
+# The shared rate state: noteResponse / rateWait (decisions §15.22)
+# ---------------------------------------------------------------------------
+#
+# accountRequest above is the RULE and stays pure. These two are the MEMORY of
+# it, moved out of API/Async.pm at step 8c because the derive job is a second
+# server-side consumer of one Discogs budget. What matters is that one consumer's
+# spend is visible to the other, so every assertion here is about the state
+# persisting across calls rather than about the arithmetic, which is already
+# covered exhaustively above.
+
+{
+	$A->_resetRate;
+
+	is( $A->rateWait, 0, 'a fresh process has no wait - nothing has been spent yet' );
+
+	is( $A->noteResponse( { limit => 60, used => 1, remaining => 59 }, 1000 ), 0,
+		'a response with budget left reports no wait' );
+	is( $A->rateWait, 0, '  ...and rateWait agrees afterwards' );
+
+	# The state is CARRIED: a headerless response after a good one decrements
+	# rather than falling back to the conservative default. Only a remembered
+	# prior state can produce 58, which is what makes this an assertion about
+	# sharing rather than about accountRequest.
+	is( $A->noteResponse( {}, 1001 ), 0,
+		'a headerless response degrades against the state it remembers' );
+	is( $A->noteResponse( {}, 1002 ), 0, '  ...and again' );
+
+	# Spend it. One consumer's exhausted window is the next consumer's wait -
+	# the whole point of the move.
+	is( $A->noteResponse( { limit => 60, used => 60, remaining => 0 }, 1003 ), 60,
+		'a response with nothing left reports the full window' );
+	is( $A->rateWait, 60,
+		'  ...and every other consumer reading rateWait sees the same wait' );
+
+	# It does not clear itself. A consumer asking twice gets the same answer,
+	# because nothing but another response may change it.
+	is( $A->rateWait, 60, 'rateWait is a read, not a take: asking again says the same' );
+
+	is( $A->noteResponse( { limit => 60, used => 1, remaining => 59 }, 1064 ), 0,
+		'the next response with budget clears the wait' );
+
+	$A->_resetRate;
+	is( $A->rateWait, 0, '_resetRate forgets the budget, for the suites only' );
+}
+
+# ---------------------------------------------------------------------------
 # backoffFor - 429 retry bound
 # ---------------------------------------------------------------------------
 

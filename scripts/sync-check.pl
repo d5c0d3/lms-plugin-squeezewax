@@ -397,6 +397,10 @@ require SqueezeWax::API::Async;
 
 my $A = 'Plugins::SqueezeWax::API::Async';
 
+# The rate state lives in API.pm since step 8c (§15.22), so this suite reaches
+# both: $A for the sync, $API for the budget the sync now shares.
+my $API = 'Plugins::SqueezeWax::API';
+
 # Rate headers that say "budget is fine", so the throttle stays out of the way
 # of every test that is not about the throttle.
 sub healthy_headers {
@@ -489,6 +493,11 @@ sub reset_state {
 	@WRITES       = ();
 	%CHANGES      = ();
 	$APPLY_RESULT = 'ok';
+
+	# The rate state is API.pm's since step 8c (§15.22) and outlives a run by
+	# design, so it is reset here explicitly rather than by accident of being
+	# somewhere else's `my`. Every block below starts with a full window.
+	$API->_resetRate;
 }
 
 # Run one sync to completion and return its result. Safe because every stub is
@@ -678,6 +687,63 @@ sub run_sync {
 	is( $result->{items}, 0, '...reporting zero items' );
 
 	is( scalar @REQUESTS, 2, '...at the cost of one identity lookup and one page' );
+}
+
+# ---------------------------------------------------------------------------
+# One budget, two consumers (decisions §15.22)
+# ---------------------------------------------------------------------------
+#
+# The rate state moved from this file's module scope into API.pm at step 8c so
+# the derive job and the sync throttle against one budget. These assertions are
+# what makes that sharing observable in both directions: nothing else here would
+# notice if the two had a throttle each, and a 429 that arrives because they do
+# is one nobody can explain from a log.
+#
+# The derive job is not loaded - it is stood in for by a call to API->noteResponse
+# with the headers a spent window returns, which is exactly what Derive.pm does
+# with its own responses. Branching on data, not on which module made the call.
+
+{
+	reset_state();
+
+	# A derive run just spent the window.
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() );
+
+	is( $API->rateWait, 60, 'a spent budget is visible before the sync starts' );
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'the sync still completes - it waits rather than failing' );
+
+	# The stub timer fires synchronously, so the wait shows up as a timer that
+	# was armed for the full window BEFORE the first request went out.
+	is( $TIMERS[0]->{delay}, 60,
+		'  ...after deferring its first request by the window the derive job spent' );
+
+	ok( ( grep { /rate budget spent, deferring/ } @LOG ),
+		'  ...and says so in the log, naming the deferral' );
+}
+
+{
+	reset_state();
+
+	# And the other direction: a sync that spends the window leaves the wait
+	# standing for whoever asks next, which is the derive job's pre-request test.
+	my $lastPage = page_response( 5, 1, 1, 5 );
+	$lastPage->{headers} = {
+		'X-Discogs-Ratelimit'           => 60,
+		'X-Discogs-Ratelimit-Used'      => 60,
+		'X-Discogs-Ratelimit-Remaining' => 0,
+	};
+
+	my $result = run_sync( identity_response(), $lastPage );
+
+	ok( $result->{ok}, 'a sync whose last page exhausted the budget still succeeds' );
+	is( $API->rateWait, 60,
+		'  ...and leaves the spent window where the derive job will see it' );
 }
 
 # ---------------------------------------------------------------------------

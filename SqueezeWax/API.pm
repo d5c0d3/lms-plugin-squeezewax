@@ -12,7 +12,7 @@ package Plugins::SqueezeWax::API;
 #
 # Two transports since step 8b, one per process, each supplying its own:
 #
-#   - API/Async.pm (step 5) wires these functions, plus accountRequest,
+#   - API/Async.pm (step 5) wires these functions, plus noteResponse, rateWait,
 #     backoffFor and _parseRateHeaders, to Slim::Networking::SimpleAsyncHTTP
 #     and Slim::Utils::Timers - CLAUDE.md: "Server-side HTTP -> SimpleAsyncHTTP
 #     (async)". It is the server's fallback sync and the manual button.
@@ -27,6 +27,11 @@ package Plugins::SqueezeWax::API;
 # identification calls buildRequest and classifyResponse directly". That was
 # false from §13.8 on - identification never talked to Discogs - and is true
 # again now only in the sense above.
+#
+# Derive.pm (step 8c) is a third consumer in the server - one /releases/{id} at a
+# time, for the master arm - and shares this module's rate state with the sync
+# (decisions §15.22). It is not a transport of its own: it wires the same
+# functions to the same SimpleAsyncHTTP.
 #
 # Keeping the decisions out of the shims is what makes them testable:
 # scripts/api-check.pl covers every function here without constructing a
@@ -72,6 +77,12 @@ use constant MAX_RETRIES => 3;
 # ---------------------------------------------------------------------------
 # Pure functions. No I/O, no globals read or written. Covered directly by
 # scripts/api-check.pl without ever constructing a transport object.
+#
+# accountRequest is pure and stays pure: the prior state is an argument and the
+# new one is a return value. The shared state that holds it between calls is
+# further down, behind noteResponse, so the rule and the state remain separable -
+# which is what lets api-check.pl assert the degradation ladder exhaustively
+# without any state at all.
 # ---------------------------------------------------------------------------
 
 # Given an endpoint path, a params hashref and a token, return the URL and
@@ -199,6 +210,83 @@ sub accountRequest {
 	my $wait = $state->{remaining} > 0 ? 0 : WINDOW_SECONDS;
 
 	return ( $state, $wait );
+}
+
+# ---------------------------------------------------------------------------
+# The ONE rate-limit state, and the two accessors that own it. Moved here from
+# API/Async.pm at build-order step 8c (decisions §15.22).
+#
+# Module-level for the reason Async.pm's copy was: one Discogs token has one real
+# budget no matter who is asking, and the server is a single long-lived process
+# (CLAUDE.md: LMS is single-threaded), so there is exactly one of these to track.
+# It deliberately outlives an individual run - a sync that ends mid-window must
+# not let the next one start as though the budget were fresh.
+#
+# It moved because step 8c adds a SECOND consumer: Derive.pm, which fetches one
+# release at a time in the server. Two independent throttles against one budget
+# is how a 429 arrives that nobody can explain - the collection sync would see
+# its own 59 remaining while the derive job had already spent the window. So the
+# state lives with the accounting rule that reads it, and both consumers share
+# it: after a derive run the sync waits out the window the derive spent, and vice
+# versa.
+#
+# Named cost of the move, recorded because it touches a shipped,
+# hardware-verified path: API/Async.pm's throttle is now under this module's
+# management. accountRequest itself is UNCHANGED and still pure - the prior state
+# is still an argument, and every existing assertion in api-check.pl and
+# sync-check.pl holds unedited. What is new is the stateful wrapper below.
+#
+# Per-process, not per-token: a token change does not reset it, and must not.
+# The budget Discogs is enforcing is attached to an IP as much as to a token, and
+# a freshly-pasted token is no reason to believe the window is empty.
+
+my $rateState;
+my $rateWait = 0;
+
+=head2 rateWait( )
+
+How many seconds the next request must wait before it is issued: 0 when the last
+response said there was budget left, WINDOW_SECONDS when it said there was not.
+
+Read by every consumer before it issues a request. The waiting itself belongs to
+the transport - a timer in the server, nothing at all in the scanner - so this
+reports and never blocks.
+
+=cut
+
+sub rateWait {
+	return $rateWait;
+}
+
+=head2 noteResponse( \%headers, $now )
+
+Fold one response's rate headers into the shared state and return the new wait.
+C<\%headers> is _parseRateHeaders' shape; C<$now> defaults to time().
+
+Called for EVERY response whatever it returned - a 429 costs budget too, and an
+error response carrying no rate headers is precisely the case accountRequest's
+degradation ladder exists for (§3.4).
+
+=cut
+
+sub noteResponse {
+	my ( $class, $headers, $now ) = @_;
+
+	( $rateState, $rateWait ) = $class->accountRequest( $headers, $now, $rateState );
+
+	return $rateWait;
+}
+
+# Forget the budget. There is no production caller and there must not be one: a
+# consumer that could clear the shared state could hide another consumer's spend,
+# which is the whole failure this state exists to prevent. It is here so the
+# offline suites can start from a known window rather than inheriting one from
+# whichever assertion ran last.
+sub _resetRate {
+	$rateState = undef;
+	$rateWait  = 0;
+
+	return;
 }
 
 # §3.2: how long to wait before retrying a 429, given how many retries have
