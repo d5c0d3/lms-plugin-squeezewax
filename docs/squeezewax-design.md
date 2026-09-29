@@ -194,7 +194,7 @@ Discogs database. Reasoning, and the measurement that produced it, in
 
 | Route | What it reads | What it concludes |
 |---|---|---|
-| **Strict** | A configured tag on the album's files naming a Discogs release id | An **identification**. Ownership only if that same id, or its master, is in the collection |
+| **Strict** | Configured tags on the album's **two candidate files**, compared | An **identification**, where they agree. Ownership only if that same id, or its master, is in the collection |
 | **Collection** | The synced collection, by title then artist | An **ownership** conclusion. Never an identification — it does not say which pressing |
 
 Neither route searches Discogs, and neither reads track durations. Structural
@@ -206,6 +206,20 @@ old `local_tracks == 0` gate came from duration fingerprinting, which needed
 files to read durations from; a title comparison needs none. On the reference
 library the gate excluded 186 of 765 albums, and removing it matched 10
 additional owned records (`squeezewax-v1-decisions.md` §13.10.1).
+
+**Strict reads two files and compares them, and it reads no more than two.**
+Reading every track was rejected on measured cost — 19–137 ms per file on a NAS,
+some 9,000 reads and ten to fifteen minutes added to every scan. Until
+build-order step 8c it read the second file only when the first had nothing to
+say, so an album whose files name **different** releases was identified from
+whichever came first and the disagreement was invisible; the second read costs no
+Discogs request and catches it at identification time. Both halves count as a
+disagreement — two different ids, and one file tagged with another untagged — and
+both produce a **conflict**, which leaves a fresh row with no release id, so no
+ownership is derived from contested tags and no badge can be painted from them
+(`squeezewax-v1-decisions.md` §15.21, §15.22). A file that could not be read at
+all is not a voice, so an unmounted disc cannot turn a tagged album into a
+conflict. A single-track album has one candidate and cannot disagree with itself.
 
 **Title comparison normalises no further than case-folding and whitespace
 collapse.** Both sides are decoded to character strings first; then leading and
@@ -232,7 +246,7 @@ flowchart TD
     C -- yes --> D{That release id<br/>in the collection?}
     D -- yes --> E["ownership = exact<br/>state = confirmed"]
 
-    D -- no --> F{"A master we already know,<br/>and it is in the collection?<br/>(no lookup — tag or stored value only)"}
+    D -- no --> F{"The release's master,<br/>and it is in the collection?<br/>(a master tag, or one derived<br/>and stored for this release id)"}
     F -- yes --> G["ownership = version<br/>identification kept, state = candidate"]
 
     C -- no --> H
@@ -254,10 +268,36 @@ stay as they are, and only `ownership` is written by the collection route.
 
 **No step in this flow makes a Discogs request.** Identification reads tags from
 files the scanner is already opening; ownership reads the collection the sync
-has already fetched. Node **F** uses a master id only where one is already known
-— from a configured master tag, or stored on the row from an earlier match — and
-never looks one up, because a per-album lookup is the cost
-`squeezewax-v1-decisions.md` §13.1 removed.
+has already fetched. Node **F** uses a master id only where one is already
+stored on the row, and never looks one up inside the pass, because a per-album
+lookup inside ownership is the cost `squeezewax-v1-decisions.md` §13.1 removed.
+
+**Node F's master has two sources, and it had only one until build-order step
+8c.** `discogs_master_id` is written only from a `DISCOGS_MASTER_ID`-family tag.
+On the reference library that left it NULL on all but 2 of 506 rows, so **node F
+had never once fired** and every `version` badge came from the title route —
+including for albums the owner demonstrably owned, which were reported `absent`
+and sent to the review queue to adjudicate a question their own collection
+already answered (`squeezewax-v1-decisions.md` §15.19).
+
+So a **bounded background job** (`SqueezeWax/Derive.pm`) fetches
+`GET /releases/{id}` once per identified release and stores the master id in
+`derived_master_id`, with `derived_from_release_id` recording which release it
+came from and `derived_at` when. It is **not part of this pass**: it runs in the
+server after a completed sync, at most 30 requests a run one a second, yields to
+a scan, to a running sync and to a spent rate budget, and on a settled library
+issues no request at all. A 404 is an ordinary answer — the release is gone,
+there is no master, and there is no reason to ask again until the tags change.
+
+Node F prefers the **tag** and falls back to the derived value **only while
+`derived_from_release_id` still equals the row's `discogs_release_id`**. A tag is
+the user's own assertion and the derived value never overrides it; a derivation
+whose release id no longer matches is **stale** and is ignored rather than
+trusted, because trusting it would badge a retagged album from the master of the
+record it used to be. A stale value is left in place, since it is what tells the
+job the row needs re-deriving. Only a **bare identifier** is stored: everything
+else the release payload carries is compared in memory, if at all, and dropped
+with the response (§9.5, and §15.20's errata).
 
 **A badge does not require a confirmed state, a tag, or a local file.** Path
 **I** is the common one: 87 of 96 matches on the measured page auto-badged, most
@@ -348,6 +388,13 @@ badge paints for `exact` and `version` alike. Confirmation is not required.
 - The review queue is its own page, reached from Settings. It lists three kinds
   of item: ambiguous matches, artist disagreement or absence, and Strict tag
   conflicts. Orphaned matches (§10) are a second list on the same page.
+- **A tag conflict is one `review_reason` value and three messages.** The column
+  records only that the album's tags are contested, because the remedy is the
+  same for all three; what differs is what the user is told, and "Show tags"
+  re-reads that album's two candidates on demand and says which of the three it
+  is — two tags in one file, two files naming different releases, or only some
+  files carrying a tag — naming the files it is talking about
+  (`squeezewax-v1-decisions.md` §15.22).
 - **Manual re-match chooses from the user's own Discogs collection.** It never
   searches the Discogs database and never offers a release the user does not
   own. Opening it runs a normal collection sync. Your collection's entries
@@ -868,8 +915,9 @@ discogs_match
                        ownership. NULL for a conflict row or an
                        edition-level match — see §3 and
                        squeezewax-v1-decisions.md §3a)
-  discogs_master_id   (which edition. From a tag, or from the collection
-                       entry's master_id)
+  discogs_master_id   (which edition. TAG ONLY — a DISCOGS_MASTER_ID-family
+                       tag, and nothing else ever writes it, because a tag is
+                       the user's own assertion. See derived_master_id below)
   ownership           (exact | version | absent — what the user OWNS.
                        Written by the collection sync; never NULL, since
                        "absent" is an answer rather than a missing one)
@@ -891,6 +939,21 @@ discogs_match
                        match time; the skip key for a rescan. NULL forces
                        re-examination, which is how a settings change
                        invalidates the cached answer — decisions §3b)
+  -- the derived master arm (build-order step 8c, decisions §15.22). Written
+  -- ONLY by Derive.pm, read only by node F, and never by the ownership pass.
+  -- Integers, all three: a bare identifier is all §9.5 permits us to keep.
+  derived_master_id       (the master of discogs_release_id, from
+                           GET /releases/{id}. NULL means "there is none" when
+                           derived_from_release_id is set, and "never looked"
+                           when it is not)
+  derived_from_release_id (which release the master above was derived from.
+                           Unequal to discogs_release_id = STALE: the tags now
+                           name a different release, node F ignores the master,
+                           and the job re-derives it)
+  derived_at              (for the log and for a human reading the table.
+                           Nothing branches on it — an age-based re-fetch is
+                           exactly what keeping only an identifier avoids)
+
   -- orphan-recovery snapshot, captured at confirm time:
   snapshot_artist
   snapshot_album_title

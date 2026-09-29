@@ -1319,13 +1319,19 @@ Each names its sites so the work is mechanical rather than a search.
       every candidate rule and changes no conclusion, so it was left unchased;
       the row is in the M2 results if anyone wants it later.
 
-- [ ] **2026-09-28, NEXT STEP: node F, the release cache, and implausible
+- [x] **2026-09-28, NEXT STEP: node F, the release cache, and implausible
       identifications.** Decisions §15.20. Needs a survey and a plan before any
       code: where the backfill runs and what triggers it; what "the release
       contradicts the identification" means in numbers; whether the ownership
       pass reads the cache directly; whether a cached row ever expires; and the
       §13.8 argument in full. Sequence it **before step 9**, since the badge step
       displays what this step corrects.
+      → 2026-09-28: surveyed, and the answers are decisions §15.21 and §15.22 and
+      `plans/build-order-step-8c-master-arm.md`. The plausibility half is DROPPED
+      (§15.21: measured zero albums to catch), so there is no "contradicts" number
+      to define. The release cache is not written at all - §9.5 forbids it, and
+      what is stored is a bare master id on `discogs_match`. Shipped as step 8c;
+      the hardware checks are the item below.
 
 - [ ] **2026-09-28: one tagged track decides a whole album.**
       `Importer.pm:479-494` stops at the first candidate carrying a release id,
@@ -1341,6 +1347,9 @@ Each names its sites so the work is mechanical rather than a search.
       `plans/build-order-step-8c-master-arm.md` §2). `_examine` will read both
       candidates and a disagreement becomes a `conflict` with no release id.
       Tick when that ships and its hardware check passes.
+      → 2026-09-29: SHIPPED in code (`c79948d`). `_examine` delegates to
+      `Tags::examineCandidates`, which reads both and compares. Still open on the
+      hardware check below - plan §6 check 5.
 
 - [ ] **2026-09-28: compare the two candidate tracks instead of stopping at the
       first?** Cheap version of "scan the whole folder", considered 2026-09-28.
@@ -1354,12 +1363,58 @@ Each names its sites so the work is mechanical rather than a search.
       2 partial, 3 disagree. It is step 8c's group B. The decisive finding: the
       `Cover Versions/` folder carries two different ids, so the rule catches it
       at identification time with no Discogs request (decisions §15.21).
+      → 2026-09-29: SHIPPED (`c79948d`). One thing the plan did not settle and the
+      build did: an UNREADABLE file is not a voice. `readTrack` returns an empty
+      hash on failure and a populated one for a readable file with no Discogs tag,
+      so the two are distinguishable — and without the distinction an album whose
+      second file sits on an unmounted disc would become a conflict and lose its
+      release id. Worth a hardware check of its own if one can be contrived.
 
 - [ ] **2026-09-28: one physical record, two badges.** A 2-LP set filed as two
       LMS albums (*Kinetik - Vinyl I* and *Vinyl II*, both master 214725, one
       owned release 34285) would badge twice once node F works. Correct per
       album; wrong for any future "how many of my records are in my library"
       count. Single observation, recorded before it becomes a surprise.
+      → 2026-09-29: node F now works (step 8c), so this stops being hypothetical
+      at the next sync. Both albums name one release, so the derive job settles
+      them with ONE request - that half is asserted offline. Confirm the two
+      badges on hardware and leave the item open: nothing counts records yet.
+
+- [ ] **2026-09-29: build-order step 8c's hardware checks, on the reference
+      server.** Code complete on `v1-buildout`; the checks are
+      `plans/build-order-step-8c-master-arm.md` §6, and none of them has run.
+      Before anything: back up both databases and record `discogs_match`'s row
+      count, the queue's contents and the ownership counts.
+      1. Migration 6 in the live server: `user_version` 6, three columns present
+         and NULL on every row, nothing else changed.
+      2. The job runs and finishes: after a sync, ~475 releases over ~16 runs of
+         30, no 429, the log showing it yield when a manual sync is pressed, and a
+         second pass after completion issuing **zero** requests.
+      3. The five measured albums badge — 2927, 2974, 3022, 3023 become `version`
+         via node F; **3421 must not**, because group B should have made it a
+         conflict first.
+      4. 404 is quiet: albums 2895, 2944, 3045 name deleted releases. One info
+         line each, the three columns written with a NULL master, no retry next run.
+      5. The covers folders queue: all four `Cover - …` albums become `conflict`
+         items whose detail names what each file said. *The Baseballs* (3396) too —
+         check its files first, per the item at the top of this section.
+      6. Nothing Content-shaped is stored: dump the three columns and confirm
+         integers only; `discogs_release_cache` still holds 0 rows.
+      7. Scan interaction: the job during a scan is refused and resumed after.
+      8. Timings for the record: a derive run's wall time, `_examine`'s extra read
+         on a wipe-and-rescan, and the pass unchanged at 41-46 ms.
+      Anything that cannot be provoked goes here rather than being marked passed.
+
+- [ ] **2026-09-29: the derive job's trigger deviates from the plan, and the
+      deviation is the interesting part.** The step 8c plan says the job is armed
+      "from `Plugin::_syncDone` on success, and from nothing else". On a server
+      whose scan-time sync works — which is the reference server — that trigger
+      never fires: the scan writes a `'scan'` marker, `_syncTick`'s §15.18 part 8
+      skip returns, and `_syncDone` is never reached. Group A would have shipped
+      as dead as the master arm it exists to wake up. So the job is also armed
+      from that skip (`c18a62b`), and `plugin-check.pl` pins both sites plus the
+      six ways nothing must arm it. Worth a line in decisions §15.22 at the next
+      edit of that file, since the plan text still says otherwise.
 
 - [ ] **2026-09-28: the measurement's lookup cache needs a home.**
       `tmp/18-release-masters.tsv` holds 328 `release_id → master_id` pairs and
@@ -1511,6 +1566,14 @@ Each names its sites so the work is mechanical rather than a search.
       starts cold (decisions §15.18 part 11). Inferred low risk at three or four
       requests against 60 a minute; revisit only if a 429 is ever seen on a
       scan-time sync.
+      → 2026-09-29: still open, and narrowed. Step 8c fixed the SERVER side of it
+      (`5eb2dc8`): the rate state moved to `API.pm`, so the collection sync and the
+      derive job now share one throttle, which matters because the derive job
+      spends up to 30 requests a minute. The CROSS-PROCESS half is unchanged and
+      unfixable by the same means - the scanner has no way to see the server's
+      state - so the exposure is now "a scan-time sync's four requests against a
+      derive run's thirty", still against 60 a minute, and still inferred rather
+      than observed. Plan §6 check 2 watches for a 429.
 
 - [x] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
       Strict identification (steps 3/4) calls buildRequest and

@@ -67,6 +67,15 @@ plugin without Spotty's helper-binary complexity.
 - Discogs API rate limit: see `docs/squeezewax-design.md` §13 for the
   authoritative figure and how it was verified. All matching must be
   batched, throttled, cached in SQLite, and resumable after interruption.
+  **One process, one budget, one throttle.** The rate state lives in `API.pm`
+  (`rateWait`, `noteResponse`) and every server-side consumer shares it - the
+  collection sync and `Derive.pm`. A second independent throttle against one
+  budget is how a 429 arrives that nobody can explain (§15.22).
+- **Nothing Content-shaped is stored.** §9.5: store conclusions, not Content. A
+  bare identifier is storable indefinitely; a title, an artist, a tracklist or a
+  payload is not, and `discogs_release_cache` is never written in v1. Reading a
+  payload in memory is permitted; keeping anything out of it but an identifier or
+  our own verdict is not.
 - A partial or interrupted scan must never corrupt or discard existing
   confirmed matches.
 
@@ -115,6 +124,18 @@ sits where it does.
    **done** (`cc43158`, packaged as 0.0.0.11); the plan §7 hardware checks
    **pass** on 0.0.0.11, 2026-09-27, with two checks unprovokable and recorded in
    `TODO.md`
+8c. **The master arm, and tags that disagree across tracks** — two independent
+   halves of one fix, an album the user owns being reported as not owned.
+   **Group A**: migration 6's three derived columns, the shared rate state in
+   `API.pm`, `Derive.pm`'s bounded server-side backfill, and node F reading the
+   derived master. **Group B**: `Importer::_examine` compares both candidates, so
+   a folder whose files name different releases becomes a conflict rather than a
+   wrong identification. Plan: `plans/build-order-step-8c-master-arm.md`;
+   decisions §15.19-§15.22 — **code complete**; the plan §6 hardware checks are
+   open in `TODO.md`. One recorded deviation: the derive job is armed from
+   `_syncTick`'s "the scan already synced" skip as well as from `_syncDone`,
+   because on a server whose scan-time sync works the latter never runs
+   (§15.18 part 8) and the job would never have fired at all.
 9. **Owned badge + badge context menu**
 10. **On-demand marketplace lookup**
 
