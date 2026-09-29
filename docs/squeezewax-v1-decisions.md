@@ -5283,3 +5283,64 @@ tagged by one person with one tagger. Five albums justify the master arm and fiv
 justify the cross-track rule. Both are small numbers, and the second rests on an
 assumption stated in §15.20 — a well-tagged library, with deviations flagged
 rather than absorbed — which a differently-kept library would not satisfy.
+
+#### As built, 2026-09-29 (`2683f2a`..`b5c7f8a`, 0.0.0.12)
+
+Seven commits plus a package, in the plan's order. Suites 1459 → **1754**. One
+plan error, one narrowing, three decisions the plan did not make, and one
+assumption that did not hold.
+
+**The plan's trigger was wrong, and would have shipped group A dead.** The plan
+said the job is armed "from `Plugin::_syncDone` on success, and from nothing
+else". On any server where step 8b's scan-time sync works — the normal case —
+`_syncDone` is **never reached**: the scan writes a `'scan'` marker, and
+`_syncTick`'s §15.18 part 8 skip returns before a sync is started. So the job
+would have run only where the scan-time sync had failed or never ran, which is
+the opposite of the intent. It is now armed from **both** sites: `_syncDone` on
+success, and that skip. The design chat wrote the rule without tracing the path
+§15.18 part 8 had just created; Claude Code caught it while building.
+
+**The manual button is deliberately not a third trigger.** Decided 2026-09-29,
+with the cost named rather than discovered: on an already-scanned library, a
+user who installs the plugin, enters a token and presses "Sync collection now"
+gets badges immediately but **no derived masters until their next rescan** — so
+roughly 1% of albums stay unbadged until then. Accepted because both arming
+sites follow a scan, and a scan is what changes the library; the remedy, if it
+ever matters, is a third call in `Settings.pm`'s success path, since arming is a
+timer rather than work and the job already yields to a running sync.
+
+**Re-arming is narrowed to pacing stops.** The plan said "re-armed a minute later
+while work remains". As built it re-arms only when the run stopped for **pacing**
+— the per-run cap, a sync in flight, or a spent budget — and not after an error
+and not during a scan. A persistent 500 would otherwise become a one-a-minute
+timer against a third party, which §15.15 part 1 forbids in spirit. A scan ends
+in `['rescan','done']`, which reaches a sync, which arms the job.
+
+**Three decisions the plan left open:**
+
+- **An unreadable file is not a voice.** `Tags->readTrack` returns an empty hash
+  when a file cannot be read and a populated one for a readable file with no
+  Discogs tag, so the two are distinguishable — and only the second counts as a
+  candidate that disagrees. Without this, an album whose second file sits on an
+  unmounted disc would become a `conflict` and lose its release id: a wrong
+  answer produced by a mount point. Such an album is treated as the
+  single-candidate album it has temporarily become.
+- **A write refused after the request ends the run.** Otherwise the selection
+  query hands back the same release — nothing was recorded — and the run spends
+  all 30 requests re-asking one question whose answer it cannot keep.
+- **Two outcomes beyond the plan's five are tested:** no response at all, and a
+  200 whose body will not parse.
+
+**What the plan assumed that did not hold.** §2.3 said the "Show tags" action
+"already re-reads that album's candidates on demand and needs no change". It did
+need one: `Queue::_readTags` carried its **own copy** of the candidate loop, and
+that copy was already one revision behind the importer's — it stopped at
+`last if %$decision` where the importer stopped at id-or-conflict. For the page
+to show what the importer saw, the comparison moved into
+`Tags::examineCandidates` and both callers now use it. The file's own comment
+already said a second implementation was not an option; the second implementation
+existed anyway, which is the more useful finding.
+
+Also: `schema-check.pl`'s "a version-N+1 file refuses this plugin" assertion moved
+with the schema version. That is the assertion following the version, not a
+behaviour change.

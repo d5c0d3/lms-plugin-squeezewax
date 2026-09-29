@@ -1298,6 +1298,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-29: the manual sync button does not arm the master derive job.**
+      Decided 2026-09-29 and recorded as a named cost in decisions §15.22's
+      as-built note. Consequence: on an already-scanned library, a freshly
+      configured plugin badges immediately but derives no masters until the next
+      rescan, so about 1% of albums stay unbadged until then. The remedy is one
+      call to `Plugin::_deriveMasters` from `Settings.pm`'s sync success path —
+      arming is a timer, not work, and the job already yields to a running sync.
+      Revisit if a first-run report ever mentions it.
 - [ ] **2026-09-28: `The Baseballs – Strike (Originals)` (album 3396) carries two
       different release ids.** Found by M1; 12 tracks, outside the
       `Cover Versions/` folder, so it is the only cross-track disagreement in the
