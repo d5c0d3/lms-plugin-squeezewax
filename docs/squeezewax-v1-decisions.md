@@ -5169,3 +5169,117 @@ will meet them, and the test that distinguishes a disc from a mis-identification
 does some single disc of the release hold exactly this album's track count — needs
 the **tracklist**, which §9.5 says we do not keep. So release-fit rules are
 awkward for this project by construction, not merely unnecessary today.
+
+### 15.22 Step 8c: how the master is derived, and what a cross-track disagreement does
+
+**Decided 2026-09-28**, in the step 8c survey and the plan written from it
+(`plans/build-order-step-8c-master-arm.md`). §15.19 establishes the defect,
+§15.20 the ruling that it must be fixed, §15.21 what was dropped. This is how.
+
+#### Three columns, because "we looked and there is nothing" must be storable
+
+Migration 6 adds `derived_master_id`, `derived_from_release_id` and `derived_at`
+to `discogs_match`. Three rather than one, because the pair of the first two
+expresses four states and the middle one carries most of the weight:
+
+- all NULL — never looked;
+- both ids set — looked, found;
+- `derived_from_release_id` set with a NULL master — **looked, and there is no
+  master**. Without this state the 29 masterless releases on the reference
+  library, and the three whose releases Discogs has deleted, would be re-fetched
+  on every run forever;
+- `derived_from_release_id` unequal to the row's `discogs_release_id` — stale,
+  because the tags now name a different release. Re-derive.
+
+The derived value is kept **separate from `discogs_master_id`**, which remains
+tag-only. A tag is the user's assertion and ours never silently overwrites it,
+and when tags change we need to know which of the two to re-derive. Both are
+regenerable, so §2a is unaffected.
+
+#### The job: bounded, yielding, and triggered by the sync
+
+Server-side, in a new `Derive.pm`, because `API/Async.pm` is the collection
+client and the ownership pass must stay request-free.
+
+- **At most 30 requests per run**, one a second, re-armed a minute later while
+  work remains — half Discogs' documented 60 a minute, leaving room for a manual
+  sync.
+- **It yields**: it never starts while a sync is running, and stops when the
+  shared rate accounting reports nothing left.
+- **Triggered from `_syncDone` on success and from nothing else.** No startup run
+  and no interval: §15.15 part 1's rule that this plugin makes no unattended call
+  to Discogs on a schedule holds, because the job's work is bounded by a library
+  that only a scan changes, and a settled library makes it do nothing at all.
+- **404 is an ordinary outcome** (§15.21): logged at info, recorded as "no master",
+  never retried until the tags change. 401 stops the run and says nothing — a
+  rejected token is the sync's to report (§15.15 part 2, §15.18 part 4).
+- **One shared rate state.** `API/Async.pm`'s module-level `$rateState` moves to
+  `API.pm` so both consumers share it. *Named cost:* it touches the sync and its
+  assertions in a step otherwise not about the sync. Two independent throttles
+  against one budget is how a 429 arrives that nobody can explain.
+
+#### Node F uses the derived master only when it is not stale
+
+`_decide` computes the effective master as the tag-derived one if present, else
+the derived one **and only when `derived_from_release_id` matches the row's
+current `discogs_release_id`**. The `$master != 0` guard is unchanged. **The pass
+never writes the derived columns** — §15.4 stands: it derives ownership and a
+review reason, nothing else.
+
+#### A cross-track disagreement is a conflict, and the album loses its release id
+
+`Importer::_examine` stops at the first candidate that answers, so an album whose
+two candidate tracks name different releases is identified from whichever came
+first. It now reads both and compares them. **Both halves count as disagreement**
+— two different ids, and one tagged with the other untagged — as decided
+2026-09-28 on M1's measurement of five albums in 764.
+
+A disagreement routes to the existing `_recordConflict`, which already does the
+right things: `review_reason = 'conflict'`, sticky until the tags are fixed, no
+snapshot, and **a NULL release id on a fresh conflict** with an incumbent
+preserved otherwise (§3a). The consequence is the point: with no release id the
+album never reaches node C, so no ownership is derived from contested tags and
+node F cannot badge it. The `Cover Versions/` folder that node F would have
+badged wrongly becomes a queue item instead, at zero request cost, before
+ownership is ever derived.
+
+**One reason value, not two.** The column's job is "these tags are contested" and
+the remedy is the same either way. What differs is the message, and that is
+display: the queue must distinguish "these two files name different releases"
+from "only some of these files carry a Discogs tag", and name which file said
+what. §15.17 part 3 is the precedent — a message that tells the user something
+untrue about their library is worse than a missing feature.
+
+#### §9.5, in three parts, because two of them have been conflated
+
+- **Reading every local file of an album** — rejected on measured cost
+  (ten to fifteen minutes per scan), not on terms grounds.
+- **Reading a Discogs payload in memory** — permitted, and this step does it once
+  per release.
+- **Storing it, or anything Content-shaped from it** — forbidden.
+
+A master id is storable: §9.5 puts a bare identifier in the same class as the
+release id already in `discogs_match`. And, recorded so it is not re-derived
+wrongly: a **per-disc test is permitted at fetch time**, storing only its verdict.
+§15.21's remark that such a test "needs the tracklist, which §9.5 says we do not
+keep" is right about keeping and wrong if read as "cannot be computed". Ruling 2
+was dropped because there was nothing to catch.
+
+#### Why this is not what §13.8 refused
+
+§13.8 replaced per-album Discogs searches with collection-first ownership. This
+adds per-release lookups, which is that shape, so the difference is argued rather
+than assumed: **once per release ever, not once per sync**; bounded by identified
+albums rather than by the library; what is kept is a bare identifier, so it is
+never re-fetched to stay fresh; and it buys what collection-first cannot — the
+collection names the masters the user owns, and nothing in it gives the master of
+a release they do **not** own, which is exactly node F's question. Measured: 475
+requests, 11.0 minutes, on a cold library of this size; zero on a settled one.
+
+#### Where the evidence is thin
+
+Every figure here comes from one library of 764 albums and a 203-item collection,
+tagged by one person with one tagger. Five albums justify the master arm and five
+justify the cross-track rule. Both are small numbers, and the second rests on an
+assumption stated in §15.20 — a well-tagged library, with deviations flagged
+rather than absorbed — which a differently-kept library would not satisfy.

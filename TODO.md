@@ -1337,6 +1337,10 @@ Each names its sites so the work is mechanical rather than a search.
       answer — the cached release contradicts the identification and the album is
       queued — so this item closes with that step unless the survey finds
       otherwise.
+      → 2026-09-28: this is step 8c's group B (decisions §15.22,
+      `plans/build-order-step-8c-master-arm.md` §2). `_examine` will read both
+      candidates and a disagreement becomes a `conflict` with no release id.
+      Tick when that ships and its hardware check passes.
 
 - [ ] **2026-09-28: compare the two candidate tracks instead of stopping at the
       first?** Cheap version of "scan the whole folder", considered 2026-09-28.
@@ -1346,6 +1350,10 @@ Each names its sites so the work is mechanical rather than a search.
       **changed** album — near nothing in steady state, since unchanged albums
       are skipped. It would **not** catch the covers folder, where only one file
       is tagged at all. Decide in the next step's survey.
+      → 2026-09-28: ADOPTED, both halves, on M1's measurement — 467 albums agree,
+      2 partial, 3 disagree. It is step 8c's group B. The decisive finding: the
+      `Cover Versions/` folder carries two different ids, so the rule catches it
+      at identification time with no Discogs request (decisions §15.21).
 
 - [ ] **2026-09-28: one physical record, two badges.** A 2-LP set filed as two
       LMS albums (*Kinetik - Vinyl I* and *Vinyl II*, both master 214725, one
@@ -2050,6 +2058,17 @@ Each names its sites so the work is mechanical rather than a search.
       pages byte-identical, and the rejection-pause notice rendered and cleared.
       Timings: fetch 2.49–3.30 s, pass 41–46 ms over 764–765 albums, four
       requests per sync, the whole ownership importer 3–12 % of a scan.
+
+- [ ] **2026-09-28: build-order step 8c's hardware checks (the master arm, and
+      tags that disagree across tracks).** Plan
+      `plans/build-order-step-8c-master-arm.md` §6, eight checks. Two matter most.
+      **Check 3:** of the five albums the measurement says node F should fix,
+      2927, 2974, 3022 and 3023 should badge `version` — and **3421 should not**,
+      because group B should have made it a conflict before ownership is derived.
+      If 3421 badges, the two halves are fighting. **Check 2:** the job must
+      finish (~475 releases over ~16 runs), yield to a manual sync, and then issue
+      **zero** requests on a second pass. Also confirm nothing Content-shaped
+      reaches the database and `discogs_release_cache` still holds 0 rows.
 
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan
