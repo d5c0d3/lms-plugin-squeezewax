@@ -127,8 +127,23 @@
 						[% ELSIF item.tags.resolved %]
 							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED" | string %]</div>
 						[% ELSIF item.tags.conflict %]
-							<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NOW" | string %][% "COLON" | string %]
+							[%# Three kinds of conflict, three sentences, because one
+							    sentence was true of only one of them and telling the
+							    user something untrue about their library is worse
+							    than a missing feature (§15.17 part 3, §15.22). The
+							    sentence is picked in Queue.pm, not here, so the
+							    kind-to-token map lives in one place. %]
+							<div>[% item.tags.kindText | html %][% "COLON" | string %]
 								[% item.tags.conflict.join(', ') | html %]</div>
+
+							[%# 'cross-partial': the file that carries a tag is above,
+							    and the ones that do not are here. Without them the
+							    line names one file and one id and reads as though
+							    nothing were wrong. %]
+							[% IF item.tags.untagged.size %]
+								<div>[% "PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NO_TAG_ON" | string %][% "COLON" | string %]
+									[% item.tags.untagged.join(', ') | html %]</div>
+							[% END %]
 						[% END %]
 					[% END %]
 				</td>

@@ -42,6 +42,25 @@ my $prefs = preferences('plugin.squeezewax');
 
 # Reason to string token. A reason the user cannot read is not a review queue,
 # it is a table of internal vocabulary.
+# Which sentence a conflict's DETAIL gets, once the user has asked to see the
+# tags. The stored review_reason is 'conflict' whichever of the three it is - one
+# reason value, because the column records "these tags are contested" and the
+# remedy is the same either way (§15.22) - so the kind is recomputed from the
+# files at render time, along with the file names it needs.
+#
+# Before step 8c there was one sentence, PLUGIN_SQUEEZEWAX_REASON_CONFLICT's "Two
+# tags name different releases", and it was true only of the in-file case. Saying
+# it of an album where one file is tagged and another is not tells the user
+# something untrue about their own library, which §15.17 part 3 ranks below a
+# missing feature. So that string became the generic one - true of every conflict,
+# which is what the reason COLUMN can honestly claim - and these three carry the
+# specifics.
+my %CONFLICT_KIND_STRING = (
+	'in-file'       => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE',
+	'cross-ids'     => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS',
+	'cross-partial' => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL',
+);
+
 my %REASON_STRING = (
 	conflict          => 'PLUGIN_SQUEEZEWAX_REASON_CONFLICT',
 	ambiguous         => 'PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS',
@@ -633,6 +652,16 @@ sub _reviewList {
 
 		if ( $reason eq 'conflict' && defined $showFor && $showFor eq $row->{album_key} ) {
 			$item->{tags} = _readTags($a);
+
+			# The kind's sentence, resolved here rather than in the template. A
+			# template mapping three kinds onto three tokens would be a second copy
+			# of the vocabulary, and the copy that went stale would be the one
+			# nothing compiles. An unrecognised kind falls back to the generic
+			# reason text, which is true of every conflict.
+			$item->{tags}->{kindText} = string(
+				$CONFLICT_KIND_STRING{ $item->{tags}->{kind} || '' }
+					|| 'PLUGIN_SQUEEZEWAX_REASON_CONFLICT'
+			) if $item->{tags}->{conflict};
 		}
 
 		push @out, $item;
@@ -648,50 +677,44 @@ sub _reviewList {
 
 # What the album's tags say NOW, for a conflict item.
 #
-# The same read the importer makes, through the same two subs, in the same
-# order: the primary candidate first, one fallback, never all (Importer::_examine
-# and decisions §3). Reusing Tags->decide rather than looking the names up here
-# is not tidiness - the page must show what the importer saw, and _lookup
-# handles the case and multi-value conventions that differ by format. A second
+# EXACTLY the read the importer makes, because it is the same sub: since step 8c
+# both go through Tags::examineCandidates, of which Importer::_examine is a
+# one-line wrapper. The page must show what the importer saw, and a second
 # implementation would drift and then show a user tags that do not explain the
-# conflict their scan recorded.
+# conflict their scan recorded - which is why this used to duplicate the loop and
+# now does not. The duplication was already one revision behind before step 8c
+# touched it: this copy stopped at `last if %$decision` where the importer stopped
+# at `$decision->{id} || $decision->{conflict}`.
 #
-# Returns { read => n, conflict => [...] }. `read` is how many candidate files
-# gave up any tags at all: readTrack catches its own failures and returns an
-# empty hash (Tags.pm:290-297), so zero across every candidate is how "the files
-# are no longer readable" looks from here - a folder that moved, a disc not
-# mounted, a permission changed. The page distinguishes that from "read fine,
-# and the tags no longer disagree", which means the conflict is stale and the
-# next scan will clear it.
+# Returns what examineCandidates returns, plus `resolved`.
+#
+# `read` is how many candidate files gave up any tags at all: readTrack catches
+# its own failures and returns an empty hash, so zero across every candidate is
+# how "the files are no longer readable" looks from here - a folder that moved, a
+# disc not mounted, a permission changed. The page distinguishes that from "read
+# fine, and the tags no longer disagree", which means the conflict is stale and
+# the next scan will clear it.
+#
+# `kind` is what the page renders distinctly (§15.22): 'in-file', 'cross-ids' or
+# 'cross-partial'. The stored review_reason is 'conflict' for all three - one
+# reason value, because the column records "these tags are contested" and the
+# remedy is the same either way - and what differs is the MESSAGE, which is
+# display, computed here from the files as they read right now.
 sub _readTags {
 	my ($album) = @_;
 
 	return { read => 0 } unless @{ Plugins::SqueezeWax::Tags->tagNames };
 
-	my $read     = 0;
-	my $decision = {};
-
-	for my $url ( @{ $album->{candidates} || [] } ) {
-		my $tags = Plugins::SqueezeWax::Tags->readTrack($url);
-
-		$read++ if %$tags;
-
-		$decision = Plugins::SqueezeWax::Tags->decide($tags);
-
-		# Anything but "no configured tag present" is an answer, exactly as
-		# _examine treats it.
-		last if %$decision;
-	}
+	my $decision = Plugins::SqueezeWax::Tags->examineCandidates( $album->{candidates} );
 
 	return {
-		read     => $read,
-		conflict => $decision->{conflict},
+		%$decision,
 
 		# The tags agree again. The row still says 'conflict' because only the
 		# importer clears it and only on a scan (§15.16 part 3) - so the page
 		# says as much rather than showing an empty list, which would read as
 		# "no tags" and be a different, wrong statement.
-		resolved => ( $read && !$decision->{conflict} ) ? 1 : 0,
+		resolved => ( $decision->{read} && !$decision->{conflict} ) ? 1 : 0,
 	};
 }
 

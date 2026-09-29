@@ -112,6 +112,7 @@ our @WARNINGS;
 our %CALLS;
 our $SCANNING = 0;
 our $READ_TAGS = 0;   # every Slim::Formats->readTags call, so file I/O is countable
+our %FILES;           # url => tag hash, for the blocks whose files must say something
 
 # ---------------------------------------------------------------------------
 # Stubs, at LMS's boundary and nowhere else.
@@ -358,10 +359,26 @@ my $VA = 'Various Artists';
 	*Slim::Music::Info::variousArtistString = sub { $VA };
 
 	# The files themselves are the one thing here with no honest stand-in: this
-	# suite has no audio. readTags returns nothing, which is how the queue page
-	# renders "tags no longer readable" - and that case is asserted rather than
-	# worked around.
-	*Slim::Formats::readTags = sub { $main::READ_TAGS++; return {} };
+	# suite has no audio. An unlisted URL returns nothing, which is how the queue
+	# page renders "tags no longer readable" - and that case is asserted rather
+	# than worked around.
+	#
+	# %FILES is empty except where a block fills it, which is step 8c's three
+	# conflict kinds (§15.22): what the page SAYS about a conflict now depends on
+	# what the files say, so at least one block has to have files that say
+	# something. A URL absent from the map is an unreadable file, and a readable
+	# file with no Discogs tag is a POPULATED hash with no configured key - which
+	# is what readTags really returns (Tags::decide's POD on remote URLs). The
+	# distinction decides whether an album becomes a conflict at all.
+	# Called as Slim::Formats->readTags($url) (Tags::readTrack), so the class name
+	# is the first argument and the URL the second.
+	*Slim::Formats::readTags = sub {
+		my ( undef, $url ) = @_;
+
+		$main::READ_TAGS++;
+
+		return exists $main::FILES{ $url // '' } ? { %{ $main::FILES{$url} } } : {};
+	};
 }
 
 # Only the columns Library reads. Types from SQL/SQLite/schema_16_up.sql.
@@ -1112,6 +1129,155 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 	my ($still) = grep { $_->{album_key} eq $K{conflict} } @{ $both->{review} };
 	ok( $still->{tags}, 'a saveSettings beside showtags does not swallow it' );
 
+}
+
+# ===========================================================================
+# 9c. Three kinds of conflict, three sentences (step 8c group B, §15.22)
+# ===========================================================================
+#
+# The stored review_reason is 'conflict' for all three, because the column
+# records "these tags are contested" and the remedy is the same either way. What
+# differs is the MESSAGE, and this is where the user meets it.
+#
+# Until step 8c there was one sentence - "Two tags name different releases" - and
+# it was true only of the in-file case. Saying it of an album where one file is
+# tagged and another is not tells the user something untrue about their own
+# library, which §15.17 part 3 ranks below a missing feature. So that string
+# became the generic one the reason COLUMN can honestly claim, and the specifics
+# moved into the detail the "Show tags" button reveals.
+#
+# Driven through the page, not by reading Queue.pm's map: what matters is that a
+# user pressing the button meets a sentence naming their own files.
+{
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+
+	# Two local tracks, so there are two candidates to disagree.
+	my $covers = album( 50, 'Cover Versions', 'Various Artists', tracks => 2 );
+
+	my $ONE = 'file:///a50-t1';
+	my $TWO = 'file:///a50-t2';
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match
+		 (album_key, lms_album_id, match_tier, state, review_reason)
+		 VALUES (?, 50, 'strict', 'candidate', 'conflict')", undef, $covers );
+
+	my $readable = { TITLE => 'A Song', CONTENT_TYPE => 'flc' };
+
+	# 'cross-ids' - album 3421's real ids, 793593 and 369197.
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 369197 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'cross-ids',
+			'two files naming different releases render as cross-ids' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS',
+			'  ...with their own sentence, not the in-file one' );
+		is( scalar @{ $item->{tags}{conflict} }, 2, '  ...naming both ids' );
+		like( $item->{tags}{conflict}[0], qr/a50-t1/,
+			'  ...each with the file it came from, so the user knows which to open' );
+		like( $item->{tags}{conflict}[1], qr/369197/, '  ...and the id that file held' );
+		is( scalar @{ $item->{tags}{untagged} }, 0, '  ...with nothing untagged to name' );
+		ok( !$item->{tags}{resolved}, '  ...and it is not reported resolved' );
+	}
+
+	# 'cross-partial' - one file tagged, the other readable and carrying no
+	# Discogs tag at all. §15.21 ruling 6's second half.
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+			$TWO => { %$readable },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'cross-partial',
+			'one file tagged and another not renders as cross-partial' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL',
+			'  ...with the sentence that says only some files carry a tag' );
+		isnt( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS',
+			'  ...and NOT the one about different releases, which would be untrue here' );
+
+		is_deeply( $item->{tags}{untagged}, ['a50-t2'],
+			'  ...and it names WHICH file has no tag - without it the line names one file '
+				. 'and one id and reads as though nothing were wrong' );
+	}
+
+	# 'in-file' - two disagreeing tags in ONE file. The case that was always
+	# handled, and whose sentence must not have moved.
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => [ 111, 222 ] },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 111 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'in-file',
+			'two disagreeing tags in one file still render as in-file' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE',
+			'  ...with the sentence that case always meant' );
+	}
+
+	# The tags agree again: still 'resolved', and the kind sentence is not shown.
+	# Only the importer clears 'conflict', and only on a scan (§15.16 part 3).
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		ok( $item->{tags}{resolved},
+			'files that agree again report the conflict resolved, as before step 8c' );
+		is( $item->{tags}{kind}, undef, '  ...with no kind, because there is no conflict' );
+		is( $item->{tags}{kindText}, undef, '  ...and no sentence about one' );
+	}
+
+	# An unreadable second file does not turn a tagged album into a conflict on
+	# the page any more than it does in the importer.
+	{
+		local %FILES = ( $ONE => { %$readable, DISCOGS_RELEASE_ID => 793593 } );
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		ok( $item->{tags}{resolved},
+			'an unreadable second file reads as resolved, not as a partial conflict' );
+		is( $item->{tags}{read}, 1, '  ...having read the one file it could' );
+	}
+
+	# And the pre-8c case the older assertions cover: no file readable at all.
+	{
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{read}, 0, 'no readable file at all still reports zero read' );
+		ok( !$item->{tags}{resolved}, '  ...and is not claimed resolved' );
+		is( $item->{tags}{kindText}, undef, '  ...with no sentence about a kind' );
+	}
+
+	# The reason COLUMN's own sentence, which is shown for every conflict whatever
+	# its kind and therefore may not claim any one of them. Read from strings.txt,
+	# because string() here returns the token.
+	{
+		open my $fh, '<', "$Bin/../SqueezeWax/strings.txt" or die $!;
+		local $/;
+		my $all = <$fh>;
+		close $fh;
+
+		my ($text) = $all =~ /^PLUGIN_SQUEEZEWAX_REASON_CONFLICT\n\tEN\t([^\n]*)/m;
+
+		ok( $text, 'PLUGIN_SQUEEZEWAX_REASON_CONFLICT has EN text' );
+		unlike( $text, qr/two tags/i,
+			'  ...and no longer claims "two tags", which is untrue of a cross-track conflict' );
+	}
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
 }
 
 # ===========================================================================

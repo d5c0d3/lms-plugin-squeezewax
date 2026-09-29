@@ -198,7 +198,7 @@ PLUGIN_SQUEEZEWAX_QUEUE_REASON
 	EN	Why
 
 PLUGIN_SQUEEZEWAX_REASON_CONFLICT
-	EN	Two tags name different releases.
+	EN	The Discogs tags on this album's files disagree.
 
 PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS
 	EN	You own more than one record with this title, and nothing here can choose between them.
@@ -215,8 +215,17 @@ PLUGIN_SQUEEZEWAX_REASON_VARIOUS_GATED
 PLUGIN_SQUEEZEWAX_REASON_ORPHAN
 	EN	This match belongs to an album that is no longer in your library.
 
-PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NOW
-	EN	The tags say now
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE
+	EN	One file carries two tags naming different releases
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS
+	EN	These files name different releases
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL
+	EN	Only some of these files carry a Discogs tag
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NO_TAG_ON
+	EN	No Discogs tag on
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
 	EN	Conflict recorded, tags no longer readable.
