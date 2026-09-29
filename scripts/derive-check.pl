@@ -5,12 +5,9 @@
 #
 # WHAT THIS PROVES. Which releases a run selects and which it leaves alone; what
 # each response outcome writes; that a run is bounded, yields to a scan, a sync
-# and a spent budget, and re-arms only where work provably remains; and that
-# nothing Content-shaped reaches the database.
-#
-# The join that the whole step exists for - derive, load, node F, `version`,
-# including the stale case that must NOT badge - is at the end of this file and
-# arrived with the commit that taught node F to read the derived column.
+# and a spent budget, and re-arms only where work provably remains; that nothing
+# Content-shaped reaches the database; and the join the whole step exists for -
+# derive, load, node F, `version` - including the stale case that must NOT badge.
 #
 # WHAT IT CANNOT PROVE. Slim::Networking::SimpleAsyncHTTP and Slim::Utils::Timers
 # are both stubbed, and the request stub is SYNCHRONOUS: a stubbed request calls
@@ -85,6 +82,7 @@ BEGIN {
 	$INC{'Slim/Utils/Timers.pm'}               = 1;
 	$INC{'Slim/Schema.pm'}                     = 1;
 	$INC{'Slim/Music/Import.pm'}               = 1;
+	$INC{'Slim/Music/Info.pm'}                 = 1;
 	$INC{'Slim/Utils/OSDetect.pm'}             = 1;
 	$INC{'Slim/Formats.pm'}                    = 1;
 
@@ -248,6 +246,7 @@ BEGIN {
 }
 
 use DBI;
+use Digest::MD5 qw(md5_hex);
 use JSON::XS qw(encode_json);
 
 # Derive.pm has real `use Plugins::SqueezeWax::*` lines, so like match-check.pl it
@@ -274,9 +273,11 @@ BEGIN {
 
 require Plugins::SqueezeWax::Schema;
 require Plugins::SqueezeWax::Match;
+require Plugins::SqueezeWax::Ownership;
 require Plugins::SqueezeWax::Derive;
 
 my $D   = 'Plugins::SqueezeWax::Derive';
+my $O   = 'Plugins::SqueezeWax::Ownership';
 my $API = 'Plugins::SqueezeWax::API';
 
 my $dir = tempdir( CLEANUP => 1 );
@@ -294,13 +295,52 @@ $dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax");
 	# The suite migrates directly rather than through postDBConnect, so the
 	# readiness flag was never set and Match::_writeOk would refuse everything.
 	*Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+	# §15.7's label, read once per ownership pass (Slim/Music/Info.pm:1540).
+	*Slim::Music::Info::variousArtistString = sub { 'Various Artists' };
 }
 
 Plugins::SqueezeWax::Schema->_migrate($dbh);
 
+# Only the columns Library reads, for the join test at the end - the ownership
+# pass walks the library, so it needs one.
+$dbh->do(q{
+	CREATE TABLE tracks (
+		id INTEGER PRIMARY KEY, album INT, urlmd5 TEXT, url TEXT,
+		timestamp INT, disc INT, tracknum INT, remote INT, audio INT,
+		content_type TEXT
+	)
+});
+$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title BLOB, contributor INT)');
+$dbh->do('CREATE TABLE contributors (id INTEGER PRIMARY KEY, name BLOB)');
+$dbh->do('CREATE TABLE contributor_album (role INT, contributor INT, album INT)');
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+my $nextTrack = 0;
+
+# One album, with its album_key computed the way Library::_finish computes it.
+sub album {
+	my ( $id, $title, $artist ) = @_;
+
+	$nextTrack++;
+	my $url = "file:///a$id-t1";
+	my $md5 = md5_hex($url);
+
+	$dbh->do( 'INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)', undef,
+		$nextTrack, $id, $md5, $url, 100, 1, 1, 0, 1, 'flc' );
+	$dbh->do( 'INSERT INTO albums (id, title) VALUES (?,?)', undef, $id, $title );
+
+	if ( defined $artist ) {
+		$dbh->do( 'INSERT INTO contributors (id, name) VALUES (?,?)', undef, $id, $artist );
+		$dbh->do( 'INSERT INTO contributor_album (role, contributor, album) VALUES (5,?,?)',
+			undef, $id, $id );
+	}
+
+	return md5_hex($md5);
+}
 
 sub matchRow {
 	my (%col) = @_;
@@ -321,6 +361,11 @@ sub rowFor {
 
 	return $dbh->selectrow_hashref(
 		'SELECT * FROM squeezewax.discogs_match WHERE album_key = ?', undef, $key );
+}
+
+sub allRows {
+	return $dbh->selectall_arrayref(
+		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
 }
 
 sub wipe {
@@ -991,6 +1036,186 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 		'  ...and §9.3\'s User-Agent, which is the difference between working and silently blocked' );
 	like( $REQUESTS[0]->{url}, qr{^https://api\.discogs\.com/releases/111$},
 		'  ...at /releases/{id}, with no query string' );
+}
+
+# ---------------------------------------------------------------------------
+# §3.4 The join: derive -> _loadRows -> node F -> version
+# ---------------------------------------------------------------------------
+#
+# This is what the whole step is for. Everything above could pass with node F
+# still never firing, which is exactly the situation §15.19 describes: a route
+# that has never once run is not a design, it is an intention.
+#
+# The shape is the measured one. The owner's collection holds release 28711 of
+# master 1884; the ripped files are tagged release 1990647, which the collection
+# does NOT hold. Before step 8c that album read `absent`, with a review-queue item
+# asking the user to adjudicate a question their own collection already answered.
+
+diag('§15.19\'s Gling-Glo: derive the master, and node F finally fires');
+
+my $GLING = album( 1, 'Gling-Glo', 'Bjork' );
+my $OTHER = album( 2, 'Something Else', 'Nobody' );
+
+# One collection entry: a pressing the user owns, of the master the tagged
+# release shares. Its TITLE deliberately does not match the album, so the title
+# route cannot rescue it and node F is the only road to a badge.
+my @collection = ( {
+	instance_id => 1001,
+	id          => 28711,
+	master_id   => 1884,
+	title       => 'Gling-Glo (Original Pressing)',
+	artists     => ['Bjork Gudmundsdottir'],
+} );
+
+{
+	reset_state();
+	wipe();
+
+	matchRow( album_key => $GLING, lms_album_id => 1, match_tier => 'strict',
+		state => 'candidate', discogs_release_id => 1990647, snapshot_track_count => 1 );
+
+	# Before: the defect itself, so the assertion below is a change and not a
+	# coincidence.
+	is( $O->apply( \@collection ), 'ok', 'the pass runs before anything is derived' );
+	is( rowFor($GLING)->{ownership}, 'absent',
+		'BEFORE: an album the owner owns reads absent - §15.19\'s false not-owned' );
+
+	@RESPONSES = ( release_response( id => 1990647, master => 1884 ) );
+
+	$D->arm;
+
+	is( rowFor($GLING)->{derived_master_id}, 1884, 'the master is derived' );
+
+	is( $O->apply( \@collection ), 'ok', 'the pass runs again over the same collection' );
+
+	is( rowFor($GLING)->{ownership}, 'version',
+		'AFTER: node F fires from the derived master and the album badges (§15.22)' );
+	is( rowFor($GLING)->{state}, 'candidate',
+		'  ...as a candidate: node F is a different pressing, not this one (design §3)' );
+	is( rowFor($GLING)->{discogs_master_id}, undef,
+		'  ...and the tag-derived column is still NULL - the badge came from the derived one' );
+}
+
+{
+	reset_state();
+	wipe();
+
+	# THE STALENESS CASE, and the one that would be silent. The album was
+	# retagged after the master was derived, so the derivation describes a
+	# release these files no longer name. Trusting it would badge this album from
+	# the master of a record it used to be - a wrong badge, with nothing in any
+	# log to say so.
+	matchRow( album_key => $GLING, lms_album_id => 1, match_tier => 'strict',
+		state => 'candidate', discogs_release_id => 1990647, snapshot_track_count => 1 );
+
+	@RESPONSES = ( release_response( id => 1990647, master => 1884 ) );
+	$D->arm;
+	is( rowFor($GLING)->{derived_from_release_id}, 1990647, 'the master is derived, and from where' );
+
+	# The user retags the album: the release id changes, the derivation does not.
+	$dbh->do( 'UPDATE squeezewax.discogs_match SET discogs_release_id = ? WHERE album_key = ?',
+		undef, 9999999, $GLING );
+
+	is( $O->apply( \@collection ), 'ok', 'the pass runs over the retagged album' );
+
+	is( rowFor($GLING)->{ownership}, 'absent',
+		'a STALE derivation does not badge: it describes a release these tags no longer name' );
+
+	# And the next run re-derives it rather than leaving it stale forever.
+	reset_state();
+	@RESPONSES = ( error_response(404) );
+
+	is( $D->arm, 1, 'the stale row re-selects on the next run' );
+	is_deeply( [ asked() ], ['9999999'], '  ...asking about the release the tags name now' );
+	is( rowFor($GLING)->{derived_master_id}, undef,
+		'  ...and the stale master is replaced, not kept beside the new answer' );
+	is( rowFor($GLING)->{derived_from_release_id}, 9999999,
+		'  ...so the pair describes one release, which is what makes the test meaningful' );
+}
+
+{
+	reset_state();
+	wipe();
+
+	# A tag-derived master WINS. The tag names a master the user does not own;
+	# the derived one names a master they do. If the derived value leaked past the
+	# tag this would badge - so 'absent' here is the assertion that a tag is the
+	# user's assertion and ours never overrides it (§15.22).
+	matchRow( album_key => $GLING, lms_album_id => 1, match_tier => 'strict',
+		state => 'candidate', discogs_release_id => 1990647,
+		discogs_master_id => 7777, derived_master_id => 1884,
+		derived_from_release_id => 1990647, derived_at => 500,
+		snapshot_track_count => 1 );
+
+	$O->apply( \@collection );
+
+	is( rowFor($GLING)->{ownership}, 'absent',
+		'a tag-derived master wins, even where the derived one would have badged' );
+
+	# The control, so the assertion above is about precedence and not about
+	# something else quietly failing.
+	$dbh->do( 'UPDATE squeezewax.discogs_match SET discogs_master_id = NULL WHERE album_key = ?',
+		undef, $GLING );
+
+	$O->apply( \@collection );
+
+	is( rowFor($GLING)->{ownership}, 'version',
+		'  ...and with the tag gone, the derived master badges it' );
+}
+
+{
+	reset_state();
+	wipe();
+
+	# The two sentinels on the DERIVED side. A derived master of 0 must behave as
+	# no master, exactly as the tag-derived one does - and an owned entry with no
+	# master must not collide with it on masters{0}.
+	matchRow( album_key => $GLING, lms_album_id => 1, match_tier => 'strict',
+		state => 'candidate', discogs_release_id => 1990647,
+		derived_master_id => 0, derived_from_release_id => 1990647, derived_at => 500,
+		snapshot_track_count => 1 );
+
+	$O->apply( [ { instance_id => 1, id => 28711, master_id => 0,
+		title => 'Masterless', artists => ['Nobody'] } ] );
+
+	is( rowFor($GLING)->{ownership}, 'absent',
+		'a derived master of 0 is not a master, and does not collide on masters{0}' );
+
+	$dbh->do( 'UPDATE squeezewax.discogs_match SET derived_master_id = NULL WHERE album_key = ?',
+		undef, $GLING );
+
+	$O->apply( \@collection );
+
+	is( rowFor($GLING)->{ownership}, 'absent',
+		'  ...and a NULL derived master with the release id set behaves as no master too' );
+}
+
+{
+	reset_state();
+	wipe();
+
+	# §15.4, at the level that matters: the PASS never writes the derived
+	# columns. It derives ownership and a review reason, and _write's column
+	# table does not know these three exist.
+	matchRow( album_key => $GLING, lms_album_id => 1, match_tier => 'strict',
+		state => 'candidate', discogs_release_id => 1990647,
+		derived_master_id => 1884, derived_from_release_id => 1990647, derived_at => 500,
+		snapshot_track_count => 1 );
+
+	$O->apply( \@collection );
+
+	my $row = rowFor($GLING);
+	is( $row->{ownership}, 'version', 'the pass badges from the derived master' );
+	is( $row->{derived_master_id}, 1884, '  ...and does not rewrite it' );
+	is( $row->{derived_from_release_id}, 1990647, '  ...nor the release it came from' );
+	is( $row->{derived_at}, 500,
+		'  ...nor the timestamp: the pass is not a writer of these columns (§15.4)' );
+
+	# Determinism (§13.2): a second pass over the same inputs changes nothing,
+	# derived columns included.
+	my $snapshot = allRows();
+	$O->apply( \@collection );
+	is_deeply( allRows(), $snapshot, 'a second pass changes nothing at all' );
 }
 
 done_testing();

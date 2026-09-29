@@ -489,6 +489,34 @@ $K{manual_ambig} = album( 17, 'Ciao Monkey', 'Someone' );
 # It owns nothing and reviews nothing, so §14.8 says it must not exist.
 $K{lapsed}     = album( 18, 'No Longer Ambiguous', 'Depeche Mode' );
 
+# Step 8c's cases: node F reading a DERIVED master (§15.22). Every one of these
+# albums has a title that matches nothing in the collection, so the title route
+# cannot rescue it and the master is the only road to a badge - which is what makes
+# each assertion about node F rather than about node H.
+#
+# f_derived: the case §15.19 found on hardware. The tagged release is not owned,
+# the master is, and the master came from Derive.pm rather than from a tag. Before
+# step 8c this read 'absent' and went to the review queue.
+$K{f_derived}     = album( 40, 'Derived Pressing',  'Depeche Mode' );
+
+# f_stale: derived, then retagged. The derivation describes a release these files
+# no longer name, so trusting it would badge from the master of the record this
+# album used to be. Silent, and the one failure no other assertion here catches.
+$K{f_stale}       = album( 41, 'Retagged Pressing', 'Depeche Mode' );
+
+# f_tag_wins: both columns set and DISAGREEING. The tag names a master the user
+# does not own; the derived one names a master they do. A tag is the user's
+# assertion and ours never overrides it, so this must NOT badge.
+$K{f_tag_wins}    = album( 42, 'Tagged Pressing',   'Depeche Mode' );
+
+# f_derived_zero: the sentinel on the derived side. 0 is Discogs' "no master", and
+# taken at face value it collides with every other masterless release on one key.
+$K{f_derived_zero} = album( 43, 'Derived Zero',     'Depeche Mode' );
+
+# f_derived_none: looked, and there is no master - a 404 or a release Discogs
+# reports without one. The release id is recorded, the master is NULL.
+$K{f_derived_none} = album( 44, 'Derived Nothing',  'Depeche Mode' );
+
 # h_disagree and h_agree share a title deliberately; the byTitle route keys on
 # the title alone and the artist check is what separates them.
 
@@ -537,6 +565,38 @@ matchRow( album_key => $K{f_zero}, lms_album_id => 4, discogs_release_id => 4440
 	snapshot_track_count => 1 );
 matchRow( album_key => $K{f_undef}, lms_album_id => 5, discogs_release_id => 5550,
 	match_tier => 'strict', state => 'confirmed', snapshot_track_count => 1 );
+
+# --- step 8c's rows: node F from a DERIVED master (§15.22) ------------------
+#
+# Release 3330 is f_version's and is NOT in the collection; master 9003 IS, via
+# entry 1003. So every row below names an unowned release, and whether it badges
+# turns entirely on which master node F ends up comparing.
+
+# Derived, current, and the master is owned. This must badge.
+matchRow( album_key => $K{f_derived}, lms_album_id => 40, discogs_release_id => 3330,
+	match_tier => 'strict', state => 'candidate', snapshot_track_count => 1,
+	derived_master_id => 9003, derived_from_release_id => 3330, derived_at => 500 );
+
+# Derived from a DIFFERENT release from the one this row now names: stale. The
+# tags moved and the derivation did not.
+matchRow( album_key => $K{f_stale}, lms_album_id => 41, discogs_release_id => 3330,
+	match_tier => 'strict', state => 'candidate', snapshot_track_count => 1,
+	derived_master_id => 9003, derived_from_release_id => 111, derived_at => 500 );
+
+# Both set and disagreeing. 7777 is in no collection entry; 9003 is.
+matchRow( album_key => $K{f_tag_wins}, lms_album_id => 42, discogs_release_id => 3330,
+	discogs_master_id => 7777, match_tier => 'strict', state => 'candidate',
+	snapshot_track_count => 1,
+	derived_master_id => 9003, derived_from_release_id => 3330, derived_at => 500 );
+
+# The two derived-side sentinels, matching f_zero and f_undef on the tag side.
+matchRow( album_key => $K{f_derived_zero}, lms_album_id => 43, discogs_release_id => 3330,
+	match_tier => 'strict', state => 'confirmed', snapshot_track_count => 1,
+	derived_master_id => 0, derived_from_release_id => 3330, derived_at => 500 );
+
+matchRow( album_key => $K{f_derived_none}, lms_album_id => 44, discogs_release_id => 3330,
+	match_tier => 'strict', state => 'confirmed', snapshot_track_count => 1,
+	derived_master_id => undef, derived_from_release_id => 3330, derived_at => 500 );
 
 # A FRESH conflict row: strict, candidate, NULL release id, no snapshot (§3a),
 # and marked, as _recordConflict now marks every conflict it writes.
@@ -636,6 +696,91 @@ is( rowFor( $K{f_zero} )->{state}, 'candidate',
 # The identification itself is untouched by any of this.
 is( rowFor( $K{f_zero} )->{discogs_release_id}, 4440,
 	'the pass never unmatches an album: the release id stands' );
+
+# --- F from a DERIVED master (build-order step 8c, §15.22) ------------------
+#
+# Until step 8c node F compared a column written only from a tag, so on the
+# reference library it was NULL on all but 2 of 506 rows and the node had NEVER
+# FIRED - every `version` badge came from the title route (§15.19). These are the
+# assertions that make it a route rather than an intention.
+{
+	my $derived = rowFor( $K{f_derived} );
+
+	is( $derived->{ownership}, 'version',
+		'F: a DERIVED master that is owned badges - the node §15.19 found dead' );
+	is( $derived->{state}, 'candidate',
+		'  ...as a candidate: a different pressing is not this one (design §3)' );
+	is( $derived->{discogs_master_id}, undef,
+		'  ...with the tag column still NULL, so the badge came from the derived one' );
+
+	# The pass reads these three and never writes them (§15.4, §15.22).
+	is( $derived->{derived_master_id}, 9003, '  ...and the derivation is not rewritten' );
+	is( $derived->{derived_from_release_id}, 3330, '  ...nor the release it came from' );
+	is( $derived->{derived_at}, 500, '  ...nor its timestamp - the pass is not their writer' );
+}
+
+# The staleness test, which is the one thing here that would go wrong SILENTLY: a
+# retagged album badging from the master of the release it used to name. Same
+# derived master as f_derived, same owned collection entry - only
+# derived_from_release_id differs, and that alone must withhold the badge.
+{
+	my $stale = rowFor( $K{f_stale} );
+
+	is( $stale->{ownership}, 'absent',
+		'F: a STALE derivation does not badge - it describes a release these tags no longer name' );
+	is( $stale->{state}, 'candidate', '  ...and the strict row is demoted rather than promoted' );
+	is( $stale->{derived_master_id}, 9003,
+		'  ...while the stale value is LEFT ALONE: it is what tells Derive.pm to re-derive' );
+	is( $stale->{derived_from_release_id}, 111, '  ...both halves of it' );
+}
+
+# Precedence. The tag names a master the user does not own and the derived one
+# names a master they do, so a badge here would mean the derived value had
+# overridden the user's own tag.
+is( rowFor( $K{f_tag_wins} )->{ownership}, 'absent',
+	'F: a tag-derived master WINS, even where the derived one would have badged (§15.22)' );
+
+# The derived-side sentinels, mirroring f_zero and f_undef on the tag side. If
+# either were taken at face value, masters{0} would exist and both would badge.
+is( rowFor( $K{f_derived_zero} )->{ownership}, 'absent',
+	'F: a derived master of 0 is a sentinel, not a master' );
+is( rowFor( $K{f_derived_none} )->{ownership}, 'absent',
+	'F: "looked, and there is no master" behaves as no master' );
+is( rowFor( $K{f_derived_zero} )->{state}, 'candidate',
+	'  ...and both strict rows are demoted rather than left confirmed' );
+is( rowFor( $K{f_derived_none} )->{state}, 'candidate', '  ...both of them' );
+
+# _effectiveMaster directly, so the precedence rule is pinned as a rule rather
+# than only through five albums' worth of outcome.
+{
+	my $eff = \&Plugins::SqueezeWax::Ownership::_effectiveMaster;
+
+	is( $eff->(undef), undef, 'no row has no effective master' );
+	is( $eff->( {} ), undef, 'an empty row likewise' );
+
+	is( $eff->( { discogs_master_id => 111 } ), 111, 'a tag-derived master is used' );
+	is( $eff->( { discogs_master_id => 111, derived_master_id => 222,
+			derived_from_release_id => 9, discogs_release_id => 9 } ), 111,
+		'  ...in preference to a derived one, however current it is' );
+
+	is( $eff->( { derived_master_id => 222, derived_from_release_id => 9,
+			discogs_release_id => 9 } ), 222,
+		'a derived master is used when the release ids agree' );
+	is( $eff->( { derived_master_id => 222, derived_from_release_id => 8,
+			discogs_release_id => 9 } ), undef,
+		'  ...and ignored when they do not' );
+	is( $eff->( { derived_master_id => 222, discogs_release_id => 9 } ), undef,
+		'  ...and ignored with no record of where it came from at all' );
+	is( $eff->( { derived_master_id => 222, derived_from_release_id => 9 } ), undef,
+		'  ...and ignored on a row with no release id, which cannot agree with anything' );
+
+	# A tag-derived 0 still reaches node F, whose own $master != 0 guard is
+	# unchanged. It must NOT fall through to the derived value: a 0 is a positive
+	# statement that the tags name no master, not an absence.
+	is( $eff->( { discogs_master_id => 0, derived_master_id => 222,
+			derived_from_release_id => 9, discogs_release_id => 9 } ), 0,
+		'a tag-derived 0 is an answer, not an absence - it does not fall through' );
+}
 
 # --- H: the title route ----------------------------------------------------
 my $agreed = rowFor( $K{h_agree} );
@@ -820,6 +965,9 @@ is_deeply(
 		# identifications, all carried forward
 		$K{d_strict}, $K{d_manual}, $K{f_version}, $K{f_zero}, $K{f_undef},
 		$K{conflict}, $K{incumbent}, $K{manual_ambig},
+		# step 8c's derived-master rows, all five carrying an identification
+		$K{f_derived}, $K{f_stale}, $K{f_tag_wins}, $K{f_derived_zero},
+		$K{f_derived_none},
 		# ownership conclusions
 		$K{h_agree}, $K{remote},
 		# review reasons - step 8's new rows
@@ -922,7 +1070,7 @@ is_deeply(
 
 	my ($identified) = $dbh->selectrow_array(
 		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE match_tier IS NOT NULL' );
-	is( $identified, 12, '  ...while every identification survives' );
+	is( $identified, 17, '  ...while every identification survives' );
 }
 
 # ===========================================================================

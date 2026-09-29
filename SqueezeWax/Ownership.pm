@@ -307,7 +307,8 @@ sub _indexCollection {
 sub _loadRows {
 	return Slim::Schema->dbh->selectall_arrayref(
 		q{SELECT album_key, lms_album_id, discogs_release_id, discogs_master_id,
-		         match_tier, state, ownership, snapshot_track_count, review_reason
+		         match_tier, state, ownership, snapshot_track_count, review_reason,
+		         derived_master_id, derived_from_release_id
 		    FROM squeezewax.discogs_match},
 		{ Slice => {} }
 	) || [];
@@ -331,6 +332,58 @@ sub _isOwnershipOnly {
 	return !defined $row->{match_tier}
 		&& !defined $row->{discogs_release_id}
 		&& !defined $row->{snapshot_track_count};
+}
+
+=head2 _effectiveMaster( \%row )
+
+The master release id node F should compare, or undef when there is none.
+
+=cut
+
+# Two sources, in this order, and the order is a decision rather than a
+# preference (decisions §15.22, build-order step 8c).
+#
+# 1. discogs_master_id, which is tag-only: written by Match::_recordMatch and
+#    recordManual from a DISCOGS_MASTER_ID-family tag (Tags.pm's _masterId). A
+#    tag is the user's assertion about their own files and OURS NEVER OVERRIDES
+#    IT. If it names a master they do not own, that is the answer - node F says
+#    no, and the title route gets its turn.
+#
+# 2. derived_master_id, which Derive.pm fetched from /releases/{id}. Until step 8c
+#    there was no second source at all, which is why node F had never once fired
+#    (§15.19): the tag column was NULL on all but 2 of 506 rows on the reference
+#    library, and all 50 `version` badges came from the title route.
+#
+# AND ONLY WHEN IT IS NOT STALE. derived_from_release_id records which release the
+# master was derived FROM, and it must equal the release id the row names now.
+# Without that test a retagged album badges from the master of the release it used
+# to name - a wrong badge, silent, with nothing in any log to say so. That is the
+# one failure in this step that no other assertion would catch, so
+# scripts/derive-check.pl derives, changes the release id, and asserts node F does
+# NOT fire.
+#
+# A stale derivation is IGNORED, not repaired and not deleted: Derive.pm's
+# selection query picks the row up on its next run precisely because the two
+# disagree, and a pass that cleared the column would be destroying the only
+# record of what still needs re-deriving.
+#
+# The 0-and-absent collapse is node F's own ($master != 0 at the call site,
+# unchanged), so nothing here has to know about the sentinel - but Derive.pm
+# already stores 0 as NULL, so both guards agree for both sources.
+sub _effectiveMaster {
+	my ($row) = @_;
+
+	return undef unless $row;
+
+	return $row->{discogs_master_id} if defined $row->{discogs_master_id};
+
+	return undef unless defined $row->{derived_master_id};
+
+	return undef unless defined $row->{derived_from_release_id}
+		&& defined $row->{discogs_release_id}
+		&& $row->{derived_from_release_id} == $row->{discogs_release_id};
+
+	return $row->{derived_master_id};
 }
 
 # Design §3 nodes C-K for one album. Returns ( $ownership, $state, $bucket ),
@@ -374,7 +427,7 @@ sub _decide {
 	my $strict = $row && defined $row->{match_tier} && $row->{match_tier} eq 'strict';
 
 	if ($tagged) {
-		my $master = $row->{discogs_master_id};
+		my $master = _effectiveMaster($row);
 
 		if ( $index->{releases}{ $row->{discogs_release_id} } ) {
 			# D: this exact pressing is in the collection.
@@ -382,7 +435,13 @@ sub _decide {
 			$state     = 'confirmed' if $strict;
 		}
 		elsif ( defined $master && $master != 0 && $index->{masters}{$master} ) {
-			# F: a different pressing of the same release is.
+			# F: a different pressing of the same release is. $master is the
+			# EFFECTIVE master - the tag's if there is one, else the one Derive.pm
+			# fetched, and only while that one still describes this row's release
+			# (§15.22). The $master != 0 guard is unchanged and still load-bearing
+			# for both sources: a 0 taken at face value collides with
+			# _indexCollection's own sentinel handling and badges every masterless
+			# release off one key.
 			$ownership = 'version';
 			$state     = 'candidate' if $strict;
 		}
@@ -854,6 +913,12 @@ sub _write {
 		# ownership and, since step 8, a review reason; it never identifies,
 		# never snapshots (§15.4), and never touches the skip contract
 		# (Importer.pm:397-408).
+		#
+		# Nor any of migration 6's three derived columns, which step 8c added and
+		# this table deliberately does NOT gain (§15.4, §15.22). The pass READS
+		# them at node F and Derive.pm is their only writer. A stale derivation is
+		# ignored here and left exactly as it is, because it is what tells
+		# Derive.pm's selection query the row still needs re-deriving.
 		my @COLUMNS = (
 			[ ownership => 'ownership' ],
 			[ state     => 'state' ],
