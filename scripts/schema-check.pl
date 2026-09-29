@@ -238,7 +238,7 @@ my %tables = map { $_->[0] => 1 } @{
 };
 
 for my $t (qw(discogs_match discogs_release_cache discogs_price_snapshot
-              discogs_no_match discogs_sync_state)) {
+              discogs_no_match discogs_sync_state discogs_meta)) {
 	ok( $tables{$t}, "table $t exists" );
 }
 
@@ -897,6 +897,111 @@ my @DERIVED = qw(derived_master_id derived_from_release_id derived_at);
 		'_migrate re-runs over a completed migration 6 with user_version forced back to 5' )
 		or diag($@);
 	is( version_of($up), $target, "  ...and reaches version $target" );
+}
+
+# --- migration 7: discogs_meta, and the two accessors (§15.23, §15.24) ------
+#
+# The key/value store the logic version lives in. Same shape of block as
+# migration 5's, and for the same reason: a real upgrade meets a populated file,
+# and all migration 7 may do to it is add one empty table.
+sub version_6_dbh {
+	my $h = version_5_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_6($h);
+	$h->do('PRAGMA squeezewax.user_version = 6');
+
+	return $h;
+}
+
+# The accessors go through Slim::Schema->dbh, which no other assertion in this
+# file needs; stubbed here, pointed at whichever scratch handle is under test.
+our $STUB_DBH;
+
+BEGIN {
+	$INC{'Slim/Schema.pm'} = 1;
+	no strict 'refs';
+	*{'Slim::Schema::dbh'} = sub { $main::STUB_DBH };
+}
+
+{
+	my $up = version_6_dbh();
+
+	is( version_of($up), 6, 'the version-6 fixture reports user_version 6' );
+
+	my ($absent) = $up->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.sqlite_master WHERE name = 'discogs_meta'}
+	);
+	is( $absent, 0, '  ...and has no discogs_meta yet' );
+
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-6 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'every discogs_match row is untouched by migration 7' );
+
+	my @columns = map { $_->{name} } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_meta'
+		)
+	};
+	is_deeply( \@columns, [qw(key value)], 'discogs_meta has exactly key and value' );
+
+	my ($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_meta');
+	is( $rows, 0, '  ...and holds no row - every key is absent until something writes it' );
+
+	# --- the accessors ----------------------------------------------------
+	local $STUB_DBH = $up;
+
+	{
+		# Not ready is not "absent": both answer undef, and neither writes.
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 0 };
+
+		is( $S->meta('logic_version'), undef, 'meta() answers undef when the schema is not ready' );
+		is( $S->setMeta( 'logic_version', 2 ), undef, '  ...and setMeta() refuses, returning undef' );
+	}
+
+	{
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+		is( $S->meta('logic_version'), undef, 'an unwritten key reads back as undef' );
+
+		is( $S->setMeta( 'logic_version', 2 ), 1, 'setMeta() reports success' );
+		is( $S->meta('logic_version'), 2, '  ...and the value round-trips' );
+
+		is( $S->setMeta( 'logic_version', 3 ), 1, 'a second write of the same key succeeds' );
+		is( $S->meta('logic_version'), 3, '  ...and replaces the value' );
+
+		my ($one) = $up->selectrow_array(
+			q{SELECT COUNT(*) FROM squeezewax.discogs_meta WHERE key = 'logic_version'} );
+		is( $one, 1, '  ...leaving one row, not two - INSERT OR REPLACE on the primary key' );
+
+		is( $S->meta('no_such_key'), undef, 'another key is still absent - the store is per key' );
+	}
+
+	# --- re-run safety ----------------------------------------------------
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_7($up); 1 },
+		'migration 7 runs a second time without dying' ) or diag($@);
+
+	{
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+		is( $S->meta('logic_version'), 3, '  ...and keeps the value already written' );
+	}
+
+	$up->do('PRAGMA squeezewax.user_version = 6');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 7 with user_version forced back to 6' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
+
+	# A file from the NEXT schema version - version 8, now that the target is 7 -
+	# must refuse this plugin rather than be guessed at.
+	$up->do( 'PRAGMA squeezewax.user_version = ' . ( $target + 1 ) );
+	ok( !eval { $S->_migrate($up); 1 },
+		'a file one version ahead of ' . $target . ' refuses this plugin' );
+	like( $@, qr/newer than this plugin/, '  ...and says why' );
 }
 
 done_testing();

@@ -36,6 +36,7 @@ my @MIGRATIONS = (
 	\&_migration_4,
 	\&_migration_5,
 	\&_migration_6,
+	\&_migration_7,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -805,6 +806,43 @@ sub _migration_6 {
 	return 1;
 }
 
+# Migration 7: discogs_meta, our own key/value store. Decisions §15.23 and
+# §15.24, step 8c's follow-up.
+#
+# It exists for one caller so far: the logic version (Tags.pm's LOGIC_VERSION),
+# compared at server start against the value stored here, so that a change to how
+# identification DECIDES can say "re-decide". §15.23 measured the failure it
+# prevents - _canSkip skips every album whose files have not changed, so step 8c's
+# cross-track rule reached none of the identifications it was written to reject,
+# and one album stayed badged as owned on tags the same build called contested.
+#
+# IN THE DATABASE, NOT IN A PREF, and the reason is a specific failure: a pref
+# would say "already done" beside a squeezewax.db restored from before the logic
+# change, leaving stale identifications that nothing would ever re-examine. The
+# marker has to travel with the rows it describes.
+#
+# §9.5 is not engaged. Nothing Discogs sent is stored here - a key we chose and a
+# number we wrote are our own conclusions, which §9.5 stores without limit.
+#
+# TEXT value for both, with no enum and no CHECK: the store is general, and the
+# one key it holds today happens to be a number. Callers convert.
+#
+# CREATE TABLE IF NOT EXISTS is re-runnable as it stands, which is migration 1's
+# form. _migration_4's pragma_table_info guard exists for ADD COLUMN and is not
+# needed here.
+sub _migration_7 {
+	my $dbh = shift;
+
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_meta (
+			key   TEXT NOT NULL PRIMARY KEY,
+			value TEXT NOT NULL
+		)
+	});
+
+	return 1;
+}
+
 # The 12 columns migration 3 carries forward, named explicitly in both halves
 # of the copy so a column-order slip cannot pass. snapshot_total_duration is
 # deliberately absent: that is obligation (f).
@@ -1032,6 +1070,73 @@ sub recordSync {
 			(id, last_synced, items, source) VALUES (0, ?, ?, ?)',
 		undef, ( defined $when ? $when : time() ), $items, $source
 	);
+
+	return 1;
+}
+
+=head2 meta( $key )
+
+Read one C<discogs_meta> value. Returns undef when the key is absent, and also
+when the database is not ready - the two are the same to every caller, which
+should do nothing rather than guess.
+
+=cut
+
+# The store migration 7 created, read and written by these two and nothing else.
+# Both are deliberately minimal: a key in, a string out. The one caller that
+# exists (Plugin::_checkLogicVersion, decisions §15.24) needs no more, and a
+# general-purpose settings API on top of a two-column table would be invention.
+#
+# Neither dies. This is read and written at server start, where a failure must
+# leave the plugin running and the marker unchanged so the next start can retry -
+# §15.24's "record only on success" rule depends on setMeta reporting failure
+# rather than raising it.
+sub meta {
+	my ( $class, $key ) = @_;
+
+	return undef unless $class->isReady;
+
+	my $value = eval {
+		my ($v) = Slim::Schema->dbh->selectrow_array(
+			'SELECT value FROM ' . DB_SCHEMA . '.discogs_meta WHERE key = ?', undef, $key
+		);
+		$v;
+	};
+
+	if ($@) {
+		$log->error("could not read the $key marker: $@");
+
+		return undef;
+	}
+
+	return $value;
+}
+
+=head2 setMeta( $key, $value )
+
+Write one C<discogs_meta> value, replacing any previous one. Returns 1 on
+success and undef on failure, including when the database is not ready.
+
+=cut
+
+sub setMeta {
+	my ( $class, $key, $value ) = @_;
+
+	return undef unless $class->isReady;
+
+	my $ok = eval {
+		Slim::Schema->dbh->do(
+			'INSERT OR REPLACE INTO ' . DB_SCHEMA . '.discogs_meta (key, value) VALUES (?, ?)',
+			undef, $key, $value
+		);
+		1;
+	};
+
+	if ( !$ok ) {
+		$log->error("could not write the $key marker: $@");
+
+		return undef;
+	}
 
 	return 1;
 }
