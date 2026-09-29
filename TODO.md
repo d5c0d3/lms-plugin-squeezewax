@@ -1298,6 +1298,29 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-09-29, NEXT: a logic change to identification has no way to say
+      "re-decide".** Decisions §15.23. `_canSkip` skips unchanged albums, so step
+      8c's group B never reached any album identified before it shipped — and
+      between 0.0.0.12 landing and a hand-run invalidation, album 3421 was badged
+      as OWNED on tags the same build recorded as contested. Decided: a **logic
+      version** constant checked at startup, running `Match->invalidateStrict`
+      once when the code's value is newer than the stored one. Built as step 8c's
+      follow-up, before step 9. Cost: one full re-examination per logic change,
+      measured at 63.9 s over 578 albums.
+
+- [ ] **2026-09-29: a derive session is invisible.** Badges change for up to 25
+      minutes after a scan and nothing on any page says why. An informational
+      line on the settings page — "deriving masters: 226 of 475 releases" — would
+      answer it without making the sync button wait on the job (decisions §15.23
+      rules against that). Observation from the hardware round, not a proposal
+      this step carries.
+
+- [ ] **2026-09-29: could not provoke a wipe-and-rescan.** Skipped deliberately
+      once `_canSkip` showed it would re-examine nothing. **Inferred from
+      reading, not tested:** `album_key` (an md5 over track `urlmd5`s) and
+      `source_timestamp` (file mtime) both survive a wipecache, so it should not
+      help. Worth one test before anyone relies on it either way.
+
 - [ ] **2026-09-29: the manual sync button does not arm the master derive job.**
       Decided 2026-09-29 and recorded as a named cost in decisions §15.22's
       as-built note. Consequence: on an already-scanned library, a freshly
@@ -2130,7 +2153,7 @@ Each names its sites so the work is mechanical rather than a search.
       Timings: fetch 2.49–3.30 s, pass 41–46 ms over 764–765 albums, four
       requests per sync, the whole ownership importer 3–12 % of a scan.
 
-- [ ] **2026-09-28: build-order step 8c's hardware checks (the master arm, and
+- [x] **2026-09-28: build-order step 8c's hardware checks (the master arm, and
       tags that disagree across tracks).** Plan
       `plans/build-order-step-8c-master-arm.md` §6, eight checks. Two matter most.
       **Check 3:** of the five albums the measurement says node F should fix,
@@ -2140,6 +2163,16 @@ Each names its sites so the work is mechanical rather than a search.
       finish (~475 releases over ~16 runs), yield to a manual sync, and then issue
       **zero** requests on a second pass. Also confirm nothing Content-shaped
       reaches the database and `discogs_release_cache` still holds 0 rows.
+      → 2026-09-29, on 0.0.0.12: all nine checks **PASS**, one of them only after
+      an invalidation run by hand — see decisions §15.23 and the item below.
+      Node F fired for the first time: `version` 50 → 55, four albums badged,
+      *Gling-Gló* left the queue. The job armed from the skip path, ran 475
+      releases over 18 runs in 25 min with no 429, yielded to both a sync and a
+      scan, and then issued zero requests. 404 quiet three times. Nothing
+      Content-shaped stored; `discogs_release_cache` still 0 rows. The
+      cross-track rule produced every shape the library can make, and album 3421
+      ended the round `absent` with `review_reason = 'conflict'` — the wrong
+      badge gone. Net: +4 correct badges, −1 wrong badge, +5 honest review items.
 
 - [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
       the ownership pass).** Plan

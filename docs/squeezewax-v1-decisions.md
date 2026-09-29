@@ -5344,3 +5344,110 @@ existed anyway, which is the more useful finding.
 Also: `schema-check.pl`'s "a version-N+1 file refuses this plugin" assertion moved
 with the schema version. That is the assertion following the version, not a
 behaviour change.
+
+### 15.23 Step 8c on hardware: node F fires, and a logic change has no way to say "re-decide"
+
+**Observed 2026-09-29** on the reference server (0.0.0.12), nine checks, all
+passing — one of them only after an invalidation the round had to ask the owner
+to run. That requirement is the finding.
+
+#### What worked
+
+- **Node F fired for the first time in this project's history.** 2927, 2974, 3022
+  and 3023 moved from `absent` to `version`; `version` 50 → 55, `absent`
+  306 → 301. *Gling-Gló* — hand-off 18's proof that the master arm had never run —
+  badges and left the review queue. All four kept `state = candidate`: node F
+  badges, it never promotes.
+- **The job armed from the skip path**, in the same millisecond as
+  `_syncTick`'s "the scan already synced" line. Had the plan's original trigger
+  shipped, that line would never have been followed by anything.
+- **It finished and then stopped asking.** 475 distinct releases, 476 requests,
+  18 runs, zero 429s; 442 rows with a master, 37 recorded as having none, **0
+  pending** afterwards. A settled library costs one query and no request; one new
+  album cost 0.39 s and a single request. One fetch settled every album naming
+  that release, including the 2-LP set filed as two albums.
+- **404 was quiet**, three times, exactly as §15.22 requires: an info line, a NULL
+  master recorded, and never asked about again.
+- **Nothing Content-shaped was stored.** `typeof()` over all 506 rows yields
+  integers and nulls only, and `discogs_release_cache` held 0 rows all round.
+- **The cross-track rule produced every shape this library can make**, on copies:
+  two ids, tagged-then-untagged, both untagged, and an agreeing pair that stayed
+  identified. Both message shapes render distinctly behind "Show tags".
+
+#### The finding: group B could not reach the albums it was built to catch
+
+`_canSkip` (`Importer.pm:466-474`) skips any album whose file mtimes are
+unchanged, so an ordinary rescan re-examines **nothing** — `examined 0, skipped
+764` on this library. Group B therefore applies only to new and changed albums,
+and **every identification made before 0.0.0.12 is exempt from the rule that
+would have rejected it**.
+
+Measured consequence, and it is worse than a missing improvement: between
+0.0.0.12 being installed and the invalidation being run by hand, **album 3421 was
+badged `version` — reported as owned** — on the strength of tags the same build
+recorded as contested on a copy of the identical files. Group A acted on an
+identification group B was never allowed to look at. One album went from a wrong
+`absent` to a wrong badge.
+
+The only lever that forces re-examination is §3b's `Match->invalidateStrict`, and
+it is reachable **only as a side effect** of changing the tag-name *set* on the
+settings page. Once run, it settled everything in 63.9 s: five conflicts
+recorded, 3421 back to `absent` with `review_reason = 'conflict'`, and `version`
+55 → 54 with that one row the only mover.
+
+**Decided 2026-09-29: a logic version, checked at startup.** A constant in the
+code and a stored counterpart; when the code's is newer, `invalidateStrict` runs
+once and the value is recorded. A migration was considered and rejected as the
+*general* mechanism: it catches only logic changes that happen to carry a schema
+change, and the common case carries none. The cost is one full re-examination per
+logic change — 63.9 s over 578 albums here, of which the second candidate read is
+about 30 s. Built as step 8c's follow-up.
+
+#### Two things this plan got wrong
+
+1. **§2.2's protection argument does not apply to the albums that matter.** The
+   plan says a cross-track disagreement "leaves the album with no release id, so
+   node C skips it". True of a **fresh** album only: on an existing one
+   `_recordConflict` deliberately keeps the incumbent id (§3a), so the row still
+   carries an identification derived from the very tags now marked contested, and
+   its derived master besides. What actually removes the badge is
+   `Ownership.pm:419-423` — a row whose `review_reason` is `conflict` is treated
+   as **untagged**, skipping nodes C, D **and F**, leaving only the title route.
+   That is **§15.16 part 4**, built at step 8 for TODO 2026-09-19, and it is what
+   makes step 8c safe on a pre-existing library. Group B alone would not have
+   been enough, and it would be easy to conclude otherwise from §2.2.
+2. **§5's cost estimate is out by a factor of 2.3.** "475 requests, 11.0 minutes"
+   counted request time and omitted the 60-second re-arm between runs. Measured:
+   **25 min 18 s** over 18 runs. The shape is `runs × 90 s`, not `requests × 1 s`.
+
+Also corrected: plan §6 check 5 says "all four `Cover - …` albums". **Five** carry
+Discogs tags; one of the five has no tag on either candidate the importer reads,
+so four conflicts is the right expectation for the wrong reason.
+
+#### The manual button is not blocked during a derive run
+
+Asked during the round and decided the same day: **no**. The round produced the
+evidence — a press mid-run cost the job one re-arm cycle, the sync was served in
+1.9 s, and no 429 occurred anywhere. The job takes about a third of the budget by
+design, so there is nothing to serialise; the 429 guard is §15.22's shared rate
+state, not mutual exclusion. Three further reasons: `Derive.pm` already declines
+to make the button a *trigger* because "it has a user waiting on a page", which
+argues equally against making the button wait; the button already refuses during
+a scan, and a second refusal would leave it dead through exactly the half hour
+after a large scan when someone would press it; and the job has no UI, so "busy,
+try later" would name something the user cannot see, wait on or hurry
+(§15.17 part 3).
+
+**Recorded, not built:** a derive session is wholly invisible. On this library the
+badges kept changing for 25 minutes after a scan with nothing on any page saying
+why. An informational line — "deriving masters: 226 of 475" — would answer that
+without taking the button away. `TODO.md` carries it.
+
+#### Where the evidence is thin
+
+One library, one round. The reachability gap was found because this library's NAS
+is read-only, which made `_canSkip` impossible to work around — on a writable
+library it might have gone unnoticed for much longer, which is an argument for
+the finding rather than against it. Whether a wipe-and-rescan would re-examine
+anything is **inferred from reading, not tested**: `album_key` and
+`source_timestamp` both survive a wipecache, so it should not help.
