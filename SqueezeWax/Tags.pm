@@ -36,6 +36,37 @@ my $prefs = preferences('plugin.squeezewax');
 # (Slim/Utils/Prefs/Base.pm:197-200), so repeating it is harmless.
 $prefs->init({ discogsTagNames => [] });
 
+# The version of the identification DECISION RULE, decisions §15.23 and §15.24.
+#
+# BUMP THIS WHENEVER THE RULE CHANGES. The server compares it at start against
+# the value stored in discogs_meta (Plugin::_checkLogicVersion) and, when the
+# code's is newer, invalidates the strict cache once so the next scan re-examines
+# the library. Without a bump, a changed rule reaches only new and changed albums:
+# Importer::_canSkip skips every album whose files have not changed, which is why
+# step 8c's cross-track rule below never saw a single identification made before
+# it shipped, and why one album stayed badged as owned on tags this very file
+# called contested (§15.23).
+#
+# A CHANGE means anything that could make these subs answer differently about the
+# same files: which files are read, how a file's tags are turned into a verdict,
+# how several files' verdicts are combined, or what counts as a disagreement.
+# Adding a tag NAME is not one - that is a pref, and Settings.pm already calls
+# Match->invalidateStrict when the set changes.
+#
+# NOT A CHANGE: a message, a log line, a comment, or a refactor that decides
+# identically. A needless bump costs every user a full re-examination at the next
+# scan - 63.9 s over 578 albums on the reference library - so it is not free, but
+# it is recoverable; a missing bump leaves wrong conclusions in place with nothing
+# to dislodge them, which is not.
+#
+# It lives here, beside examineCandidates and decide, because this file IS the
+# rule. A constant in Schema.pm would version storage, which is what
+# user_version already does.
+#
+# 1 was everything up to and including 0.0.0.11. 2 is step 8c group B's
+# cross-track comparison (examineCandidates), the first rule change to need this.
+use constant LOGIC_VERSION => 2;
+
 =head2 tagNames()
 
 The configured tag names, in precedence order. Never undef.

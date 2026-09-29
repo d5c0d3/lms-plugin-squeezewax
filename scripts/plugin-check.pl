@@ -203,10 +203,24 @@ our %VALIDATED;
 # makes, and only for the skip rule. Driven from $main::MARKER.
 our $MARKER;
 
+# discogs_meta, likewise driven from here (decisions §15.24). %META is the
+# stored side of the logic-version comparison; $READY is the schema's.
+our %META;
+our $READY = 1;
+our @METAWRITES;
+
 {
 	package Plugins::SqueezeWax::Schema;
 	sub init { 1 }
 	sub syncState { $main::MARKER }
+	sub isReady { $main::READY }
+	sub meta { return $main::READY ? $main::META{ $_[1] } : undef }
+	sub setMeta {
+		return undef unless $main::READY;
+		push @main::METAWRITES, [ $_[1], $_[2] ];
+		$main::META{ $_[1] } = $_[2];
+		return 1;
+	}
 }
 BEGIN { $INC{'Plugins/SqueezeWax/Schema.pm'} = 1 }
 
@@ -245,6 +259,29 @@ BEGIN {
 	*{'Plugins::SqueezeWax::Derive::arm'} = sub { push @ARMED, 1; return 1 };
 }
 
+# Match.pm is stubbed for the same reason Derive.pm is: the real module pulls in
+# Library.pm and Slim::Music::Import, and what is under test here is the
+# DECISION - whether the logic-version check invalidates, and whether it records
+# the new version afterwards. invalidateStrict's own behaviour is
+# scripts/match-check.pl's.
+#
+# $INVALIDATED stands in for _writeOk: undef is the refusal Match.pm:105 returns
+# when a scan is running or the schema is unusable, which is the case §15.24's
+# "record only on success" rule exists for.
+our @INVALIDATIONS;
+our $INVALIDATE_RETURN = 503;
+our $HAS_ROWS          = 1;
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Match.pm'} = 1;
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Match::invalidateStrict'} = sub {
+		push @INVALIDATIONS, 1;
+		return $main::INVALIDATE_RETURN;
+	};
+	*{'Plugins::SqueezeWax::Match::hasAnyRow'} = sub { $main::HAS_ROWS };
+}
+
 my $incdir;
 
 BEGIN {
@@ -279,6 +316,12 @@ sub reset_state {
 	$NOW      = undef;
 	@ARMED    = ();
 	@LOG      = ();
+	@INVALIDATIONS = ();
+	@METAWRITES    = ();
+	%META             = ();
+	$READY            = 1;
+	$HAS_ROWS         = 1;
+	$INVALIDATE_RETURN = 503;
 }
 
 # ---------------------------------------------------------------------------
@@ -841,6 +884,151 @@ for my $error (qw(unauthorized already_running refused no_response count_mismatc
 
 	is( scalar @ARMED, 0,
 		'initPlugin\'s subscription and the debounce arm no derive run - there is no startup run' );
+}
+
+# ---------------------------------------------------------------------------
+# The logic version (decisions §15.23, §15.24)
+# ---------------------------------------------------------------------------
+
+diag('§15.24: a change to the identification rule can say "re-decide"');
+
+# The real Tags.pm, not a stub: the constant under test is its value, and the
+# whole mechanism is a comparison against it.
+require Plugins::SqueezeWax::Tags;
+
+my $LOGIC = Plugins::SqueezeWax::Tags::LOGIC_VERSION();
+
+cmp_ok( $LOGIC, '>=', 2,
+	"Tags::LOGIC_VERSION is $LOGIC - at least 2, since step 8c's cross-track rule" );
+
+# --- absent, and no rows: a fresh install ----------------------------------
+{
+	reset_state();
+	$HAS_ROWS = 0;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 0,
+		'a fresh install invalidates nothing - there is nothing to re-decide' );
+	is( $META{logic_version}, $LOGIC, '  ...and records the current version' );
+	is( scalar @LOG, 0, '  ...and logs nothing: no work happened' );
+}
+
+# --- absent, with rows: written before the marker existed, so version 1 -----
+{
+	reset_state();
+	$HAS_ROWS = 1;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 1,
+		'an absent marker over existing rows invalidates: they were decided under rule 1' );
+	is( $META{logic_version}, $LOGIC, '  ...and records the current version' );
+	is( scalar @METAWRITES, 1, '  ...once' );
+	like( "@LOG", qr/1 -> $LOGIC/, '  ...and the line names both versions' );
+	like( "@LOG", qr/\b503\b/, '  ...and the row count invalidateStrict returned' );
+}
+
+# --- stored and older ------------------------------------------------------
+{
+	reset_state();
+	local $main::INVALIDATE_RETURN = 0;
+	$META{logic_version} = $LOGIC - 1;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 1, 'a stored version older than the code invalidates' );
+	is( $META{logic_version}, $LOGIC, '  ...and records the new one' );
+
+	# 0 rows is a real answer, not a refusal: an invalidation that touched
+	# nothing still happened, and the version must be recorded or it repeats at
+	# every start forever.
+	like( "@LOG", qr/0 rows invalidated/, '  ...even when it touched no rows' );
+}
+
+# --- stored and equal: the common case, and it must do nothing at all -------
+{
+	reset_state();
+	$META{logic_version} = $LOGIC;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 0, 'a matching stored version invalidates nothing' );
+	is( scalar @METAWRITES, 0, '  ...and writes nothing' );
+	is( scalar @LOG, 0, '  ...and logs nothing - this is every normal start' );
+}
+
+# --- stored and NEWER: a downgrade --------------------------------------
+{
+	reset_state();
+	$META{logic_version} = $LOGIC + 1;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 0,
+		'a database written by a newer SqueezeWax is left alone' );
+	is( $META{logic_version}, $LOGIC + 1,
+		'  ...and its marker is NOT overwritten with the lower number' );
+	is( scalar @METAWRITES, 0, '  ...so nothing is written at all' );
+}
+
+# --- the refusal, which is the one that would be permanent ------------------
+#
+# invalidateStrict returns undef when _writeOk says no (Match.pm:105) - during a
+# scan, or with the schema unusable. Recording the version anyway would skip the
+# invalidation forever: the same silent, permanent failure §15.23 describes,
+# with an extra step.
+{
+	reset_state();
+	$META{logic_version} = 1;
+	$INVALIDATE_RETURN   = undef;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 1, 'a refused invalidation was still attempted' );
+	is( $META{logic_version}, 1, '  ...and the stored version is left UNCHANGED' );
+	is( scalar @METAWRITES, 0, '  ...with nothing written' );
+	like( "@LOG", qr/retry/, '  ...and the line says it will be tried again' );
+
+	# ...and the next start, with the refusal gone, does the work.
+	@LOG           = ();
+	@INVALIDATIONS = ();
+	$INVALIDATE_RETURN = 12;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 1, 'the next start invalidates, because nothing was recorded' );
+	is( $META{logic_version}, $LOGIC, '  ...and records the version this time' );
+}
+
+# --- the schema is not usable: unknowable, not "fresh install" --------------
+{
+	reset_state();
+	$READY    = 0;
+	$HAS_ROWS = 0;
+
+	Plugins::SqueezeWax::Plugin::_checkLogicVersion();
+
+	is( scalar @INVALIDATIONS, 0, 'an unusable schema invalidates nothing' );
+	is( scalar @METAWRITES, 0,
+		'  ...and records nothing: a marker written now would claim a re-examination '
+		. 'that never happened' );
+}
+
+# --- and it runs from initPlugin, after Schema->init ------------------------
+#
+# The check is worth nothing if it is never called. initPlugin is the only
+# caller, and a suite that drove _checkLogicVersion alone would stay green if
+# the call were deleted.
+{
+	reset_state();
+	$META{logic_version} = 1;
+
+	Plugins::SqueezeWax::Plugin->initPlugin();
+
+	is( scalar @INVALIDATIONS, 1, 'initPlugin runs the logic-version check' );
+	is( $META{logic_version}, $LOGIC, '  ...and the new version is recorded' );
+	is( scalar @TIMERS, 0, '  ...and it still arms no timer (§15.15 part 1)' );
 }
 
 done_testing();

@@ -588,6 +588,38 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'and a strict confirmed row with a release id still counts, as it always did' );
 }
 
+# --- hasAnyRow: "has this plugin ever concluded anything here" --------------
+# Plugin::_checkLogicVersion's fresh-install test (decisions §15.24). Every row
+# counts, not the identified ones hasAnyStrictMatch asks about: the question is
+# whether there is anything that could need re-deciding.
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+	is( $M->hasAnyRow, 0, 'an empty discogs_match is a fresh install' );
+
+	# An ownership-only row: match_tier NULL since migration 3, no release id,
+	# no tag ever read. It is still a conclusion this plugin wrote, so it is not
+	# a fresh install - and it is the row hasAnyStrictMatch would answer 0 for.
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, state, ownership)
+		 VALUES (?, 'candidate', 'absent')", undef, 'h' x 32
+	);
+	is( $M->hasAnyRow, 1, 'an ownership-only row counts - it is a conclusion of ours' );
+	is( $M->hasAnyStrictMatch, 0,
+		'  ...and hasAnyStrictMatch still answers 0 for it, which is why this is a second sub' );
+}
+
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 0 };
+
+	# undef, not 0: "cannot tell". Its caller must not read that as a fresh
+	# install and record a version for rows it could not see.
+	is( $M->hasAnyRow, undef, 'an unusable schema answers undef rather than 0' );
+}
+
 # --- invariant 1 is detected, for free, by the skip query -----------------
 {
 	no warnings 'redefine', 'once';

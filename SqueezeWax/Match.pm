@@ -170,6 +170,35 @@ my $STATE_SQL = q{
 	 WHERE album_key = ? AND tier = 'strict'
 };
 
+=head2 hasAnyRow()
+
+True if C<discogs_match> holds any row at all. Returns undef when the schema is
+not usable, which is "cannot tell" rather than "no".
+
+Asked by Plugin::_checkLogicVersion (decisions §15.24) for one thing only:
+whether this is a fresh install. An empty table with no stored logic version is
+a first start, and there is nothing to re-decide; a populated one with no stored
+version was identified under a rule older than the marker, so it is invalidated.
+
+Deliberately EVERY row, not the strict, identified ones hasAnyStrictMatch asks
+about. The question is "has this plugin ever concluded anything here", and an
+ownership-only row (match_tier NULL since migration 3) or a no-tag conflict row
+answers it just as well as a matched one.
+
+=cut
+
+sub hasAnyRow {
+	my $class = shift;
+
+	return undef unless Plugins::SqueezeWax::Schema->isReady;
+
+	my ($found) = Slim::Schema->dbh->selectrow_array(
+		'SELECT 1 FROM squeezewax.discogs_match LIMIT 1'
+	);
+
+	return $found ? 1 : 0;
+}
+
 =head2 hasAnyStrictMatch()
 
 True if the configured tag names have ever named a release: a Strict row

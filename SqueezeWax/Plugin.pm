@@ -128,6 +128,11 @@ sub initPlugin {
 
 	Plugins::SqueezeWax::Schema->init();
 
+	# After Schema->init and nowhere else: registering the handler forces the
+	# reconnect that runs our migrations (Slim/Utils/SQLiteHelper.pm:396-400), so
+	# discogs_meta exists by the time this reads it, and not before.
+	_checkLogicVersion();
+
 	_initSync();
 
 	# Only the server has a web UI; the scanner never loads this file anyway
@@ -139,6 +144,100 @@ sub initPlugin {
 	}
 
 	$class->SUPER::initPlugin(@_);
+}
+
+# The key discogs_meta holds the logic version under (decisions §15.24). One
+# string, named once.
+use constant LOGIC_VERSION_KEY => 'logic_version';
+
+# Has the identification rule changed since these rows were written? Decisions
+# §15.23 and §15.24.
+#
+# WHY IT EXISTS. Importer::_canSkip skips any album whose file mtimes have not
+# changed, so an ordinary rescan re-examines nothing and a NEW RULE reaches only
+# new and changed albums. Step 8c shipped its cross-track rule to a library where
+# every existing identification was exempt from it, and album 3421 was badged as
+# owned on tags the same build recorded as contested. The only lever that forced
+# re-examination was Match->invalidateStrict, reachable solely as a side effect
+# of editing the tag-name set on the settings page.
+#
+# So: a version for the rule (Tags.pm's LOGIC_VERSION), a copy stored beside the
+# rows it describes, and this comparison at every server start.
+#
+# IT DOES NOT START A SCAN, deliberately. invalidateStrict NULLs source_timestamp
+# and drops the strict no-match rows; the re-examination happens at the user's
+# next scan, exactly as a tag-name change behaves today. A plugin that started a
+# scan on the user's behalf would be a new behaviour of its own, and this is not
+# the place to introduce one.
+#
+# Server only: this file is never loaded by the scanner
+# (Slim/Utils/PluginManager.pm:204), and DDL and repair are the server's job
+# there too (Schema::postDBConnect).
+#
+# Required lazily. Match.pm pulls in Library.pm and Slim::Music::Import; nothing
+# else in this file needs either.
+sub _checkLogicVersion {
+	# Not "no version stored": unknowable. The plugin is inactive anyway
+	# (Schema::postDBConnect has already logged why), and writing the marker now
+	# would claim a re-examination that never happened. The next start retries.
+	return unless Plugins::SqueezeWax::Schema->isReady;
+
+	require Plugins::SqueezeWax::Match;
+	require Plugins::SqueezeWax::Tags;
+
+	my $current = Plugins::SqueezeWax::Tags::LOGIC_VERSION();
+	my $stored  = Plugins::SqueezeWax::Schema->meta(LOGIC_VERSION_KEY);
+
+	# A database written by a NEWER SqueezeWax. Say so once and change nothing:
+	# its rows were decided by a rule this code does not have, and neither
+	# invalidating them nor overwriting the marker with a lower number could
+	# improve on that. Warn, not error - the plugin works, it is the downgrade
+	# that is odd.
+	if ( defined $stored && $stored > $current ) {
+		$log->warn( "squeezewax.db was written by a newer SqueezeWax (identification "
+			. "rule $stored, this one has $current); leaving its identifications alone" );
+
+		return;
+	}
+
+	# A fresh install: no marker, and nothing has ever been concluded here. Record
+	# the current version and say nothing. There is no re-decision to make, and an
+	# invalidation line at a first start would describe work that did not happen.
+	if ( !defined $stored && !Plugins::SqueezeWax::Match->hasAnyRow ) {
+		Plugins::SqueezeWax::Schema->setMeta( LOGIC_VERSION_KEY, $current );
+
+		return;
+	}
+
+	# An absent marker over existing rows means version 1 - everything written
+	# before the marker itself existed, which on this project is everything up to
+	# 0.0.0.12.
+	my $from = defined $stored ? $stored : 1;
+
+	return if $from == $current;
+
+	my $rows = Plugins::SqueezeWax::Match->invalidateStrict;
+
+	# REFUSED, not "nothing to do". invalidateStrict returns undef when _writeOk
+	# says no - a scan is running, or the schema is not usable (Match.pm:105) -
+	# and recording the version anyway would skip the invalidation FOREVER, which
+	# is the bug this sub exists to fix with an extra step. Leave the marker
+	# alone; the next start tries again.
+	if ( !defined $rows ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info( "the identification rule changed ($from -> $current) but the "
+				. 'strict cache could not be invalidated now; will retry at the next start' );
+
+		return;
+	}
+
+	main::INFOLOG && $log->is_info
+		&& $log->info( "the identification rule changed ($from -> $current): "
+			. "$rows rows invalidated; the next scan will re-examine the library" );
+
+	Plugins::SqueezeWax::Schema->setMeta( LOGIC_VERSION_KEY, $current );
+
+	return;
 }
 
 # One of §13.7's two triggers, as §15.15 part 1 leaves them. The other is the
