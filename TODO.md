@@ -1330,7 +1330,10 @@ Each names its sites so the work is mechanical rather than a search.
       distinct releases against `_pending`'s own predicate, and the line renders
       only while something is pending.
 
-- [ ] **2026-09-29: could not provoke a wipe-and-rescan.** Skipped deliberately
+- [ ] **2026-09-29: could not provoke a wipe-and-rescan.** → 2026-09-30: RUN
+      (decisions §15.26). Every album id moved; D1 held. Still open: an album
+      *taking* a previously used id, which LMS did not do. Covered offline only
+      (`menu-check.pl` part 3). Skipped deliberately
       once `_canSkip` showed it would re-examine nothing. **Inferred from
       reading, not tested:** `album_key` (an md5 over track `urlmd5`s) and
       `source_timestamp` (file mtime) both survive a wipecache, so it should not
@@ -2050,9 +2053,12 @@ Each names its sites so the work is mechanical rather than a search.
       master search.
 - [ ] **2026-09-29: pressing details and credits in the menu** — cut from v1;
       return only with "Data provided by Discogs" placed next to them.
-- [ ] **2026-09-29: Jivelite and service logos.** The owner reports seeing
+- [x] **2026-09-29: Jivelite and service logos.** The owner reports seeing
       online-library logos on a player skin; Jivelite `d43a20b` has no such
       code. Needs a photo and the skin's name before anything rests on it.
+      → 2026-09-30: SETTLED, the owner was right. A SqueezePlay screenshot shows
+      Spotify emblems (decisions §15.26). The upstream item below now names three
+      UIs.
 - [ ] **2026-09-29, noticed, not changed: "Test token" bypasses the shared rate
       state.** `Settings.pm`'s token test makes a bare `SimpleAsyncHTTP`
       request with no `API->rateWait` check and no `noteResponse`, against
@@ -2068,11 +2074,23 @@ Each names its sites so the work is mechanical rather than a search.
       changes the plugin's Manage Plugins description, which is
       naming-sensitive (design §1). Not decided. The text is verbatim in
       `strings.txt` under `PLUGIN_SQUEEZEWAX_ATTRIBUTION_*`.
+- [ ] **2026-09-30: plugin log categories revert to ERROR after startup.** Seen
+      on 0.0.0.14: ours, Spotty's and four others ran at `ERROR` in the server
+      while `log.conf` said otherwise; core categories kept theirs (decisions
+      §15.26). The test that separates the install from any restart: a plain
+      restart with nothing else changed, then read the logging page. If it
+      reproduces, it is LMS behaviour worth raising upstream.
+- [ ] **2026-09-30, v2: link the release the user actually owns.** Owner's
+      request 8. Needs the owned release id(s) per album stored, one-to-many
+      (several pressings of one record is normal), a migration, and §14.10
+      reversed. Goes with the wantlist and the master search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-09-30: build-order step 9's hardware checks (the ownership menu
-      and the owned view).** Plan `plans/build-order-step-9-badge.md` §7, in
+- [x] **2026-09-30: build-order step 9's hardware checks (the ownership menu
+      and the owned view).**
+      → 2026-09-30, on 0.0.0.14: all PASS (decisions §15.26). Check 6's second
+      half, an album taking an old id, was not provokable; see its own item. Plan `plans/build-order-step-9-badge.md` §7, in
       full, on the reference server. The ones that settle something no offline
       suite can:
       1. **The Discogs URL forms.** `/master/{id}` is inferred from captured

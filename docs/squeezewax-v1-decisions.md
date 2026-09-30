@@ -5690,3 +5690,74 @@ Recorded so they are not re-proposed as new:
 - `https://www.discogs.com/master/{id}` and `/user/{name}/collection` are
   inferred URL forms, hardware checks.
 - One library, one collection.
+
+### 15.26 Step 9 on hardware, and step 9b: links for apps, a line for players
+
+**Observed 2026-09-30** on the reference server (0.0.0.14, hand-offs 41 and 44);
+**decided the same day** (design chat, hand-off 43). Plan:
+`plans/build-order-step-9b-menu-links.md`.
+
+#### Step 9 on hardware: every check passes
+
+- **The menu**, album and track, in Material, the Default UI and SqueezePlay, for
+  `exact`, `version` with a master, `version` without, and `absent`.
+- **Both Discogs URL forms settled:** `/release/{id}` and `/master/{id}` redirect
+  to their slug pages; `/user/{name}/collection` is the collection page.
+- **The view** appears in Material (My Music → Other), the Default UI and
+  SqueezePlay. It reconciles exactly (204 = 204), rip and stream both present
+  (§13.10.3).
+- **Rebuild without a rescan**, in both directions, via "Sync collection now".
+- **Nothing asks Discogs:** with `network.asynchttp` at DEBUG, and proven live by
+  14 request lines during a rescan, 16 menu opens made **zero** outbound requests.
+- **D1 proven:** a wipe-and-rescan moved every album id. 480 of 481 rows kept a
+  stale `lms_album_id`, and menu and view stayed right. Keyed on the id, every
+  album would have shown another's ownership. The other half, an album *taking*
+  an old id, could not be provoked: LMS never reused one.
+- **The delete guard held under a destructive wipe** (Spotty's token failed, so
+  186 albums vanished): 25 verdict-only rows deleted, 0 identifications lost, the
+  manual row orphaned rather than deleted, and all of it back on the next scan.
+
+#### A defect reported and withdrawn: the log, not the code
+
+Report 41 concluded that `['rescan','done']` no longer reached `_rescanDone`. It
+did (44, direct observation: `_rescanDone` → `View::_build` twice →
+`_syncTick` skip → `Derive::arm` → `View::_build`). What had stopped was the
+**log**: after startup, the server's running level for every plugin-registered
+category (ours, Spotty's and four others) was `ERROR`, while `log.conf` said
+otherwise and was never rewritten. Two pieces of evidence were unsound and are
+recorded so they are not reused: **unchanged `library_track` rowids** (a
+composite-key table that is emptied and refilled restarts its rowids at 1, per
+SQLite's documented rule, so a rebuild and no rebuild look alike); and **absent
+log lines**, read without first checking the running level. Why plugin categories
+revert is **unexplained**. It is LMS behaviour, not ours, and `TODO.md` carries the
+test that separates install from restart.
+
+#### Settled against the design chat
+
+**Jive-family skins draw service emblems.** A SqueezePlay screenshot shows
+Spotify emblems on streamed albums. Jivelite `d43a20b` was the wrong place to
+look. §15.25's badge ruling is unchanged: it is the same one-per-album,
+`extid`-keyed icon. The upstream request now names three UIs.
+
+#### Step 9b rulings (owner's requests 1–8)
+
+1. **Release and master links**, each only where its id is usable. Replaces
+   §15.25 ruling 5.
+2. **Labels say what is true.** The release is "your pressing" only for `exact`;
+   for `version` it is "the pressing your files name", which the owner does not
+   own (node F). The master is "all versions".
+3. **Links for apps that can open them, one line for players**
+   (`Slim::Utils::Misc::canFollowWeblinks`, with non-menu mode and no-client
+   treated as link-capable). Where no link exists, the line shows everywhere, so
+   ownership never shows as nothing. **Named limit:** the function reads the UA
+   of the app that last controlled the player, not the one asking.
+4. **Pressing details → step 10**, as a submenu that fetches `/releases/{id}` only
+   when opened, with "Data provided by Discogs" inside it. The pattern is core's
+   "View tags" (`TrackInfo.pm` `infoTagDump` → `tagDump($client, $callback, …)`).
+   This reverses §15.25 ruling 4 inside the submenu only. It is also how players
+   get release information.
+5. **Settings: a plain discogs.com link** beside the collection-linked notice.
+6. **Linking the release actually owned → v2**, with the wantlist. Several owned
+   versions of one record are the ordinary case, so it is a table, a migration
+   and a reversal of §14.10. The ingredient exists: `_indexCollection` holds
+   `masters` as a presence set, and a map is a small change.

@@ -79,8 +79,15 @@ badges rather than a crash.
 
 ### 4.1 Hardware sessions
 
-Two rules, both learned the hard way on the reference server.
+Three rules, all learned the hard way on the reference server.
 
+- **Check the running log level before reasoning from the log.** On 2026-09-30 a
+  hardware report concluded that a handler had stopped firing, because its log
+  lines were missing. The server's running level for every plugin category had
+  reverted to `ERROR` after startup, whatever `log.conf` said (decisions §15.26).
+  Read the level on the server's logging settings page first. And prefer
+  evidence that does not depend on our own logging: rendered pages, database
+  state, `network.asynchttp` for outbound requests.
 - **Never read the prefs file.** Pref **key names** come from the source
   (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** comes from the
   owner, if it is needed at all. A session looking up key names grepped

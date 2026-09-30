@@ -618,12 +618,25 @@ reveals details of the **owned variant**:
 - "View on Discogs" link-out
 - ~~**"Re-match…"** — manual re-match action (§3, re-match triggers)~~
 
-**Corrected 2026-09-29 (decisions §15.25) — the v1 menu, in full.** On an owned
+~~**Corrected 2026-09-29 (decisions §15.25) — the v1 menu, in full.** On an owned
 album, or on the playing track of one: one line — "You own this pressing"
 (`exact`) or "You own a version of this record" (`version`) — and a link,
 "This album on Discogs", to the release page (`exact`) or the master page
 (`version`, only where a master id is already stored). Nothing else, and no
-Discogs request. Unowned albums show no entry.
+Discogs request. Unowned albums show no entry.~~
+
+**Corrected 2026-09-30 (decisions §15.26, after hardware) — the v1 menu, in
+full.** On an owned album, or on the playing track of one:
+- **In an app that can open links** (the web skins, iPeng, Squeezer and others;
+  core's `canFollowWeblinks`): links only — "On Discogs: your pressing"
+  (`exact`) or "On Discogs: the pressing your files name" (`version`) to the
+  release, and "On Discogs: all versions" to the master, each only where its id
+  is stored.
+- **On a player**, and wherever no link exists: one line — "You own a pressing"
+  or "You own a version".
+No Discogs data and no Discogs request. Unowned albums show no entry. Pressing
+details come with step 10, as a submenu that fetches when opened, with "Data
+provided by Discogs" inside it.
 - **Pressing details and credits are cut from v1.** Showing Discogs data puts
   "Data provided by Discogs" beside it (§9.6), and the user chose to keep the
   menu free of it. They return only with a placement for the notice.
