@@ -420,4 +420,35 @@ $allFormats{ $_->{content_type} }++ for @$all;
 is( $allFormats{flc}, 42, 'a cap above the album count returns every FLAC album' );
 is( $allFormats{mp3}, 4,  '  ...and every MP3 album' );
 
+# --- albumKey: the single-album route agrees with the walk -----------------
+#
+# Asserted over EVERY album this fixture holds, not a sample. The menu and the
+# owned view reach our rows through albumKey; the importer and the ownership
+# pass wrote them through eachAlbum. If the two ever disagree on one album,
+# that album silently stops being owned, and nothing logs it (step 9 plan §1).
+my @walk;
+$L->eachAlbum( sub { push @walk, $_[0]; 1 } );
+
+cmp_ok( scalar @walk, '>', 40, 'the whole-set check runs over the full fixture library' );
+
+my $mismatch = 0;
+for my $album (@walk) {
+	my $key = $L->albumKey( $album->{album_id} );
+	$mismatch++ if !defined $key || $key ne $album->{album_key};
+}
+is( $mismatch, 0, 'albumKey agrees with eachAlbum for every album in the library' );
+
+# The albums eachAlbum refuses to emit have no key by either route.
+is( $L->albumKey(4), undef,
+	'albumKey is undef for an album whose only track is a non-audio content_type' );
+is( $L->albumKey(5), undef,
+	'albumKey is undef for an album whose only track has audio = 0' );
+is( $L->albumKey(999999), undef, 'albumKey is undef for an album id that does not exist' );
+is( $L->albumKey(undef),  undef, 'albumKey is undef for an undefined album id' );
+
+# md5_hex('') must never be returned as a key - it is the one value every
+# trackless album would share.
+ok( !grep( { defined $_ && $_ eq $emptyDigest } map { $L->albumKey($_) } ( 4, 5, 999999 ) ),
+	'albumKey never returns md5_hex("")' );
+
 done_testing();

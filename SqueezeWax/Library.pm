@@ -68,28 +68,50 @@ END {
 # artist the same way, so decoding here would make every non-ASCII artist fail
 # to fit. LEFT JOINs: a NULL or dangling albums.contributor yields undef, never
 # a dropped row.
-my $ALBUM_TRACKS_SQL = q{
+#
+# The predicate and the digest order are named once here and interpolated
+# everywhere, rather than restated per statement. albumKey (below) has to
+# produce the byte-identical key for one album that this walk produces for the
+# whole library, and a drifted copy of either would yield a key matching no
+# discogs_match row - an owned album silently losing its menu entry, with
+# nothing to see in a log (step 9 plan §1).
+my $QUALIFYING_TRACKS = q{
+		   t.audio = 1
+	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
+};
+
+my $KEY_ORDER = q{t.urlmd5};
+
+my $ALBUM_TRACKS_SQL = qq{
 	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote,
 	       t.content_type, a.title, c.name
 	  FROM tracks t
 	  LEFT JOIN albums a ON a.id = t.album
 	  LEFT JOIN contributors c ON c.id = a.contributor
 	 WHERE t.album IS NOT NULL
-	   AND t.audio = 1
-	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
-	 ORDER BY t.album, t.urlmd5
+	   AND $QUALIFYING_TRACKS
+	 ORDER BY t.album, $KEY_ORDER
 };
 
 # One aggregate over the same predicate, for Progress->new's total. An
 # indeterminate progress bar would undercut finding 4's reasoning: the scan-UI
 # row is the healthy-run signal that justified dropping the log category to WARN,
 # and a bar with no total carries less of that.
-my $ALBUM_COUNT_SQL = q{
+my $ALBUM_COUNT_SQL = qq{
 	SELECT COUNT(DISTINCT t.album)
 	  FROM tracks t
 	 WHERE t.album IS NOT NULL
-	   AND t.audio = 1
-	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
+	   AND $QUALIFYING_TRACKS
+};
+
+# One album's qualifying urlmd5s, in the same order. Indexed on tracks.album
+# (SQL/SQLite/schema_1_up.sql, trackAlbumIndex).
+my $ALBUM_KEY_SQL = qq{
+	SELECT t.urlmd5
+	  FROM tracks t
+	 WHERE t.album = ?
+	   AND $QUALIFYING_TRACKS
+	 ORDER BY $KEY_ORDER
 };
 
 =head2 eachAlbum( \&callback )
@@ -257,7 +279,7 @@ sub _finish {
 		# when albums.contributor is NULL or has no contributors row.
 		artist           => $acc->{artist},
 
-		album_key        => md5_hex( join '', @{ $acc->{urlmd5} } ),
+		album_key        => _keyDigest( $acc->{urlmd5} ),
 		source_timestamp => $source,
 		local_tracks     => scalar @local,
 		remote_tracks    => $acc->{remote_tracks},
@@ -269,6 +291,48 @@ sub _finish {
 		# list. undef for an album with no local tracks.
 		content_type     => $sorted[0] ? $sorted[0]->{content_type} : undef,
 	};
+}
+
+# The key itself, from an album's qualifying urlmd5s in $KEY_ORDER. The one
+# definition: eachAlbum's per-album accumulator and albumKey both call it, so
+# the two routes cannot drift apart.
+#
+# An empty list yields undef, not md5_hex(''). That constant is what every
+# trackless album would collide on, and discogs_match's
+# CHECK(length(album_key) = 32) would accept it.
+sub _keyDigest {
+	my $urlmd5 = shift;
+
+	return undef unless $urlmd5 && @$urlmd5;
+
+	return md5_hex( join '', @$urlmd5 );
+}
+
+=head2 albumKey( $albumId )
+
+The C<album_key> of one LMS album, or C<undef> for an album with no qualifying
+tracks.
+
+The single-album counterpart to C<eachAlbum>, for the menu and the owned view,
+which are handed an C<albums.id> by LMS and have to reach our row. They cannot
+use C<discogs_match.lms_album_id>: nothing refreshes it for an album the
+importer skips or never examines, so it goes stale as soon as LMS reassigns
+C<albums.id>, and a lookup through it would show B<the wrong album as owned>
+(step 9 plan D1, decisions §15.25). Identity is the key; the id is a cache.
+
+One indexed query per call - once per menu open, never per grid tile (design
+§382).
+
+=cut
+
+sub albumKey {
+	my ( $class, $albumId ) = @_;
+
+	return undef unless defined $albumId;
+
+	my $urlmd5 = Slim::Schema->dbh->selectcol_arrayref( $ALBUM_KEY_SQL, undef, $albumId );
+
+	return _keyDigest($urlmd5);
 }
 
 =head2 sample_albums( $perFormat )
