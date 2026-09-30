@@ -491,6 +491,16 @@ only visible signal, and it reflects whichever path synced last (§15.18 part 7)
 
 ## 4. Badge (Ownership Indicator)
 
+**v1 as built (`squeezewax-v1-decisions.md` §15.25, 2026-09-29).** There is no
+badge on artwork in v1: neither LMS core nor Material Skin lets a plugin draw
+one, verified against source. Ownership is shown in three places, each built once
+for every skin: a **"Discogs" entry in the album's menu**, the **same entry in the
+playing track's menu** (Now Playing), and a **"Records I own" library view**, the
+normal album grid filtered to owned albums, also reachable from My Music. The
+bullets below describe the artwork badge as designed. It waits for a hook from
+LMS or Material (`TODO.md`), and each bullet the finding touches is corrected in
+place.
+
 - **Where**: corner overlay on album artwork, in
   - grid view while browsing, and
   - the Now Playing screen (smaller).
@@ -515,14 +525,17 @@ only visible signal, and it reflects whichever path synced last (§15.18 part 7)
   feature of what a third-party app creates (see §1, naming section). A
   badge rendered as the Discogs "D" logomark on every owned album tile would
   sit squarely inside that restriction; the generic vinyl glyph does not.
-- **Rendering is skin-independent by design**: the intent is a single overlay
+- ~~**Rendering is skin-independent by design**: the intent is a single overlay
   mechanism that works the same way regardless of skin (default web UI,
-  Material Skin, etc.), rather than a per-skin reimplementation. This still
-  needs to be verified once implementation starts — no confirmed generic
-  badge/overlay API was found in LMS core (see "Rendering note" below), so
-  whether true skin-independence is achievable, or whether each skin needs
-  its own CSS/template hook, is something to validate against actual skin
-  source rather than assume.
+  Material Skin, etc.), rather than a per-skin reimplementation.~~ **Corrected
+  2026-09-29 (decisions §15.25):** validated against skin source, and no such
+  mechanism exists for a plugin. Each skin draws exactly one cover icon, keyed on
+  `albums.extid`, meaning "which service this album came from": core's Default
+  template (`HTML/Default/xmlbrowser.html`, block `itemIcon`) and Material's
+  fixed list (`emblems.json`). A plugin can supply the Default UI's icon for its
+  own service prefix and nothing more, and writing `albums.extid` breaks the
+  album (`Slim/Schema/Album.pm`, `url`). What *is* skin-independent is the menu
+  and the library view, which v1 uses instead.
 - **Granularity**: per album *edition* (matching the observed Spotify
   behavior — two editions of the same album can be badged independently).
 - **Artist-level badge**: opt-in via Settings, and scoped **only to artists
@@ -565,8 +578,13 @@ the same glyph on each (`squeezewax-v1-decisions.md` §13.10.3).
 ### Rendering note
 
 No evidence found that LMS core provides a generic badge/overlay mechanism —
-the Spotify badge appears to be plugin/skin-drawn. The Discogs plugin will
-draw its own overlay via template/CSS hooks for the default web UI. Given the
+~~the Spotify badge appears to be plugin/skin-drawn.~~ **Corrected 2026-09-29
+(decisions §15.25):** the Spotify badge is *skin*-drawn. Spotty supplies only an
+icon file, through `Slim::Plugin::OnlineLibrary::Plugin->addLibraryIconProvider`,
+for the Default UI; Material draws its own from a built-in list. Both key it on
+the album's `extid`. ~~The Discogs plugin will
+draw its own overlay via template/CSS hooks for the default web UI.~~ No such
+hook exists (decisions §15.25). Given the
 skin-independence goal above, this should be re-examined during
 implementation to confirm the same hook/approach genuinely applies across
 skins (e.g. Material Skin) rather than requiring a distinct integration path.
@@ -591,13 +609,32 @@ reveals details of the **owned variant**:
   resolved pressing** — one supplied by a tag or by a manual link. An album
   owned by *version* alone has none, and v1 does not retain the collection
   entry's release id, so those four are **absent rather than empty** for it
-  (`squeezewax-v1-decisions.md` §13.2, §14.10). **"Re-match…" is always
-  available**, and is the action that resolves a pressing where none is known.
-- Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year
-- Credits (musicians, producers, engineers — a Discogs strength)
-- Current estimated value (fetched on demand)
+  (`squeezewax-v1-decisions.md` §13.2, §14.10). ~~**"Re-match…" is always
+  available**, and is the action that resolves a pressing where none is known.~~
+  **Corrected 2026-09-29:** not in v1's menu (decisions §15.25).
+- ~~Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year~~
+- ~~Credits (musicians, producers, engineers — a Discogs strength)~~
+- ~~Current estimated value (fetched on demand)~~
 - "View on Discogs" link-out
-- **"Re-match…"** — manual re-match action (§3, re-match triggers)
+- ~~**"Re-match…"** — manual re-match action (§3, re-match triggers)~~
+
+**Corrected 2026-09-29 (decisions §15.25) — the v1 menu, in full.** On an owned
+album, or on the playing track of one: one line — "You own this pressing"
+(`exact`) or "You own a version of this record" (`version`) — and a link,
+"This album on Discogs", to the release page (`exact`) or the master page
+(`version`, only where a master id is already stored). Nothing else, and no
+Discogs request. Unowned albums show no entry.
+- **Pressing details and credits are cut from v1.** Showing Discogs data puts
+  "Data provided by Discogs" beside it (§9.6), and the user chose to keep the
+  menu free of it. They return only with a placement for the notice.
+- **Estimated value moves to step 10**, with the marketplace lookup.
+- **"Re-match…" is not in the menu in v1.** It stays on the review-queue page,
+  for queue items only. A version album with no tag can be given a pressing only
+  by tagging its files.
+- **The link describes the album, not the copy.** The stored master is the master
+  of the *identified* release. A version album reached by title can own a record
+  under a different master, and nothing stored says which, so the link is never
+  called "your version".
 
 All Discogs-referencing labels here ("View on Discogs," etc.) use the
 descriptive phrasing pattern permitted under Discogs' brand-usage policy
@@ -864,12 +901,15 @@ would let a user opt into wrong badges
   button is the only remedy.
 
 ### Badge
-- Enable/disable badge in grid view.
-- Enable/disable badge on Now Playing.
-- Optional artist-level badge (Collection artists only).
-- Enable/disable Wantlist badge.
-- **Badge color for "owned"** (configurable).
-- **Badge color for "wantlist"** (configurable).
+**Corrected 2026-09-29 (decisions §15.25): v1 has no badge settings.** The menu
+entry and the "Records I own" view are always on, and there is no artwork badge
+to configure. The list below returns with a cover badge.
+- ~~Enable/disable badge in grid view.~~
+- ~~Enable/disable badge on Now Playing.~~
+- Optional artist-level badge (Collection artists only). *(v3, §11.)*
+- Enable/disable Wantlist badge. *(v2, §11.)*
+- ~~**Badge color for "owned"** (configurable).~~
+- **Badge color for "wantlist"** (configurable). *(v2.)*
 
 ### Marketplace preferences
 - Format filter: vinyl only / CD only / any.
@@ -895,6 +935,17 @@ would let a user opt into wrong badges
   visible sign of a sync that keeps failing. If the failure is an authentication
   one, an **authentication-failure state** is shown beside it with the
   "re-enter token" prompt (§8; `squeezewax-v1-decisions.md` §13.7, §14.2).
+- **Derive status** (decisions §15.25): while the master-derive job has releases
+  pending, "Deriving masters: N of M releases", marked running or waiting.
+  Without it, ownership changes for up to 25 minutes after a scan with nothing
+  on screen to say why (§15.23).
+- **Both Discogs notices** (decisions §9.6, §15.25): "This application uses
+  Discogs' API but is not affiliated with, sponsored or endorsed by Discogs.
+  'Discogs' is a trademark of Zink Media, LLC." and "Data provided by Discogs.",
+  the latter linked, without `nofollow`, to the user's collection page. The
+  username comes from a stored pref, `discogsUsername`, written by the server's
+  identity calls and cleared when the token changes; when it's empty the link
+  goes to discogs.com.
 - Price-snapshot interval (for the value-history chart).
 - **Display currency**: default = Discogs' native currency per item; optional
   override to recalculate a normalized total into a chosen display currency.
@@ -909,8 +960,13 @@ discogs_match
                        identity of the match, not lms_album_id — see §3)
   mb_album_id         (albums.musicbrainz_id where present, secondary
                        resolution path)
-  lms_album_id        (denormalised cache column, refreshed whenever a
-                       rescan completes; never trusted as identity)
+  lms_album_id        (denormalised cache column; never trusted as identity.
+                       ~~refreshed whenever a rescan completes~~ — corrected
+                       2026-09-29, decisions §15.25: refreshed only when the
+                       importer examines the album or a relink moves it. An
+                       unchanged or all-remote album keeps a stale id after LMS
+                       reassigns albums.id, so nothing may look an album up by
+                       it; compute album_key from the album's tracks instead)
   discogs_release_id  (which release this album IS. Identity, never
                        ownership. NULL for a conflict row or an
                        edition-level match — see §3 and
@@ -1062,8 +1118,11 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - Strict identification from tags, plus collection matching for ownership,
   review queue, manual re-match (§3). **Every album is in scope**, including
   albums with no local files at all (`squeezewax-v1-decisions.md` §13.10.1).
-- Owned badge (grid + Now Playing) with badge context menu (pressing details,
-  credits, on-demand value, Discogs link-out).
+- ~~Owned badge (grid + Now Playing) with badge context menu (pressing details,
+  credits, on-demand value, Discogs link-out).~~ **Corrected 2026-09-29
+  (decisions §15.25):** ownership in the album and track menus (one line and a
+  Discogs link), and a "Records I own" library view. No artwork badge: no skin
+  offers a hook.
 - Personal access token + collection sync (`squeezewax-v1-decisions.md` §9.1).
   Not merely "needed for the owned badge" — the collection is where ownership
   is determined, so without a valid token there are no badges at all (§8).
@@ -1086,6 +1145,8 @@ advantage there and no way to see the physical object.
 - Flow 2 (native Discogs grids, "Find on …" / "Find" fan-out).
 - Statistics dashboard (value trend chart, stat cuts, completeness view).
 - Artist-level badge (opt-in), currency conversion option.
+- A SqueezeWax app (`is_app`, the pattern of the Listen Later plugin) as a
+  low-level forerunner of Flow 2's Discogs browse (decisions §15.25).
 
 ---
 
@@ -1095,10 +1156,11 @@ All original open design questions have been resolved (see §3–§9 for the
 decisions and where they now live). Remaining follow-ups to verify during
 implementation, rather than open design questions:
 
-- Confirm whether a genuinely skin-independent badge/overlay mechanism is
+- ~~Confirm whether a genuinely skin-independent badge/overlay mechanism is
   achievable in LMS core, or whether Material Skin (and others) will still
   need a distinct integration path — check against actual skin source rather
-  than assuming.
+  than assuming.~~ **Answered 2026-09-29 (decisions §15.25):** neither core nor
+  Material offers a plugin one; v1 shows ownership in menus and a library view.
 - Choose and verify an actual FX-rate source for the optional currency
   conversion feature (§5/§9) — not yet selected.
 - **How LMS's rescan flags changed files is settled; what remains is

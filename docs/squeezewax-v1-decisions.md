@@ -1388,6 +1388,11 @@ natural place for the notice** — whether it appears per tile, once per page, o
 only in the context menu the badge opens is a step-6 UI decision that must be
 taken before step 6 begins, not discovered during it.
 
+**Answered 2026-09-29, §15.25** ("step 6" was the 2026-09-07 numbering for what
+is now build-order step 9). There is no grid badge. The menu shows no Discogs
+data, only our conclusion and a link. Both notices go on the settings page, the
+second linked to the user's collection page.
+
 ### 9.7 Endpoints used in v1
 
 | Purpose | Endpoint | Notes |
@@ -5590,3 +5595,98 @@ returns at the "nothing at all" branch and never attempts a write. Provoking it
 would mean hand-writing the marker backwards in a live database. It stays covered
 offline in `plugin-check.pl`, and that is the right and only home for it —
 recorded so "not run" is not later read as "untested".
+
+### 15.25 Step 9: ownership in menus and a library view, not on artwork
+
+**Decided 2026-09-29 (design chat)**, on the step 9 survey. Evidence: Phase 0
+(hand-off 34) and an options survey (hand-off 35), both read against slimserver
+`a670a38`, Material `47e31ed`, Spotty `68fd614` and Listen Later `ecb3622`. Plan:
+`plans/build-order-step-9-badge.md`.
+
+#### The finding that reshaped the step
+
+**No skin lets a plugin draw on album artwork.** Verified for the Default UI and
+Material; other skins not read. Each draws one cover icon, keyed on
+`albums.extid`: core's Default template calls
+`OnlineLibrary::Plugin->getServiceIcon` (`HTML/Default/xmlbrowser.html`, block
+`itemIcon`), and Material reads a fixed list shipped inside Material
+(`emblems.js`, `emblems.json`). The icon means "which service this album came
+from". Spotty supplies only an image for the Default UI
+(`addLibraryIconProvider`). Writing our own `albums.extid` was examined at the
+owner's request and **rejected**: `extid` is the album's address
+(`Slim/Schema/Album.pm`, `url`), Online Library's local-only views exclude any
+album carrying one, and it would overwrite a streamed album's own. Design §4's
+"skin-independent by design" was an intent that the source does not support.
+
+#### Considered and not taken (hand-off 35)
+
+Recorded so they are not re-proposed as new:
+
+- **Our own album list carrying `extid` + our icon.** It works in the Default UI
+  (any browse item's `extid` gets the registered icon), and Listen Later uses the
+  pattern. But it only works inside our list, a second album browser; it takes
+  the single icon slot, so a streamed album loses its service logo; and Material
+  shows nothing unless it adds us to its list.
+- **Painting the badge into the cover image.** Dispatch allows it: a plugin's raw
+  URL handler runs before core's artwork handler (`Slim/Web/HTTP.pm`,
+  `getRawFunction` before the `music/…/cover` branch). But the only bundled image
+  library is `Image::Scale`, which resizes and cannot draw, and it would put every
+  cover in every skin behind our code.
+- **A marker in the title format** (`Slim::Music::TitleFormatter::addFormat`):
+  text, opt-in, and Material does not use title formats for display (inferred).
+- **A Material user script** (`prefs/material-skin/custom.js`): overwrites the
+  user's own, and breaks on Material updates.
+- **A fake "Owned" genre:** writes LMS's own tables and mislabels music.
+
+#### Rulings
+
+1. **v1 shows ownership in the album menu, the playing track's menu, and a
+   "Records I own" library view**, each built once for every skin
+   (`Slim::Menu::AlbumInfo` / `TrackInfo->registerInfoProvider`,
+   `Slim::Music::VirtualLibraries->registerLibrary`). No artwork badge. The
+   request for a hook goes to `TODO.md`.
+2. **The view is a library, not an app.** A SqueezeWax app (the Listen Later
+   pattern) is recorded as a future forerunner of Flow 2, v3.
+3. **The menu appears on owned albums only**, `exact` or `version`.
+4. **The menu carries no Discogs data**: one ownership line and a link. Both
+   §9.6 notices go on the settings page. The owner first asked for the notice on
+   the settings page only while keeping pressing details in the menu. That
+   **breaks the terms' "directly next to any data" rule**, was put back to them
+   as such, and they chose to drop the data instead. **Named risk:** this rests
+   on reading "you own this" as our conclusion rather than Discogs data, and the
+   terms class the collection as Restricted "Discogs User Data". `TODO.md`'s
+   2026-09-07 question on the derived label is now load-bearing.
+5. **Links: `exact` → release, `version` → master, only where a master id is
+   already stored** (`Ownership::_effectiveMaster`). No migration; §14.10
+   stands. A master search is deferred to v2, with the wantlist.
+6. **Value → step 10. Re-match → not in the menu. No new settings.**
+7. **The derive status line** goes on the settings page. Closes `TODO.md`
+   2026-09-29 "a derive session is invisible".
+8. **Artist-level badge: v3** (design §11).
+9. **The settings-page link goes to the user's collection page, with the
+   username stored** in `discogsUsername`: written by the server's existing
+   identity calls, cleared on a token change. It is Restricted "Discogs User
+   Data", and keeping it is accepted by the owner as necessary for the link
+   (§9.5's necessity test). First decided the same day as "fetched per page view,
+   never stored", and superseded by the owner.
+
+#### Defaults from the plan, accepted at the plan review
+
+- **Identity by `album_key`, never `lms_album_id`.** Found while writing the plan:
+  the importer's skip and all-remote paths (`Importer.pm`, `startScan` loop) never
+  refresh `lms_album_id`, and the pass never writes it, so it goes stale when LMS
+  reassigns `albums.id`. Design §10 said otherwise and is corrected. Keyed on it,
+  the menu and the view would show **the wrong album as owned**.
+- **"This album on Discogs"**, never "your version": the stored master is the
+  identified release's, which need not be the owned one's.
+- **A "Records I own" entry under My Music**, as core's `LibraryDemo` does.
+
+#### Where the evidence is thin
+
+- Default UI's library picker, Material's handling of a plugin My Music node,
+  Jivelite, iPeng and Squeezer: not read.
+- The owner reports online-library logos on Jivelite. Jivelite `d43a20b`
+  (piCorePlayer's source) has no such code. Unsettled.
+- `https://www.discogs.com/master/{id}` and `/user/{name}/collection` are
+  inferred URL forms, hardware checks.
+- One library, one collection.

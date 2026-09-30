@@ -840,12 +840,14 @@ Each names its sites so the work is mechanical rather than a search.
       conservative fallback for various-artists and album-artist
       mismatches.
       2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
-- [ ] **2026-09-07: mandatory Discogs attribution.** Both required notices
+- [x] **2026-09-07: mandatory Discogs attribution.** Both required notices
       are recorded in `squeezewax-v1-decisions.md` §9.6. Still open: **a
       grid badge has no natural place for the "Data provided by Discogs"
       notice — decide before step 6 starts.** 2026-09-19: "step 6" is the
       2026-09-07 numbering and meant the badge, now build-order step 9.
       Decide before step 9 starts.
+      → 2026-09-29: DECIDED, decisions §15.25. No grid badge; the menu shows no
+      Discogs data; both notices on the settings page.
 - [ ] **Step 4's plan must open with an enumerated "what step 3 established
       that step 4 must honour" section**, each item citing its decision
       record or symbol — the same shape step 3's plan used for step 2's
@@ -887,6 +889,10 @@ Each names its sites so the work is mechanical rather than a search.
       The ambiguous branch is step 8's (§15.5 part 4).
 - [ ] **`lms_album_id` refresh** on `['rescan','done']`, debounced — *not*
       `Slim::Utils::Scanner::API->onFinished`. Reasoning in decisions §6.
+      → 2026-09-29: still open, and now documented as such. Design §10 claimed
+      a refresh that no code does (decisions §15.25). Step 9 routes around it by
+      keying on `album_key`. Anything new that looks an album up by
+      `lms_album_id` is wrong until this is built.
 - [x] **`Slim::Music::Import->addImporter`** registration, which step 2
       deliberately omitted: an importer whose `startScan` does nothing would
       only put a dead row in the scan progress UI.
@@ -1799,7 +1805,7 @@ Each names its sites so the work is mechanical rather than a search.
 - [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
       question.** Landed — see `squeezewax-v1-decisions.md` §3a (amended)
       and §8.
-- [ ] **2026-09-07, recorded not designed: a user with both a local rip and
+- [x] **2026-09-07, recorded not designed: a user with both a local rip and
       a streaming copy sees the album twice in the grid, and only the
       local row is badged.** Arguably correct; will read oddly. A UI
       question for step 6, not a matching one.
@@ -1808,6 +1814,8 @@ Each names its sites so the work is mechanical rather than a search.
       a stream of one owned record BOTH badge (design §3 walkthrough 4), so
       "only the local row is badged" no longer happens. Re-check at step 9;
       likely closable.
+      → 2026-09-29: closed by step 9. No grid badge exists; both albums appear in
+      the "Records I own" view (hardware check §7.4).
 - [ ] **Detection has no progress feedback, and the fix depends on the next
       item.** The Settings worker runs through `Slim::Utils::Scheduler` and the
       page never refreshes, so it shows "Reading files... (0/79)" until the user
@@ -1882,6 +1890,10 @@ Each names its sites so the work is mechanical rather than a search.
       conclusion, or one bit of Restricted Data under the Discogs TOU?**
       Leaning conclusion; NOT settled. Kept academic by choosing the sync
       interval on UX grounds regardless. Do not record as decided.
+      → 2026-09-29: no longer academic. Step 9's menu and view show the
+      conclusion with no "Data provided by Discogs" beside it, which is compliant
+      only on the "our conclusion" reading (decisions §15.25 ruling 4). Revisit
+      trigger: any Discogs guidance on derived data.
 - [ ] **`type=master` search results carry `user_data.in_collection`/
       `in_wantlist` per token holder, undocumented.** Recorded in
       `squeezewax-v1-decisions.md` §9.9.
@@ -2020,6 +2032,29 @@ Each names its sites so the work is mechanical rather than a search.
       Working-agreement §2 makes this a defect to reconcile, so it should not
       sit indefinitely. Survey first, as the design reconciliation did, so
       the session starts from a list rather than deriving one.
+
+- [ ] **2026-09-29: ask upstream for a per-album cover emblem hook.** Material
+      (emblems are a fixed list keyed on `extid`) and LMS core (one icon slot in
+      the Default UI's `xmlbrowser.html`). Needed for design §4's artwork badge.
+      Not decided whether or when to ask. Decisions §15.25.
+- [ ] **2026-09-29, future feature: a SqueezeWax app** (Listen Later's `is_app`
+      pattern) as a low-level Discogs browse. Design §11 v3, beside Flow 2.
+- [ ] **2026-09-29, v2: master search for version albums**, so a version album
+      matched by title gets a master link. Belongs with the wantlist (decisions
+      §14.10's revisit).
+- [ ] **2026-09-29: Re-match from the album menu** — not in v1. A version album
+      with no tag cannot be given a pressing except by tagging. Revisit with the
+      master search.
+- [ ] **2026-09-29: pressing details and credits in the menu** — cut from v1;
+      return only with "Data provided by Discogs" placed next to them.
+- [ ] **2026-09-29: Jivelite and service logos.** The owner reports seeing
+      online-library logos on a player skin; Jivelite `d43a20b` has no such
+      code. Needs a photo and the skin's name before anything rests on it.
+- [ ] **2026-09-29, noticed, not changed: "Test token" bypasses the shared rate
+      state.** `Settings.pm`'s token test makes a bare `SimpleAsyncHTTP`
+      request with no `API->rateWait` check and no `noteResponse`, against
+      `CLAUDE.md`'s "every server-side consumer shares it". One user-pressed
+      request; small risk.
 
 ## Waiting — needs a real server
 
