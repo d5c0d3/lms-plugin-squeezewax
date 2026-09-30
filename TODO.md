@@ -2071,6 +2071,28 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-09-30: build-order step 9's hardware checks (the ownership menu
+      and the owned view).** Plan `plans/build-order-step-9-badge.md` §7, in
+      full, on the reference server. The ones that settle something no offline
+      suite can:
+      1. **The Discogs URL forms.** `/master/{id}` is inferred from captured
+         `uri` fields, which spell it `/master/{id}-{slug}`; `/user/{name}/collection`
+         is inferred outright (§0.2 D4). Open one of each.
+      2. **The library pickers.** Whether the Default UI's picker lists the view
+         at all, and whether Material's My Music shows a `registerNode` entry,
+         were not read (§0.5, "unverified").
+      3. **Zero requests at INFO** while opening menus.
+      4. **The view equals the owned set** — 204 albums expected — with a rip
+         and a stream of one record both present.
+      5. **Rebuild without a rescan**: change the collection by one record,
+         press "Sync collection now", the view follows.
+      6. **D1 on hardware**: record whether a re-created album can be provoked
+         at all. If not, it stays here rather than being marked passed.
+      7. **Settings page**: both notices, the link carrying the username and no
+         `nofollow` (view source), the derive line appearing and disappearing.
+      8. **A player skin / Jivelite**, if there is one: does the entry show?
+      9. **Timings**: menu open, and view rebuild on this library.
+
 - [x] **2026-09-29: the logic version's hardware checks (0.0.0.13).** Decisions
       §15.24. Short, on the reference server, in order:
       1. **Upgrade and start.** `user_version` 6 → 7, and expect **exactly one

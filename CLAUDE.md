@@ -147,7 +147,10 @@ sits where it does.
    library view filters the grid to owned albums; the settings page carries both
    Discogs notices and the derive status. Plan:
    `plans/build-order-step-9-badge.md`. **Identity by `album_key`, never
-   `lms_album_id`** (stale after LMS reassigns album ids)
+   `lms_album_id`** (stale after LMS reassigns album ids) — **code complete**;
+   the plan §7 hardware checks are open in `TODO.md`. One item reported rather
+   than decided: the plan also asked for the two notices in a README, and this
+   repo has none (`TODO.md`, 2026-09-29)
 10. **On-demand marketplace lookup**
 
 **There is no Structural tier and no Fuzzy tier.** Decisions §13.8 replaced the
