@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Menu Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Menu View Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -190,7 +190,7 @@ for scanner in 0 1; do
 		# skipped here on the grounds that the pass ran only in the server; it
 		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
 		# scanner loads it and its scanner-mode compile is the point.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "View" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
 			continue
 		fi
 
@@ -374,6 +374,25 @@ BEGIN {
 	require Tie::Cache::LRU;
 }'
 				note=" (Slim::Schema, Misc stubbed; Slim::Menu::AlbumInfo and TrackInfo real)"
+				;;
+			View)
+				# Server only, and for a reason of its own: a scan-time rebuild
+				# would run at importer weight 100, before our own pass at 130,
+				# and so describe the ownership of the scan before last.
+				#
+				# Slim::Music::VirtualLibraries and Slim::Menu::BrowseLibrary are
+				# loaded FOR REAL - registerLibrary, rebuild, getRealId,
+				# registerNode and _albums are exactly what this file has to have
+				# right. Misc and Tie::Cache::LRU are cut and made good as the
+				# Menu case does, for the same two reasons.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)} = 1;
+
+	require Tie::Cache::LRU;
+}'
+				note=" (Slim::Schema, Misc stubbed; VirtualLibraries and BrowseLibrary real)"
 				;;
 			Settings|Queue)
 				# Slim::Web::Settings is a web-UI class; stub the base the same

@@ -36,9 +36,15 @@
 use strict;
 use warnings;
 
+# Compile-time constants the LMS modules below read from package main. RESIZER
+# is Slim::Utils::DbCache's, reached through BrowseLibrary's cache.
 use constant PERFMON  => 0;
 use constant DEBUGLOG => 1;
 use constant INFOLOG  => 1;
+use constant RESIZER  => 0;
+use constant SCANNER  => 0;
+use constant ISWINDOWS => 0;
+use constant ISMAC    => 0;
 
 use Config;
 use FindBin qw($Bin);
@@ -265,6 +271,7 @@ require Plugins::SqueezeWax::Schema;
 require Plugins::SqueezeWax::Library;
 require Plugins::SqueezeWax::Ownership;
 require Plugins::SqueezeWax::Menu;
+require Plugins::SqueezeWax::View;
 
 Plugins::SqueezeWax::Schema->_migrate($dbh);
 
@@ -291,7 +298,11 @@ sub album {
 
 	for my $n ( 1 .. $tracks ) {
 		$nextTrack++;
-		my $url = $remote ? "spotify://a$id-t$n" : "file:///a$id-t$n";
+		# The url carries $nextTrack, not just the album id: the D1 block below
+		# re-creates an album AT AN ID THAT WAS USED BEFORE, and urls derived
+		# from the id alone would hand it the old album's key - which is the
+		# one thing that block must not accidentally arrange.
+		my $url = $remote ? "spotify://a$id-t$nextTrack" : "file:///a$id-t$nextTrack";
 
 		$dbh->do( 'INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)', undef,
 			$nextTrack, $id, md5_hex($url), $url, 100, 1, $n, $remote, 1, 'flc' );
@@ -553,6 +564,133 @@ sub link_  { my $i = shift; return $i->[1] && $i->[1]{weblink} }
 
 	is( scalar @$items, 0,
 		'a track with no library album - a stream that is not in the library - gets no entry' );
+}
+
+# ===========================================================================
+# 3. D1: identity is album_key, and an album id that moved does not mislead
+# ===========================================================================
+#
+# THE ASSERTION THIS SUITE EXISTS FOR. LMS reassigns albums.id on a full wipe,
+# and on a retitle that re-creates the album. Nothing refreshes
+# discogs_match.lms_album_id for an album the importer skips, so after such a
+# move the column points at whatever album now holds that id - which is how a
+# record you do not own gets shown as owned, silently.
+#
+# So: move an owned album's id WITHOUT touching discogs_match, and give the old
+# id to a different album.
+{
+	# Album 1 is the owned exact match. Move it to 101 and put an unowned album
+	# in its place at 1, tracks and all - exactly what a wipe-and-rescan does.
+	$dbh->do('UPDATE tracks SET album = 101 WHERE album = 1');
+	$dbh->do('UPDATE albums SET id = 101 WHERE id = 1');
+
+	my $usurper = album( 1, 'Someone Else\'s Record' );
+
+	isnt( $usurper, $K{exact}, 'the album now holding id 1 is a different record' );
+
+	# The stale column is still there, still pointing at 1. Nothing in this step
+	# reads it, and this is the fixture that proves so.
+	$dbh->do( 'UPDATE squeezewax.discogs_match SET lms_album_id = 1 WHERE album_key = ?',
+		undef, $K{exact} );
+
+	my $moved = albumMenu(101);
+
+	is( scalar @$moved, 2, 'the owned album is still found after its id changed' );
+	is( link_($moved), 'https://www.discogs.com/release/1001',
+		'  ...with its own release, not another album\'s' );
+
+	my $wrong = albumMenu(1);
+
+	is( scalar @$wrong, 0,
+		'the album that inherited the old id is NOT shown as owned - D1' );
+}
+
+# ===========================================================================
+# 4. The view is exactly the owned set
+# ===========================================================================
+
+# VirtualLibraries is not loaded here: it reaches the Prefs/Unicode chain this
+# suite cuts, and what has to be right is WHAT THE CALLBACK INSERTS. So the
+# callback is called the way rebuild() calls it - with the library id, after the
+# library's rows have been deleted - and the insert is read back.
+sub buildView {
+	my $id = 'swowned';
+
+	$dbh->do( 'DELETE FROM library_track WHERE library = ?', undef, $id );
+
+	Plugins::SqueezeWax::View::_build($id);
+
+	return $dbh->selectcol_arrayref(q{
+		SELECT DISTINCT t.album
+		  FROM library_track lt
+		  JOIN tracks t ON t.id = lt.track
+		 WHERE lt.library = ?
+		 ORDER BY t.album
+	}, undef, $id );
+}
+
+{
+	my $albums = buildView();
+
+	# Owned: the exact match (now at 101), the contested exact (2), the exact
+	# with no release (3), the four version rows (4-7), the version with no
+	# master (8) and the owned stream (11). Not: the absent album (9), the one
+	# with no row (10), or the usurper that inherited id 1.
+	is_deeply( $albums, [ 2, 3, 4, 5, 6, 7, 8, 11, 101 ],
+		'the view holds exactly the albums the ownership column names' );
+
+	# A contested album is in the view although the menu gives it no link. The
+	# two are different questions: which record this is, and whether the album
+	# is owned at all.
+	ok( ( grep { $_ == 2 || $_ == 7 } @$albums ),
+		'  ...including the conflict rows, which are owned but unlinkable' );
+
+	ok( !grep( { $_ == 9 || $_ == 10 || $_ == 1 } @$albums ),
+		'  ...and neither the absent album, the unknown one, nor the id-1 usurper' );
+
+	# §13.10.3: a rip and a stream of one record are two owned albums. Album 11
+	# is entirely remote, and every one of its tracks is in the view.
+	my ($streamTracks) = $dbh->selectrow_array(q{
+		SELECT COUNT(*) FROM library_track lt JOIN tracks t ON t.id = lt.track
+		 WHERE lt.library = 'swowned' AND t.album = 11
+	});
+
+	is( $streamTracks, 2, 'every track of an owned all-remote album is in the view' );
+}
+
+# A rebuild follows the data: a record that leaves the collection leaves the
+# view, and one that arrives joins it - with no rescan in between. This is the
+# "press Sync collection now" path (plan §7.5).
+{
+	$dbh->do( "UPDATE squeezewax.discogs_match SET ownership = 'absent' WHERE album_key = ?",
+		undef, $K{master} );
+
+	my $albums = buildView();
+
+	ok( !grep( { $_ == 4 } @$albums ), 'a version album that became absent drops out of the view' );
+
+	$dbh->do( "UPDATE squeezewax.discogs_match SET ownership = 'version' WHERE album_key = ?",
+		undef, $K{master} );
+
+	$albums = buildView();
+
+	ok( ( grep { $_ == 4 } @$albums ), '  ...and comes back when it is owned again' );
+}
+
+# The empty case is a library with nothing in it, not an error: a user who has
+# never synced owns nothing as far as we know.
+{
+	$dbh->do("UPDATE squeezewax.discogs_match SET ownership = 'absent'");
+
+	my $albums = buildView();
+
+	is_deeply( $albums, [], 'an unsynced library builds an empty view rather than failing' );
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+
+	$albums = buildView();
+
+	is_deeply( $albums, [], '  ...and so does one with no rows at all' );
 }
 
 # ===========================================================================

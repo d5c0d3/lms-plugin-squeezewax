@@ -144,6 +144,12 @@ sub initPlugin {
 	require Plugins::SqueezeWax::Menu;
 	Plugins::SqueezeWax::Menu->init();
 
+	# The "Records I own" view, likewise server-only and for a reason of its
+	# own: a scan-time rebuild runs at importer weight 100, before our pass at
+	# 130, so it would always be one pass behind (build-order step 9 plan §3).
+	require Plugins::SqueezeWax::View;
+	Plugins::SqueezeWax::View->init();
+
 	# Only the server has a web UI; the scanner never loads this file anyway
 	# (Slim/Utils/PluginManager.pm:204). Guarded and required lazily as
 	# refs/lms-plugin-tidal/Plugin.pm:60-66 does.
@@ -309,7 +315,27 @@ sub _rescanDone {
 	main::INFOLOG && $log->is_info
 		&& $log->info('library scan finished; scheduling a fallback collection sync');
 
+	# The owned view, rebuilt now rather than in the debounce: the scan has just
+	# written the albums, and after a full wipe every album id in the view is
+	# stale. This covers the pass that ran INSIDE the scan (§15.18) and a wipe
+	# with no sync behind it at all. The sync paths rebuild again when they
+	# finish; a rebuild is local SQL over the owned set and is idempotent.
+	_rebuildView();
+
 	_scheduleSync(DEBOUNCE_AFTER_RESCAN);
+
+	return;
+}
+
+# Required lazily, like the rest of the step 9 modules, and never fatal: a view
+# that failed to rebuild is a stale grid, not a broken server, and the pass it
+# describes has already committed.
+sub _rebuildView {
+	eval {
+		require Plugins::SqueezeWax::View;
+		Plugins::SqueezeWax::View->rebuild;
+		1;
+	} or $log->error( 'could not rebuild the owned view: ' . ( $@ || 'unknown error' ) );
 
 	return;
 }
@@ -400,6 +426,14 @@ sub _syncTick {
 		# a difference the job can see, and the collection it needs is not the
 		# collection - it is the library's own release ids.
 		_deriveMasters();
+
+		# And the view, for the same reason the derive job is armed from here
+		# (§15.18 part 8): on a server whose scan-time sync works, this is the
+		# only place that learns the pass finished. _rescanDone rebuilt already,
+		# but it ran while the scan may still have been settling, and this tick
+		# is a minute past that. A second rebuild costs one pass over the owned
+		# set and cannot be wrong.
+		_rebuildView();
 
 		return;
 	}

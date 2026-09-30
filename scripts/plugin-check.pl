@@ -295,6 +295,19 @@ BEGIN {
 	*{'Plugins::SqueezeWax::Menu::init'} = sub { push @MENU_INIT, 1; return };
 }
 
+# View.pm, stubbed for the same reason: it loads Slim::Music::VirtualLibraries
+# and Slim::Menu::BrowseLibrary. What is under test here is WHERE a rebuild is
+# triggered from - registration and the build itself are menu-check.pl's.
+our @VIEW_INIT;
+our @REBUILDS;
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/View.pm'} = 1;
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::View::init'}    = sub { push @VIEW_INIT, 1; return };
+	*{'Plugins::SqueezeWax::View::rebuild'} = sub { push @REBUILDS, 1; return 1 };
+}
+
 my $incdir;
 
 BEGIN {
@@ -328,6 +341,9 @@ sub reset_state {
 	$MARKER   = undef;
 	$NOW      = undef;
 	@ARMED    = ();
+	@REBUILDS = ();
+	@VIEW_INIT = ();
+	@MENU_INIT = ();
 	@LOG      = ();
 	@INVALIDATIONS = ();
 	@METAWRITES    = ();
@@ -441,6 +457,8 @@ diag('the one remaining automatic trigger');
 	Plugins::SqueezeWax::Plugin::_rescanDone();
 
 	is( scalar @TIMERS, 1, 'rescan-done arms exactly one timer' );
+	is( scalar @REBUILDS, 1,
+		'  ...and rebuilds the owned view at once: after a wipe every album id in it is stale' );
 	is( scalar @KILLS,  1, '  ...having killed any already armed first' );
 	is( $KILLS[0]{cb}, $TIMERS[0]{cb},
 		'  ...killing the same coderef it then arms' );
@@ -696,6 +714,13 @@ sub open_window {
 	# the master arm it exists to wake up.
 	is( scalar @ARMED, 1,
 		'  ...and still arms the master derive job: a sync DID complete, in the scanner' );
+
+	# And the owned view, for the same reason and on the same path: the pass
+	# that changed ownership ran in the scanner, so the server's view is the one
+	# that is stale. Two rebuilds here - one from the rescan-done that opened
+	# the window, one from this tick - which is idempotent local SQL.
+	is( scalar @REBUILDS, 2,
+		'  ...and rebuilds the owned view, from rescan-done and from the tick' );
 }
 
 {
@@ -1047,6 +1072,7 @@ cmp_ok( $LOGIC, '>=', 2,
 	# nowhere else (build-order step 9). Not under main::WEBUI: the album and
 	# track menus are served to players and the CLI as well as to the skins.
 	is( scalar @MENU_INIT, 1, '  ...and it registers the ownership menu' );
+	is( scalar @VIEW_INIT, 1, '  ...and the "Records I own" view' );
 }
 
 done_testing();

@@ -596,6 +596,22 @@ sub _finish {
 		if ( $applied ne 'ok' ) {
 			$result = { ok => 0, error => $applied };
 		}
+		else {
+			# The pass has committed, so the "Records I own" view is now one
+			# pass behind. Rebuilt here rather than left to the next scan: this
+			# is the path a user takes when they press "Sync collection now"
+			# after buying a record, and the view has to follow without a
+			# rescan (build-order step 9 plan §3).
+			#
+			# Local SQL, no request. Never fatal: ownership is written either
+			# way, and a stale grid is not a reason to report the sync failed.
+			eval {
+				require Plugins::SqueezeWax::View;
+				Plugins::SqueezeWax::View->rebuild;
+				1;
+			} or $log->error( 'ownership was derived but the owned view was not '
+				. 'rebuilt: ' . ( $@ || 'unknown error' ) );
+		}
 	}
 
 	# The rejection flag is set and cleared here, at the single exit, for the

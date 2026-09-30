@@ -335,6 +335,51 @@ sub albumKey {
 	return _keyDigest($urlmd5);
 }
 
+=head2 trackIdsForAlbums( \@albumIds )
+
+The C<tracks.id>s of every qualifying track of the given albums, as an
+arrayref. Remote tracks included: a rip and a stream of one record are two
+albums and the user owns both (decisions §13.10.3).
+
+For the owned library view, which has to put tracks - not albums - into
+C<library_track>. Qualifying means the same thing here as everywhere else in
+this file, through the same interpolated predicate: the view must hold exactly
+the tracks the key was computed over, or an album could be owned and yet appear
+with some of its tracks missing.
+
+Chunked, because SQLite's variable limit is 999 by default and an owned library
+can be larger than that.
+
+=cut
+
+use constant ID_CHUNK => 500;
+
+sub trackIdsForAlbums {
+	my ( $class, $albumIds ) = @_;
+
+	return [] unless $albumIds && @$albumIds;
+
+	my $dbh = Slim::Schema->dbh;
+	my @ids;
+
+	my @pending = @$albumIds;
+
+	while ( my @chunk = splice( @pending, 0, ID_CHUNK ) ) {
+		my $marks = join ',', ('?') x @chunk;
+
+		my $rows = $dbh->selectcol_arrayref( qq{
+			SELECT t.id
+			  FROM tracks t
+			 WHERE t.album IN ($marks)
+			   AND $QUALIFYING_TRACKS
+		}, undef, @chunk );
+
+		push @ids, @{ $rows || [] };
+	}
+
+	return \@ids;
+}
+
 =head2 sample_albums( $perFormat )
 
 Up to C<$perFormat> albums for B<each> distinct local content type, as a plain
