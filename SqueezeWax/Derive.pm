@@ -240,18 +240,66 @@ sub abort {
 # in 506 on the reference library, so the saving is nothing and the query is
 # simpler for it. A row whose tags name a master AND whose release id changes
 # would otherwise also have to be reasoned about twice.
+# The predicate above, named once. _pending selects with it and the settings
+# page counts with it (build-order step 9 §4.2); a second copy of it on the page
+# would be a status line that could disagree with the job it describes - saying
+# nothing is left while the job goes on fetching, or the reverse.
+my $IDENTIFIED = q{discogs_release_id IS NOT NULL};
+
+my $UNSETTLED = q{( derived_from_release_id IS NULL
+		      OR derived_from_release_id <> discogs_release_id )};
+
 sub _pending {
-	my ($release) = Slim::Schema->dbh->selectrow_array(q{
+	my ($release) = Slim::Schema->dbh->selectrow_array(qq{
 		SELECT DISTINCT discogs_release_id
 		  FROM squeezewax.discogs_match
-		 WHERE discogs_release_id IS NOT NULL
-		   AND ( derived_from_release_id IS NULL
-		      OR derived_from_release_id <> discogs_release_id )
+		 WHERE $IDENTIFIED
+		   AND $UNSETTLED
 		 ORDER BY discogs_release_id
 		 LIMIT 1
 	});
 
 	return $release;
+}
+
+=head2 progress( )
+
+What the settings page says about this job: C<< { done, total, pending } >> in
+releases, or nothing when there is nothing to do.
+
+Distinct releases, not rows, because that is the unit the job works in - several
+albums can name one release, and one fetch settles all of them.
+
+One query, and no state of its own: the numbers are read from the same rows
+C<_pending> selects from, so a run that died still counts as unfinished work
+rather than as progress that stopped being reported. Nothing here issues a
+request.
+
+Without this, ownership changes for up to 25 minutes after a scan with nothing
+on screen to say why (decisions §15.23, §15.25 ruling 7).
+
+=cut
+
+sub progress {
+	my ($class) = @_;
+
+	my ( $total, $pending ) = Slim::Schema->dbh->selectrow_array(qq{
+		SELECT COUNT(DISTINCT discogs_release_id),
+		       COUNT(DISTINCT CASE WHEN $UNSETTLED THEN discogs_release_id END)
+		  FROM squeezewax.discogs_match
+		 WHERE $IDENTIFIED
+	});
+
+	$total   ||= 0;
+	$pending ||= 0;
+
+	return undef unless $pending;
+
+	return {
+		total   => $total,
+		pending => $pending,
+		done    => $total - $pending,
+	};
 }
 
 # ---------------------------------------------------------------------------

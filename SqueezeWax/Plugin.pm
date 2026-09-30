@@ -67,6 +67,13 @@ $prefs->migrate(3, sub {
 $prefs->setChange( sub {
 	$prefs->set( 'discogsLastSyncError', '' );
 
+	# And the username, which belongs to the OLD token (build-order step 9 §4).
+	# A token is a different account's as often as it is a new one for the same
+	# account, and a settings page linking to a stranger's collection is worse
+	# than one linking to discogs.com. The next identity call writes the new
+	# name; until then the link falls back.
+	$prefs->set( 'discogsUsername', '' );
+
 	require Plugins::SqueezeWax::API::Async;
 	Plugins::SqueezeWax::API::Async->clearTokenRejected;
 }, 'discogsToken' );
@@ -87,6 +94,24 @@ $prefs->setChange( sub {
 # value the template can test rather than a missing key.
 $prefs->init({
 	discogsLastSyncError => '',
+
+	# The Discogs username, for the "Data provided by Discogs" link on the
+	# settings page (decisions §9.6, §15.25 ruling 9). Written only from the
+	# identity calls the server ALREADY makes - the token test and the async
+	# sync - so it costs no request of its own, and cleared when the token
+	# changes.
+	#
+	# It is Restricted "Discogs User Data", and keeping it was weighed against
+	# §9.5's necessity test rather than assumed: it is the user's own name, on
+	# their own server, beside the token that is already stored, and the terms
+	# want the link to point at the discogs.com page the data came from. It is
+	# never written to the database - §9.5 stores conclusions, not Content.
+	#
+	# A pref and not a scanner-written value: the scanner cannot persist a pref
+	# (Slim/Utils/Prefs/Namespace.pm), so on a server whose syncs all happen in
+	# the scan the name arrives at the next token test and the fallback covers
+	# the gap.
+	discogsUsername => '',
 
 	# A development aid, not a feature: a comma-separated list of Discogs
 	# release ids that API.pm's _testFilter hides from the ownership

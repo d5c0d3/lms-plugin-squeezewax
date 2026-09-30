@@ -657,8 +657,16 @@ sub run_sync {
 	# nothing a page carried is reachable afterwards. §13.2 - ownership is a
 	# column on discogs_match computed at step 7, not a mirrored collection,
 	# and discogs_collection is not a v1 table.
-	is_deeply( [ sort keys %PREFS ], [ qw(discogsLastSyncError) ],
-		'a completed sync writes exactly one pref and nothing else - no release survives it' );
+	# discogsUsername is the ONE addition to this list, and it is not a release:
+	# it is the account name the identity call returned, kept for the settings
+	# page's attribution link (decisions §15.25 ruling 9). The rule this
+	# assertion guards is unchanged - nothing a collection PAGE carried is
+	# reachable afterwards - so the list is pinned rather than relaxed.
+	is_deeply( [ sort keys %PREFS ], [ qw(discogsLastSyncError discogsUsername) ],
+		'a completed sync writes two prefs and nothing else - no release survives it' );
+
+	is( $PREFS{discogsUsername}, 'deschman',
+		'  ...and the one that is new is the account name, not anything from a page' );
 
 	my ($rows) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
 	is( $rows, 1, '  ...and exactly one marker row' );
@@ -1499,10 +1507,13 @@ diag('the single exit: which prefs are written, and when');
 	ok( defined $passAt && defined $syncAt && $passAt < $syncAt,
 		'  ...the pass FIRST, then the marker (§15.13 part 1, §15.18 part 7)' );
 
+	# The username is written at the identity step, which is the FIRST request
+	# of the sync - long before the pass and the marker. Its position in this
+	# list is the evidence that it costs no request of its own.
 	is_deeply(
 		[ grep { $_ ne '<pass>' } @WRITES ],
-		[qw(<marker> discogsLastSyncError)],
-		'  ...and writes exactly the marker and the error pref, in that order'
+		[qw(discogsUsername <marker> discogsLastSyncError)],
+		'  ...and writes exactly the username, the marker and the error pref, in that order'
 	);
 }
 

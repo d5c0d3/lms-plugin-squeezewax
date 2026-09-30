@@ -62,6 +62,32 @@
 	[% END %]
 [% END %]
 
+[%# The master-derive job (build-order step 9). Nothing is rendered when
+    nothing is pending: `derive` is set only then, so a settled library shows no
+    block at all rather than a permanent "0 of 0". No request is made to build
+    it - it is one count over rows we already hold. %]
+[% IF derive %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DERIVE" desc="PLUGIN_SQUEEZEWAX_DERIVE_DESC" %]
+		<div>[% derive.label | html %] &mdash; [% derive.state | html %]</div>
+	[% END %]
+[% END %]
+
+[%# The two mandatory Discogs notices (decisions §9.6, §15.25 ruling 4). They
+    are on THIS page and not in the album menu because the menu carries no
+    Discogs data at all - the moment it does, the "Data provided by Discogs"
+    notice has to move next to it.
+
+    NO rel ON THE LINK. The other links on this page carry rel="noopener",
+    which is allowed, but an attribution link must not carry nofollow and the
+    simplest way to be sure of that is to add no rel at all. The href is built
+    in beforeRender: the user's own collection page when we know their Discogs
+    username, discogs.com when we do not. %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_ATTRIBUTION" desc="" %]
+	<div><a href="[% discogsCollectionUrl | html %]" target="_blank">[%
+		"PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA" | string %]</a></div>
+	<div>[% "PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED" | string %]</div>
+[% END %]
+
 [%# The queue is its own page and is reached only from here: its class
     registers a page function but no `name`, so it has no settings-menu entry
     (decisions §15.16 part 1). A plain link rather than a button, because it

@@ -405,6 +405,13 @@ sub _tokenTested {
 	if ( $result->{ok} ) {
 		my $username = $result->{data} && $result->{data}->{username};
 
+		# One of the two places the username is learned (the other is the async
+		# sync's identity step). Kept for the "Data provided by Discogs" link,
+		# and for nothing else - see Plugin.pm's pref block. On a server whose
+		# syncs all happen inside the scan this is the ONLY place it is ever
+		# written, which is why it is written here rather than only there.
+		$prefs->set( 'discogsUsername', $username ) if $username;
+
 		$params->{tokenTestResult} = $username
 			? sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK'), $username )
 			: string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER');
@@ -562,6 +569,18 @@ sub _detectionTick {
 	return 1;
 }
 
+# A Discogs username is [A-Za-z0-9_-] in practice, but the pref is a string the
+# user's Discogs account decides and this one is interpolated into a URL. Escape
+# rather than assume: an unescaped name would at worst build a link pointing
+# somewhere else on discogs.com.
+sub _urlEscape {
+	my ($text) = @_;
+
+	$text =~ s/([^A-Za-z0-9._~-])/sprintf '%%%02X', ord $1/ge;
+
+	return $text;
+}
+
 sub beforeRender {
 	my ( $class, $params ) = @_;
 
@@ -600,6 +619,47 @@ sub beforeRender {
 			Slim::Utils::DateTime::shortDateF( $params->{sync}->{lastSynced} ) . ' '
 			. Slim::Utils::DateTime::timeF( $params->{sync}->{lastSynced} );
 	}
+
+	# The master-derive job, and why the page says anything about it at all:
+	# ownership can go on changing for up to 25 minutes after a scan finishes,
+	# because the job is rate-limited to one release a second and runs in the
+	# background (decisions §15.23). Without a line here that is a badge moving
+	# on its own with nothing on screen to explain it.
+	#
+	# Nothing when nothing is pending - progress() returns undef - so a settled
+	# library shows no line rather than "0 of 500". And no request: it is one
+	# count over rows we already have.
+	if ( $params->{dbReady} ) {
+		require Plugins::SqueezeWax::Derive;
+
+		if ( my $derive = Plugins::SqueezeWax::Derive->progress ) {
+			$params->{derive} = {
+				# Built here rather than in the template: two numbers in one
+				# sentence cannot go through the template's replace('%s'),
+				# which is global and would put the same number in both.
+				label => sprintf( string('PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS'),
+					$derive->{done}, $derive->{total} ),
+
+				state => string( Plugins::SqueezeWax::Derive->isRunning
+					? 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING'
+					: 'PLUGIN_SQUEEZEWAX_DERIVE_WAITING' ),
+			};
+		}
+	}
+
+	# The attribution link (decisions §9.6, §15.25 ruling 9). The terms want it
+	# to point at the discogs.com page the data came from, and for ownership
+	# that is the user's own collection page. An empty username - never synced,
+	# never tested, or a token just changed - falls back to discogs.com rather
+	# than building a URL with a hole in it.
+	#
+	# No request at render. No rel on the link either, here or in the template:
+	# nofollow on an attribution link is exactly what §9.6 forbids.
+	my $username = $prefs->get('discogsUsername');
+
+	$params->{discogsCollectionUrl} = ( defined $username && $username ne '' )
+		? 'https://www.discogs.com/user/' . _urlEscape($username) . '/collection'
+		: 'https://www.discogs.com/';
 
 	return unless %detection;
 

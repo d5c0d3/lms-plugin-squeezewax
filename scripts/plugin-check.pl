@@ -628,6 +628,19 @@ diag('changing the token clears what described the old one');
 	ok( !$REJECTED, '  ...so the next finished scan syncs again' );
 }
 
+# The username describes the OLD token (build-order step 9 §4). A new token is
+# as often a different account as the same one, and a settings page linking to a
+# stranger's collection is worse than one linking to discogs.com.
+{
+	reset_state();
+	$PREFS{discogsUsername} = 'deschman';
+
+	$prefs_under_test->set( 'discogsToken', 'a-different-token' );
+
+	is( $PREFS{discogsUsername}, '',
+		'changing the token clears the stored Discogs username' );
+}
+
 {
 	reset_state();
 	$PREFS{discogsLastSyncError} = 'unauthorized';

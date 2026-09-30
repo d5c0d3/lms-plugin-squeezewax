@@ -1320,12 +1320,15 @@ Each names its sites so the work is mechanical rather than a search.
       next start rather than becoming permanent. It does not start a scan.
       Packaged as 0.0.0.13; hardware checks below.
 
-- [ ] **2026-09-29: a derive session is invisible.** Badges change for up to 25
+- [x] **2026-09-29: a derive session is invisible.** Badges change for up to 25
       minutes after a scan and nothing on any page says why. An informational
       line on the settings page — "deriving masters: 226 of 475 releases" — would
       answer it without making the sync button wait on the job (decisions §15.23
       rules against that). Observation from the hardware round, not a proposal
       this step carries.
+      → built at step 9, decisions §15.25 ruling 7. `Derive->progress` counts
+      distinct releases against `_pending`'s own predicate, and the line renders
+      only while something is pending.
 
 - [ ] **2026-09-29: could not provoke a wipe-and-rescan.** Skipped deliberately
       once `_canSkip` showed it would re-examine nothing. **Inferred from
@@ -2055,6 +2058,16 @@ Each names its sites so the work is mechanical rather than a search.
       request with no `API->rateWait` check and no `noteResponse`, against
       `CLAUDE.md`'s "every server-side consumer shares it". One user-pressed
       request; small risk.
+
+- [ ] **2026-09-29: the two Discogs notices have no README to go into.** Step 9
+      put both on the settings page (decisions §15.25 ruling 4), and the plan
+      also asked for them "in the repository README / usage documentation".
+      There is no README and no user-facing usage doc in this repo — the only
+      other user-visible description is `install.xml`'s
+      `PLUGIN_SQUEEZEWAX_DESC`, and putting the trademark sentence there
+      changes the plugin's Manage Plugins description, which is
+      naming-sensitive (design §1). Not decided. The text is verbatim in
+      `strings.txt` under `PLUGIN_SQUEEZEWAX_ATTRIBUTION_*`.
 
 ## Waiting — needs a real server
 

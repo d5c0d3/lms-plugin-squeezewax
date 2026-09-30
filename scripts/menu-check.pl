@@ -714,6 +714,83 @@ sub buildView {
 		'  ...and none was attempted and swallowed' );
 }
 
+# ===========================================================================
+# 6. The derive line: counts against pending, settled and stale rows
+# ===========================================================================
+#
+# What the settings page says about the master-derive job. It exists because
+# ownership goes on changing for up to 25 minutes after a scan, and a badge that
+# moves on its own with nothing on screen to explain it is what §15.23 ran into.
+#
+# The rows are the four states §15.22 describes, and the count must read them
+# the same way _pending does - which is why the predicate is interpolated from
+# one definition rather than written twice.
+{
+	require Plugins::SqueezeWax::Derive;
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+
+	my $D = 'Plugins::SqueezeWax::Derive';
+
+	is( $D->progress, undef,
+		'an empty table has nothing pending, so the page shows no line' );
+
+	# Identified, never looked at: pending.
+	match( 'a' x 32, ownership => 'exact', discogs_release_id => 2001 );
+
+	# Looked at, and the answer still describes this release: settled.
+	match( 'b' x 32, ownership => 'exact', discogs_release_id => 2002,
+	       derived_master_id => 9002, derived_from_release_id => 2002 );
+
+	# Looked at, and Discogs said there is no master: ALSO settled. This is the
+	# state that keeps the masterless releases from being re-fetched forever.
+	match( 'c' x 32, ownership => 'exact', discogs_release_id => 2003,
+	       derived_from_release_id => 2003 );
+
+	# Looked at, but the tags have named a different release since: stale, and
+	# therefore pending again.
+	match( 'd' x 32, ownership => 'exact', discogs_release_id => 2004,
+	       derived_master_id => 9004, derived_from_release_id => 1 );
+
+	# No release id at all: not identified, so not the job's business.
+	match( 'e' x 32, ownership => 'absent' );
+
+	my $p = $D->progress;
+
+	is( $p->{total},   4, 'the total counts identified releases, not rows or albums' );
+	is( $p->{pending}, 2, '  ...and the pending count is the unsettled ones' );
+	is( $p->{done},    2, '  ...with "no master" counted as settled, not as work left' );
+
+	# Several albums can name one release, and one fetch settles all of them:
+	# the job works in releases, so the line has to as well.
+	match( 'f' x 32, ownership => 'exact', discogs_release_id => 2001 );
+
+	$p = $D->progress;
+
+	is( $p->{total},   4, 'a second album naming a release already counted does not inflate the total' );
+	is( $p->{pending}, 2, '  ...nor the pending count' );
+
+	# Nothing left to do: no line at all, rather than "4 of 4".
+	$dbh->do('UPDATE squeezewax.discogs_match SET derived_from_release_id = discogs_release_id');
+
+	is( $D->progress, undef,
+		'a settled library shows no derive line rather than a complete one' );
+}
+
+# The username is a pref, never a row: §9.5 stores conclusions, not Content, and
+# a Discogs account name is neither.
+{
+	my $found = 0;
+
+	for my $table (qw(discogs_match discogs_no_match discogs_sync_state discogs_meta)) {
+		my $cols = $dbh->selectall_arrayref("PRAGMA squeezewax.table_info($table)");
+
+		$found++ if grep { $_->[1] =~ /user/i } @$cols;
+	}
+
+	is( $found, 0, 'no table of ours has anywhere to put a Discogs username' );
+}
+
 is_deeply( \@MISSING_STRINGS, [],
 	'every string the menu asks for is defined in strings.txt' );
 

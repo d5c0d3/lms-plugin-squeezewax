@@ -346,3 +346,27 @@ PLUGIN_SQUEEZEWAX_MENU_LINK
 
 PLUGIN_SQUEEZEWAX_LIBRARY_OWNED
 	EN	Records I own
+
+PLUGIN_SQUEEZEWAX_DERIVE
+	EN	Master releases
+
+PLUGIN_SQUEEZEWAX_DERIVE_DESC
+	EN	Some albums are identified by a pressing that SqueezeWax has not yet linked to the record it is a pressing of. It asks Discogs about them a few at a time, in the background, so ownership can keep changing for a while after a scan.
+
+PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS
+	EN	Deriving masters: %s of %s releases
+
+PLUGIN_SQUEEZEWAX_DERIVE_RUNNING
+	EN	running
+
+PLUGIN_SQUEEZEWAX_DERIVE_WAITING
+	EN	waiting
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION
+	EN	Discogs
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA
+	EN	Data provided by Discogs.
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
+	EN	This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC.

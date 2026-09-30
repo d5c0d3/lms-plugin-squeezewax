@@ -433,6 +433,11 @@ sub _gotIdentity {
 	$run->{username} = $username;
 	$run->{path}     = Plugins::SqueezeWax::API::_collectionPath($username);
 
+	# Kept for the settings page's attribution link (build-order step 9 §4).
+	# This sync asked Discogs who the token belongs to because it needs the
+	# collection path; storing the answer costs no extra request.
+	$prefs->set( 'discogsUsername', $username );
+
 	main::INFOLOG && $log->is_info
 		&& $log->info("collection sync starting for Discogs user $username");
 

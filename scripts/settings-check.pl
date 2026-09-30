@@ -1098,4 +1098,105 @@ diag('§15.18 part 7: the page shows the marker, whichever path wrote it');
 	is( $params->{sync}{lastItems}, 203, '  ...with its item count' );
 }
 
+# ---------------------------------------------------------------------------
+# Build-order step 9: the two Discogs notices, and the attribution link
+# ---------------------------------------------------------------------------
+
+diag('§9.6: both notices on the page, and no nofollow on the link');
+
+{
+	# Verbatim, from decisions §9.6. These are contractual text, so they are
+	# asserted as strings rather than as "a notice is present somewhere".
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
+	EN	This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs\. 'Discogs' is a trademark of Zink Media, LLC\.$/m,
+		'the not-affiliated notice is present, word for word' );
+
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA
+	EN	Data provided by Discogs\.$/m,
+		'the data-provided notice is present, word for word' );
+
+	like( $tpl, qr/PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED/,
+		'  ...and the page renders the first' );
+
+	# The link, and what it must not carry. nofollow on an attribution link is
+	# what §9.6 forbids; this page's other links carry rel="noopener", so
+	# "no rel at all" is asserted for this one specifically rather than for the
+	# file.
+	my ($anchor) = $tpl =~ /(<a[^>]*discogsCollectionUrl[^>]*>)/;
+
+	ok( $anchor, 'the data-provided notice is a link' );
+	unlike( $anchor || '', qr/\brel=/,
+		'  ...carrying no rel at all, so no nofollow' );
+	like( $anchor || '', qr/target="_blank"/,
+		'  ...opening in a new tab like the page\'s other outward links' );
+}
+
+diag('the attribution link points at the user\'s own collection page');
+
+{
+	local $main::DB_READY = 0;
+
+	local $PREFS{discogsUsername} = 'deschman';
+
+	my $params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	is( $params->{discogsCollectionUrl},
+		'https://www.discogs.com/user/deschman/collection',
+		'a known username links to that user\'s collection page' );
+
+	# Never synced, never tested, or a token just changed. A link with a hole
+	# in it would be worse than the site's front page.
+	$PREFS{discogsUsername} = '';
+
+	$params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	is( $params->{discogsCollectionUrl}, 'https://www.discogs.com/',
+		'an empty username falls back to discogs.com' );
+
+	delete $PREFS{discogsUsername};
+
+	$params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	is( $params->{discogsCollectionUrl}, 'https://www.discogs.com/',
+		'  ...and so does an unset one' );
+
+	# The name comes from Discogs, not from us, and it is interpolated into a
+	# URL path.
+	$PREFS{discogsUsername} = 'a name/with?bits';
+
+	$params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	is( $params->{discogsCollectionUrl},
+		'https://www.discogs.com/user/a%20name%2Fwith%3Fbits/collection',
+		'a username is escaped into the path rather than trusted' );
+}
+
+# The token test is one of the two places the username is learned, and on a
+# server whose syncs all happen inside the scan it is the only one.
+diag('the token test keeps the username it was told');
+
+{
+	local $PREFS{discogsUsername} = '';
+
+	Plugins::SqueezeWax::Settings::_tokenTested(
+		'Plugins::SqueezeWax::Settings', undef, {}, sub { }, [], 0,
+		{ ok => 1, data => { username => 'deschman' } } );
+
+	is( $PREFS{discogsUsername}, 'deschman',
+		'a successful token test records the username for the attribution link' );
+
+	# A failure says nothing about who the token belongs to, so it must not
+	# overwrite a name that is still good.
+	Plugins::SqueezeWax::Settings::_tokenTested(
+		'Plugins::SqueezeWax::Settings', undef, {}, sub { }, [], 0,
+		{ ok => 0, error => 'unauthorized' } );
+
+	is( $PREFS{discogsUsername}, 'deschman',
+		'  ...and a failed one leaves the stored name alone' );
+}
+
 done_testing();
