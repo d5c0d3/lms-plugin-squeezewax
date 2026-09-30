@@ -135,6 +135,15 @@ sub initPlugin {
 
 	_initSync();
 
+	# The ownership menu (build-order step 9). Not under main::WEBUI: the album
+	# and track menus are served to players and to the CLI as well as to the web
+	# skins, and this file is server-only regardless
+	# (Slim/Utils/PluginManager.pm, load_plugin). Required lazily, as Settings.pm
+	# is below - it pulls in Slim::Menu::AlbumInfo and TrackInfo, which nothing
+	# else here needs.
+	require Plugins::SqueezeWax::Menu;
+	Plugins::SqueezeWax::Menu->init();
+
 	# Only the server has a web UI; the scanner never loads this file anyway
 	# (Slim/Utils/PluginManager.pm:204). Guarded and required lazily as
 	# refs/lms-plugin-tidal/Plugin.pm:60-66 does.

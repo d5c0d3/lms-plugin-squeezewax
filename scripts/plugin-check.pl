@@ -282,6 +282,19 @@ BEGIN {
 	*{'Plugins::SqueezeWax::Match::hasAnyRow'} = sub { $main::HAS_ROWS };
 }
 
+# Menu.pm is stubbed for the reason Derive.pm and Match.pm are: the real module
+# pulls in Slim::Menu::AlbumInfo, which reaches the Strings/Prefs/Unicode chain
+# every stub in this file exists to cut. What is under test HERE is that
+# initPlugin registers the menu at all - what the providers return is
+# scripts/menu-check.pl's, which drives the real Slim::Menu classes.
+our @MENU_INIT;
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Menu.pm'} = 1;
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Menu::init'} = sub { push @MENU_INIT, 1; return };
+}
+
 my $incdir;
 
 BEGIN {
@@ -1029,6 +1042,11 @@ cmp_ok( $LOGIC, '>=', 2,
 	is( scalar @INVALIDATIONS, 1, 'initPlugin runs the logic-version check' );
 	is( $META{logic_version}, $LOGIC, '  ...and the new version is recorded' );
 	is( scalar @TIMERS, 0, '  ...and it still arms no timer (§15.15 part 1)' );
+
+	# The ownership menu is registered from the same entry point, and from
+	# nowhere else (build-order step 9). Not under main::WEBUI: the album and
+	# track menus are served to players and the CLI as well as to the skins.
+	is( scalar @MENU_INIT, 1, '  ...and it registers the ownership menu' );
 }
 
 done_testing();

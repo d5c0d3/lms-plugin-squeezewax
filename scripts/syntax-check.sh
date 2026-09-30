@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Menu Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -190,7 +190,7 @@ for scanner in 0 1; do
 		# skipped here on the grounds that the pass ran only in the server; it
 		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
 		# scanner loads it and its scanner-mode compile is the point.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
 			continue
 		fi
 
@@ -348,6 +348,32 @@ BEGIN {
 	$INC{q(Slim/Music/Info.pm)} = 1;
 }'
 				note=" (Slim::Schema, Import, Info, Progress, Prefs, PluginManager stubbed)"
+				;;
+			Menu)
+				# Server only: the menus are a web/player-UI concern and the
+				# scanner never loads Plugin.pm, which is what registers them.
+				#
+				# Slim::Menu::AlbumInfo and Slim::Menu::TrackInfo are loaded FOR
+				# REAL, which is the point of checking this file at all: it is
+				# where registerInfoProvider and the callback signatures have to
+				# be right, and a stub would prove only that we can spell our own
+				# stub. It pulls in Library.pm's and Ownership.pm's chains, hence
+				# their stubs.
+				# Slim::Utils::Misc is cut for the reason the API::Async case
+				# gives: its chain reaches Slim::Utils::Unicode, which does not
+				# load offline. Strings.pm and Menu/Base.pm both `use` it and
+				# neither calls it at compile time.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)} = 1;
+
+	# AlbumInfo.pm ties a package variable to Tie::Cache::LRU at file scope
+	# without using it, relying on Slim::Schema to have loaded the class.
+	# Slim::Schema is stubbed here, so the load has to be made good.
+	require Tie::Cache::LRU;
+}'
+				note=" (Slim::Schema, Misc stubbed; Slim::Menu::AlbumInfo and TrackInfo real)"
 				;;
 			Settings|Queue)
 				# Slim::Web::Settings is a web-UI class; stub the base the same
