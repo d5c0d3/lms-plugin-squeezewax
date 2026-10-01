@@ -1131,6 +1131,20 @@ diag('§9.6: both notices on the page, and no nofollow on the link');
 		'  ...opening in a new tab like the page\'s other outward links' );
 }
 
+diag('step 9b ruling 5: a plain discogs.com link beside the collection one');
+
+{
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE
+	EN	discogs\.com$/m,
+		'the site-link label is present, word for word' );
+
+	my ($anchor) = $tpl =~ m{(<a href="https://www\.discogs\.com/" target="_blank">[^<]*PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE[^<]*</a>)};
+
+	ok( $anchor, 'the page renders a plain link straight to discogs.com' );
+	unlike( $anchor || '', qr/\brel=/,
+		'  ...carrying no rel at all either, so no nofollow' );
+}
+
 diag('the attribution link points at the user\'s own collection page');
 
 {

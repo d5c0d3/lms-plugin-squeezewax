@@ -86,6 +86,10 @@
 	<div><a href="[% discogsCollectionUrl | html %]" target="_blank">[%
 		"PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA" | string %]</a></div>
 	<div>[% "PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED" | string %]</div>
+	[%# Step 9b ruling 5: a plain link to the site itself, beside the
+	    collection-linked notice above. Same "no rel at all" rule. %]
+	<div><a href="https://www.discogs.com/" target="_blank">[%
+		"PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE" | string %]</a></div>
 [% END %]
 
 [%# The queue is its own page and is reached only from here: its class

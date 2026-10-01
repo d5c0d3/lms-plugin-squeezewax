@@ -376,3 +376,6 @@ PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
 	EN	This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC.
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE
+	EN	discogs.com
