@@ -142,6 +142,43 @@ BEGIN {
 	};
 }
 
+# Slim::Utils::Misc is marked loaded above rather than loaded for real: its
+# chain reaches Slim::Utils::Unicode, which dies offline with no locale this
+# suite can supply (the same cut syntax-check.sh makes). canFollowWeblinks
+# (Slim/Utils/Misc.pm:413-418, over the UA regexes at :68-69) needs neither -
+# so ITS OWN SOURCE, and nothing else from the file, is read and eval'd into
+# the stubbed package. This is not a reimplementation of the rule: the two
+# regexes and two subs below are copied verbatim out of the real file at
+# run time, so the suite exercises core's own rule rather than this suite's
+# guess at it (CLAUDE.md's "no invented APIs", and step 9b's instruction to
+# test the function through a stub client rather than replace it).
+{
+	my $miscFile = "$Bin/../refs/slimserver/Slim/Utils/Misc.pm";
+
+	package Slim::Utils::Misc;
+
+	my $src = do {
+		open my $fh, '<', $miscFile
+			or die "could not read Slim/Utils/Misc.pm: $!\n";
+		local $/;
+		<$fh>;
+	};
+
+	my @parts;
+	for my $re (
+		qr/^my \$WEBLINK_SUPPORTED_UA_RE[^\n]*\n/m,
+		qr/^my \$WEBBROWSER_UA_RE[^\n]*\n/m,
+		qr/^sub isWebBrowser \{.*?\n\}\n/ms,
+		qr/^sub canFollowWeblinks \{.*?\n\}\n/ms,
+	) {
+		$src =~ $re or die "canFollowWeblinks: expected source shape not found ($re)\n";
+		push @parts, $&;
+	}
+
+	eval join( "\n", @parts );
+	die $@ if $@;
+}
+
 # Enough of a prefs object for the classes that read one at file scope. No
 # SqueezeWax pref is involved in a menu open, which is itself the point: the
 # menu asks the database, not the settings.
@@ -355,29 +392,40 @@ sub match {
 	sub coverArtExists { 0 }
 }
 
+# A stand-in for Slim::Player::Client, exposing only what
+# Slim::Utils::Misc::canFollowWeblinks reads. The suite never stubs that
+# function itself - going through a real client's controllerUA is the point:
+# it proves the rule LMS actually applies, not this suite's guess at it.
+{
+	package Test::Client;
+	sub new { my ( $class, $ua ) = @_; bless { controllerUA => $ua }, $class }
+	sub controllerUA { $_[0]->{controllerUA} }
+}
+
 # Our item as the user would get it, by driving the REAL menu. Returns the list
 # of items our provider contributed - core's own items are dropped, since every
 # one of them either fails against the stand-in album (inside menu()'s own eval,
 # which is why they are harmless) or is not ours to assert.
+# %opt: tags => {...} (default {}, i.e. non-menu mode), client => a Test::Client
+# or undef (default undef, i.e. no client).
 sub albumMenu {
-	my ($albumId) = @_;
+	my ( $albumId, %opt ) = @_;
 
 	@WARNINGS = ();
 
-
-	my $menu = Slim::Menu::AlbumInfo->menu( undef, 'file:///a-track',
-		Test::Album->new($albumId), {} );
+	my $menu = Slim::Menu::AlbumInfo->menu( $opt{client}, 'file:///a-track',
+		Test::Album->new($albumId), $opt{tags} || {} );
 
 	return _ours( $menu->{items} );
 }
 
 sub trackMenu {
-	my ($album) = @_;
+	my ( $album, %opt ) = @_;
 
 	@WARNINGS = ();
 
-	my $menu = Slim::Menu::TrackInfo->menu( undef, 'file:///a-track',
-		Test::Track->new($album), {} );
+	my $menu = Slim::Menu::TrackInfo->menu( $opt{client}, 'file:///a-track',
+		Test::Track->new($album), $opt{tags} || {} );
 
 	return _ours( $menu->{items} );
 }
@@ -454,93 +502,120 @@ match( $K{ver_none},    ownership => 'version', discogs_release_id => 1008 );
 match( $K{absent},      ownership => 'absent',  discogs_release_id => 1009 );
 match( $K{stream},      ownership => 'exact',   discogs_release_id => 1011 );
 
+# The master link is not version-only: a tagged DISCOGS_MASTER_ID sits on
+# discogs_match regardless of tier, so an exact match can carry one too.
+$K{exact_master} = album( 12, 'An Exact With A Tagged Master' );
+match( $K{exact_master}, ownership => 'exact', discogs_release_id => 1012,
+       discogs_master_id => 9012 );
+
+# The V2 case plan §3 names: a version with nothing to link at all. Ownership
+# is never shown as nothing, so even a link-capable app falls back to the
+# text line here.
+$K{ver_norel} = album( 13, 'A Version With Nothing To Link' );
+match( $K{ver_norel}, ownership => 'version' );
+
 # ===========================================================================
-# 2. The table in plan §2, row by row
+# 2. The table in plan §1, cell by cell, over the app matrix
 # ===========================================================================
+#
+# Four apps (plan §3): non-menu mode; menu mode with no client (43); menu mode
+# with a link-capable controller UA; menu mode with a player UA. The first two
+# are link-capable however $client looks, by the first two disjuncts of
+# linkCapable - so they are folded into one "always link-capable" case below,
+# and the UA-driven pair is exercised on its own to prove the third disjunct,
+# canFollowWeblinks, through a real client rather than a stub of the function.
 
-sub line   { my $i = shift; return $i->[0] && $i->[0]{name} }
-sub link_  { my $i = shift; return $i->[1] && $i->[1]{weblink} }
+my %APP = (
+	nonMenu       => { tags => {},              client => undef,
+	                    linkCapable => 1 },
+	menuNoClient  => { tags => { menuMode => 1 }, client => undef,
+	                    linkCapable => 1 },
+	menuLinkable  => { tags => { menuMode => 1 }, client => Test::Client->new('iPeng/1.0'),
+	                    linkCapable => 1 },
+	menuPlayer    => { tags => { menuMode => 1 }, client => Test::Client->new('SqueezePlay'),
+	                    linkCapable => 0 },
+);
 
+sub weblinks { return [ map { $_->{weblink} } @{ $_[0] } ] }
+sub tokens   { return [ map { $_->{name}    } @{ $_[0] } ] }
+
+# One row's expectation: the link items link-capable apps get (empty for
+# none), and the token of the fallback line everyone else gets.
+my %ROW = (
+	exact        => { id => 1,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED', 'https://www.discogs.com/release/1001' ] ] },
+	exact_conf   => { id => 2,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING', links => [] },
+	exact_norel  => { id => 3,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING', links => [] },
+	exact_master => { id => 12, line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED',  'https://www.discogs.com/release/1012' ],
+	                              [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER', 'https://www.discogs.com/master/9012' ] ] },
+	master       => { id => 4,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_FILES',  'https://www.discogs.com/release/1004' ],
+	                              [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER', 'https://www.discogs.com/master/9004' ] ] },
+	derived      => { id => 5,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_FILES',  'https://www.discogs.com/release/1005' ],
+	                              [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER', 'https://www.discogs.com/master/9005' ] ] },
+	stale        => { id => 6,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_FILES',  'https://www.discogs.com/release/1006' ] ] },
+	ver_conf     => { id => 7,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION', links => [] },
+	ver_none     => { id => 8,  line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
+	                   links => [ [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_FILES',  'https://www.discogs.com/release/1008' ] ] },
+	ver_norel    => { id => 13, line => 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION', links => [] },
+);
+
+for my $rowName ( sort keys %ROW ) {
+	my $row = $ROW{$rowName};
+
+	for my $appName ( sort keys %APP ) {
+		my $app = $APP{$appName};
+
+		my $items = albumMenu( $row->{id}, tags => $app->{tags}, client => $app->{client} );
+
+		if ( $app->{linkCapable} && @{ $row->{links} } ) {
+			is_deeply( tokens($items), [ map { $_->[0] } @{ $row->{links} } ],
+				"$rowName/$appName: links only, in order" );
+			is_deeply( weblinks($items), [ map { $_->[1] } @{ $row->{links} } ],
+				"  ...to the right pages" );
+			ok( !( grep { exists $_->{rel} } @$items ),
+				"  ...with no rel on any of them" );
+		}
+		else {
+			is_deeply( tokens($items), [ $row->{line} ],
+				"$rowName/$appName: the ownership line, and nothing else" );
+			ok( !( grep { exists $_->{weblink} } @$items ),
+				"  ...carrying no weblink at all" );
+		}
+	}
+}
+
+# The two assertions plan §3 names explicitly, beyond the grid above.
 {
-	my $items = albumMenu(1);
+	my $items = albumMenu( $ROW{ver_norel}{id},
+		tags => $APP{menuLinkable}{tags}, client => $APP{menuLinkable}{client} );
 
-	is( scalar @$items, 2, 'an exact match gets a line and a link' );
-	is( line($items), 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING', '  ...saying you own this pressing' );
-	is( $items->[1]{name}, 'PLUGIN_SQUEEZEWAX_MENU_LINK',
-		'  ...and the link describes the album, not the copy' );
-	is( link_($items), 'https://www.discogs.com/release/1001', '  ...pointing at the release page' );
-	is( $items->[0]{type}, 'text', '  ...as a plain text item, core\'s own shape' );
-	ok( !exists $items->[1]{rel}, '  ...and nothing carries a rel, so no nofollow' );
+	ok( scalar @$items,
+		'a link-capable app never gets an empty entry for an owned album (V2)' );
+	is( tokens($items)->[0], 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
+		'  ...it falls back to the ownership line instead' );
 }
 
 {
-	my $items = albumMenu(2);
+	my $items = albumMenu( $ROW{master}{id},
+		tags => $APP{menuPlayer}{tags}, client => $APP{menuPlayer}{client} );
 
-	is( scalar @$items, 1, 'a contested exact match gets a line and NO link' );
-	is( line($items), 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING',
-		'  ...the ownership line is still shown' );
+	ok( !( grep { exists $_->{weblink} } @$items ),
+		'a player never gets a weblink, even for a row with two links to give' );
 }
 
+# Both mandatory notices stay off the menu entirely - not asserted per row
+# above, so asserted once here: no item anywhere in the grid carries Discogs
+# data, only our own tokens (checked throughout by _ours, which is how the
+# harness sees them at all) and a bare href.
 {
-	my $items = albumMenu(3);
+	my $items = albumMenu( $ROW{master}{id}, tags => {}, client => undef );
 
-	is( scalar @$items, 1, 'an exact match with no release id gets a line and no link' );
-}
-
-{
-	my $items = albumMenu(4);
-
-	is( link_($items), 'https://www.discogs.com/master/9004',
-		'a version with a tagged master links to the master page' );
-	is( line($items), 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION',
-		'  ...saying you own a version of this record' );
-}
-
-{
-	my $items = albumMenu(5);
-
-	is( link_($items), 'https://www.discogs.com/master/9005',
-		'a version whose derived master still describes its release links to it' );
-}
-
-{
-	my $items = albumMenu(6);
-
-	is( scalar @$items, 1,
-		'a version whose derivation is stale gets no link - _effectiveMaster refuses it' );
-	is( line($items), 'PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION', '  ...but keeps its line' );
-}
-
-{
-	my $items = albumMenu(7);
-
-	is( scalar @$items, 1, 'a contested version gets no link even with a master id' );
-}
-
-{
-	my $items = albumMenu(8);
-
-	is( scalar @$items, 1, 'a version with no master at all gets a line and no link' );
-}
-
-{
-	my $items = albumMenu(9);
-
-	is( scalar @$items, 0, 'an album the pass decided is absent gets no entry at all' );
-}
-
-{
-	my $items = albumMenu(10);
-
-	is( scalar @$items, 0, 'an album with no row gets no entry - the same as absent, to a user' );
-}
-
-# A release link is never built from a conflict row's release id, whatever the
-# ownership: the row's two candidates disagree and neither is an answer.
-{
-	my @links = map { link_( albumMenu($_) ) } ( 2, 7 );
-
-	ok( !grep( { defined $_ } @links ), 'no conflict row produces a link of any kind' );
+	ok( !( grep { /discogs data|data provided/i } map { $_->{name} } @$items ),
+		'no item anywhere carries Discogs data - the notices stay on the settings page' );
 }
 
 # --- the track provider ----------------------------------------------------
@@ -548,9 +623,10 @@ sub link_  { my $i = shift; return $i->[1] && $i->[1]{weblink} }
 {
 	my $items = trackMenu( Test::Album->new(1) );
 
-	is( scalar @$items, 2, 'the playing track of an owned album gets the same entry' );
-	is( line($items), 'PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING', '  ...the same line' );
-	is( link_($items), 'https://www.discogs.com/release/1001', '  ...and the same link' );
+	is_deeply( tokens($items), [ 'PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED' ],
+		'the playing track of an owned album gets the same entry' );
+	is_deeply( weblinks($items), [ 'https://www.discogs.com/release/1001' ],
+		'  ...and the same link' );
 }
 
 {
@@ -595,8 +671,8 @@ sub link_  { my $i = shift; return $i->[1] && $i->[1]{weblink} }
 
 	my $moved = albumMenu(101);
 
-	is( scalar @$moved, 2, 'the owned album is still found after its id changed' );
-	is( link_($moved), 'https://www.discogs.com/release/1001',
+	is( scalar @$moved, 1, 'the owned album is still found after its id changed' );
+	is( weblinks($moved)->[0], 'https://www.discogs.com/release/1001',
 		'  ...with its own release, not another album\'s' );
 
 	my $wrong = albumMenu(1);
@@ -604,6 +680,12 @@ sub link_  { my $i = shift; return $i->[1] && $i->[1]{weblink} }
 	is( scalar @$wrong, 0,
 		'the album that inherited the old id is NOT shown as owned - D1' );
 }
+
+# The two rows added for the app-matrix above (12, 13) are this section's
+# alone - removed before the view test below, so its album list stays the one
+# §4's own comment documents rather than growing to match §2's fixtures.
+$dbh->do( 'DELETE FROM squeezewax.discogs_match WHERE album_key IN (?, ?)',
+	undef, $K{exact_master}, $K{ver_norel} );
 
 # ===========================================================================
 # 4. The view is exactly the owned set

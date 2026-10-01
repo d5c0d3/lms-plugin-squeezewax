@@ -336,13 +336,19 @@ PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON_RUNNING
 	EN	Moving...
 
 PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING
-	EN	You own this pressing
+	EN	You own a pressing
 
 PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION
-	EN	You own a version of this record
+	EN	You own a version
 
-PLUGIN_SQUEEZEWAX_MENU_LINK
-	EN	This album on Discogs
+PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED
+	EN	On Discogs: your pressing
+
+PLUGIN_SQUEEZEWAX_MENU_LINK_FILES
+	EN	On Discogs: the pressing your files name
+
+PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER
+	EN	On Discogs: all versions
 
 PLUGIN_SQUEEZEWAX_LIBRARY_OWNED
 	EN	Records I own
