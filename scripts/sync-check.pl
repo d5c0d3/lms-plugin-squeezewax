@@ -411,11 +411,30 @@ sub healthy_headers {
 	};
 }
 
+# The identity reply AND the profile reply that follows it. Every sync asks for
+# the account's currency label between the identity and the first page since
+# step 10 (decisions §15.31 ruling 15), so every successful identity in this
+# suite is followed by one; a list, so the call sites stay one argument each.
+# The profile's own behaviour - stored, kept on failure, never fatal - is
+# asserted on its own further down, with explicit replies.
 sub identity_response {
+	my $username = shift // 'deschman';
+
+	return (
+		{
+			code    => 200,
+			headers => healthy_headers(),
+			content => encode_json( { username => $username } ),
+		},
+		profile_response(),
+	);
+}
+
+sub profile_response {
 	return {
 		code    => 200,
 		headers => healthy_headers(),
-		content => encode_json( { username => shift // 'deschman' } ),
+		content => encode_json( { username => 'deschman', curr_abbr => 'EUR' } ),
 	};
 }
 
@@ -600,6 +619,29 @@ sub run_sync {
 	is( Plugins::SqueezeWax::API::_collectionPath('a/b'),
 		'/users/a%2Fb/collection/folders/0/releases',
 		'...including a slash, which would otherwise change which endpoint is called' );
+
+	# The profile path (step 10) shares the escape.
+	is( Plugins::SqueezeWax::API::_profilePath('deschman'), '/users/deschman',
+		'the profile path is /users/{username}' );
+	is( Plugins::SqueezeWax::API::_profilePath('a/b c'), '/users/a%2Fb%20c',
+		'  ...escaped the same way' );
+}
+
+# ---------------------------------------------------------------------------
+# _profileCurrency: what is stored from a profile reply, and when nothing is
+# ---------------------------------------------------------------------------
+
+{
+	my $C = \&Plugins::SqueezeWax::API::_profileCurrency;
+
+	is( $C->( { ok => 1, data => { curr_abbr => 'EUR' } } ), 'EUR', 'a curr_abbr is the label' );
+
+	is( $C->( { ok => 1, data => { curr_abbr => '' } } ), undef, 'an empty one is nothing to store' );
+	is( $C->( { ok => 1, data => {} } ),                  undef, '  ...so is a missing one' );
+	is( $C->( { ok => 1, data => { curr_abbr => {} } } ), undef, '  ...and one that is not a string' );
+	is( $C->( { ok => 1, data => [] } ),                  undef, '  ...and a reply that is not an object' );
+	is( $C->( { ok => 0, error => 'server_error' } ),     undef, '  ...and a failed reply' );
+	is( $C->(undef),                                      undef, '  ...and no reply at all' );
 }
 
 # ---------------------------------------------------------------------------
@@ -618,10 +660,10 @@ sub run_sync {
 
 	ok( $result->{ok}, 'a three-page sync succeeds' );
 
-	is( scalar @REQUESTS, 4,
-		'203 items costs ceil(203/100) + 1 requests - the three pages plus the identity lookup' );
+	is( scalar @REQUESTS, 5,
+		'203 items costs ceil(203/100) + 2 requests - the three pages, the identity lookup and the profile' );
 
-	is( $result->{requests}, 4, '...and the result says so' );
+	is( $result->{requests}, 5, '...and the result says so' );
 
 	is( $result->{items}, 203, 'the reported count is the server\'s own pagination.items' );
 
@@ -631,13 +673,16 @@ sub run_sync {
 	like( $REQUESTS[0]->{url}, qr{/oauth/identity},
 		'the username is looked up first, every run, rather than read from a pref' );
 
-	like( $REQUESTS[1]->{url}, qr{/users/deschman/collection/folders/0/releases},
+	is( $REQUESTS[1]->{url}, 'https://api.discogs.com/users/deschman',
+		'...then the profile, for the currency label (§15.31 ruling 15)' );
+
+	like( $REQUESTS[2]->{url}, qr{/users/deschman/collection/folders/0/releases},
 		'...and the path is built from what it returned' );
 
-	like( $REQUESTS[1]->{url}, qr{sort=added},
+	like( $REQUESTS[2]->{url}, qr{sort=added},
 		'every page request pins the sort' );
 
-	like( $REQUESTS[3]->{url}, qr{page=3},
+	like( $REQUESTS[4]->{url}, qr{page=3},
 		'the last request is for the last page' );
 
 	is( scalar( grep { $_->{url} =~ /page=4/ } @REQUESTS ), 0,
@@ -657,13 +702,15 @@ sub run_sync {
 	# nothing a page carried is reachable afterwards. §13.2 - ownership is a
 	# column on discogs_match computed at step 7, not a mirrored collection,
 	# and discogs_collection is not a v1 table.
-	# discogsUsername is the ONE addition to this list, and it is not a release:
-	# it is the account name the identity call returned, kept for the settings
-	# page's attribution link (decisions §15.25 ruling 9). The rule this
-	# assertion guards is unchanged - nothing a collection PAGE carried is
-	# reachable afterwards - so the list is pinned rather than relaxed.
-	is_deeply( [ sort keys %PREFS ], [ qw(discogsLastSyncError discogsUsername) ],
-		'a completed sync writes two prefs and nothing else - no release survives it' );
+	# discogsUsername and discogsCurrency are the two additions to this list,
+	# and neither is a release: the account name the identity call returned,
+	# kept for the settings page's attribution link (decisions §15.25 ruling 9),
+	# and the account's currency label from its profile, kept to label prices
+	# (§15.31 ruling 15). The rule this assertion guards is unchanged - nothing
+	# a collection PAGE carried is reachable afterwards - so the list is pinned
+	# rather than relaxed.
+	is_deeply( [ sort keys %PREFS ], [ qw(discogsCurrency discogsLastSyncError discogsUsername) ],
+		'a completed sync writes three prefs and nothing else - no release survives it' );
 
 	is( $PREFS{discogsUsername}, 'deschman',
 		'  ...and the one that is new is the account name, not anything from a page' );
@@ -694,7 +741,7 @@ sub run_sync {
 
 	is( $result->{items}, 0, '...reporting zero items' );
 
-	is( scalar @REQUESTS, 2, '...at the cost of one identity lookup and one page' );
+	is( scalar @REQUESTS, 3, '...at the cost of one identity lookup, one profile and one page' );
 }
 
 # ---------------------------------------------------------------------------
@@ -775,7 +822,7 @@ sub run_sync {
 
 	ok( $result->{ok}, 'a 429 that clears on retry does not fail the sync' );
 
-	is( scalar @REQUESTS, 3, '...and costs one extra request' );
+	is( scalar @REQUESTS, 4, '...and costs one extra request' );
 
 	is( $TIMERS[0]->{delay}, 60,
 		'the retry waits WINDOW_SECONDS, from backoffFor - and waits on a timer, not a sleep' );
@@ -800,8 +847,8 @@ sub run_sync {
 
 	is( $result->{error}, 'rate_limited', '...as rate_limited, not as something vaguer' );
 
-	is( scalar @REQUESTS, 5,
-		'...after MAX_RETRIES + 1 attempts at the page, plus the identity lookup - it gives up rather than retrying forever' );
+	is( scalar @REQUESTS, 6,
+		'...after MAX_RETRIES + 1 attempts at the page, plus the identity and the profile - it gives up rather than retrying forever' );
 
 	ok( !marker(),
 		'and the marker does not move for a sync that did not complete' );
@@ -997,7 +1044,7 @@ sub run_sync {
 	my ($done) = grep { /collection sync complete/ } @LOG;
 
 	ok( $done, 'a complete sync logs its summary at info' );
-	like( $done, qr/203 items over 4 requests/,
+	like( $done, qr/203 items over 5 requests/,
 		'  ...carrying the item count and the request count' );
 
 	is( scalar @APPLIED, 1, 'the ownership pass is called exactly once per sync' );
@@ -1318,7 +1365,7 @@ diag('the test-only collection filter');
 
 	# Nothing about the filter reaches Discogs: the requests are identical to
 	# an unfiltered run, and the collection itself is never written to.
-	is( scalar @REQUESTS, 4, 'the filter does not change the fetch' );
+	is( scalar @REQUESTS, 5, 'the filter does not change the fetch' );
 	ok( !( grep { $_->{url} =~ /999|exclude|1001/ } @REQUESTS ),
 		'  ...and no request mentions a filtered id' );
 }
@@ -1509,11 +1556,12 @@ diag('the single exit: which prefs are written, and when');
 
 	# The username is written at the identity step, which is the FIRST request
 	# of the sync - long before the pass and the marker. Its position in this
-	# list is the evidence that it costs no request of its own.
+	# list is the evidence that it costs no request of its own. The currency
+	# follows from the second request, the profile, before any page.
 	is_deeply(
 		[ grep { $_ ne '<pass>' } @WRITES ],
-		[qw(discogsUsername <marker> discogsLastSyncError)],
-		'  ...and writes exactly the username, the marker and the error pref, in that order'
+		[qw(discogsUsername discogsCurrency <marker> discogsLastSyncError)],
+		'  ...and writes exactly the username, the currency, the marker and the error pref, in that order'
 	);
 }
 
@@ -1609,6 +1657,119 @@ diag('status() reads the marker, whichever path wrote it');
 	ok( ( grep { /marker was not written.*disk full/ } @ERRORS ),
 		'  ...and the loss is logged at error' );
 	is( $PREFS{discogsLastSyncError}, '', '  ...while the error pref is still cleared' );
+}
+
+# ---------------------------------------------------------------------------
+# The currency label (decisions §15.31 ruling 15, plan step 10 §6 part 8)
+# ---------------------------------------------------------------------------
+#
+# One /users/{username} request between the identity and the first page. Its
+# curr_abbr is stored; a failed or empty reply keeps the stored value and NEVER
+# changes the sync's outcome.
+
+sub profile_fixture {
+	my $path = "$Bin/fixtures/profile-example.json";
+
+	open my $fh, '<:raw', $path or die "could not read $path: $!\n";
+	local $/;
+
+	return scalar <$fh>;
+}
+
+{
+	my $NOTED = 0;
+
+	no warnings 'redefine';
+
+	my $real = \&Plugins::SqueezeWax::API::noteResponse;
+
+	local *Plugins::SqueezeWax::API::noteResponse = sub { $NOTED++; goto &$real };
+
+	reset_state();
+
+	my ($identity) = identity_response('example');
+
+	my $result = run_sync(
+		$identity,
+		{ code => 200, headers => healthy_headers(), content => profile_fixture() },
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a sync with a profile reply succeeds' );
+	is( $PREFS{discogsCurrency}, 'EUR', '  ...and stores the profile\'s curr_abbr (the real reply\'s shape)' );
+	is( $REQUESTS[1]{url}, 'https://api.discogs.com/users/example',
+		'  ...asked for once, at /users/{username}, second' );
+	is( scalar( grep { $_->{url} =~ m{/users/example$} } @REQUESTS ), 1, '  ...exactly once' );
+	is( $NOTED, 3, '  ...every reply noted once: identity, profile, page' );
+
+	my %h = @{ $REQUESTS[1]{headers} };
+	is( $h{Authorization}, 'Discogs token=token-abc', '  ...with the token' );
+}
+
+# A failed profile never changes the sync. The reference run is the one above
+# minus the label: same result, same requests, same marker, same error pref.
+{
+	my @FAILURES = (
+		[ 'a 500',                    { code => 500, content => '' } ],
+		[ 'a 401',                    { code => 401, content => '{"message":"Invalid consumer token."}' } ],
+		[ 'a 429',                    { code => 429, content => '' } ],
+		[ 'a 404',                    { code => 404, content => '' } ],
+		[ 'a dropped connection',     { code => undef } ],
+		[ 'a 200 that will not parse', { code => 200, content => 'nope' } ],
+		[ 'a 200 with no curr_abbr',  { code => 200, content => encode_json( { username => 'deschman' } ) } ],
+		[ 'a 200 with an empty one',  { code => 200, content => encode_json( { curr_abbr => '' } ) } ],
+	);
+
+	for my $f (@FAILURES) {
+		my ( $what, $profile ) = @$f;
+
+		reset_state();
+		$PREFS{discogsCurrency} = 'GBP';
+
+		my ($identity) = identity_response();
+
+		my $result = run_sync( $identity, { headers => healthy_headers(), %$profile },
+			page_response( 5, 1, 1, 5 ) );
+
+		is_deeply( $result, { ok => 1, items => 5, counted => 5, pages => 1, requests => 3 },
+			"profile $what: the sync's result is unchanged" );
+		is( $PREFS{discogsCurrency}, 'GBP', '  ...the stored currency is kept' );
+		is( $PREFS{discogsLastSyncError}, '', '  ...no error is recorded' );
+		ok( marker(), '  ...the marker is written' );
+		is( scalar( grep { $_->{url} =~ m{/users/deschman$} } @REQUESTS ), 1,
+			'  ...and the profile was asked once, never retried' );
+	}
+}
+
+# The shared budget: a spent window defers the profile on a timer, as it would
+# a page, rather than skipping it or spending a request into a 429.
+{
+	reset_state();
+
+	my $result = run_sync(
+		{
+			code    => 200,
+			headers => { 'X-Discogs-Ratelimit' => 60, 'X-Discogs-Ratelimit-Used' => 60,
+			             'X-Discogs-Ratelimit-Remaining' => 0 },
+			content => encode_json( { username => 'deschman' } ),
+		},
+		profile_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a spent budget after the identity still ends in a good sync' );
+	is( $TIMERS[0]{delay}, 60, '  ...the profile waited out the window on a timer' );
+	is( $PREFS{discogsCurrency}, 'EUR', '  ...and was then asked, and stored' );
+}
+
+# An aborted sync cancels a deferred profile request too.
+{
+	reset_state();
+
+	$A->abort;
+
+	ok( ( grep { $_->{coderef} == \&Plugins::SqueezeWax::API::Async::_fireProfile } @KILLS ),
+		'abort cancels a pending profile request as well as a pending page' );
 }
 
 done_testing();

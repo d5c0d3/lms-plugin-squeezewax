@@ -484,6 +484,16 @@ sub identity_response {
 	};
 }
 
+# The profile request every server sync makes after the identity since step 10,
+# for the currency label (decisions §15.31 ruling 15).
+sub profile_response {
+	return {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( { username => 'deschman', curr_abbr => 'EUR' } ),
+	};
+}
+
 # One page of a collection. @items is a list of [ instance, release, master,
 # title, artist ] tuples, so a test can say exactly what the user owns.
 sub page_response {
@@ -593,17 +603,19 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 # 1. rematch: the requests, the choices, and what it must not write
 # ===========================================================================
 {
-	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
 
 	my $before = matchCount();
 
 	my $params = press( rematch => 1, album_key => $K{ambiguous} );
 
-	is( scalar @REQUESTS, 2,
-		'rematch issues the identity request and one page request' );
+	is( scalar @REQUESTS, 3,
+		'rematch issues the identity request, the profile request and one page request' );
 	like( $REQUESTS[0]{url}, qr{/oauth/identity},
 		'  ...identity first, as every sync does' );
-	like( $REQUESTS[1]{url}, qr{/users/[^/]+/collection/folders/0/releases},
+	like( $REQUESTS[1]{url}, qr{/users/deschman$},
+		'  ...then the profile, for the currency label' );
+	like( $REQUESTS[2]{url}, qr{/users/[^/]+/collection/folders/0/releases},
 		'  ...then the collection folder' );
 
 	# API.pm built the request for real, so the token is where it belongs.
@@ -692,7 +704,7 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 #    proxy.
 # ===========================================================================
 {
-	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
 
 	my $params = press( rematch => 1, album_key => $K{conflict} );
 
@@ -904,7 +916,7 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 # ===========================================================================
 {
 	# Clean state first, so the notice's absence means something.
-	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
 	press( rematch => 1, album_key => $K{conflict} );
 
 	my $before = press();
@@ -923,7 +935,7 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 		'  ...and the queue page shows the pause notice (§15.17 part 4)' );
 
 	# It clears the way the settings page clears it: a sync that works.
-	@RESPONSES = ( identity_response(), page_response(@COLLECTION) );
+	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
 	press( rematch => 1, album_key => $K{conflict} );
 
 	my $after = press();

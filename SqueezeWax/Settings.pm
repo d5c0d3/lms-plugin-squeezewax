@@ -391,7 +391,7 @@ sub _testToken {
 
 		my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
 
-		_tokenTested( $class, $client, $params, $callback, $args, $scanning, $result );
+		_tokenTested( $class, $client, $params, $callback, $args, $scanning, $result, $token );
 	};
 
 	Slim::Networking::SimpleAsyncHTTP->new( $done, $done, { timeout => 15 } )->get( $url, @headers );
@@ -400,7 +400,7 @@ sub _testToken {
 }
 
 sub _tokenTested {
-	my ( $class, $client, $params, $callback, $args, $scanning, $result ) = @_;
+	my ( $class, $client, $params, $callback, $args, $scanning, $result, $token ) = @_;
 
 	if ( $result->{ok} ) {
 		my $username = $result->{data} && $result->{data}->{username};
@@ -415,12 +415,79 @@ sub _tokenTested {
 		$params->{tokenTestResult} = $username
 			? sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK'), $username )
 			: string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER');
+
+		# The message is settled above, before the profile is asked: nothing
+		# the profile request returns may change it (plan step 10 §4b).
+		return _testCurrency( $token, $username, sub {
+			_finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+		} ) if $username;
 	}
 	else {
 		$params->{tokenTestResult} = _tokenTestFailureString($result);
 	}
 
 	_finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+}
+
+# The account's currency label, learned where the username is (decisions §15.31
+# ruling 15): one /users/{username} request after a successful identity, its
+# curr_abbr stored if it has one. API/Async.pm's _getProfile does the same for
+# the sync.
+#
+# NEVER FATAL, and it never changes what the page says: $done is called exactly
+# once whatever happens, and a failed or empty reply keeps the stored label.
+# Through the shared budget like every other request - but a page does not wait
+# out a window, so a spent budget skips the request rather than deferring it.
+sub _testCurrency {
+	my ( $token, $username, $done ) = @_;
+
+	return $done->() unless defined $token && $token ne '';
+
+	if ( Plugins::SqueezeWax::API->rateWait ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('rate budget spent; the token test did not ask for the currency');
+
+		return $done->();
+	}
+
+	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest(
+		Plugins::SqueezeWax::API::_profilePath($username), {}, $token );
+
+	# The same two-path reply as the identity request above.
+	my $got = sub {
+		my ( $http, undef, $response ) = @_;
+
+		my $code    = $http->code;
+		my $content = $http->content;
+		my $headers = $http->headers;
+
+		if ( !defined $code && $response ) {
+			$code    = $response->code;
+			$content = $response->content;
+			$headers = $response->headers;
+		}
+
+		my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
+
+		Plugins::SqueezeWax::API->noteResponse(
+			Plugins::SqueezeWax::API::_parseRateHeaders($headers), time() );
+
+		if ( defined( my $currency = Plugins::SqueezeWax::API::_profileCurrency($result) ) ) {
+			$prefs->set( 'discogsCurrency', $currency );
+		}
+		else {
+			main::INFOLOG && $log->is_info
+				&& $log->info( 'no currency from the Discogs profile ('
+					. ( $result->{ok} ? 'none in the reply' : $result->{error} || 'unknown' )
+					. '); keeping the stored one' );
+		}
+
+		$done->();
+	};
+
+	Slim::Networking::SimpleAsyncHTTP->new( $got, $got, { timeout => 15 } )->get( $url, @headers );
+
+	return;
 }
 
 sub _tokenTestFailureString {

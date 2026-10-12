@@ -287,6 +287,7 @@ sub abort {
 	my ($class) = @_;
 
 	Slim::Utils::Timers::killTimers( undef, \&_fire );
+	Slim::Utils::Timers::killTimers( undef, \&_fireProfile );
 
 	return;
 }
@@ -440,6 +441,93 @@ sub _gotIdentity {
 
 	main::INFOLOG && $log->is_info
 		&& $log->info("collection sync starting for Discogs user $username");
+
+	_getProfile($run);
+
+	return;
+}
+
+# The account's currency label, between the identity and the first page
+# (decisions §15.31 ruling 15, plan step 10 §4b). One request, through the shared
+# budget like every other, and NEVER FATAL: whatever comes back, the sync goes on
+# to its first page exactly as it did before this request existed. So it does not
+# go through _get / _handle, whose failure path is _fail and whose 429 path is a
+# retry - neither is this request's to take. A failed or empty reply keeps the
+# stored label.
+#
+# Counted in $run->{requests}: it is a request this sync made, and the figure is
+# what the log reports.
+sub _getProfile {
+	my ($run) = @_;
+
+	my $rateWait = Plugins::SqueezeWax::API->rateWait;
+
+	if ($rateWait) {
+		main::INFOLOG && $log->is_info
+			&& $log->info("rate budget spent, deferring the profile request by ${rateWait}s");
+
+		Slim::Utils::Timers::setTimer( undef, time() + $rateWait, \&_fireProfile, $run );
+
+		return;
+	}
+
+	_fireProfile( undef, $run );
+
+	return;
+}
+
+sub _fireProfile {
+	my ( undef, $run ) = @_;
+
+	$run->{requests}++;
+
+	my $path = Plugins::SqueezeWax::API::_profilePath( $run->{username} );
+
+	my ( $url, @headers ) =
+		Plugins::SqueezeWax::API->buildRequest( $path, {}, $run->{token} );
+
+	# The same two-path reply as _fire: see the comment there.
+	my $done = sub {
+		my ( $http, undef, $response ) = @_;
+
+		_gotProfile( $http, $run, $response );
+	};
+
+	Slim::Networking::SimpleAsyncHTTP->new( $done, $done, { timeout => 15 } )
+		->get( $url, @headers );
+
+	return;
+}
+
+sub _gotProfile {
+	my ( $http, $run, $response ) = @_;
+
+	my $code    = $http->code;
+	my $content = $http->content;
+	my $headers = $http->headers;
+
+	if ( !defined $code && $response ) {
+		$code    = $response->code;
+		$content = $response->content;
+		$headers = $response->headers;
+	}
+
+	my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
+
+	Plugins::SqueezeWax::API->noteResponse(
+		Plugins::SqueezeWax::API::_parseRateHeaders($headers), time() );
+
+	if ( defined( my $currency = Plugins::SqueezeWax::API::_profileCurrency($result) ) ) {
+		$prefs->set( 'discogsCurrency', $currency );
+	}
+	else {
+		# Info, not warn: nothing the user sees changes except that a price shows
+		# as a count until a later sync or token test learns the label.
+		main::INFOLOG && $log->is_info
+			&& $log->info( 'no currency from the Discogs profile ('
+				. ( $result->{ok} ? 'none in the reply' : $result->{error} || 'unknown' )
+				. '); keeping the stored one' );
+	}
 
 	_get( $run, $run->{path}, Plugins::SqueezeWax::API::_collectionParams(1), \&_gotPage );
 

@@ -358,11 +358,37 @@ sub _pageCount {
 sub _collectionPath {
 	my ($username) = @_;
 
-	my $escaped = $username;
-	$escaped =~ s/([^A-Za-z0-9\-_.~])/sprintf('%%%02X', ord($1))/ge;
-
 	return sprintf( '/users/%s/collection/folders/%d/releases',
-		$escaped, COLLECTION_FOLDER );
+		_pathSegment($username), COLLECTION_FOLDER );
+}
+
+# The user's profile, for its curr_abbr (decisions §15.31 ruling 15). Escaped
+# as the collection path is, for the same reason.
+sub _profilePath {
+	my ($username) = @_;
+
+	return '/users/' . _pathSegment($username);
+}
+
+sub _pathSegment {
+	my ($segment) = @_;
+
+	( my $escaped = $segment ) =~ s/([^A-Za-z0-9\-_.~])/sprintf('%%%02X', ord($1))/ge;
+
+	return $escaped;
+}
+
+# The currency label out of a classified profile reply, or undef when there is
+# none to store. Undef means "keep what is stored": a failed or empty reply
+# never clears a label (plan step 10 §4b).
+sub _profileCurrency {
+	my ($result) = @_;
+
+	return undef unless $result && $result->{ok} && ref $result->{data} eq 'HASH';
+
+	my $currency = $result->{data}->{curr_abbr};
+
+	return ( defined $currency && !ref $currency && $currency =~ /\S/ ) ? $currency : undef;
 }
 
 # Query parameters for one page.

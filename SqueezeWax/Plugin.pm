@@ -74,6 +74,12 @@ $prefs->setChange( sub {
 	# name; until then the link falls back.
 	$prefs->set( 'discogsUsername', '' );
 
+	# And the currency label, the same account's (decisions §15.31 ruling 15).
+	# Until the next token test or sync writes the new account's, a price is
+	# shown as a count only: an unlabelled price is never shown, and a price
+	# labelled with another account's currency would be a wrong one.
+	$prefs->set( 'discogsCurrency', '' );
+
 	require Plugins::SqueezeWax::API::Async;
 	Plugins::SqueezeWax::API::Async->clearTokenRejected;
 }, 'discogsToken' );
@@ -112,6 +118,21 @@ $prefs->init({
 	# the scan the name arrives at the next token test and the fallback covers
 	# the gap.
 	discogsUsername => '',
+
+	# The account's Discogs currency, the profile's curr_abbr, to label prices in
+	# the step 10 submenus (decisions §15.31 ruling 15). /releases and /masters
+	# price in the account's currency and say nothing about which, and ignore
+	# curr_abbr if asked (Phase 0, T1), so this is the only label there is.
+	#
+	# Written where discogsUsername is, by one /users/{username} request after
+	# each identity call - the token test and the async sync - and cleared with
+	# it when the token changes. A failed profile request keeps the old value and
+	# never fails either caller. Restricted "Discogs User Data", kept by the
+	# username's necessity reasoning: without it no price can be shown at all.
+	# Never written to the database. The scan-time sync does not write it, as it
+	# does not write the username: whether a pref set in the scanner reaches the
+	# server is unverified.
+	discogsCurrency => '',
 
 	# A development aid, not a feature: a comma-separated list of Discogs
 	# release ids that API.pm's _testFilter hides from the ownership

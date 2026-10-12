@@ -641,6 +641,18 @@ diag('changing the token clears what described the old one');
 		'changing the token clears the stored Discogs username' );
 }
 
+# And the currency label, the same account's (decisions §15.31 ruling 15): until
+# the next token test or sync, a price shows as a count only.
+{
+	reset_state();
+	$PREFS{discogsCurrency} = 'EUR';
+
+	$prefs_under_test->set( 'discogsToken', 'yet-another-token' );
+
+	is( $PREFS{discogsCurrency}, '',
+		'changing the token clears the stored currency label' );
+}
+
 {
 	reset_state();
 	$PREFS{discogsLastSyncError} = 'unauthorized';
