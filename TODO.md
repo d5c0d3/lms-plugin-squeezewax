@@ -2865,6 +2865,9 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **Waiting: Discogs Help Center Request #1281019, filed 2026-10-12.**
+      Revisit §15.29 part 3 when answered.
+
 - [x] **2026-09-08: collection-page fixture not captured.** Six of the plan's
       seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
       the seventh — a page of a real collection, needed to re-verify the
@@ -2889,24 +2892,30 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
-- [ ] **2026-10-12: optional Discogs Help Center reply on ownership verdict vs.
-      the 6-hour display rule.** Record the date sent and the answer under
-      decisions §15.29. If Discogs disagrees: an "as of <last sync>" label, or a
-      sync at most every 6 h (reverses §15.15 part 1).
-- [ ] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
+- [x] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
       **and any Discogs logo use** against the Application Name and Description
       Policy (§15.29).
-- [ ] **2026-10-12: `strings.txt` `PLUGIN_SQUEEZEWAX_SYNC_DESC` is inaccurate.** It says
+      → Checked 2026-10-12, no change needed; findings in the build report
+      (name, no Discogs mark; the only images are `owned.svg`/`owned_svg.png`, a
+      generic four-stroke glyph).
+- [x] **2026-10-12: `strings.txt` `PLUGIN_SQUEEZEWAX_SYNC_DESC` is inaccurate.** It says
       nothing about the collection is stored, but the last-sync time and item
       count are stored in `discogs_sync_state`. Make it accurate.
-- [ ] **2026-10-12: `strings.txt` `TOKEN_DESC` and `QUEUE_TOKEN_PAUSED` still say
+      → `1c1f6fe`.
+- [x] **2026-10-12: `strings.txt` `TOKEN_DESC` and `QUEUE_TOKEN_PAUSED` still say
       "owned badge" / "badged".** No badge exists (§15.25).
-- [ ] **2026-10-12, optional: `ATTRIBUTION_NOTAFFILIATED` uses straight quotes;**
+      → `1c1f6fe`; `QUEUE_BADGE_LATER` too.
+- [x] **2026-10-12, optional: `ATTRIBUTION_NOTAFFILIATED` uses straight quotes;**
       Discogs' own text uses curly ones.
-- [ ] **2026-10-12: audit every delete path for `discogs_match`;** confirm the README's
+      → Won't do, `settings-check.pl` asserts the text; same words.
+- [x] **2026-10-12: audit every delete path for `discogs_match`;** confirm the README's
       "no expiry" statement.
-- [ ] **2026-10-12: audit `use` lines for Perl modules outside core LMS;** confirm the
+      → `1c1f6fe`: no expiry; token change and uninstall delete nothing. README
+      reworded.
+- [x] **2026-10-12: audit `use` lines for Perl modules outside core LMS;** confirm the
       README's "no add-ons required".
+      → `1c1f6fe`: all shipped by LMS or core Perl; HTTPS (`IO::Socket::SSL`) is
+      bundled for macOS only and README now says so.
 - [ ] **2026-10-12, needs a real server: install via Additional Repositories end
       to end,** and whether LMS needs a restart.
 
@@ -3187,6 +3196,9 @@ Each names its sites so the work is mechanical rather than a search.
       bust anything next time. Cheapest at the next package build.
 
 ## Deferred by decision — not forgotten
+
+- SPDX license headers in source files: deferred. Adding a line at the top of
+  each file shifts every file:line citation in the docs.
 
 - [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
       owned and tagged). It now runs server-side in a Scheduler task
