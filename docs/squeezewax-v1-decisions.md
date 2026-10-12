@@ -6297,3 +6297,9 @@ committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
    - verified: the hold, the hint, and that no log names the user or token;
    - not run: the Material scroll check (the owner accepted the CLI evidence) and
      the §15.32 countdown check.
+
+3. **Amended 2026-10-13, after a hardware test of 0.0.0.21:** with a correct
+   token, Test token did not bring the currency back. The wording now requires a
+   collection sync: the unknown line reads "Not known yet. Press Sync collection
+   now." and the description names the sync alone. The Test token request is
+   unchanged; why it does not store the label is open (`TODO.md`).

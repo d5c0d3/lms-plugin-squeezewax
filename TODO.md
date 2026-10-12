@@ -2158,6 +2158,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-13: Test token does not store the currency** (decisions §15.34
+      item 3). On 0.0.0.21 with a correct token the label stayed empty after
+      "Test token"; a fake token clears it as designed. Wording now requires a
+      sync. Find out whether `_testCurrency` is reached (INFO line "no currency
+      from the Discogs profile") and what the reply held.
+
 - [x] **2026-10-13: hold and hint checks** (decisions §15.33), on 0.0.0.20.
       → 2026-10-13, report 66 (decisions §15.34): the hold was verified by CLI
       and the hint reads correctly (now the Prices section). The Material scroll

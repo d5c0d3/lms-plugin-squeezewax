@@ -1190,10 +1190,10 @@ diag('the currency hint reads the stored label');
 
 	like( $st, qr/CURRENCY_KNOWN\n\tEN\tCurrency: %s\n/,
 		'  ...the known hint names the stored code' );
-	like( $st, qr/CURRENCY_UNKNOWN\n\tEN\tNot known yet\. Press Test token, or Sync collection now\./,
-		'  ...the unknown hint names both ways to learn it' );
+	like( $st, qr/CURRENCY_UNKNOWN\n\tEN\tNot known yet\. Press Sync collection now\./,
+		'  ...the unknown hint tells the user to sync' );
 	like( $st, qr/PLUGIN_SQUEEZEWAX_CURRENCY\n\tEN\tPrices\n/, '  ...the section is titled Prices' );
-	like( $st, qr/PLUGIN_SQUEEZEWAX_CURRENCY_DESC\n\tEN\t[^\n]*Test token[^\n]*sync/, '  ...and its description names both' );
+	like( $st, qr/PLUGIN_SQUEEZEWAX_CURRENCY_DESC\n\tEN\t[^\n]*collection sync[^\n]*Sync collection now/, '  ...and its description requires a collection sync' );
 
 	like( $t, qr/WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC".*?WRAPPER setting title="PLUGIN_SQUEEZEWAX_CURRENCY"/s,
 		'the Prices section comes after Sync' );
