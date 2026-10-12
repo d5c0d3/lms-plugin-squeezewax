@@ -665,9 +665,8 @@ $API->_resetRate;
 		responses => [ ok_response($RELEASE) ] );
 
 	is( scalar @{ weblinked($items) }, 0, 'player: no weblink at all' );
-	is_deeply( [ @{ names($items) }[ -2, -1 ] ],
-		[ $NOTICE, "www.discogs.com/release/593568-Die-\x{c4}rzte-Unplugged-RocknRoll-Realschule" ],
-		'  ...the notice, then the address as plain text without https://' );
+	is_deeply( [ @{ names($items) }[ -2, -1 ] ], [ $NOTICE, 'discogs.com/release/593568' ],
+		'  ...the notice, then the short address built from the id, not the reply\'s uri (§15.32)' );
 	is( scalar @$items, 8, '  ...after the same six data lines' );
 }
 
@@ -675,8 +674,9 @@ $API->_resetRate;
 	my $items = open_details( master => 63790, linkCapable => 0,
 		responses => [ ok_response($MASTER) ] );
 
-	is( names($items)->[-1], "www.discogs.com/master/63790-Die-\x{c4}rzte-Unplugged-Rock-n-Roll-Realschule",
-		'player, master details: the master\'s address' );
+	is( names($items)->[-1], 'discogs.com/master/63790',
+		'player, master details: the master\'s short address' );
+	is( scalar @{ weblinked($items) }, 0, '  ...and no weblink' );
 }
 
 # A reply with no uri still links the page the data came from.

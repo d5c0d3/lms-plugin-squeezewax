@@ -33,8 +33,8 @@ package Plugins::SqueezeWax::Details;
 #
 # THE NOTICE GOES WITH THE DATA (§9.6). Every list that shows Discogs data ends
 # with "Data provided by Discogs", linked to the reply's own uri in an app that
-# can open links, and followed by the address as plain text on a player, which
-# cannot (§15.31 ruling 10). A list that shows no Discogs data - an error, the
+# can open links, and followed by a short address as plain text on a player,
+# which cannot (§15.31 ruling 10, §15.32). A list that shows no Discogs data - an error, the
 # busy line, no token - carries no notice.
 
 use strict;
@@ -174,7 +174,7 @@ sub _handle {
 
 	return $callback->( [
 		( map { _text($_) } @lines ),
-		_notice( $data->{uri} || PAGE_URL . "$kind/$id", $linkCapable ),
+		_notice( $data->{uri} || PAGE_URL . "$kind/$id", $linkCapable, $kind, $id ),
 	] );
 }
 
@@ -263,20 +263,21 @@ sub _forSaleLine {
 		$count, sprintf( '%.2f', $price ), $currency );
 }
 
-# The notice (plan §2.1). In an app that can open links, one item, linked, and -
-# as everywhere else in this plugin - with no rel. On a player, the text and then
-# the address as plain text, without its scheme; a weblink there would be a row
+# The notice (plan §2.1). In an app that can open links, one item linked to the
+# reply's own uri, and - as everywhere else in this plugin - with no rel. On a
+# player, the text and then a short address as plain text, built from the id:
+# discogs.com/release/{id} or discogs.com/master/{id} (decisions §15.32). The
+# reply's uri carries a slug - artist and title - that is long on a player
+# screen, and the bare id reaches the same page. A weblink there would be a row
 # that does nothing.
 sub _notice {
-	my ( $uri, $linkCapable ) = @_;
+	my ( $uri, $linkCapable, $kind, $id ) = @_;
 
 	my $notice = string('PLUGIN_SQUEEZEWAX_DETAILS_NOTICE');
 
 	return { type => 'text', name => $notice, weblink => $uri } if $linkCapable;
 
-	( my $plain = $uri ) =~ s{^https?://}{};
-
-	return ( _text($notice), _text($plain) );
+	return ( _text($notice), _text("discogs.com/$kind/$id") );
 }
 
 sub _busy {
