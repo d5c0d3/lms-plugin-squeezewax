@@ -2118,6 +2118,22 @@ Each names its sites so the work is mechanical rather than a search.
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
 
+- [ ] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
+      next sync.** `API->rateWait` is a stored figure, not a countdown: it changes
+      only when a reply is noted (`API.pm` `noteResponse`). Step 10's rule (plan
+      §3, ruling 9) is "rateWait non-zero → busy line, no request", so once it is
+      non-zero no submenu open can clear it; only a sync or derive reply does.
+      Ways in: a reply saying `remaining: 0`, a 429, or a reply with no rate
+      headers and nothing known before it (a dropped connection as the first
+      request of the process) - `accountRequest`'s last rung assumes the budget
+      spent. Then every Release details and Master details open says "busy, try
+      again in 60 s", indefinitely. `details-check.pl` records it (the "RECORDED,
+      NOT ENDORSED" block). Built to the plan, not changed: the fix touches the
+      shared throttle. Candidate: `rateWait` returns what is left of the window
+      since the state's `checked_at` (already stored, unused). **Same root,
+      older:** `Derive.pm` re-arms on "the rate budget is spent" every 60 s and
+      re-checks the same stale figure, so with no sync it never fetches again -
+      inferred from code, not seen on hardware.
 - [ ] **2026-10-13: README still describes step 9b's menu.** `README.md` (the
       menu paragraph, "On Discogs: your pressing" / "the pressing your files
       name" / "all versions") names strings step 10 replaced or retired, and its
