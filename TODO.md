@@ -52,6 +52,29 @@ Each names its sites so the work is mechanical rather than a search.
       beside the existing `migrate(1)` to `migrate(3)` in `Plugin.pm`, at
       N = 4 (3 is step 8b's, which retired the last-synced prefs).
 
+- [ ] **2026-10-12: a public beta (forum announcement) waits for step 10**
+      (owner, design chat). Before announcing, in this order:
+      1. **A fixed beta channel.** `repo.xml` on `v1-buildout` follows every dev
+         build, and migrations are one-way (`_migrate`'s downgrade guard,
+         decisions §6a), so a tester could not step back. A `beta` branch whose
+         `repo.xml` names one hardware-checked zip, moved only on purpose.
+         Master stays the rollback point (working agreement §5).
+      2. **A way out of a bad state.** Clear & rebuild (decisions §10) is still
+         unbuilt (item 2026-09-24). At minimum, the README documents a manual
+         reset (stop server, delete `squeezewax.db`, restart; manual links are
+         lost). That this is safe is inferred from `Schema.pm`, not tested.
+      3. **The build being announced is hardware-checked**, including its
+         wording (the 0.0.0.17 strings item is still open).
+      4. **How testers report**: where (GitHub issues: whether they are enabled is
+         not checked), what to send (LMS version, OS, SqueezeWax log at INFO,
+         queue counts), and **never the token**.
+      State plainly in the announcement: no marketplace lookup or pressing
+      details before step 10 (if the beta follows it, drop this), the open
+      Discogs Help Center question (Request #1281019), and untested platforms
+      (scanner HTTPS outside macOS; Windows, Docker, piCorePlayer never run).
+      Venue: the Lyrion forum's third-party plugins section; the official
+      plugin directory waits for v1.
+
 ---
 
 ## Blocking — do before build-order step 2
