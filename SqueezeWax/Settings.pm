@@ -714,6 +714,12 @@ sub beforeRender {
 		}
 	}
 
+	# The currency label the price lines use (decisions §15.33). Read from the
+	# pref the token test and the sync write; nothing is fetched for the page.
+	my $currency = $prefs->get('discogsCurrency');
+
+	$params->{currencyCode} = ( defined $currency && $currency ne '' ) ? $currency : '';
+
 	# The attribution link (decisions §9.6, §15.25 ruling 9). The terms want it
 	# to point at the discogs.com page the data came from, and for ownership
 	# that is the user's own collection page. An empty username - never synced,

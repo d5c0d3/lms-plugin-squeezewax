@@ -82,6 +82,12 @@ PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
 	EN	Test token
 
+PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN
+	EN	Prices are shown in %s, your Discogs account's currency.
+
+PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN
+	EN	The currency for prices is not known yet. Press Test token.
+
 PLUGIN_SQUEEZEWAX_ACTIONS_HINT
 	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
 

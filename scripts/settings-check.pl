@@ -1158,6 +1158,42 @@ diag('step 9b ruling 5: a plain discogs.com link beside the collection one');
 		'  ...carrying no rel at all either, so no nofollow' );
 }
 
+diag('the currency hint reads the stored label');
+
+{
+	local $main::DB_READY = 0;
+
+	for my $case ( [ 'EUR', 'EUR' ], [ '', '' ], [ undef, '' ] ) {
+		my ( $stored, $want ) = @$case;
+
+		local $PREFS{discogsCurrency} = $stored;
+
+		my $params = {};
+		Plugins::SqueezeWax::Settings->beforeRender($params);
+
+		is( $params->{currencyCode}, $want,
+			'currency ' . ( defined $stored && $stored ne '' ? "'$stored'" : 'empty/unset' )
+			. ' reaches the template as ' . ( $want ne '' ? "'$want'" : 'empty' ) );
+	}
+}
+
+# The template's two states, against the real strings text.
+{
+	open my $fh, '<', "$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/settings.html" or die $!;
+	my $t = do { local $/; <$fh> };
+
+	like( $t, qr/IF currencyCode.*?CURRENCY_KNOWN.*?replace\('%s', currencyCode\).*?ELSE.*?CURRENCY_UNKNOWN/s,
+		'the page shows the known hint with the code, else the unknown hint' );
+
+	open $fh, '<', "$Bin/../SqueezeWax/strings.txt" or die $!;
+	my $st = do { local $/; <$fh> };
+
+	like( $st, qr/CURRENCY_KNOWN\n\tEN\tPrices are shown in %s, your Discogs account's currency\./,
+		'  ...the known hint names the stored code' );
+	like( $st, qr/CURRENCY_UNKNOWN\n\tEN\tThe currency for prices is not known yet\. Press Test token\./,
+		'  ...the unknown hint tells the user what to press' );
+}
+
 diag('the attribution link points at the user\'s own collection page');
 
 {
