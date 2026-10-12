@@ -5956,3 +5956,48 @@ options are an "as of <last sync>" label, or a sync at most every 6 hours (which
 reverses §15.15 part 1).
 
 2026-10-12: asked Discogs Help Center, Request #1281019. Options offered if the verdict counts as Content: an 'as of <last sync>' label, or a sync at most every 6 h. Awaiting answer; the ruling above stands until then.
+
+### 15.30 Settings during a scan; data left after uninstall
+
+**Decided 2026-10-12**, design chat (`claude/records-0.0.0.17-strings-audits.md`).
+
+#### Part 1 — settings actions during a scan stay refused (owner ruling)
+
+All four actions (save tag names, Test token, Sync, Detect) stay refused while a
+scan runs, as built: `Settings.pm:134`, `:228`, `:349`, `:458`, and
+`settings.html` shows a notice instead of the buttons. Reasons:
+
+- A sync started during a scan cannot write. Verified on hardware (TODO.md,
+  step-8b check 4): `_writeOk` refused, "ownership pass declined".
+- The scan runs its own sync (§15.18), so a manual one would spend requests for
+  nothing.
+- Test token would be harmless, but `Settings.pm:228` treats the refusal as a
+  page convention, and a change is not worth it.
+
+Correction for the record: the 2026-10-12 strings-round prompt said only saving
+tag names was refused. The code refuses all four; the README follows the code.
+
+#### Part 2 — no clean-up on uninstall (research, no change)
+
+Read in `slimserver` `public/9.1` (local ref at `a670a38`; the design chat cited
+`582a1b2`, which is not in the local ref), not run:
+
+- **Verified:** uninstall is `Slim::Utils::PluginManager::_needsUninstall`
+  (`PluginManager.pm:840-865`), at the next restart. It deletes the plugin's code
+  folder (only under `InstalledPlugins`) and its `plugin.state` pref
+  (`PluginManager.pm:31`, `:864`). Nothing else.
+- **Verified:** LMS offers plugins no uninstall hook; the only lifecycle call is
+  `shutdownPlugin`, at every server shutdown (`PluginManager::shutdownPlugins`,
+  `PluginManager.pm:412-428`).
+- **Verified (by the design chat; not re-read in this session):** MusicArtistInfo
+  (`a5ea399`) stores its data in LMS's shared cache (`Slim::Utils::Cache`) and has
+  no clean-up code.
+- **Not checked:** TIDAL, Spotty and other third-party plugins. Evidence for
+  "what most plugins do" is thin.
+- **Inferred:** leaving data after uninstall is normal for LMS plugins, and a
+  reinstall keeps all matches.
+
+Consequence: SqueezeWax keeps `squeezewax.db` and its prefs (including the token)
+after uninstall. No removal feature. Stored values are conclusions and
+identifiers (§9.5), so no Discogs TOU issue. The sensitive leftover is the token;
+users are told to revoke it on Discogs.

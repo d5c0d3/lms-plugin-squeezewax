@@ -2108,6 +2108,9 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-12: at the next design-step build, check the 0.0.0.17 wording on
+      hardware:** on the settings page (`SYNC_DESC`, `TOKEN_DESC`) and in the
+      review queue (`QUEUE_TOKEN_PAUSED`, `QUEUE_BADGE_LATER`).
 - [x] **2026-10-01: the "Records I own" menu icon's hardware checks (decisions
       §15.27).**
       → 2026-10-12, on 0.0.0.16: all PASS (decisions §15.28). Material right on
@@ -3196,6 +3199,9 @@ Each names its sites so the work is mechanical rather than a search.
       bust anything next time. Cheapest at the next package build.
 
 ## Deferred by decision — not forgotten
+
+- [x] ~~**Remove plugin data on uninstall.**~~ Won't do, 2026-10-12: LMS gives
+  plugins no uninstall hook (decisions §15.30 part 2).
 
 - SPDX license headers in source files: deferred. Adding a line at the top of
   each file shifts every file:line citation in the docs.

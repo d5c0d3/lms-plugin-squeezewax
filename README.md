@@ -94,8 +94,9 @@ a development branch; its version series is `0.0.0.N`.
 The token is stored in this server's preferences file in plain text, not
 encrypted. It is not limited to your collection: it can do anything you can do
 on Discogs. Revoke it at the same Developer Settings page if you stop using the
-plugin. If you paste a new token, the stored Discogs username is cleared and
-looked up again.
+plugin: uninstalling SqueezeWax does not delete the token or the SqueezeWax
+database from the server, because LMS removes only the plugin's code. If you
+paste a new token, the stored Discogs username is cleared and looked up again.
 
 ## Settings
 
