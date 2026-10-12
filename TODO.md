@@ -2080,15 +2080,34 @@ Each names its sites so the work is mechanical rather than a search.
       §15.26). The test that separates the install from any restart: a plain
       restart with nothing else changed, then read the logging page. If it
       reproduces, it is LMS behaviour worth raising upstream.
+      → 2026-10-12: not reproduced on two install-and-restart rounds (0.0.0.15,
+      0.0.0.16); `plugin.squeezewax` came up at its `log.conf` level both times.
+      Left open, as one unexplained observation. Close it if it never recurs.
 - [ ] **2026-09-30, v2: link the release the user actually owns.** Owner's
       request 8. Needs the owned release id(s) per album stored, one-to-many
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
 
+- [ ] **2026-10-12: derive fetches masters a tag already gives.** One request per
+      release whose files carry a `DISCOGS_MASTER_ID`-family tag. The answer is
+      never read while the tag is there (`_effectiveMaster`, tag first). Kept by
+      decision (decisions §15.28; the comment above `Derive.pm`'s `$UNSETTLED`).
+      **Revisit trigger:** master-tagged rows exceed ~10% of identified rows (3 of
+      507 on 2026-10-12). Then add "and no master tag" to `$UNSETTLED`, which also
+      changes the settings page's derive count.
+- [ ] **2026-10-12: the "release tag, no master tag" ownership delay is still
+      unobserved.** Such an album, if the owner holds a different pressing, should
+      show unowned after its first scan and become a version only at the next sync,
+      because nothing re-runs the pass after a derive. Real, inferred from code, and
+      not yet seen on hardware.
+
 ## Waiting — needs a real server
 
-- [ ] **2026-10-01: the "Records I own" menu icon's hardware checks (decisions
+- [x] **2026-10-01: the "Records I own" menu icon's hardware checks (decisions
       §15.27).**
+      → 2026-10-12, on 0.0.0.16: all PASS (decisions §15.28). Material right on
+      three themes; SqueezePlay and Classic show the icon (owner); zip contents,
+      serving and recolouring checked by the session.
       1. **Material**: the icon shows, and recolours, on a light, a dark and a
          coloured theme.
       2. **Jivelite/SqueezePlay**: the node shows `owned_svg.png`, not a default

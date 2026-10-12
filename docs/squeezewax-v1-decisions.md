@@ -5729,8 +5729,14 @@ recorded so they are not reused: **unchanged `library_track` rowids** (a
 composite-key table that is emptied and refilled restarts its rowids at 1, per
 SQLite's documented rule, so a rebuild and no rebuild look alike); and **absent
 log lines**, read without first checking the running level. Why plugin categories
-revert is **unexplained**. It is LMS behaviour, not ours, and `TODO.md` carries the
-test that separates install from restart.
+revert is **unexplained**. ~~It is LMS behaviour, not ours~~, and `TODO.md` carries
+the test that separates install from restart.
+**Corrected 2026-10-12 (§15.28):** the revert did **not** reproduce on two later
+install-and-restart rounds (0.0.0.15 on 2026-10-01, 0.0.0.16 on 2026-10-12):
+`plugin.squeezewax` came up at the `log.conf` value both times. "Plugin categories
+revert, core categories keep theirs" was one observation, generalised. The
+2026-09-30 observation stands as made; its cause, and whether it is LMS's, is
+unknown.
 
 #### Settled against the design chat
 
@@ -5817,3 +5823,91 @@ No check script reads `View.pm` source (`plugin-check.pl` stubs the module,
 arguments), so the icon-path-to-file assertion was not added; a new script for
 one assertion was out of the prompt's scope.
 
+### 15.28 0.0.0.16 on hardware: step 9b, the menu icon, and the first new LP end to end
+
+**Observed 2026-10-01 and 2026-10-12** on the reference server (0.0.0.15, then
+0.0.0.16). Design-chat hand-offs 48, 51 and 55; Claude Code reports 49, 52–54 and
+56; the owner's own checks.
+
+#### Step 9b: every check passes
+
+- **Default UI and Material**: `exact` shows "On Discogs: your pressing" and, where
+  a master is stored, "On Discogs: all versions". `version` with a release shows
+  "the pressing your files name" and "all versions". `version` with nothing stored
+  shows the line "You own a version". `absent` shows nothing. No `rel`, no
+  `nofollow`. The owner opened the links; all landed right.
+- **SqueezePlay** shows the one text line (owner).
+- **The named limit is real, observed three times on one player id** (text line
+  ~15:58, both links ~16:15, text line 16:39, 2026-10-12, one build). The variant
+  follows the player's stored controller UA (`canFollowWeblinks`), not the asking
+  app. So a player check has no fixed expected answer: record the variant together
+  with what last controlled the player.
+- **Nothing asks Discogs, proven three ways**: with `network.asynchttp` at DEBUG,
+  20 menu opens across five albums, both menus and both client variants wrote **0
+  lines**, inside one minute bracketed by an independent 36-line-a-minute LAN
+  heartbeat. A synchronous request would have tripped core's unconditional
+  root-logger error (`SimpleSyncHTTP.pm` `new`); none in the log. `discogs.com`
+  occurs 0 times in the log.
+- The plain discogs.com link and both notices are present on the settings page.
+
+#### The menu icon (§15.27)
+
+- Files served; Material recolours the SVG (`stroke` follows the theme, no `#000`
+  left); Material's My Music entry and the Jive menu item both carry
+  `owned_svg.png`, with no `iconStyle`; the Default skin draws a resized 25/50 px
+  copy, so the 512 px source resizes cleanly.
+- **Owner, by eye:** Material is right in light, dark and a coloured theme;
+  SqueezePlay and the Classic skin show the new icon. This answers §15.27's
+  "unverified" Jivelite row: the node's URL is honoured.
+- **Unreconciled:** report 52 rendered Classic's home page and found no `<img>` at
+  all; the owner sees the icon in Classic. Probably two different pages. It
+  changes nothing.
+
+#### The first new LP, from rip to owned, with no "Sync now"
+
+*Various – X-Mix-1 - The MFS Trip*: ripped, tagged with `DISCOGS_RELEASE_ID`
+198756 and `DISCOGS_MASTER_RELEASE_ID` 56108 on all 13 files, added to the
+collection, then one ordinary rescan. Predicted in writing before the scan, and
+right in every particular: node C → D, `exact`, `confirmed`, no queue item. The
+Various gate was never reached, because a tagged release in the collection is
+decided before any artist test. Both links were present immediately: the master
+comes from the tag. View 204 → 205, then the whole chain:
+`_rescanDone` → view rebuilt → `_syncTick` skip → `Derive::arm` → view rebuilt.
+Scan 2 min 58 s.
+
+**A design-chat prediction was wrong, and the build session caught it before the
+scan:** hand-off 51 expected a different-pressing album to stay unowned until the
+next sync. That holds only for an album tagged with a release and **no master**;
+a master tag is used at once (`Ownership::_effectiveMaster`, tag first).
+
+#### Derive fetches masters the tag already gives — kept, with a trigger
+
+The derive job fetched release 198756 and got master 56108, which the tag had
+already supplied and which `_effectiveMaster` never reads while the tag is there.
+This is the documented choice in `Derive.pm` (the comment above `$UNSETTLED`: "Rows
+carrying a tag-derived master are NOT excluded", decided at 2 of 506 rows). It is
+now 3 of 507. **Kept, decided 2026-10-12 by the owner.** It costs one request per
+master-tagged release, once ever. Revisit trigger in `TODO.md`.
+
+#### Core deletes track rows when the music share is offline
+
+With `/mnt/nas-music` unmounted, opening a **track** menu deleted that track's row:
+`Slim::Schema::find` → `_checkValidity` → `_hasChanged` treats a missing file as
+changed, and on Linux core cannot tell an unmounted share from deleted files
+(`Slim/Schema.pm`, the `XXX: Linux/Unix` comment). Seven rows were lost and
+restored by the next rescan with the share back. It is core behaviour, and it is
+not triggered by our provider: any track menu does it. A rescan with the share
+offline would cost the whole local library. Album menus and the view are safe; they
+never ask for a Track object. This is now a hardware-session rule (working
+agreement §4.1).
+
+#### D1 in ordinary operation
+
+That same rescan refreshed `lms_album_id` on 17 rows and changed nothing else on
+any of the 506 existing rows (all identity and verdict columns diffed). Ids moved,
+`album_key` held, no verdict changed.
+
+#### Where the evidence is thin
+
+One library, one player, one new LP, and it was the easy case (fully tagged, release
+owned). The "release tag, no master tag" delay is still unobserved.

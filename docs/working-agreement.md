@@ -79,7 +79,17 @@ badges rather than a crash.
 
 ### 4.1 Hardware sessions
 
-Three rules, all learned the hard way on the reference server.
+```
+Five rules, all learned the hard way on the reference server.
+
+- **Confirm the music share is mounted before anything else.** On 2026-10-12
+  `/mnt/nas-music` was unmounted, and opening track menus made core delete those
+  tracks' rows: on Linux it cannot tell an unmounted share from deleted files
+  (decisions §15.28). While the share is offline, **open no track menu and run no
+  rescan**; album menus and the view are safe.
+- **Copy a WAL database with its `-wal` and `-shm` files**, all three, or the copy
+  is a torn snapshot. `library.db` copied alone showed tracks "vanishing" that had
+  not (2026-10-12).
 
 - **Check the running log level before reasoning from the log.** On 2026-09-30 a
   hardware report concluded that a handler had stopped firing, because its log
