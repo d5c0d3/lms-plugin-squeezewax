@@ -5761,3 +5761,59 @@ look. §15.25's badge ruling is unchanged: it is the same one-per-album,
    versions of one record are the ordinary case, so it is a table, a migration
    and a reversal of §14.10. The ingredient exists: `_indexCollection` holds
    `masters` as a presence set, and a map is a small change.
+
+### 15.27 The "Records I own" menu icon
+
+**Decided 2026-10-01** (build prompt 49, hand-off 50 for the hardware checks).
+
+#### Decision
+One icon path serves all three UIs, using the FilterMusic convention:
+
+- `SqueezeWax/HTML/EN/plugins/SqueezeWax/html/images/owned_svg.png`: 512×512 PNG
+  for the Classic web skin and Jivelite. Core tile style, rebuilt from core
+  `albums.png`'s frame.
+- `SqueezeWax/HTML/EN/plugins/SqueezeWax/html/images/owned.svg`: 24×24 vector
+  for Material, colour `#000`.
+- In `View.pm` `registerNode`, `icon` and `jiveIcon` both become
+  `plugins/SqueezeWax/html/images/owned_svg.png`. This replaces
+  `html/images/albums.png`.
+
+**Change from the supplied SVG:** `stroke="currentColor"` became `stroke="#000"`.
+Geometry is unchanged.
+
+#### Evidence
+Refs checked (not the pinned `refs/`): lms-material `1988d4e` (2026-10-01),
+slimserver `public/9.2` `f0a77cd` (2026-09-23), filtermusic_sb `914d0e7`
+(2026-09-19).
+
+| Claim | State | Source |
+|---|---|---|
+| Material's My Music reads node `jiveIcon`, else `icon` | verified (read) | lms-material `MaterialSkin/Plugin.pm`, `browsemodes` branch (~L1287-1290) |
+| An icon ending `/albums.png` gets Material's built-in "album" icon. Other icons go to `mapIcon` | verified (read) | `html/js/browse-resp.js`, `parseBrowseModes` (~L2884-2903) |
+| A path ending `_svg.png` is swapped for a same-named `.svg` | verified (read) | `html/js/icon-mapping.js`, `mapIconType` (L142-147) |
+| Plugin SVGs are served via `/material/svg/<path>` with a plugin-path fallback | verified (read) | `MaterialSkin/Plugin.pm`, `_svgHandler` (~L3013-3021) |
+| Recolouring replaces literal `#000`, and `fill`/`stroke` values matching `[#0-9a-fA-F.]+` | verified (read) | `_svgHandler` (~L3026-3032) |
+| `currentColor` is **not** recoloured. The regex can't match it | verified (read) | same lines |
+| An un-recoloured `currentColor` icon renders black, so it would be invisible on dark themes | *inferred* (browser default for SVG in `<img>`), not observed | - |
+| Jive menu `icon` = node `jiveIcon` | verified (read) | slimserver `Slim/Menu/BrowseLibrary.pm` ~L699-701 |
+| Classic skin uses node `icon` via `addPageLinks('icons')` | verified (read) | `BrowseLibrary.pm` L342 |
+| Core My Music icons are 512×512 PNG, light tile with dark glyph | verified (file inspection) | `HTML/EN/html/images/albums.png` |
+| The `_svg.png` + `.svg` pairing works on a real server | *inferred*. FilterMusic ships it (`install.xml` `<icon>`), but via the plugin-icon path, not `registerNode` | filtermusic_sb `CHANGELOG.md` 2.0/2.1.1 |
+| Jivelite shows a node's `icon` URL rather than an `iconStyle` derived from `id` | *unverified*. Core comment says default nodes get an `iconStyle` by id. Behaviour for a plugin node with `jiveIcon` was not read in Jivelite source | `BrowseLibrary.pm` ~L694 |
+| Jivelite/server resize of a 512 px plugin PNG | *unverified* | - |
+
+#### Where the evidence is thin
+- The rendering in all three skins is read from source, not observed running.
+- Jivelite source was not checked at all.
+
+#### Side effect
+Material currently shows its own "album" icon for this node, via the
+`albums.png` match. After this change it shows the custom glyph. This is
+intended.
+
+#### Not asserted offline
+No check script reads `View.pm` source (`plugin-check.pl` stubs the module,
+`menu-check.pl` loads it and calls `_build`, neither inspects `registerNode`'s
+arguments), so the icon-path-to-file assertion was not added; a new script for
+one assertion was out of the prompt's scope.
+

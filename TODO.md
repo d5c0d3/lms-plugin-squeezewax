@@ -2087,6 +2087,15 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-01: the "Records I own" menu icon's hardware checks (decisions
+      §15.27).**
+      1. **Material**: the icon shows, and recolours, on a light, a dark and a
+         coloured theme.
+      2. **Jivelite/SqueezePlay**: the node shows `owned_svg.png`, not a default
+         or blank icon (unverified: an id-based `iconStyle` may win).
+      3. **Default web skin and Classic skin**: the PNG shows.
+      4. **The zip** contains both `owned_svg.png` and `owned.svg`.
+
 - [x] **2026-09-30: build-order step 9's hardware checks (the ownership menu
       and the owned view).**
       → 2026-09-30, on 0.0.0.14: all PASS (decisions §15.26). Check 6's second
