@@ -1188,10 +1188,17 @@ diag('the currency hint reads the stored label');
 	open $fh, '<', "$Bin/../SqueezeWax/strings.txt" or die $!;
 	my $st = do { local $/; <$fh> };
 
-	like( $st, qr/CURRENCY_KNOWN\n\tEN\tPrices are shown in %s, your Discogs account's currency\./,
+	like( $st, qr/CURRENCY_KNOWN\n\tEN\tCurrency: %s\n/,
 		'  ...the known hint names the stored code' );
-	like( $st, qr/CURRENCY_UNKNOWN\n\tEN\tThe currency for prices is not known yet\. Press Test token\./,
-		'  ...the unknown hint tells the user what to press' );
+	like( $st, qr/CURRENCY_UNKNOWN\n\tEN\tNot known yet\. Press Test token, or Sync collection now\./,
+		'  ...the unknown hint names both ways to learn it' );
+	like( $st, qr/PLUGIN_SQUEEZEWAX_CURRENCY\n\tEN\tPrices\n/, '  ...the section is titled Prices' );
+	like( $st, qr/PLUGIN_SQUEEZEWAX_CURRENCY_DESC\n\tEN\t[^\n]*Test token[^\n]*sync/, '  ...and its description names both' );
+
+	like( $t, qr/WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC".*?WRAPPER setting title="PLUGIN_SQUEEZEWAX_CURRENCY"/s,
+		'the Prices section comes after Sync' );
+	unlike( $t =~ m{(WRAPPER setting title="PLUGIN_SQUEEZEWAX_TOKEN".*?WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC")}s ? $1 : '', qr/CURRENCY/,
+		'  ...and the hint is no longer in the token block' );
 }
 
 diag('the attribution link points at the user\'s own collection page');

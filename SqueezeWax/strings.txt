@@ -82,11 +82,17 @@ PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
 	EN	Test token
 
+PLUGIN_SQUEEZEWAX_CURRENCY
+	EN	Prices
+
+PLUGIN_SQUEEZEWAX_CURRENCY_DESC
+	EN	Prices in the album menus are in your Discogs account's currency. SqueezeWax learns which currency that is when you press Test token or when a collection sync runs.
+
 PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN
-	EN	Prices are shown in %s, your Discogs account's currency.
+	EN	Currency: %s
 
 PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN
-	EN	The currency for prices is not known yet. Press Test token.
+	EN	Not known yet. Press Test token, or Sync collection now.
 
 PLUGIN_SQUEEZEWAX_ACTIONS_HINT
 	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
