@@ -171,7 +171,7 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Importer ScanSync Settings Queue Menu View Plugin"
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Details Importer ScanSync Settings Queue Menu View Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -190,7 +190,7 @@ for scanner in 0 1; do
 		# skipped here on the grounds that the pass ran only in the server; it
 		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
 		# scanner loads it and its scanner-mode compile is the point.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "View" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ]; }; then
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "View" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ] || [ "$m" = "Details" ]; }; then
 			continue
 		fi
 
@@ -331,6 +331,20 @@ BEGIN {
 	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
 }'
 				note=" (SimpleAsyncHTTP, Misc, Prefs, Schema stubbed; Timers real)"
+				;;
+			Details)
+				# Details.pm (step 10) is the two submenus' fetch, and server-only
+				# for Derive's reason: the scanner has no menus and no event loop.
+				# It pulls in API.pm, hence API_STUB and TAGS_STUB; its transport is
+				# stubbed for the reason the API::Async case gives. Slim::Utils::Strings
+				# is loaded for real, as in the Menu case, with Slim::Utils::Misc cut
+				# for the reason given there.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Misc, Prefs, PluginManager stubbed; Strings real)"
 				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"

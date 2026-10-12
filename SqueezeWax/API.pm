@@ -33,6 +33,9 @@ package Plugins::SqueezeWax::API;
 # (decisions §15.22). It is not a transport of its own: it wires the same
 # functions to the same SimpleAsyncHTTP.
 #
+# Details.pm (step 10) is the fourth, the same shape again: one /releases/{id} or
+# /masters/{id} per submenu open, sharing the same rate state (decisions §15.31).
+#
 # Keeping the decisions out of the shims is what makes them testable:
 # scripts/api-check.pl covers every function here without constructing a
 # transport object, the same division Match.pm's _writeRefusal uses.

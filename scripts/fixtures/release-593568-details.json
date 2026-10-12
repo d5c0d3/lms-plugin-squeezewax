@@ -1,0 +1,45 @@
+{
+ "id": 593568,
+ "uri": "https://www.discogs.com/release/593568-Die-Ärzte-Unplugged-RocknRoll-Realschule",
+ "title": "Unplugged - Rock'n'Roll Realschule",
+ "year": 2002,
+ "country": "Europe",
+ "released": "2002-11-04",
+ "released_formatted": "04 Nov 2002",
+ "labels": [
+  {
+   "name": "Hot Action Records",
+   "catno": "108 934 - 2",
+   "id": 33213
+  }
+ ],
+ "formats": [
+  {
+   "name": "CD",
+   "qty": "1",
+   "descriptions": [
+    "Album"
+   ]
+  }
+ ],
+ "genres": [
+  "Rock"
+ ],
+ "styles": [
+  "Acoustic",
+  "Pop Rock",
+  "Punk"
+ ],
+ "community": {
+  "have": 1622,
+  "want": 35,
+  "rating": {
+   "count": 109,
+   "average": 4.1
+  }
+ },
+ "num_for_sale": 54,
+ "lowest_price": 1.33,
+ "master_id": 63790,
+ "blocked_from_sale": false
+}
