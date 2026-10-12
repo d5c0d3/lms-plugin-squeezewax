@@ -357,6 +357,9 @@ sub open_details {
 	@LOG       = ();
 	$NOTED     = 0;
 
+	# Every open is a fresh one unless the block is about the hold (§15.33).
+	Plugins::SqueezeWax::Details->clearHold unless $opt{keepHold};
+
 	my $db    = dbSnapshot();
 	my $prefs = prefsSnapshot();
 
@@ -707,6 +710,116 @@ for my $token ( '', undef ) {
 
 	is( scalar @REQUESTS, 0, 'an id that is not a number makes no request' );
 	is_deeply( names($items), ['Not found on Discogs'], '  ...and says not found' );
+}
+
+# ===========================================================================
+# 8. The 2-minute in-memory hold (decisions §15.33)
+# ===========================================================================
+
+{
+	local $NOW = $NOW;
+
+	Plugins::SqueezeWax::Details->clearHold;
+	$API->_resetRate;
+
+	my $first = open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, 'hold: the first open fetches' );
+
+	$NOW += 119;
+
+	my $again = open_details( release => 593568, keepHold => 1, responses => [] );
+
+	is( scalar @REQUESTS, 0, '  ...a second open at +119 s makes no request' );
+	is_deeply( $again, $first, '  ...and builds the same lines' );
+
+	$NOW += 2;
+
+	open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, '  ...at +121 s it fetches again and replaces the held reply' );
+
+	# Release and master with one id are held apart.
+	Plugins::SqueezeWax::Details->clearHold;
+
+	open_details( release => 7, keepHold => 1, responses => [ ok_response( encode_json( { country => 'UK' } ) ) ] );
+	open_details( master  => 7, keepHold => 1, responses => [ ok_response( encode_json( { year => 1999 } ) ) ] );
+
+	is( scalar @REQUESTS, 1, '  ...a master with the same id as a held release is its own fetch' );
+
+	my $r = open_details( release => 7, keepHold => 1, responses => [] );
+	my $m = open_details( master  => 7, keepHold => 1, responses => [] );
+
+	is( names($r)->[0], 'UK', '  ...and each is then served from its own held reply' );
+	is( names($m)->[0], 'Year 1999', '  ...without a request' );
+
+	# An error is not held.
+	Plugins::SqueezeWax::Details->clearHold;
+
+	open_details( release => 9, keepHold => 1, responses => [ { code => 500, headers => healthy_headers(), content => '' } ] );
+	open_details( release => 9, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, '  ...an error reply is not held, so the next open requests' );
+
+	# Served while the budget is spent.
+	Plugins::SqueezeWax::Details->clearHold;
+	$API->_resetRate;
+
+	my $held = open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	open_details( release => 11, keepHold => 1, responses => [ { code => 429, content => '' } ] );
+
+	ok( $API->rateWait > 0, '  ...the budget is now spent' );
+
+	my $busy = open_details( release => 593568, keepHold => 1, responses => [] );
+
+	is( scalar @REQUESTS, 0, '  ...a held reply is served with no request' );
+	is_deeply( $busy, $held, '  ...and with its data, not the busy line' );
+
+	$API->_resetRate;
+
+	# Token change empties it.
+	Plugins::SqueezeWax::Details->clearHold;
+
+	open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+	Plugins::SqueezeWax::Details->clearHold;
+	open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, '  ...clearHold empties it, so the next open fetches' );
+
+	# Bounded: entry 51 drops the oldest.
+	Plugins::SqueezeWax::Details->clearHold;
+
+	open_details( master => $_, keepHold => 1, responses => [ ok_response( encode_json( { year => 2000 } ) ) ] )
+		for 1 .. 50;
+	open_details( master => 51, keepHold => 1, responses => [ ok_response( encode_json( { year => 2000 } ) ) ] );
+
+	open_details( master => 2, keepHold => 1, responses => [] );
+	is( scalar @REQUESTS, 0, '  ...entry 51 keeps the second oldest held' );
+
+	open_details( master => 1, keepHold => 1, responses => [ ok_response( encode_json( { year => 2000 } ) ) ] );
+	is( scalar @REQUESTS, 1, '  ...and has dropped the oldest' );
+
+	# Currency and variant come from the current open.
+	Plugins::SqueezeWax::Details->clearHold;
+
+	open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
+
+	my $jpy = do {
+		local $PREFS{discogsCurrency} = 'JPY';
+		open_details( release => 593568, keepHold => 1, responses => [] );
+	};
+
+	is( scalar @REQUESTS, 0, '  ...currency: still held' );
+	is( names($jpy)->[5], 'For sale: 54, from 1.33 JPY', '  ...but labelled with the current currency' );
+
+	my $player = open_details( release => 593568, keepHold => 1, linkCapable => 0, responses => [] );
+
+	is( scalar @REQUESTS, 0, '  ...variant: still held' );
+	is( scalar @{ weblinked($player) }, 0, '  ...but built for a player, with no weblink' );
+	is( names($player)->[-1], 'discogs.com/release/593568', '  ...and the short address' );
+
+	Plugins::SqueezeWax::Details->clearHold;
 }
 
 # ===========================================================================

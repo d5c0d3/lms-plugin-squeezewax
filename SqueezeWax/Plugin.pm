@@ -80,6 +80,10 @@ $prefs->setChange( sub {
 	# labelled with another account's currency would be a wrong one.
 	$prefs->set( 'discogsCurrency', '' );
 
+	# And whatever the details menus are holding in memory (decisions §15.33).
+	require Plugins::SqueezeWax::Details;
+	Plugins::SqueezeWax::Details->clearHold;
+
 	require Plugins::SqueezeWax::API::Async;
 	Plugins::SqueezeWax::API::Async->clearTokenRejected;
 }, 'discogsToken' );

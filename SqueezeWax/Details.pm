@@ -16,9 +16,10 @@ package Plugins::SqueezeWax::Details;
 # ONE REQUEST PER OPEN. /releases/{id} or /masters/{id}, no parameters: Discogs
 # ignores curr_abbr on both and prices in the account's currency (Phase 0, T1).
 # No retry - a 429 on a menu means "busy", and a user waiting on a menu is not a
-# sync that can sit out a window. No cache either: LMS does not cache a list that
-# holds code references (XMLBrowser.pm:342-347), so a reopened submenu fetches
-# again, and Discogs' six-hour rule never comes into it.
+# sync that can sit out a window. LMS does not cache a list that holds code
+# references (XMLBrowser.pm:342-347), so a skin that re-asks while the user
+# scrolls would fetch again each time; hence the short in-memory hold below
+# (decisions §15.33).
 #
 # THE SAME BUDGET AS EVERYTHING ELSE. A third small server-side caller, the shape
 # of Derive.pm's _fire / _handle, over API.pm's buildRequest, classifyResponse,
@@ -26,10 +27,11 @@ package Plugins::SqueezeWax::Details;
 # ($run, _fail, the retry loop). When the budget is spent this does not wait: it
 # says so and makes no request (§15.31 ruling 9).
 #
-# NOTHING IS STORED. The reply is read in memory, turned into text lines and
-# dropped when the callback returns: no table, no pref, no cache (§9.5). The one
-# pref read here, discogsCurrency, is written by the token test and the server
-# sync, never from a details reply.
+# NOTHING IS STORED ON DISK. No table, no pref, no cache (§9.5). The one pref
+# read here, discogsCurrency, is written by the token test and the server sync,
+# never from a details reply. In memory only, the last good reply per (kind, id)
+# is held for HOLD_SECONDS, trimmed to the fields the lines use, and emptied
+# whenever the token changes (§15.33).
 #
 # THE NOTICE GOES WITH THE DATA (§9.6). Every list that shows Discogs data ends
 # with "Data provided by Discogs", linked to the reply's own uri in an app that
@@ -52,6 +54,14 @@ my $prefs = preferences('plugin.squeezewax');
 # Only for a reply that carries no uri of its own, so the notice still links to
 # the page the data came from. The same public page form Menu.pm links to.
 use constant PAGE_URL => 'https://www.discogs.com/';
+
+# The in-memory hold (decisions §15.33): the last successful reply per
+# (kind, id), trimmed to what the lines use, with the time it arrived.
+use constant HOLD_SECONDS => 120;
+use constant HOLD_MAX     => 50;
+
+my %HELD;        # "kind:id" => { at => time, data => trimmed reply }
+my @HELD_ORDER;  # keys, oldest first
 
 # Separators inside one line. Written as code points so this file stays ASCII.
 use constant DASH => " \x{2013} ";
@@ -101,6 +111,14 @@ sub _open {
 
 	return $callback->( [ _text( string('PLUGIN_SQUEEZEWAX_DETAILS_NO_TOKEN') ) ] )
 		unless defined $token && $token ne '';
+
+	# A held reply is served first, even while the budget is spent.
+	if ( my $held = _held( $kind, $id ) ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info("details: $kind $id served from the 2-minute hold");
+
+		return _respond( $callback, $kind, $id, $held, $linkCapable );
+	}
 
 	if ( my $wait = Plugins::SqueezeWax::API->rateWait ) {
 		main::INFOLOG && $log->is_info
@@ -164,7 +182,17 @@ sub _handle {
 			$ERROR_LINE{$error} || 'PLUGIN_SQUEEZEWAX_DETAILS_NO_ANSWER' ) ) ] );
 	}
 
-	my $data = ref $result->{data} eq 'HASH' ? $result->{data} : {};
+	my $data = _trim( $kind, ref $result->{data} eq 'HASH' ? $result->{data} : {} );
+
+	_hold( $kind, $id, $data );
+
+	return _respond( $callback, $kind, $id, $data, $linkCapable );
+}
+
+# The lines for one reply, held or fresh. The currency and the link variant are
+# read here, from the current open, never from the hold.
+sub _respond {
+	my ( $callback, $kind, $id, $data, $linkCapable ) = @_;
 
 	my $currency = $prefs->get('discogsCurrency');
 
@@ -176,6 +204,87 @@ sub _handle {
 		( map { _text($_) } @lines ),
 		_notice( $data->{uri} || PAGE_URL . "$kind/$id", $linkCapable, $kind, $id ),
 	] );
+}
+
+# ---------------------------------------------------------------------------
+# The hold. In memory only; nothing here is written anywhere.
+# ---------------------------------------------------------------------------
+
+# Only the fields _releaseLines and _masterLines read, same shape as the reply.
+sub _trim {
+	my ( $kind, $data ) = @_;
+
+	my %t = map { $_ => $data->{$_} }
+		grep { defined $data->{$_} && !ref $data->{$_} }
+		qw( uri country released_formatted num_for_sale lowest_price year );
+
+	$t{genres} = $data->{genres} if ref $data->{genres} eq 'ARRAY';
+	$t{styles} = $data->{styles} if ref $data->{styles} eq 'ARRAY';
+
+	if ( $kind eq 'release' ) {
+		my $label  = ref $data->{labels}  eq 'ARRAY' ? $data->{labels}[0]  : undef;
+		my $format = ref $data->{formats} eq 'ARRAY' ? $data->{formats}[0] : undef;
+		my $c      = ref $data->{community} eq 'HASH' ? $data->{community} : {};
+		my $r      = ref $c->{rating} eq 'HASH' ? $c->{rating} : {};
+
+		$t{labels}  = [ { name => $label->{name}, catno => $label->{catno} } ]
+			if ref $label eq 'HASH';
+		$t{formats} = [ { name => $format->{name}, descriptions => $format->{descriptions} } ]
+			if ref $format eq 'HASH';
+		$t{community} = {
+			have   => $c->{have},
+			want   => $c->{want},
+			rating => { average => $r->{average}, count => $r->{count} },
+		};
+	}
+
+	return \%t;
+}
+
+sub _held {
+	my ( $kind, $id ) = @_;
+
+	my $entry = $HELD{"$kind:$id"} or return;
+
+	return $entry->{data} if time() - $entry->{at} < HOLD_SECONDS;
+
+	_drop("$kind:$id");
+
+	return;
+}
+
+sub _hold {
+	my ( $kind, $id, $data ) = @_;
+
+	my $key = "$kind:$id";
+
+	_drop($key);
+
+	while ( @HELD_ORDER >= HOLD_MAX ) {
+		_drop( $HELD_ORDER[0] );
+	}
+
+	$HELD{$key} = { at => time(), data => $data };
+	push @HELD_ORDER, $key;
+
+	return;
+}
+
+sub _drop {
+	my ($key) = @_;
+
+	delete $HELD{$key};
+	@HELD_ORDER = grep { $_ ne $key } @HELD_ORDER;
+
+	return;
+}
+
+# Everything held, because the token changed and it may be another account's.
+sub clearHold {
+	%HELD       = ();
+	@HELD_ORDER = ();
+
+	return;
 }
 
 # ---------------------------------------------------------------------------

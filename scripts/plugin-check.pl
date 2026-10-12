@@ -259,6 +259,16 @@ BEGIN {
 	*{'Plugins::SqueezeWax::Derive::arm'} = sub { push @ARMED, 1; return 1 };
 }
 
+# Details.pm likewise (SimpleAsyncHTTP). Only the token-change hook's call to
+# clearHold is under test here; the hold itself is scripts/details-check.pl's.
+our @HOLD_CLEARS;
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Details.pm'} = 1;
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Details::clearHold'} = sub { push @HOLD_CLEARS, 1; return };
+}
+
 # Match.pm is stubbed for the same reason Derive.pm is: the real module pulls in
 # Library.pm and Slim::Music::Import, and what is under test here is the
 # DECISION - whether the logic-version check invalidates, and whether it records
@@ -334,6 +344,7 @@ sub reset_state {
 	@SUBSCRIBED = ();
 	@SKIPS    = ();
 	@CLEARED  = ();
+	@HOLD_CLEARS = ();
 	@WRITES   = ();
 	$SCANNING = 0;
 	$REJECTED = 0;
@@ -651,6 +662,23 @@ diag('changing the token clears what described the old one');
 
 	is( $PREFS{discogsCurrency}, '',
 		'changing the token clears the stored currency label' );
+}
+
+# And the details menus' in-memory hold (decisions §15.33): it may be another
+# account's.
+{
+	reset_state();
+
+	$prefs_under_test->set( 'discogsToken', 'hold-token' );
+
+	is( scalar @HOLD_CLEARS, 1, 'changing the token empties the details hold' );
+
+	reset_state();
+	$PREFS{discogsToken} = 'hold-token';
+
+	$prefs_under_test->set( 'discogsToken', 'hold-token' );
+
+	is( scalar @HOLD_CLEARS, 0, '  ...and saving it unchanged does not' );
 }
 
 {
