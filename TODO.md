@@ -1892,7 +1892,7 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **2026-09-07, recorded not designed: master-level badge fallback vs.
       pressing-level collectors.** Keep both answers recoverable — product
       decision, not yet taken.
-- [ ] **2026-09-07, recorded not designed: is a derived "owned" label our
+- [x] **2026-09-07, recorded not designed: is a derived "owned" label our
       conclusion, or one bit of Restricted Data under the Discogs TOU?**
       Leaning conclusion; NOT settled. Kept academic by choosing the sync
       interval on UX grounds regardless. Do not record as decided.
@@ -1900,6 +1900,9 @@ Each names its sites so the work is mechanical rather than a search.
       conclusion with no "Data provided by Discogs" beside it, which is compliant
       only on the "our conclusion" reading (decisions §15.25 ruling 4). Revisit
       trigger: any Discogs guidance on derived data.
+      → 2026-10-12: CLOSED as a design question. Decided as the "our conclusion"
+      reading, with the source evidence and its thin spots, in decisions §15.29.
+      The optional Discogs confirmation is a new item under Housekeeping.
 - [ ] **`type=master` search results carry `user_data.in_collection`/
       `in_wantlist` per token holder, undocumented.** Recorded in
       `squeezewax-v1-decisions.md` §9.9.
@@ -2065,7 +2068,7 @@ Each names its sites so the work is mechanical rather than a search.
       `CLAUDE.md`'s "every server-side consumer shares it". One user-pressed
       request; small risk.
 
-- [ ] **2026-09-29: the two Discogs notices have no README to go into.** Step 9
+- [x] **2026-09-29: the two Discogs notices have no README to go into.** Step 9
       put both on the settings page (decisions §15.25 ruling 4), and the plan
       also asked for them "in the repository README / usage documentation".
       There is no README and no user-facing usage doc in this repo — the only
@@ -2074,6 +2077,8 @@ Each names its sites so the work is mechanical rather than a search.
       changes the plugin's Manage Plugins description, which is
       naming-sensitive (design §1). Not decided. The text is verbatim in
       `strings.txt` under `PLUGIN_SQUEEZEWAX_ATTRIBUTION_*`.
+      → 2026-10-12: README.md added with the non-affiliation notice; the
+      "Data provided by Discogs" line stays on the settings page only (§15.29).
 - [ ] **2026-09-30: plugin log categories revert to ERROR after startup.** Seen
       on 0.0.0.14: ours, Spotty's and four others ran at `ERROR` in the server
       while `log.conf` said otherwise; core categories kept theirs (decisions
@@ -2883,6 +2888,27 @@ Each names its sites so the work is mechanical rather than a search.
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
+
+- [ ] **2026-10-12: optional Discogs Help Center reply on ownership verdict vs.
+      the 6-hour display rule.** Record the date sent and the answer under
+      decisions §15.29. If Discogs disagrees: an "as of <last sync>" label, or a
+      sync at most every 6 h (reverses §15.15 part 1).
+- [ ] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
+      **and any Discogs logo use** against the Application Name and Description
+      Policy (§15.29).
+- [ ] **2026-10-12: `strings.txt` `PLUGIN_SQUEEZEWAX_SYNC_DESC` is inaccurate.** It says
+      nothing about the collection is stored, but the last-sync time and item
+      count are stored in `discogs_sync_state`. Make it accurate.
+- [ ] **2026-10-12: `strings.txt` `TOKEN_DESC` and `QUEUE_TOKEN_PAUSED` still say
+      "owned badge" / "badged".** No badge exists (§15.25).
+- [ ] **2026-10-12, optional: `ATTRIBUTION_NOTAFFILIATED` uses straight quotes;**
+      Discogs' own text uses curly ones.
+- [ ] **2026-10-12: audit every delete path for `discogs_match`;** confirm the README's
+      "no expiry" statement.
+- [ ] **2026-10-12: audit `use` lines for Perl modules outside core LMS;** confirm the
+      README's "no add-ons required".
+- [ ] **2026-10-12, needs a real server: install via Additional Repositories end
+      to end,** and whether LMS needs a restart.
 
 - [ ] **2026-09-24: `Plugin.pm:90-97` is a comment about the removed interval
       pref's floor and `intlimit`, with no code under it.** The pref hash closes

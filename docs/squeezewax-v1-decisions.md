@@ -5911,3 +5911,46 @@ any of the 506 existing rows (all identity and verdict columns diffed). Ids move
 
 One library, one player, one new LP, and it was the easy case (fully tagged, release
 owned). The "release tag, no master tag" delay is still unobserved.
+
+### 15.29 License, plugin name and display freshness
+
+**Decided 2026-10-12**, design chat (`claude/research-license-name-freshness.md`).
+
+#### License: GPL-2.0-or-later
+
+`LICENSE` at the repo root is GNU GPL v2, fetched from
+`gnu.org/licenses/old-licenses/gpl-2.0.txt`. It matches LMS (`slimserver`
+`public/9.1`, `License.txt`, GPL v2; **verified**). The plugin ships no Discogs data
+and no app key (§9.1), so no conflict with the API Terms of Use's licensing clause
+is expected (**inferred**). Whether an LMS plugin must be GPL at all is a legal
+question this sidesteps (**unverified**).
+
+#### Plugin name
+
+"SqueezeWax for Discogs" follows the "unique name + for Discogs" form in Discogs'
+Application Name and Description Policy (effective 2019-12-11, **verified**
+2026-10-12). **Not yet checked:** the name LMS actually displays, and any Discogs
+logo use (`TODO.md`).
+
+#### Display freshness (Terms of Use, API Use and Restrictions, item 5)
+
+The stored ownership verdict (`discogs_match.ownership`) is the user's own
+conclusion, not Discogs Content, so the 6-hour display rule does not apply to it.
+Evidence, **verified by reading source, not run**:
+
+- `View.pm` `_build`, `_ownedKeys`: "Records I own" is LMS's own album grid
+  filtered by `ownership IN ('exact','version')`; no Discogs data is shown.
+- `Menu.pm` `_itemFor`, `_links`: fixed plugin strings, or links to discogs.com
+  release and master pages. `scripts/menu-check.pl` asserts that no menu item
+  carries Discogs data.
+- The only Discogs-origin values on screen are IDs in link URLs; the Terms list
+  identifiers as CC0 Data.
+- Consistent with §9.5 (store conclusions, not Content) and §15.15 part 1 (no
+  scheduled calls).
+
+**Where the evidence is thin.** The Terms list a user's collection as Restricted
+Data (noted at step 9 phase 0), and Discogs has given no guidance on derived
+verdicts. An optional confirmation through the Discogs Help Center was drafted
+2026-10-12; date sent and answer to be recorded here. If Discogs disagrees, the
+options are an "as of <last sync>" label, or a sync at most every 6 hours (which
+reverses §15.15 part 1).
