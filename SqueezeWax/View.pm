@@ -77,13 +77,20 @@ sub init {
 	# whole library. The shape is core's own demo's
 	# (Slim/Plugin/LibraryDemo/Plugin.pm), including the condition, which is
 	# what lets a user hide the node.
+	#
+	# One path serves every UI (decisions §15.27): `icon` is what the Classic
+	# skin gets through registerNode's addPageLinks('icons', ...) call
+	# (Slim/Menu/BrowseLibrary.pm), `jiveIcon` is what becomes the Jive menu's
+	# `icon` (BrowseLibrary.pm, the `$node->{'jiveIcon'}` branch). Material is
+	# not in refs/; §15.27 records it swapping the `_svg.png` name for the
+	# sibling owned.svg.
 	Slim::Menu::BrowseLibrary->registerNode({
 		type         => 'link',
 		name         => 'PLUGIN_SQUEEZEWAX_LIBRARY_OWNED',
 		params       => { library_id => Slim::Music::VirtualLibraries->getRealId(LIBRARY_ID) },
 		feed         => \&Slim::Menu::BrowseLibrary::_albums,
-		icon         => 'html/images/albums.png',
-		jiveIcon     => 'html/images/albums.png',
+		icon         => 'plugins/SqueezeWax/html/images/owned_svg.png',
+		jiveIcon     => 'plugins/SqueezeWax/html/images/owned_svg.png',
 		homeMenuText => 'PLUGIN_SQUEEZEWAX_LIBRARY_OWNED',
 		condition    => \&Slim::Menu::BrowseLibrary::isEnabledNode,
 		id           => NODE_ID,
