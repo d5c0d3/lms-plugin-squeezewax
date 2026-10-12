@@ -5954,3 +5954,5 @@ verdicts. An optional confirmation through the Discogs Help Center was drafted
 2026-10-12; date sent and answer to be recorded here. If Discogs disagrees, the
 options are an "as of <last sync>" label, or a sync at most every 6 hours (which
 reverses §15.15 part 1).
+
+2026-10-12: asked Discogs Help Center, Request #1281019. Options offered if the verdict counts as Content: an 'as of <last sync>' label, or a sync at most every 6 h. Awaiting answer; the ruling above stands until then.

@@ -71,7 +71,7 @@ PLUGIN_SQUEEZEWAX_TOKEN
 	EN	Discogs personal access token
 
 PLUGIN_SQUEEZEWAX_TOKEN_DESC
-	EN	Required for collection sync and the owned badge. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
+	EN	Required for collection sync, which decides the ownership shown in album menus and the "Records I own" view. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
 
 PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS
 	EN	https://www.discogs.com/settings/developers
@@ -126,7 +126,7 @@ PLUGIN_SQUEEZEWAX_SYNC
 	EN	Discogs collection
 
 PLUGIN_SQUEEZEWAX_SYNC_DESC
-	EN	SqueezeWax reads your Discogs collection to work out which albums in this library you own on record. It only counts what is there; nothing about your collection is stored, and your library is not changed. This happens automatically during each library rescan, and you can run it now with the button.
+	EN	SqueezeWax reads your Discogs collection to work out which albums in this library you own on record. It only counts what is there, and your library is not changed. Your collection itself is not stored: SqueezeWax keeps only its own conclusions about your albums, the time of the last sync and how many items it found. This happens automatically during each library rescan, and you can run it now with the button.
 
 PLUGIN_SQUEEZEWAX_SYNC_BUTTON
 	EN	Sync collection now
@@ -177,7 +177,7 @@ PLUGIN_SQUEEZEWAX_QUEUE_DESC
 	EN	Albums SqueezeWax could not decide about on its own.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TOKEN_PAUSED
-	EN	Discogs rejected the access token, so automatic collection syncs are paused. New albums will not be badged until you fix the token in Settings or press "Sync collection now".
+	EN	Discogs rejected the access token, so automatic collection syncs are paused. Ownership of new albums will not be shown until you fix the token in Settings or press "Sync collection now".
 
 PLUGIN_SQUEEZEWAX_QUEUE_OPEN
 	EN	Open the review queue
@@ -282,7 +282,7 @@ PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS
 	EN	View on Discogs
 
 PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER
-	EN	The badge changes at the next collection sync, not now.
+	EN	Ownership changes at the next collection sync, not now.
 
 PLUGIN_SQUEEZEWAX_QUEUE_LINKED
 	EN	Linked.

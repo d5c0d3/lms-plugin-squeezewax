@@ -14,7 +14,13 @@ never plays audio and never changes your Discogs collection.
   9.1.1.
 - A Discogs account, with your records in your Discogs collection.
 - A Discogs personal access token (see [Discogs setup](#discogs-setup)).
-- No other plugins or add-ons are required.
+- No other plugins or add-ons are required. Every Perl module the plugin uses
+  ships with LMS or with Perl itself, except HTTPS support (`IO::Socket::SSL`),
+  which the plugin uses only through LMS's own HTTP classes. LMS bundles that
+  for macOS only; on other systems it comes from the system's Perl, and without
+  it the scan-time sync fails with only a warning in the scanner log (the
+  fallback sync after the scan is then the one that works, and only if the
+  server has HTTPS too).
 
 ### For good results
 
@@ -74,7 +80,7 @@ Settings → Plugins → Additional Repositories:
     https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/repo.xml
 
 Then install and enable SqueezeWax from the plugin list. This repository is
-a development branch; its version series is `0.0.0.N` (currently 0.0.0.16).
+a development branch; its version series is `0.0.0.N`.
 
 ## Discogs setup
 
@@ -106,8 +112,10 @@ other than empty.
 | Review queue | Link to the page listing albums SqueezeWax could not decide. | |
 | Master releases | Shown only while there is background work: progress of asking Discogs for master releases. | |
 
-While a library scan is running, saving tag names and the three buttons are
-refused, and the page says so.
+While a library scan is running, the page shows a "scan is running" notice in
+place of the Test token, Sync collection now and Detect buttons, and a save does
+not change the tag names (the token field still saves). The same notice appears
+if one of those actions is submitted anyway.
 
 ## Using it
 
@@ -153,8 +161,12 @@ refused, and the page says so.
 - **Stored in LMS preferences:** the token (plain text), your Discogs username
   (used for the link back to your collection), and the last sync error.
 - **Refresh:** see Syncing above. Nothing is fetched on a schedule. No
-  expiry for stored matches was found in the code; you can remove a match in
-  the review queue.
+  expiry: nothing in the plugin deletes a stored match because of its age. A
+  match row is removed only by "Remove this match" in the review queue, or when
+  a scan finds that its tags no longer name a release and the row carries no
+  decision. Removing or changing the token, or uninstalling the plugin, deletes
+  nothing: `squeezewax.db` stays in LMS's preferences directory until you delete
+  it.
 - Requests are limited to stay within Discogs' limit of 60 requests a minute.
   A collection of N items costs about N/100 requests per sync.
 
