@@ -2118,8 +2118,10 @@ Each names its sites so the work is mechanical rather than a search.
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
 
-- [ ] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
-      next sync.** `API->rateWait` is a stored figure, not a countdown: it changes
+- [x] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
+      next sync.** → 2026-10-13: FIXED, decisions §15.32: `rateWait` counts down
+      from the last counted reply, so a busy submenu and Derive both clear when
+      the window passes. `API->rateWait` is a stored figure, not a countdown: it changes
       only when a reply is noted (`API.pm` `noteResponse`). Step 10's rule (plan
       §3, ruling 9) is "rateWait non-zero → busy line, no request", so once it is
       non-zero no submenu open can clear it; only a sync or derive reply does.
@@ -2134,7 +2136,8 @@ Each names its sites so the work is mechanical rather than a search.
       older:** `Derive.pm` re-arms on "the rate budget is spent" every 60 s and
       re-checks the same stale figure, so with no sync it never fetches again -
       inferred from code, not seen on hardware.
-- [ ] **2026-10-13: README still describes step 9b's menu.** `README.md` (the
+- [x] **2026-10-13: README still describes step 9b's menu.** → 2026-10-13:
+      DONE, decisions §15.32: menu paragraph, data and privacy, roadmap. `README.md` (the
       menu paragraph, "On Discogs: your pressing" / "the pressing your files
       name" / "all versions") names strings step 10 replaced or retired, and its
       roadmap line says marketplace lookup is "not yet implemented". Plan step
@@ -2155,6 +2158,11 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
+      Restart the server with Discogs unreachable (network off, or a wrong DNS
+      entry for `api.discogs.com`), open Release details: "busy, try again in
+      N s". Restore the network, open it again a few times: N falls, and once
+      it reaches 0 the submenu shows the details without a sync in between.
 - [ ] **2026-10-12: step 10 hardware checks** (`plans/build-order-step-10-details.md`
       §7), on 0.0.0.18, together with the 0.0.0.17 wording item below.
       1. **Log level first** (working agreement §4.1): `plugin.squeezewax` at INFO.

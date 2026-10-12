@@ -6224,3 +6224,21 @@ committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
   the slimserver pin.
 - ~~Requests per open (one or two).~~ Settled by ruling 14: one per open.
 - The throttle: `API.pm` `rateWait` / `noteResponse`.
+
+### 15.32 The rate wait counts down
+
+**Decided 2026-10-13**, design chat (review of hand-off 62, owner's answers).
+
+**The rate wait counts down.**
+- `API->rateWait` returns the seconds left in the current window, measured
+  from the last counted reply. It used to return a stored figure that only a
+  new reply could change.
+- Found in hand-off 62's report. A submenu that saw "busy" never cleared it,
+  and Derive could re-arm forever on the same figure. That second case was
+  inferred from code.
+- Grounded in Discogs' documented window: it resets after 60 idle seconds
+  (§9.2).
+- `accountRequest` is unchanged.
+- Also from that report:
+  - the player notice shows `discogs.com/{release|master}/{id}`;
+  - the README is brought up to step 10.
