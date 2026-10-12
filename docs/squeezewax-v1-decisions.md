@@ -6242,3 +6242,42 @@ committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
 - Also from that report:
   - the player notice shows `discogs.com/{release|master}/{id}`;
   - the README is brought up to step 10.
+
+
+### 15.33 Hardware findings of step 10
+
+**Decided 2026-10-13**, design chat (hardware report 64, owner's answers).
+
+1. **A 2-minute in-memory hold for the details submenus.** Amends §15.31
+   ruling 11, "no cache".
+   - Report 64, check 6f: scrolling inside Release details in Material made 10
+     Discogs requests in 13 s, and master details 3. LMS does not cache a list
+     that holds code references (`Slim/Control/XMLBrowser.pm:342-347`), so each
+     fetch Material makes calls the code again.
+   - `Details.pm` holds the last **successful** reply per (kind, id), trimmed to
+     the fields the lines use, with its arrival time, for `HOLD_SECONDS = 120`.
+     Within the hold an open makes no request, even while `rateWait` is
+     non-zero. After it, the next open fetches and replaces the held reply.
+   - Labels, the currency and the player or link variant come from the current
+     open, never from the hold. Errors, busy and no-token results are never
+     held. At most 50 replies; the oldest is dropped at the 51st. The whole hold
+     is emptied when the token changes (`Plugin.pm`'s `setChange` handler),
+     because it may be another account. Nothing goes to disk.
+   - **Terms reading, inferred:** a hold this short, in memory, serving the same
+     user's open menu, is "necessary to provide a service" (TOU item 5), and far
+     inside the six-hour display rule.
+2. **A currency hint on the Settings page**, at the owner's request: "Prices are
+   shown in EUR, your Discogs account's currency." with the stored code, or "The
+   currency for prices is not known yet. Press Test token." when empty. Rendered
+   from the pref; nothing is fetched for it.
+3. **No username in the log.** The two "collection sync starting" INFO lines
+   (`API/Async.pm`, `API/Sync.pm`) no longer name the Discogs user. No other log
+   line in `SqueezeWax/` printed the username or the token.
+4. **Check 10a's expectation was wrong.** Saving an unchanged token fires no
+   change handler (`Slim/Utils/Prefs/Base.pm:95-98`), so the currency label
+   correctly stays.
+5. **The logging rule.** Never raise `network.asynchttp`, `network.http` or
+   any logger that prints HTTP requests above ERROR while a Discogs request can
+   happen: at DEBUG LMS logs the `Authorization` header with the token. Count
+   requests with `ss` and our own log line. Recorded in working agreement
+   §4.1.

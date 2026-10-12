@@ -826,11 +826,13 @@ Explicitly **not** automatic/ambient — fires only when the user triggers it.
   rating, sort order, ship-to country.~~ **Dropped, §15.31.**
 - ~~Because it is on-demand, rate-limit pressure is low; results can still be
   cached briefly per release.~~ **Dropped, §15.31:** no cache. LMS does not
-  cache a menu list holding code-backed items, so every open fetches live.
+  cache a menu list holding code-backed items; amended by the 2-minute in-memory
+  hold, §15.33.
 
 **Corrected 2026-10-12 (decisions §15.31) — what v1 builds.** Two submenus on
 owned albums (§4), each fetching **only when opened**, with **one request**, and
-storing nothing. All lines are plain text, one per row; a line whose source field
+storing nothing on disk (a reply is held in memory for up to 2 minutes,
+decisions §15.33). All lines are plain text, one per row; a line whose source field
 is missing or empty is left out, never shown blank.
 
 **Release details** (`exact` only, from `/releases/{id}`):

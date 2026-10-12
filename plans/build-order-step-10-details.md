@@ -127,8 +127,9 @@ source field is missing or empty is left out, never shown blank.
   decides whether apps wait that long (§7).
 - **Token:** read from the prefs as the sync does. With no token: one line,
   "Add your Discogs token in Settings", and no request.
-- **Nothing is written anywhere:** no table, no prefs, no cache. Replies are
-  dropped once the lines are built.
+- **Nothing is written anywhere:** no table, no prefs, no cache on disk. Since
+  hardware report 64 a reply is held in memory for up to 2 minutes (decisions
+  §15.33).
 - **Logging:** one INFO line per request (path and outcome), so hardware can
   count requests per open.
 
@@ -276,7 +277,8 @@ same hardware session (`TODO.md`, 2026-10-12).
   Whether Material, SqueezePlay and the Default UI wait up to 15 s is unknown.
   This is §7.4.
 - **Paging re-fetch** is inferred from "lists with code are not cached"
-  (`:342-347`). Not observed.
+  (`:342-347`). Observed in report 64 (10 requests in 13 s); answered by the
+  2-minute hold, decisions §15.33.
 - **The price follows the account currency.** Inferred from T1, one account
   (EUR): the parameter is ignored, and 1.33 equals the labelled €1.33.
 - **A stored label can lag** if the user changes currency on Discogs. This is an

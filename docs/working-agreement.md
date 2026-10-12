@@ -80,7 +80,7 @@ badges rather than a crash.
 ### 4.1 Hardware sessions
 
 ```
-Five rules, all learned the hard way on the reference server.
+Six rules, all learned the hard way on the reference server.
 
 - **Confirm the music share is mounted before anything else.** On 2026-10-12
   `/mnt/nas-music` was unmounted, and opening track menus made core delete those
@@ -97,13 +97,22 @@ Five rules, all learned the hard way on the reference server.
   reverted to `ERROR` after startup, whatever `log.conf` said (decisions §15.26).
   Read the level on the server's logging settings page first. And prefer
   evidence that does not depend on our own logging: rendered pages, database
-  state, `network.asynchttp` for outbound requests.
+  state, our own one-line-per-reply log for outbound requests (never
+  `network.asynchttp`; see the rule below).
 - **Never read the prefs file.** Pref **key names** come from the source
   (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** comes from the
   owner, if it is needed at all. A session looking up key names grepped
   `squeezewax.prefs` on 2026-09-28 and printed the Discogs token into its own
   transcript, which had to be rotated. A grep for a name does not need the file
   that holds the values.
+- **Never raise `network.asynchttp`, `network.http`, or any other logger that
+  prints HTTP requests above ERROR while a Discogs request can happen.** At
+  DEBUG, LMS logs the whole request, the `Authorization: Discogs token=...`
+  header included (`Slim/Networking/Async.pm:227-229`,
+  `Async/HTTP.pm:278-300`). To count requests, use the kernel's socket table
+  (`ss`), which shows no secrets, together with our own one-line-per-reply log.
+  Step 9b check 8's recipe was safe only because it expected zero requests.
+  Found by hardware session 64, which refused the hand-off's instruction.
 - **A session may install a SqueezeWax package itself**, and should, rather than
   stopping to ask. Decided 2026-09-29. The sanctioned method, recorded so it is
   repeated rather than re-invented: drive the Plugins page over localhost HTTP

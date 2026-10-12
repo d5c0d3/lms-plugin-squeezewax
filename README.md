@@ -135,7 +135,8 @@ if one of those actions is submitted anyway.
   - Each entry appears only where the release or master ID is known. An album
     whose tags disagree shows only the ownership line.
   - **The submenus ask Discogs only when you open them**, one request each, and
-    store nothing. Pressing details show the label and catalogue number;
+    store nothing on disk; a reply is kept in memory for up to 2 minutes, so
+    scrolling a submenu does not ask again. Pressing details show the label and catalogue number;
     format, country and date; genre and styles; how many Discogs users have and
     want it; its rating; and how many copies are for sale, from what price.
     Master details show the year, genre and styles, and copies for sale.
@@ -172,7 +173,9 @@ if one of those actions is submitted anyway.
   release (up to 30 a run, one a second, only when something is pending); and
   one release or master lookup each time you open a details submenu. The
   collection is held in memory for the length of one pass and then discarded;
-  what a submenu shows is discarded once it is shown.
+  what a submenu shows is kept in memory for up to 2 minutes (so scrolling does
+  not ask again), is emptied when you change the token, and is never written to
+  disk. The settings page shows which currency prices use, from the stored label.
 - **Stored in the SqueezeWax database** (`squeezewax.db`, in LMS's preferences
   directory): for each album a key made from its files, the release ID and
   master ID, whether you own it (and how), how it was matched, when, and the

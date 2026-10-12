@@ -2158,6 +2158,13 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-13: hold and hint checks** (decisions §15.33), on 0.0.0.20.
+      1. Check 9.2, the countdown (the entry below), is still owed.
+      2. Scrolling a submenu in Material makes at most 1 request per 2 minutes
+         (count with `ss` and our INFO line, never `network.asynchttp`).
+      3. The currency hint on the settings page reads correctly, before and
+         after "Test token", and after a token change.
+
 - [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
       Restart the server with Discogs unreachable (network off, or a wrong DNS
       entry for `api.discogs.com`), open Release details: "Discogs did not
@@ -2185,6 +2192,8 @@ Each names its sites so the work is mechanical rather than a search.
       8. **Currency:** after "Test token", Release details shows "… EUR". Change
          the token: the price line shows the count only, until the next test or
          sync.
+         (Saving an *unchanged* token keeps the label: no change handler fires,
+         decisions §15.33 item 4.)
 - [ ] **2026-10-12: at the next design-step build, check the 0.0.0.17 wording on
       hardware:** on the settings page (`SYNC_DESC`, `TOKEN_DESC`) and in the
       review queue (`QUEUE_TOKEN_PAUSED`, `QUEUE_BADGE_LATER`).
