@@ -2118,6 +2118,12 @@ Each names its sites so the work is mechanical rather than a search.
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
 
+- [ ] **2026-10-13: README still describes step 9b's menu.** `README.md` (the
+      menu paragraph, "On Discogs: your pressing" / "the pressing your files
+      name" / "all versions") names strings step 10 replaced or retired, and its
+      roadmap line says marketplace lookup is "not yet implemented". Plan step
+      10 §8 lists no README edit, so the build left it: the wording is the
+      owner's to choose.
 - [ ] **2026-10-12: derive fetches masters a tag already gives.** One request per
       release whose files carry a `DISCOGS_MASTER_ID`-family tag. The answer is
       never read while the tag is there (`_effectiveMaster`, tag first). Kept by
