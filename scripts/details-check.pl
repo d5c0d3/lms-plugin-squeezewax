@@ -767,6 +767,7 @@ for my $token ( '', undef ) {
 
 	my $held = open_details( release => 593568, keepHold => 1, responses => [ ok_response($RELEASE) ] );
 
+	$API->_resetRate;
 	open_details( release => 11, keepHold => 1, responses => [ { code => 429, content => '' } ] );
 
 	ok( $API->rateWait > 0, '  ...the budget is now spent' );
