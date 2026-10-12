@@ -2160,9 +2160,10 @@ Each names its sites so the work is mechanical rather than a search.
 
 - [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
       Restart the server with Discogs unreachable (network off, or a wrong DNS
-      entry for `api.discogs.com`), open Release details: "busy, try again in
-      N s". Restore the network, open it again a few times: N falls, and once
-      it reaches 0 the submenu shows the details without a sync in between.
+      entry for `api.discogs.com`), open Release details: "Discogs did not
+      answer", and opened again, "busy, try again in N s". Restore the network,
+      open it again a few times: N falls, and once it reaches 0 the submenu shows
+      the details without a sync in between.
 - [ ] **2026-10-12: step 10 hardware checks** (`plans/build-order-step-10-details.md`
       §7), on 0.0.0.18, together with the 0.0.0.17 wording item below.
       1. **Log level first** (working agreement §4.1): `plugin.squeezewax` at INFO.
