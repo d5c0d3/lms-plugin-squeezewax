@@ -52,6 +52,15 @@ our @KILLS;
 # write.
 our %PREFS;
 
+# The clock, pinnable, for the shared rate wait, which counts down from the last
+# counted reply (decisions §15.32). Installed before any module is compiled;
+# undef means the real clock.
+our $NOW;
+
+BEGIN {
+	*CORE::GLOBAL::time = sub () { defined $main::NOW ? $main::NOW : CORE::time() };
+}
+
 BEGIN {
 	my $libPath = "$Bin/../refs/slimserver";
 	die "refs/slimserver not found at $libPath\n" unless -d $libPath;
@@ -761,8 +770,10 @@ sub run_sync {
 {
 	reset_state();
 
+	local $NOW = CORE::time();
+
 	# A derive run just spent the window.
-	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() );
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW );
 
 	is( $API->rateWait, 60, 'a spent budget is visible before the sync starts' );
 
@@ -782,6 +793,33 @@ sub run_sync {
 		'  ...and says so in the log, naming the deferral' );
 }
 
+# It defers by what is LEFT of the window, not by a fixed 60 (decisions §15.32).
+{
+	reset_state();
+
+	local $NOW = CORE::time();
+
+	# Spent twenty seconds ago.
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW - 20 );
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a window spent twenty seconds ago still ends in a good sync' );
+	is( $TIMERS[0]->{delay}, 40, '  ...deferred by the forty seconds left, not a full window' );
+
+	# And one spent more than a window ago is no wait at all.
+	reset_state();
+
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW - 61 );
+
+	run_sync( identity_response(), page_response( 5, 1, 1, 5 ) );
+
+	is( scalar @TIMERS, 0, 'a window that has already passed defers nothing' );
+}
+
 {
 	reset_state();
 
@@ -793,6 +831,8 @@ sub run_sync {
 		'X-Discogs-Ratelimit-Used'      => 60,
 		'X-Discogs-Ratelimit-Remaining' => 0,
 	};
+
+	local $NOW = CORE::time();
 
 	my $result = run_sync( identity_response(), $lastPage );
 
@@ -1745,6 +1785,8 @@ sub profile_fixture {
 # a page, rather than skipping it or spending a request into a 429.
 {
 	reset_state();
+
+	local $NOW = CORE::time();
 
 	my $result = run_sync(
 		{

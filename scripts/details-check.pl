@@ -47,6 +47,17 @@ our %PREFS;
 our %STRINGS;
 our @MISSING_STRINGS;
 
+# The clock, pinnable. API.pm's rateWait counts down from the last counted reply
+# (decisions §15.32), so a suite that notes a reply at time() and then reads the
+# wait would see 60 or 59 depending on where a second boundary fell. Installed
+# before any module is compiled, so every time() in API.pm and Details.pm reads
+# it; undef means the real clock.
+our $NOW;
+
+BEGIN {
+	*CORE::GLOBAL::time = sub () { defined $main::NOW ? $main::NOW : CORE::time() };
+}
+
 BEGIN {
 	my $libPath = "$Bin/../refs/slimserver";
 	die "refs/slimserver not found at $libPath\n" unless -d $libPath;
@@ -382,6 +393,9 @@ my $MASTER_URI  = "https://www.discogs.com/master/63790-Die-\x{c4}rzte-Unplugged
 %PREFS = ( discogsToken => 'tok', discogsCurrency => 'EUR' );
 $API->_resetRate;
 
+# Frozen for the whole suite; a block that needs time to pass moves it.
+$NOW = CORE::time();
+
 # ===========================================================================
 # 2. Release details opened
 # ===========================================================================
@@ -512,21 +526,41 @@ for my $currency ( '', undef ) {
 # ===========================================================================
 
 {
+	local $NOW = $NOW;
+
+	# Spent 15 seconds ago, by someone else.
 	$API->_resetRate;
-	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() );
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW - 15 );
 
 	ok( $API->rateWait, 'the shared budget is spent' );
 
 	my $items = open_details( release => 593568, responses => [] );
 
 	is( scalar @REQUESTS, 0, 'busy: no request is made' );
-	is_deeply( names($items), [ 'Discogs is busy, try again in 60 s' ], '  ...only the busy line' );
+	is_deeply( names($items), [ 'Discogs is busy, try again in 45 s' ],
+		'  ...only the busy line, with the seconds actually left in the window' );
 	is( $NOTED, 0, '  ...and no reply, so nothing noted' );
 
 	$items = open_details( master => 63790, responses => [] );
 
 	is( scalar @REQUESTS, 0, 'busy master details: no request either' );
-	is_deeply( names($items), [ 'Discogs is busy, try again in 60 s' ], '  ...the same line' );
+	is_deeply( names($items), [ 'Discogs is busy, try again in 45 s' ], '  ...the same line' );
+
+	# The wait counts down with no reply in between (decisions §15.32).
+	$NOW += 40;
+
+	$items = open_details( release => 593568, responses => [] );
+
+	is_deeply( names($items), [ 'Discogs is busy, try again in 5 s' ],
+		'forty seconds on, the line says five' );
+
+	# And once the window has passed, the SAME open asks Discogs.
+	$NOW += 5;
+
+	$items = open_details( release => 593568, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, 'once the window has passed, the same open makes its request' );
+	is( names($items)->[-1], $NOTICE, '  ...and shows the details' );
 
 	$API->_resetRate;
 }
@@ -573,26 +607,33 @@ for my $e (@ERRORS) {
 
 $API->_resetRate;
 
-# RECORDED, NOT ENDORSED (TODO.md 2026-10-13). rateWait is a stored figure, not
-# a countdown: it changes only when a reply is noted. A reply with no rate
-# headers and nothing known before it - a dropped connection as the first
-# request of the process - is accounted as the budget spent, per
-# accountRequest's documented last rung. A submenu then shows the busy line and,
-# because it makes no request while busy, nothing in the menu path ever clears
-# it; only the next sync or derive reply does. This asserts the behaviour as
-# built, so a change to it is a deliberate one.
+# A reply with no rate headers and nothing known before it - a dropped
+# connection as the first request of the process - is accounted as the budget
+# spent, per accountRequest's last rung. Until decisions §15.32 that made every
+# later open busy until a sync or derive reply arrived, because a busy submenu
+# makes no request to clear it. Now the wait counts down and clears by itself.
 {
+	local $NOW = $NOW;
+
 	$API->_resetRate;
 
 	open_details( release => 593568, responses => [ { code => undef } ] );
 
-	is( $API->rateWait, 60,
-		'recorded: a dropped first connection leaves the shared budget marked spent' );
+	is( $API->rateWait, 60, 'a dropped first connection marks the shared budget spent' );
+
+	$NOW += 20;
 
 	my $items = open_details( release => 593568, responses => [] );
 
-	is_deeply( names($items), [ 'Discogs is busy, try again in 60 s' ],
-		'  ...so the next open is busy without asking, until another reply is noted' );
+	is_deeply( names($items), [ 'Discogs is busy, try again in 40 s' ],
+		'  ...the next open is busy, counting down' );
+
+	$NOW += 40;
+
+	$items = open_details( release => 593568, responses => [ ok_response($RELEASE) ] );
+
+	is( scalar @REQUESTS, 1, '  ...and once the window has passed, it asks again with no other reply between' );
+	is( $API->rateWait, 0, '  ...whose healthy reply leaves no wait' );
 
 	$API->_resetRate;
 }

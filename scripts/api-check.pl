@@ -360,15 +360,29 @@ for my $headers ( undef, {}, { limit => 60 }, { limit => 'sixty', used => 12, re
 	# the whole point of the move.
 	is( $A->noteResponse( { limit => 60, used => 60, remaining => 0 }, 1003 ), 60,
 		'a response with nothing left reports the full window' );
-	is( $A->rateWait, 60,
-		'  ...and every other consumer reading rateWait sees the same wait' );
+	is( $A->rateWait(1003), 60,
+		'  ...and every other consumer reading rateWait at that moment sees the same wait' );
 
-	# It does not clear itself. A consumer asking twice gets the same answer,
-	# because nothing but another response may change it.
-	is( $A->rateWait, 60, 'rateWait is a read, not a take: asking again says the same' );
+	# It COUNTS DOWN (decisions §15.32): the seconds left in the window that
+	# reply opened, with no further reply. Until 2026-10-13 it was a stored 60
+	# that only another response could change, so a consumer that makes no
+	# request while the budget is spent never saw it clear.
+	is( $A->rateWait(1033), 30, 'half a window later, half the wait is left' );
+	is( $A->rateWait(1033), 30, 'rateWait is a read, not a take: asking again says the same' );
+	is( $A->rateWait(1062.5), 1, 'a part second left is rounded up, never down to "go"' );
+	is( $A->rateWait(1063), 0, 'once the window has passed there is no wait, with no reply needed' );
+	is( $A->rateWait(5000), 0, '  ...and it never goes negative' );
+	is( $A->rateWait, 0, 'with no $now, it is measured against time() - long after 1063' );
 
 	is( $A->noteResponse( { limit => 60, used => 1, remaining => 59 }, 1064 ), 0,
 		'the next response with budget clears the wait' );
+
+	# A headerless reply on a spent window is still counted as spent, and opens
+	# a new window from ITS moment - accountRequest is unchanged.
+	$A->noteResponse( { limit => 60, used => 60, remaining => 0 }, 2000 );
+	is( $A->noteResponse( {}, 2070 ), 60,
+		'a headerless reply after a spent window opens a fresh window from its own moment' );
+	is( $A->rateWait(2100), 30, '  ...counting down from there' );
 
 	$A->_resetRate;
 	is( $A->rateWait, 0, '_resetRate forgets the budget, for the suites only' );

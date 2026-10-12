@@ -52,6 +52,15 @@ our %PREFS;
 our $SCANNING = 0;
 our $SYNCING  = 0;
 
+# The clock, pinnable, for the shared rate wait, which counts down from the last
+# counted reply (decisions §15.32). Installed before any module is compiled;
+# undef means the real clock.
+our $NOW;
+
+BEGIN {
+	*CORE::GLOBAL::time = sub () { defined $main::NOW ? $main::NOW : CORE::time() };
+}
+
 BEGIN {
 	my $libPath = "$Bin/../refs/slimserver";
 	die "refs/slimserver not found at $libPath\n" unless -d $libPath;
@@ -915,13 +924,26 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 	# The shared budget, spent by someone else - a collection sync, in
 	# production. Standing in for it with the accounting call the sync makes is
 	# branching on data rather than on which module made it (§15.22).
-	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() );
+	local $NOW = CORE::time();
+
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW );
 
 	$D->arm;
 
 	is( scalar @REQUESTS, 0, 'a budget spent by the sync stops the run before it asks' );
 	is( scalar @REARMS, 1, '  ...and re-arms, because the window will pass' );
 	ok( ( grep { /the rate budget is spent/ } @LOG ), '  ...saying why' );
+
+	# The re-arm a minute later. Until decisions §15.32 the wait was a stored
+	# figure that only a reply could change, and this run made none - so it
+	# re-armed on the same "spent" every minute, forever, with no sync. Now the
+	# window passes by itself, and the next run fetches.
+	$NOW += 61;
+	@RESPONSES = ( release_response( id => 111, master => 1 ) );
+
+	is( $D->arm, 1, 'with the clock past the window and no reply between, the next run starts' );
+	is( scalar @REQUESTS, 1, '  ...and fetches: it no longer stalls on a spent budget' );
+	is( rowFor($K1)->{derived_master_id}, 1, '  ...and records the answer' );
 }
 
 {
@@ -938,6 +960,8 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 			'X-Discogs-Ratelimit-Used'      => 60,
 			'X-Discogs-Ratelimit-Remaining' => 0,
 		} ) );
+
+	local $NOW = CORE::time();
 
 	$D->arm;
 

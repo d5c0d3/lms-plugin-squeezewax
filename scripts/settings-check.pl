@@ -1304,8 +1304,20 @@ diag('the token test learns the currency label');
 	is( $PREFS{discogsCurrency}, 'GBP', '  ...the stored currency is kept' );
 	is( $CALLS{callback}, 1, '  ...and the page is rendered' );
 
+	# Only while time is actually left (decisions §15.32): a window spent more
+	# than a minute ago has passed by itself, with no reply in between.
+	Plugins::SqueezeWax::API->_resetRate;
+	Plugins::SqueezeWax::API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() - 61 );
+
+	$message = token_test( { code => 200, content => '{"username":"deschman"}' },
+		{ code => 200, content => '{"curr_abbr":"SEK"}' } );
+
+	is( scalar @REQUESTS, 2, 'a window that has passed no longer skips the profile' );
+	is( $PREFS{discogsCurrency}, 'SEK', '  ...which is asked, and stored' );
+
 	# A failed identity asks for no profile at all.
 	Plugins::SqueezeWax::API->_resetRate;
+	$PREFS{discogsCurrency} = 'GBP';
 
 	$message = token_test( { code => 401, content => '' } );
 

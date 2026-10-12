@@ -244,12 +244,20 @@ sub accountRequest {
 # a freshly-pasted token is no reason to believe the window is empty.
 
 my $rateState;
-my $rateWait = 0;
 
-=head2 rateWait( )
+=head2 rateWait( $now )
 
-How many seconds the next request must wait before it is issued: 0 when the last
-response said there was budget left, WINDOW_SECONDS when it said there was not.
+How many seconds the next request must wait before it is issued, as seen at
+C<$now> (default time()): 0 when nothing has been counted yet or the last counted
+reply said there was budget left; otherwise what is left of the window that reply
+opened, C<checked_at + WINDOW_SECONDS - $now>, rounded up and never below 0.
+
+It COUNTS DOWN (decisions §15.32). Until 2026-10-13 this returned a stored figure,
+0 or WINDOW_SECONDS, that only noteResponse could change - so a consumer that
+makes no request while the budget is spent (a step 10 submenu) could never see it
+clear, and Derive.pm re-armed every minute against the same figure. The window
+ends where Discogs documents it: it resets after 60 idle seconds (§9.2), and
+checked_at is the last reply we counted.
 
 Read by every consumer before it issues a request. The waiting itself belongs to
 the transport - a timer in the server, nothing at all in the scanner - so this
@@ -258,13 +266,16 @@ reports and never blocks.
 =cut
 
 sub rateWait {
-	return $rateWait;
+	my ( $class, $now ) = @_;
+
+	return _waitLeft( $rateState, defined $now ? $now : time() );
 }
 
 =head2 noteResponse( \%headers, $now )
 
-Fold one response's rate headers into the shared state and return the new wait.
-C<\%headers> is _parseRateHeaders' shape; C<$now> defaults to time().
+Fold one response's rate headers into the shared state and return the wait as
+seen at C<$now>. C<\%headers> is _parseRateHeaders' shape; C<$now> defaults to
+time().
 
 Called for EVERY response whatever it returned - a 429 costs budget too, and an
 error response carrying no rate headers is precisely the case accountRequest's
@@ -275,9 +286,26 @@ degradation ladder exists for (§3.4).
 sub noteResponse {
 	my ( $class, $headers, $now ) = @_;
 
-	( $rateState, $rateWait ) = $class->accountRequest( $headers, $now, $rateState );
+	$now = time() unless defined $now;
 
-	return $rateWait;
+	# accountRequest's own wait is the fixed figure for the moment of the reply;
+	# the countdown is _waitLeft's, so both callers of the state read one rule.
+	( $rateState ) = $class->accountRequest( $headers, $now, $rateState );
+
+	return _waitLeft( $rateState, $now );
+}
+
+# The countdown. Pure: the state and the clock are arguments. There is no stored
+# wait any more - the state's own checked_at is all it needs, and a second copy
+# of the answer is a second thing to keep in step.
+sub _waitLeft {
+	my ( $state, $now ) = @_;
+
+	return 0 unless $state && defined $state->{remaining} && $state->{remaining} <= 0;
+
+	my $left = ceil( ( $state->{checked_at} || 0 ) + WINDOW_SECONDS - $now );
+
+	return $left > 0 ? $left : 0;
 }
 
 # Forget the budget. There is no production caller and there must not be one: a
@@ -287,7 +315,6 @@ sub noteResponse {
 # whichever assertion ran last.
 sub _resetRate {
 	$rateState = undef;
-	$rateWait  = 0;
 
 	return;
 }
