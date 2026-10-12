@@ -6001,3 +6001,226 @@ Consequence: SqueezeWax keeps `squeezewax.db` and its prefs (including the token
 after uninstall. No removal feature. Stored values are conclusions and
 identifiers (§9.5), so no Discogs TOU issue. The sensitive leftover is the token;
 users are told to revoke it on Discogs.
+
+### 15.31 Step 10: release details and master details, fetched on open
+
+**Decided 2026-10-12**, design chat (decision 61). Plan:
+`plans/build-order-step-10-details.md`. Closes `TODO.md` 2026-09-13 "define the
+minimum scope for on-demand marketplace lookup".
+
+Phase 0, in five lines (full text: `plans/build-order-step-10-phase0.md`):
+
+- `/releases/{id}` gives have, want, rating, `num_for_sale` and `lowest_price` in one call; `/masters/{id}` gives `num_for_sale` and `lowest_price`, and no have, want or rating.
+- No endpoint gives sales history (last sold, low / median / high) or a highest price: checked across every documented read endpoint with a valid token.
+- `lowest_price` on `/releases` and `/masters` comes in the account's currency, unlabelled, and ignores `curr_abbr`; `/users/{username}` with the token carries `curr_abbr` (T1).
+- A personal token is enough for every call step 10 makes: no consumer key or secret (§9.1 unchanged).
+- LMS does not cache a menu list holding code-backed items (`Slim/Control/XMLBrowser.pm:342-347`), so each open fetches live and no cache is needed; core's "View tags" (`Slim/Menu/TrackInfo.pm` `infoTagDump`) is the menu pattern.
+
+Decision 61, verbatim. Rulings 12 and 14 are superseded and kept for the
+record; ruling 13 sits after 17, as in the source.
+
+Input: `claude/session-brief-step-10.md`, the owner's answers in this chat, two
+screenshots of discogs.com (release and master "For Sale" + "Statistics" boxes,
+Violator), and Phase 0 data (`claude/phase0-step-10.md`). Folds into a new
+decisions §15.31 and design §4 / §7 / §9 / §11 edits. Closes `TODO.md`
+2026-09-13 "define the minimum scope for on-demand marketplace lookup".
+
+#### Rulings
+
+1. **"Release details" submenu**, only on `exact` albums (the owned pressing).
+   - It holds the pressing info plus the release **Statistics**: **Have, Want,
+     Avg rating, Ratings, and "N for sale, from €X"**.
+   - It fetches only when opened, with "Data provided by Discogs" inside it.
+     This is §15.26 ruling 4 extended to include the statistics.
+2. **"Master info" submenu**, on owned albums (`exact` or `version`) where a
+   master id is usable (`_effectiveMaster`).
+   - It holds basic master facts plus **"N for sale, from €X"**.
+   - The same fetch-on-open and notice rules apply.
+   - Which "basic facts" to show is picked from what `/masters/{id}` returns
+     (Phase 0): title, year, artists, genres, styles, tracklist, main /
+     most-recent release.
+3. **Estimated value is removed.** It is not a separate item.
+   - This supersedes decisions §15.25 ruling 6 and design §4's "moves to
+     step 10".
+4. **Dropped (owner: "better done at the Discogs site"):** design §7's
+   expandable full listing, its filters and sort, and design §9 "Marketplace
+   preferences". These are dropped outright, not deferred.
+5. **This is the last v1 feature.** The public beta follows step 10 (`TODO.md`
+   v1 release checklist).
+
+#### Amended by Phase 0 (owner, 2026-10-12, after the full authenticated call set)
+
+6. **Not shown, because the API doesn't provide them:** Last sold,
+   Low / Median / High, highest price ("to €Y"), and master Have / Want /
+   rating. Verified across every documented read endpoint with a valid token
+   (`claude/phase0-step-10.md`).
+   - This replaces ruling 3's earlier "Low / Median / High covers value".
+7. **Master Have / Want are not added up from versions** (owner).
+8. **Price suggestions are not in v1** (owner chose "API basics only").
+   - The endpoint works for the owner's account. Not designed, not deferred.
+
+#### v2 (record only, not designed)
+
+- **Master info for albums the user does not own.** The owner first asked for it,
+  then placed it in v2.
+- **Menus for owned versions.** This keeps step 9b ruling 4 (§15.26). Inferred
+  blocker: the owned pressing id for a `version` album may not be stored
+  (`claude/plan-step-9.md` §0.2 D2, citing §13.2). Not checked in code.
+- **"Add to Discogs wantlist".** Owner, 2026-10-12. Design §11 already lists the
+  wantlist and add-to-wantlist as v2/v3, and this places it in v2. Unverified:
+  whether the personal token allows writing to the user's wantlist.
+
+#### Binding and unchanged
+
+On demand only, with link-out and no checkout (design §7). Nothing is stored
+(§9.5). The notice sits next to the data (§9.6). The top-level menu never fetches
+(§15.28). Personal token only, no shipped key or secret (§9.1): verified
+sufficient for every call step 10 needs.
+
+**§9.1 "Application registration" is done.** Owner-confirmed 2026-10-12: the
+registered Discogs app is SqueezeWax's. Its key and secret are not used and not
+committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
+
+#### Rulings after Phase 0 part 2 (owner, 2026-10-12)
+
+9. **Budget spent → say so, don't wait.**
+   - When `API->rateWait` is non-zero at open, the submenu shows one line:
+     "Discogs is busy, try again in N s".
+   - No Discogs request is made.
+10. **Players get the notice plus the address as plain text.**
+    - The notice is "Data provided by Discogs", followed by the page address
+      (e.g. `discogs.com/release/593568`) as plain text. Apps that can open
+      links get the real hyperlink (§9.6).
+    - **Unverified** whether plain text meets the TOU's hyperlink requirement.
+      Follow-up: add this question to Help Center request #1281019.
+11. **No cache.** Design §7's "cache briefly" is dropped. LMS doesn't cache
+    menus with code-backed items, so every open fetches live
+    (`claude/phase0-step-10.md` part 2).
+
+**[Superseded by ruling 14, itself superseded by ruling 15.]**
+
+12. **Currency: always the label Discogs gives, never assumed.** Owner,
+    2026-10-12.
+    - **Release details:** 2 requests, `/releases/{id}` and
+      `/marketplace/stats/{id}`. The price and its currency come from the
+      stats call.
+    - **Master info:** 2 requests, `/masters/{id}` and
+      `/marketplace/stats/{main_release}`. The currency label is borrowed
+      from the stats reply.
+      - **Inferred:** both calls default to the user's currency (docs:
+        `curr_abbr` "defaults to the authenticated users currency").
+      - **Verified only for the owner's account:** EUR without `curr_abbr`,
+        and the master's 1.33 equal to the labelled €1.33.
+    - **Not done:** a currency hard-coded in the code, or a currency setting.
+    - **Hardware check:** a second account whose currency is not EUR, if one
+      is available.
+
+**[Superseded by ruling 15.]**
+
+14. **Supersedes ruling 12: one request per open, currency from Settings.**
+    Owner, 2026-10-12: "I don't like a 30 seconds wait time for a menu."
+    - Release details = `/releases/{id}?curr_abbr=C`.
+    - Master info = `/masters/{id}?curr_abbr=C`.
+    - The price is labelled with C. No `/marketplace/stats` call.
+    - **C, from the Settings page:** a currency choice from the 12 codes the
+      docs list (USD, GBP, EUR, CAD, AUD, JPY, CHF, MXN, BRL, NZD, SEK, ZAR).
+      - **Default:** the user's own Discogs currency if it can be fetched,
+        otherwise USD until the user sets one (owner).
+      - **Fetchable? Unverified, but likely:**
+        - ExDisco's docs (third-party, v0.1.0) list `curr_abbr` in the
+          `/users/{username}` profile;
+        - the TOU lists "currency for Our Marketplace" as Discogs User Data;
+        - the official docs' Profile section was not retrievable;
+        - `joalla`'s unauthenticated profile fixture has no `curr_abbr`.
+        - **Inferred:** it is returned only when logged in as that user.
+    - **Precondition T1 (owner, at a terminal): blocks phase A.**
+      1. `/users/{username}` with the token: does it carry `curr_abbr`?
+      2. `/releases/593568?curr_abbr=USD` and `/masters/63790?curr_abbr=USD`
+         with the token: does `lowest_price` change away from 1.33?
+      - **Why it blocks:** if Discogs ignored `curr_abbr`, the label would be
+        silently wrong. There is a warning sign: an unauthenticated
+        `/releases/593568?curr_abbr=EUR` returned 1.49, not the EUR 1.33. So
+        the parameter was ignored, at least without a token. (Observed.)
+    - **If the currency is fetched:** it's Discogs User Data (Restricted). It is
+      kept only as the pref's default value, by the same necessity reasoning as
+      the username (plan-step-9 D4). Not decided yet: whether it's read at token
+      test or at sync.
+
+15. **Supersedes ruling 14's currency setting: the label comes from the
+    Discogs profile, stored at sync** (owner, 2026-10-12, after T1).
+    - **T1 (verified, raw):**
+      - `curr_abbr` is ignored by `/releases` and `/masters` (USD, EUR and JPY
+        all gave 1.33);
+      - `/users/{username}` with the token returns `curr_abbr: EUR`.
+    - **So there is no currency setting.** It could only mislabel prices.
+    - **Still one request per open**, with no `curr_abbr` parameter.
+    - **Pref `discogsCurrency`** is written where `discogsUsername` already is:
+      - `Settings.pm:406-413` (token test);
+      - `API/Async.pm` `_gotIdentity` (`:424-447`).
+      - In each, one extra `/users/{username}` request follows the identity
+        call.
+      - **A failed profile call never fails a sync or a token test.** The old
+        value is kept.
+    - **Cleared** with the username when the token changes (`Plugin.pm:64-78`).
+    - **Not written by the scan-time sync** (`API/Sync.pm`). It does not store
+      the username either. **Inferred:** prefs set in the scanner process may
+      not reach the server. Unverified.
+    - **No currency known yet:** the price is not shown, only "For sale: N".
+      An unlabelled price is never shown.
+    - **Terms, stated:** the TOU lists "currency for Our Marketplace" as
+      Discogs User Data (Restricted). It is stored as the username already is,
+      as necessary to label prices (plan-step-9 D4's reasoning).
+      - **Accepted risk:** if the user changes currency on Discogs, the label
+        lags until the next sync or token test. It is the same class of
+        freshness question as §15.29 and the open Help Center request
+        #1281019.
+
+16. **Labels and order** (owner, 2026-10-12). The links stay at the top level
+    (plan §1). Each link is followed by its own submenu.
+
+    | | `exact` | `version` |
+    |---|---|---|
+    | 1 | Discogs: Browse your pressing (link) | — (ruling 17) |
+    | 2 | Discogs: Show your pressing's details › | — (no release submenu, ruling 1) |
+    | 3 | Discogs: Browse all versions (link) | Discogs: Browse all versions (link) |
+    | 4 | Discogs: Show master details › | Discogs: Show master details › |
+
+    - **Version wording keeps §15.26 ruling 2:** "your pressing" is said only
+      for `exact`.
+    - "pressing's" gets an apostrophe; the owner's draft read "pressings".
+    - **Players** (no links): the ownership line ("You own a pressing" /
+      "You own a version"), then the submenus in the same order.
+    - **The "Discogs:" prefix** is a descriptive reference, like today's
+      "On Discogs:" (§15.26, design §1). No logo.
+    - **Replaces step 9b's link strings** `MENU_LINK_OWNED`, `MENU_LINK_FILES`
+      and `MENU_LINK_MASTER`. The meanings are unchanged. Hardware rechecks
+      the wording on screen.
+
+17. **Version albums get no release link** (owner, 2026-10-12). This amends
+    ruling 16 and §15.26 rulings 1–2.
+    - **Owner's rule:** a link may name only a pressing the user owns.
+    - **For `version` albums,** the release in the files is not owned, and the
+      owned one is not stored. **Verified:** `API.pm:455-460`,
+      `Schema.pm:625-631`, §13.2.
+    - **So, for `version`:** "Discogs: Browse all versions" (link) and
+      "Discogs: Show master details ›" only.
+    - **Players, or no master:** the ownership line, as today. Ownership is
+      never shown as nothing (§15.26).
+    - **`MENU_LINK_FILES` ("the pressing your files name") is retired.**
+    - **v2:** a link to the version the user owns, which needs that release id
+      stored. It already exists as "menus for owned versions".
+
+13. **Fields (owner, 2026-10-12):**
+    - **Release details:** label + cat. no.; format, country, date; genre /
+      style. Barcode and matrix lines are not shown.
+    - **Master info:** year; genre / style. Number of versions is not shown,
+      because it would cost a third request.
+
+#### Still open for Phase 0 (not data)
+
+- Whether Have / Want / rating count as Restricted Data, and how the six-hour
+  rule applies to fetch-on-open.
+- The menu pattern: core's "View tags" (`TrackInfo.pm` `infoTagDump`), read at
+  the slimserver pin.
+- ~~Requests per open (one or two).~~ Settled by ruling 14: one per open.
+- The throttle: `API.pm` `rateWait` / `noteResponse`.

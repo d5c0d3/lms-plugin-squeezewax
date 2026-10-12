@@ -154,7 +154,10 @@ sits where it does.
    view's My Music icon (§15.27). Both **done** on 0.0.0.16, hardware checks pass
    (§15.28). One item reported rather than decided: the plan also asked for the
    two notices in a README, and this repo has none (`TODO.md`, 2026-09-29)
-10. **On-demand marketplace lookup**
+10. **On-demand marketplace lookup** — release details and master details,
+   two submenus that fetch when opened, one request each, nothing stored but the
+   currency label. Plan: `plans/build-order-step-10-details.md`; decisions
+   §15.31
 
 **There is no Structural tier and no Fuzzy tier.** Decisions §13.8 replaced the
 per-album Discogs search with collection-first ownership, and §14.3 deleted

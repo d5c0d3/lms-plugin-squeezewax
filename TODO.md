@@ -1793,8 +1793,10 @@ Each names its sites so the work is mechanical rather than a search.
       ownership is the main path (§13.10.2), so two colours would teach a
       distinction that is almost always one value. Distinction shows in the
       badge context menu only. Revisit after the hardware pass. Decisions §14.5.
-- [ ] **2026-09-13: define the minimum scope for on-demand marketplace
-      lookup.** Marketplace lookup stays in v1 (decisions §1 item 10, §13.1,
+- [x] **2026-09-13: define the minimum scope for on-demand marketplace
+      lookup.** → 2026-10-12: CLOSED by decisions §15.31 (step 10): two submenus
+      fetched on open, one request each; listing, filters, sort and the
+      marketplace preferences dropped outright. Marketplace lookup stays in v1 (decisions §1 item 10, §13.1,
       §14.3), but "at a minimum" was the instruction and design §7 currently
       specifies a compact summary line, an expandable full listing, and five
       user-configurable filter/sort axes in Settings. Design §7 is on the
@@ -2131,6 +2133,27 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-12: step 10 hardware checks** (`plans/build-order-step-10-details.md`
+      §7), on 0.0.0.18, together with the 0.0.0.17 wording item below.
+      1. **Log level first** (working agreement §4.1): `plugin.squeezewax` at INFO.
+      2. **Material:** album E shows four rows in plan §1's order and wording; open
+         each submenu, the lines match plan §2, and the notice is a link that
+         opens the Discogs page. V1: "Browse all versions" and "Show master
+         details" only, with **no** release link. V2 / A: no entries.
+      3. **Default UI:** the same, via album info.
+      4. **SqueezePlay:** E shows the ownership line plus both submenus; opened,
+         they show text lines, the notice and the plain address, with no link
+         row. **Does SqueezePlay wait for the replies?**
+      5. **Requests per open:** the log shows exactly 1 per open, and 0 when the
+         album menu opens without a submenu. If Material asks again for a second
+         page, record it (inferred not to happen).
+      6. **Busy:** press "Sync collection now", then open Release details at
+         once. Expect the busy line, or normal lines if the budget allows.
+         Record which.
+      7. **Token removed** (then restored): the token line.
+      8. **Currency:** after "Test token", Release details shows "… EUR". Change
+         the token: the price line shows the count only, until the next test or
+         sync.
 - [ ] **2026-10-12: at the next design-step build, check the 0.0.0.17 wording on
       hardware:** on the settings page (`SYNC_DESC`, `TOKEN_DESC`) and in the
       review queue (`QUEUE_TOKEN_PAUSED`, `QUEUE_BADGE_LATER`).
@@ -2891,6 +2914,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-12: add the players' notice question to Help Center Request
+      #1281019** (decisions §15.31 ruling 10). On a player the step 10 submenus
+      show "Data provided by Discogs" and the page address as plain text, because
+      a player cannot open a link. Ask whether that meets the TOU's hyperlink
+      requirement. Also worth asking there (Phase 0, T1b): whether `/releases`
+      and `/masters` ignoring `curr_abbr` is intended.
 - [ ] **Waiting: Discogs Help Center Request #1281019, filed 2026-10-12.**
       Revisit §15.29 part 3 when answered.
 

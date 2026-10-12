@@ -617,6 +617,11 @@ reveals details of the **owned variant**:
 - ~~Current estimated value (fetched on demand)~~
 - "View on Discogs" link-out
 - ~~**"Re-match…"** — manual re-match action (§3, re-match triggers)~~
+- **Release details** submenu, `exact` only: pressing facts and the release
+  statistics, fetched when opened (decisions §15.31, §7).
+- **Master details** submenu, `exact` or `version` with a usable master id:
+  year, genre and styles, and copies for sale, fetched when opened (§15.31,
+  §7).
 
 ~~**Corrected 2026-09-29 (decisions §15.25) — the v1 menu, in full.** On an owned
 album, or on the playing track of one: one line — "You own this pressing"
@@ -640,7 +645,9 @@ provided by Discogs" inside it.
 - **Pressing details and credits are cut from v1.** Showing Discogs data puts
   "Data provided by Discogs" beside it (§9.6), and the user chose to keep the
   menu free of it. They return only with a placement for the notice.
-- **Estimated value moves to step 10**, with the marketplace lookup.
+- ~~**Estimated value moves to step 10**, with the marketplace lookup.~~
+  **Removed, §15.31:** estimated value is not an item. The API gives no sales
+  history, and "N for sale, from X" in the submenus is what remains.
 - **"Re-match…" is not in the menu in v1.** It stays on the review-queue page,
   for queue items only. A version album with no tag can be given a pressing only
   by tagging its files.
@@ -648,6 +655,27 @@ provided by Discogs" inside it.
   of the *identified* release. A version album reached by title can own a record
   under a different master, and nothing stored says which, so the link is never
   called "your version".
+
+**Corrected 2026-10-12 (decisions §15.31 rulings 16-17) — the v1 menu, in full,
+from step 10.** The links stay at the top level, each followed by its own
+submenu:
+
+| | `exact` | `version` |
+|---|---|---|
+| 1 | Discogs: Browse your pressing (link) | — |
+| 2 | Discogs: Show your pressing's details › | — |
+| 3 | Discogs: Browse all versions (link) | Discogs: Browse all versions (link) |
+| 4 | Discogs: Show master details › | Discogs: Show master details › |
+
+- Rows 1 and 2 need the release id, rows 3 and 4 a usable master id. Rows 1 and
+  3 appear only in an app that can open links.
+- **A `version` album gets no release link** (ruling 17): a link may name only a
+  pressing the user owns, and for `version` the owned one is not stored. "On
+  Discogs: the pressing your files name" is retired.
+- **On a player, and in an app with no link to offer:** the ownership line first,
+  as before, then rows 2 and 4 where they apply.
+- **`conflict`:** the ownership line only, no links and no submenus.
+- Building the menu makes no request; each submenu makes one when opened (§7).
 
 All Discogs-referencing labels here ("View on Discogs," etc.) use the
 descriptive phrasing pattern permitted under Discogs' brand-usage policy
@@ -788,15 +816,57 @@ can be ambiguous too).
 
 Explicitly **not** automatic/ambient — fires only when the user triggers it.
 
-- **Trigger**: context menu action, e.g. **"Check availability"**, on any
-  release (owned or not, local or streaming or Discogs-grid).
-- **Result**: compact summary line — e.g. "14 copies available, $8–$45" —
+- ~~**Trigger**: context menu action, e.g. **"Check availability"**, on any
+  release (owned or not, local or streaming or Discogs-grid).~~
+- ~~**Result**: compact summary line — e.g. "14 copies available, $8–$45" —
   expandable into the full filtered listing, each entry linking out to the
-  Discogs listing. No in-plugin checkout; link-out only.
-- **User-filterable / sortable** (see Settings, §8): format, condition, seller
-  rating, sort order, ship-to country.
-- Because it is on-demand, rate-limit pressure is low; results can still be
-  cached briefly per release.
+  Discogs listing. No in-plugin checkout; link-out only.~~ **Dropped, §15.31:**
+  the expandable listing.
+- ~~**User-filterable / sortable** (see Settings, §8): format, condition, seller
+  rating, sort order, ship-to country.~~ **Dropped, §15.31.**
+- ~~Because it is on-demand, rate-limit pressure is low; results can still be
+  cached briefly per release.~~ **Dropped, §15.31:** no cache. LMS does not
+  cache a menu list holding code-backed items, so every open fetches live.
+
+**Corrected 2026-10-12 (decisions §15.31) — what v1 builds.** Two submenus on
+owned albums (§4), each fetching **only when opened**, with **one request**, and
+storing nothing. All lines are plain text, one per row; a line whose source field
+is missing or empty is left out, never shown blank.
+
+**Release details** (`exact` only, from `/releases/{id}`):
+
+1. Label – cat. no. (`labels[0].name`, `.catno`).
+2. Format · country · date (`formats[0].name` and `descriptions`, `country`,
+   `released_formatted`).
+3. Genre · styles (`genres`, `styles`).
+4. Have N · Want N (`community.have`, `.want`).
+5. Rating A / 5 (C ratings) (`community.rating.average`, `.count`).
+6. For sale: N, from X C (`num_for_sale`, `lowest_price`, and C, the stored
+   pref `discogsCurrency`). With N = 0 or no price: "None for sale". With no C
+   stored: "For sale: N" only — an unlabelled price is never shown.
+7. The notice.
+
+**Master details** (`exact` or `version` with a usable master, from
+`/masters/{id}`): year; genre · styles; for sale, by the same rules; the notice.
+
+- **The notice.** In an app that can open links: "Data provided by Discogs",
+  linked to the reply's own `uri`, with no `rel`. On a player: the same text,
+  then the address as plain text without `https://`. Whether the plain address
+  meets the terms is unverified (Help Center request #1281019).
+- **Numbers.** Price to two decimals, then the currency code as Discogs sends
+  it ("from 1.33 EUR"). Rating to one decimal. Counts as given.
+- **Currency.** `/releases` and `/masters` ignore `curr_abbr` and price in the
+  account's currency, unlabelled. The label is the profile's `curr_abbr`, kept
+  in `discogsCurrency`, written by the token test and the server sync and
+  cleared with the username when the token changes. There is no currency
+  setting.
+- **Budget.** If the shared budget is spent when a submenu opens, it shows
+  "Discogs is busy, try again in N s" and makes no request. No retry.
+- **Errors** are one line each: busy, rejected token, not found, no answer. On
+  any failure no Discogs data is shown, so no notice either.
+- **Not shown, because the API does not provide them:** last sold, low / median
+  / high, highest price, master have / want / rating. Price suggestions are not
+  in v1.
 
 ---
 
@@ -924,14 +994,17 @@ to configure. The list below returns with a cover badge.
 - ~~**Badge color for "owned"** (configurable).~~
 - **Badge color for "wantlist"** (configurable). *(v2.)*
 
-### Marketplace preferences
-- Format filter: vinyl only / CD only / any.
-- Minimum media condition (Goldmine grading: M, NM, VG+, VG, …).
-- Minimum seller rating (%).
-- Sort order: price ascending / seller rating / condition / newest listing.
-- Ship-to country filter.
-- What to show and **in what order** in the result summary
-  (e.g. amount available first, then price range).
+### ~~Marketplace preferences~~
+**Dropped 2026-10-12 (decisions §15.31 ruling 4):** "better done at the Discogs
+site". Not deferred. There is no currency setting either: Discogs prices in the
+account's currency whatever is asked (§7).
+- ~~Format filter: vinyl only / CD only / any.~~
+- ~~Minimum media condition (Goldmine grading: M, NM, VG+, VG, …).~~
+- ~~Minimum seller rating (%).~~
+- ~~Sort order: price ascending / seller rating / condition / newest listing.~~
+- ~~Ship-to country filter.~~
+- ~~What to show and **in what order** in the result summary
+  (e.g. amount available first, then price range).~~
 
 ### Collection / value
 - ~~**Collection sync interval.**~~ **Removed 2026-09-22
@@ -1149,6 +1222,12 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - A field picker for the review queue's re-match list.
 - Orphan relink for users with manual links and no tag names configured.
 - Collection value total + price snapshots.
+- Master details for albums the user does not own (decisions §15.31).
+- Menus for owned versions: the release link and release details for the
+  pressing a `version` album's owner actually holds, which needs that release id
+  stored (§15.31 ruling 17).
+- "Add to Discogs wantlist" (§15.31). Unverified: whether a personal token may
+  write to the user's wantlist.
 
 **Not planned:** any write to the Discogs Collection (§5) — adding a release
 is a record-in-hand act performed on the Discogs website; LMS has no
