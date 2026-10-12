@@ -682,6 +682,9 @@ sub run_sync {
 	like( $REQUESTS[0]->{url}, qr{/oauth/identity},
 		'the username is looked up first, every run, rather than read from a pref' );
 
+	ok( ( grep { /^collection sync starting$/ } @LOG ), 'the start is logged at info' );
+	ok( !( grep { /deschman/ } @LOG ), '  ...and no log line names the user (§15.33)' );
+
 	is( $REQUESTS[1]->{url}, 'https://api.discogs.com/users/deschman',
 		'...then the profile, for the currency label (§15.31 ruling 15)' );
 

@@ -126,7 +126,7 @@ sub _fetch {
 	my $path = Plugins::SqueezeWax::API::_collectionPath($username);
 
 	main::INFOLOG && $log->is_info
-		&& $log->info("scan-time collection fetch starting for Discogs user $username");
+		&& $log->info("scan-time collection fetch starting");
 
 	# Keyed by instance_id, as the async path keys them: the collection ENTRY's
 	# identity (see API.pm's entryFromRelease).

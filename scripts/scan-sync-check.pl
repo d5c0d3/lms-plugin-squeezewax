@@ -557,7 +557,8 @@ diag('API/Sync.pm: the walk');
 	is_deeply( $notified, [ [ 1, undef ], [ 2, 3 ], [ 3, 3 ], [ 4, 3 ] ],
 		'onResponse fires once per response, with the page count from page 1 on' );
 
-	ok( ( grep { /fetch starting for Discogs user deschman/ } @LOG ), 'the start is logged at info' );
+	ok( ( grep { /fetch starting/ } @LOG ), 'the start is logged at info' );
+	ok( !( grep { /deschman/ } @LOG ), '  ...and no log line names the user (§15.33)' );
 	is( scalar @ERRORS, 0, '  ...and nothing at error' );
 }
 

@@ -440,7 +440,7 @@ sub _gotIdentity {
 	$prefs->set( 'discogsUsername', $username );
 
 	main::INFOLOG && $log->is_info
-		&& $log->info("collection sync starting for Discogs user $username");
+		&& $log->info("collection sync starting");
 
 	_getProfile($run);
 
