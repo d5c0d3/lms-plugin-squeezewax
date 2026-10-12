@@ -142,15 +142,18 @@ sits where it does.
    skipped by `_canSkip` forever. Bump `LOGIC_VERSION` whenever the decision
    rule changes. Decisions §15.23, §15.24; hardware checks open in `TODO.md`.
 9. **Ownership menu + "Records I own" view** — no artwork badge: no skin lets a
-   plugin draw one (decisions §15.25). The album and track menus show one
-   ownership line and a Discogs link, with no Discogs data and no request; a
-   library view filters the grid to owned albums; the settings page carries both
-   Discogs notices and the derive status. Plan:
-   `plans/build-order-step-9-badge.md`. **Identity by `album_key`, never
-   `lms_album_id`** (stale after LMS reassigns album ids) — **code complete**;
-   the plan §7 hardware checks are open in `TODO.md`. One item reported rather
-   than decided: the plan also asked for the two notices in a README, and this
-   repo has none (`TODO.md`, 2026-09-29)
+   plugin draw one (decisions §15.25). The album and track menus show ownership
+   with no Discogs data and no request; a library view filters the grid to owned
+   albums; the settings page carries both Discogs notices and the derive status.
+   Plan: `plans/build-order-step-9-badge.md`. **Identity by `album_key`, never
+   `lms_album_id`** (stale after LMS reassigns album ids) — **done**, hardware
+   checks pass (§15.26). **9b**: links (release, master) for apps that can open
+   them and one ownership line for players (`canFollowWeblinks`; it follows the
+   app that last controlled the player), plus a plain discogs.com link on the
+   settings page. Plan: `plans/build-order-step-9b-menu-links.md`. **9c**: the
+   view's My Music icon (§15.27). Both **done** on 0.0.0.16, hardware checks pass
+   (§15.28). One item reported rather than decided: the plan also asked for the
+   two notices in a README, and this repo has none (`TODO.md`, 2026-09-29)
 10. **On-demand marketplace lookup**
 
 **There is no Structural tier and no Fuzzy tier.** Decisions §13.8 replaced the
