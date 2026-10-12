@@ -96,7 +96,8 @@ encrypted. It is not limited to your collection: it can do anything you can do
 on Discogs. Revoke it at the same Developer Settings page if you stop using the
 plugin: uninstalling SqueezeWax does not delete the token or the SqueezeWax
 database from the server, because LMS removes only the plugin's code. If you
-paste a new token, the stored Discogs username is cleared and looked up again.
+paste a new token, the stored Discogs username and currency are cleared and
+looked up again.
 
 ## Settings
 
@@ -120,11 +121,29 @@ if one of those actions is submitted anyway.
 
 ## Using it
 
-- **Album and track menus.** If you own an album, its menu says "You own a
-  pressing" or "You own a version". In apps and web pages that can open links,
-  the menu instead shows "On Discogs: your pressing" or "On Discogs: the
-  pressing your files name", and "On Discogs: all versions" (the master), where
-  those IDs are known. An album whose tags disagree gets no links.
+- **Album and track menus.** Only albums you own get entries.
+  - **Your exact pressing**, in apps and web pages that can open links:
+    "Discogs: Browse your pressing" (a link to it on Discogs), "Discogs: Show
+    your pressing's details" (a submenu), "Discogs: Browse all versions" (a link
+    to the master release) and "Discogs: Show master details" (a submenu).
+  - **A version you own** (another pressing of the same record): only "Discogs:
+    Browse all versions" and "Discogs: Show master details". There is never a
+    link to a pressing you don't own.
+  - **On a player, and in apps that cannot open links:** "You own a pressing" or
+    "You own a version", then the same submenus. The submenus show the Discogs
+    address as text instead of a link.
+  - Each entry appears only where the release or master ID is known. An album
+    whose tags disagree shows only the ownership line.
+  - **The submenus ask Discogs only when you open them**, one request each, and
+    store nothing. Pressing details show the label and catalogue number;
+    format, country and date; genre and styles; how many Discogs users have and
+    want it; its rating; and how many copies are for sale, from what price.
+    Master details show the year, genre and styles, and copies for sale.
+  - **Prices are in your Discogs account's currency.** SqueezeWax learns which
+    currency that is when you press "Test token" and at each sync. Until it
+    knows, it shows the number of copies for sale without a price.
+  - If Discogs' request limit is used up, a submenu says "Discogs is busy, try
+    again in N s" and asks nothing.
 - **Records I own.** A library view (and a My Music entry) that shows only the
   albums you own, in the normal album grid.
 - **Review queue** (Settings → Review queue). Lists albums with conflicting
@@ -146,11 +165,14 @@ if one of those actions is submitted anyway.
 
 ## Data and privacy
 
-- **Fetched from Discogs, using your token:** your username; your whole
-  collection (the main collection listing, a page of 100 at a time); and, in
-  the background, one release lookup per identified release to find its master
-  release (up to 30 a run, one a second, only when something is pending). The
-  collection is held in memory for the length of one pass and then discarded.
+- **Fetched from Discogs, using your token:** your username and your profile's
+  currency (at "Test token" and at each sync started by the server); your whole
+  collection (the main collection listing, a page of 100 at a time); in the
+  background, one release lookup per identified release to find its master
+  release (up to 30 a run, one a second, only when something is pending); and
+  one release or master lookup each time you open a details submenu. The
+  collection is held in memory for the length of one pass and then discarded;
+  what a submenu shows is discarded once it is shown.
 - **Stored in the SqueezeWax database** (`squeezewax.db`, in LMS's preferences
   directory): for each album a key made from its files, the release ID and
   master ID, whether you own it (and how), how it was matched, when, and the
@@ -160,7 +182,8 @@ if one of those actions is submitted anyway.
   per album, and the time and item count of the last sync.
   No titles, artists, tracklists or other Discogs release data are stored.
 - **Stored in LMS preferences:** the token (plain text), your Discogs username
-  (used for the link back to your collection), and the last sync error.
+  (used for the link back to your collection), your Discogs currency code (used
+  to label prices), and the last sync error.
 - **Refresh:** see Syncing above. Nothing is fetched on a schedule. No
   expiry: nothing in the plugin deletes a stored match because of its age. A
   match row is removed only by "Remove this match" in the review queue, or when
@@ -187,10 +210,6 @@ if one of those actions is submitted anyway.
 - The review queue's "Choose from my collection" lists a fixed set of fields.
 - This is a development build; several hardware checks are still open in
   `TODO.md`.
-
-## Planned (not yet implemented)
-
-- On-demand marketplace lookup (not yet implemented).
 
 ## Discogs notice
 
