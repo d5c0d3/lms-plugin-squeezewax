@@ -2158,14 +2158,15 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-10-13: hold and hint checks** (decisions §15.33), on 0.0.0.20.
-      1. Check 9.2, the countdown (the entry below), is still owed.
-      2. Scrolling a submenu in Material makes at most 1 request per 2 minutes
-         (count with `ss` and our INFO line, never `network.asynchttp`).
-      3. The currency hint on the settings page reads correctly, before and
-         after "Test token", and after a token change.
+- [x] **2026-10-13: hold and hint checks** (decisions §15.33), on 0.0.0.20.
+      → 2026-10-13, report 66 (decisions §15.34): the hold was verified by CLI
+      and the hint reads correctly (now the Prices section). The Material scroll
+      check (item 2) was not run; the owner accepted the CLI evidence. Item 1,
+      the countdown, stays open under its own entry below.
 
 - [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
+      **Observe when the internet happens to drop; do not schedule a test or ask
+      the owner** (owner, report 66; unchecked in reports 64 and 66).
       Restart the server with Discogs unreachable (network off, or a wrong DNS
       entry for `api.discogs.com`), open Release details: "Discogs did not
       answer", and opened again, "busy, try again in N s". Restore the network,

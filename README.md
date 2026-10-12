@@ -141,7 +141,8 @@ if one of those actions is submitted anyway.
     want it; its rating; and how many copies are for sale, from what price.
     Master details show the year, genre and styles, and copies for sale.
   - **Prices are in your Discogs account's currency.** SqueezeWax learns which
-    currency that is when you press "Test token" and at each sync. Until it
+    currency that is when you press "Test token" and at each sync, and the
+    settings page's Prices section shows it. Until it
     knows, it shows the number of copies for sale without a price.
   - If Discogs' request limit is used up, a submenu says "Discogs is busy, try
     again in N s" and asks nothing.

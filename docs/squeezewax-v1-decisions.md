@@ -6281,3 +6281,19 @@ committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
    happen: at DEBUG LMS logs the `Authorization` header with the token. Count
    requests with `ss` and our own log line. Recorded in working agreement
    §4.1.
+
+
+### 15.34 Prices section on the Settings page
+
+**Decided 2026-10-13**, design chat (hardware report 66, owner's request).
+
+1. **The currency hint gets its own section**, "Prices", directly after the Sync
+   section, out of the token block (`PLUGIN_SQUEEZEWAX_CURRENCY`, `_DESC`). The
+   body reads "Currency: EUR" from the stored code, or "Not known yet. Press Test
+   token, or Sync collection now." naming both, because both learn it (§15.31
+   ruling 15). Rendered from the pref; nothing is fetched. This replaces item 2
+   of §15.33's wording.
+2. **Report 66 results (0.0.0.20):**
+   - verified: the hold, the hint, and that no log names the user or token;
+   - not run: the Material scroll check (the owner accepted the CLI evidence) and
+     the §15.32 countdown check.
