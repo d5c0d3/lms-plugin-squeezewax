@@ -46,7 +46,7 @@ Source on GitHub
 <div style="flex: 1 1 480px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; gap: 24px">
 <div style="display: flex; flex-wrap: wrap; gap: 8px">
 <span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; border: 1px solid #45454D; border-radius: 999px; padding: 4px 12px; color: #D6D5D0">Plugin for Lyrion Music Server</span>
-<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; background: #D9480F; color: #FFFFFF; border-radius: 999px; padding: 4px 12px">1.0.0b3 · beta</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; background: #D9480F; color: #FFFFFF; border-radius: 999px; padding: 4px 12px" id="release-badge" hidden>&nbsp;</span>
 </div>
 <h1 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 112%; font-weight: 850; font-size: clamp(40px, 6vw, 72px); line-height: 1.02; letter-spacing: -0.025em; color: #FFFFFF">Your shelf, inside your library.</h1>
 <p style="margin: 0; font-size: 19px; line-height: 1.6; color: #C9C8C2; max-width: 34em">SqueezeWax reads your Discogs record collection and works out which albums in your LMS library are records you own. Owned albums say so in their menu, link to the release on Discogs, and appear in a “Records I own” view.</p>
@@ -79,7 +79,7 @@ Source on GitHub
 <text x="256" y="184" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#16161A">LMS 8.4+</text>
 <circle cx="180" cy="180" r="7" fill="#16161A"></circle>
 <text x="180" y="232" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="34" letter-spacing="-0.5" fill="#16161A">SqueezeWax</text>
-<text x="180" y="256" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" letter-spacing="1.5" fill="#16161A">1.0.0b3 · BETA</text>
+<text x="180" y="256" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" letter-spacing="1.5" fill="#16161A" id="release-label"></text>
 </svg>
 </div>
 </div>
@@ -247,6 +247,24 @@ Source on GitHub
 </footer>
 
 </div>
+<script>
+fetch('repo.xml', { cache: 'no-cache' })
+  .then(function (response) { return response.ok ? response.text() : Promise.reject(); })
+  .then(function (text) {
+    var xml = new DOMParser().parseFromString(text, 'application/xml');
+    var plugin = xml.querySelector('plugin[name="SqueezeWax"]');
+    var version = plugin && plugin.getAttribute('version');
+    if (!version) return;
+    // 1.0.0b3 -> beta, 1.0.0a1 -> alpha, 1.0.0 -> no suffix
+    var stage = /\d(a|b)\d*$/.exec(version);
+    var name = stage ? (stage[1] === 'a' ? 'alpha' : 'beta') : '';
+    var badge = document.getElementById('release-badge');
+    badge.textContent = name ? version + ' · ' + name : version;
+    badge.hidden = false;
+    document.getElementById('release-label').textContent = name ? version + ' · ' + name.toUpperCase() : version;
+  })
+  .catch(function () {});
+</script>
 <script>
 document.getElementById('copy-url').addEventListener('click', function () {
   var button = this;

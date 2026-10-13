@@ -3138,8 +3138,9 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README
       stays the full documentation and is linked from both. Open:
-      (1) the version **1.0.0b3** is hard-coded in `index.html` (badge and record
-      label) — update it with each `repo.xml` bump until it is generated;
+      (1) ~~the version is hard-coded~~ — done: `index.html` reads the release
+      from `repo.xml` at load time (badge and record label; hidden if it
+      cannot be read), so a `repo.xml` bump updates the site;
       (2) `worked-example.html` has three `[Screenshot: …]` placeholders to fill;
       (3) `assets/owned.svg` is a recoloured copy of the plugin's
       `owned.svg` (`_config.yml` keeps `SqueezeWax/` out of the site) — keep the
