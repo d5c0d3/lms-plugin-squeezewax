@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SqueezeWax — your record collection in Lyrion Music Server</title>
+<meta name="description" content="SqueezeWax is a Lyrion Music Server plugin that reads your Discogs collection and shows which albums in your library are records you own.">
+<link rel="icon" href="assets/owned.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#B53B0A}a:hover{color:#16161A}
+</style>
+</head>
+<body>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #16161A; background: #FFFFFF; font-size: 17px; line-height: 1.6">
+
+<!-- Header and hero share one record -->
+<div style="position: relative; overflow: hidden; background: #16161A">
+<!-- Header -->
+<header style="position: relative; z-index: 2; color: #F4F4F1">
+<div style="max-width: 1160px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px">
+<a href="#top" style="display: flex; align-items: center; gap: 12px; color: #FFFFFF; text-decoration: none; min-height: 44px">
+<svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#D9480F" stroke-width="2.6" stroke-linecap="round" fill="none"><line x1="7.5" y1="4.2" x2="4.3" y2="19.8"></line><line x1="11.4" y1="4" x2="11.4" y2="20"></line><line x1="15.9" y1="4" x2="15.9" y2="20"></line><line x1="20.4" y1="4" x2="20.4" y2="20"></line></g></svg>
+<span style="font-family: Archivo, sans-serif; font-weight: 800; font-size: 20px; letter-spacing: -0.01em">SqueezeWax</span>
+</a>
+<nav aria-label="Main" style="display: flex; flex-wrap: wrap; gap: 4px 24px; flex: 1 1 auto; font-size: 15px">
+<a href="#install" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Install</a>
+<a href="#setup" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Setup</a>
+<a href="#using" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Using it</a>
+<a href="#privacy" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Data &amp; privacy</a>
+<a href="worked-example.html" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Worked example</a>
+<a href="#help" style="color: #D6D5D0; text-decoration: none; padding: 10px 0">Help</a>
+</nav>
+<a href="https://github.com/d5c0d3/lms-plugin-squeezewax" style="display: inline-flex; align-items: center; gap: 8px; color: #FFFFFF; text-decoration: none; border: 1px solid #45454D; border-radius: 999px; padding: 10px 16px; font-size: 15px">
+<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+Source on GitHub
+</a>
+</div>
+</header>
+
+<!-- Hero -->
+<section id="top" style="color: #F4F4F1">
+<div style="max-width: 1160px; margin: 0 auto; padding: 40px 24px 56px; display: flex; flex-wrap: wrap; align-items: center; gap: 40px">
+<div style="flex: 1 1 480px; min-width: 0; position: relative; z-index: 1; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; border: 1px solid #45454D; border-radius: 999px; padding: 4px 12px; color: #D6D5D0">Plugin for Lyrion Music Server</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; background: #D9480F; color: #FFFFFF; border-radius: 999px; padding: 4px 12px">1.0.0b3 · beta</span>
+</div>
+<h1 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 112%; font-weight: 850; font-size: clamp(40px, 6vw, 72px); line-height: 1.02; letter-spacing: -0.025em; color: #FFFFFF">Your shelf, inside your library.</h1>
+<p style="margin: 0; font-size: 19px; line-height: 1.6; color: #C9C8C2; max-width: 34em">SqueezeWax reads your Discogs record collection and works out which albums in your LMS library are records you own. Owned albums say so in their menu, link to the release on Discogs, and appear in a “Records I own” view.</p>
+<div style="display: flex; flex-direction: column; gap: 8px; max-width: 640px">
+<p style="margin: 0; font-size: 14px; color: #A9A8A2">Add this under Settings → Plugins → Additional Repositories</p>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<code id="repo-url" style="flex: 1 1 300px; min-width: 0; min-height: 48px; box-sizing: border-box; display: flex; align-items: center; background: #232329; color: #FFFFFF; border: 1px solid #45454D; border-radius: 10px; padding: 10px 14px; font-family: 'IBM Plex Mono', monospace; font-size: 13px; overflow-wrap: anywhere; user-select: all">https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml</code>
+<button type="button" id="copy-url" style="min-height: 48px; padding: 0 22px; border: 0; border-radius: 10px; background: #D9480F; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">Copy URL</button>
+</div>
+</div><p style="margin: 0; font-size: 15px; color: #A9A8A2"><a href="#setup" style="color: rgb(255, 255, 255)">Read the six-step setup →</a></p>
+
+</div>
+
+<!-- Hero visual: the runout label -->
+<div style="flex: 1 1 380px; min-width: 0; min-height: 460px; position: relative; display: flex; align-items: center; justify-content: center">
+<div aria-hidden="true" style="position: absolute; left: 50%; top: 50%; width: 2400px; height: 2400px; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; background-image: radial-gradient(circle at center, transparent 0 400px, #16161A 400px 430px, transparent 430px 600px, #16161A 600px 630px, transparent 630px 830px, #16161A 830px 860px, transparent 860px), repeating-radial-gradient(circle at center, transparent 0, rgba(255,255,255,.05) 1px, transparent 2.5px, transparent 13px)"></div>
+<div style="position: relative; width: min(360px, 100%); aspect-ratio: 1 / 1; border-radius: 50%; background: #D9480F; box-shadow: 0 0 0 44px #16161A; overflow: hidden">
+<svg viewBox="0 0 360 360" style="width: 100%; height: 100%; display: block" role="img" aria-label="SqueezeWax record label">
+<defs>
+<path id="sw-top" d="M 34 180 A 146 146 0 1 1 326 180"></path>
+<path id="sw-bottom" d="M 24 180 A 156 156 0 0 0 336 180"></path>
+</defs>
+<circle cx="180" cy="180" r="180" fill="#D9480F"></circle>
+<circle cx="180" cy="180" r="170" fill="none" stroke="#16161A" stroke-opacity=".3" stroke-width="1"></circle>
+<circle cx="180" cy="180" r="128" fill="none" stroke="#16161A" stroke-opacity=".22" stroke-width="1"></circle>
+<text font-family="'IBM Plex Mono', monospace" font-size="10" letter-spacing="1.6" fill="#16161A"><textPath href="#sw-top" startOffset="50%" text-anchor="middle">LINKS YOUR PHYSICAL RECORD COLLECTION TO YOUR LMS LIBRARY</textPath></text>
+<text font-family="'IBM Plex Mono', monospace" font-size="10" letter-spacing="2" fill="#16161A"><textPath href="#sw-bottom" startOffset="50%" text-anchor="middle">FOR LYRION MUSIC SERVER · GPL-2.0-OR-LATER</textPath></text>
+<g transform="translate(150 64) scale(2.5)" stroke="#16161A" stroke-width="2.6" stroke-linecap="round" fill="none"><line x1="7.5" y1="4.2" x2="4.3" y2="19.8"></line><line x1="11.4" y1="4" x2="11.4" y2="20"></line><line x1="15.9" y1="4" x2="15.9" y2="20"></line><line x1="20.4" y1="4" x2="20.4" y2="20"></line></g>
+<text x="104" y="184" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#16161A">d5c0d3</text>
+<text x="256" y="184" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" fill="#16161A">LMS 8.4+</text>
+<circle cx="180" cy="180" r="7" fill="#16161A"></circle>
+<text x="180" y="232" text-anchor="middle" font-family="Archivo, sans-serif" font-weight="800" font-size="34" letter-spacing="-0.5" fill="#16161A">SqueezeWax</text>
+<text x="180" y="256" text-anchor="middle" font-family="'IBM Plex Mono', monospace" font-size="11" letter-spacing="1.5" fill="#16161A">1.0.0b3 · BETA</text>
+</svg>
+</div>
+</div>
+</div>
+</section>
+
+</div>
+
+<!-- Ownership states -->
+<section style="background: #F4F4F1">
+<div style="max-width: 1160px; margin: 0 auto; padding: 56px 24px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 720px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #B53B0A">How ownership is decided</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">From your Discogs collection — the records on your shelf.</h2>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 22px">You own a pressing</h3>
+<p style="margin: 0; color: #4A4A52">The release ID in your file tags is in your collection — the exact pressing you own.</p>
+</div>
+<div style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 22px">You own a version</h3>
+<p style="margin: 0; color: #4A4A52">The tagged release isn’t in your collection, but its master release is — another pressing of the same record.</p>
+</div>
+<div style="flex: 1 1 300px; min-width: 0; background: #FFFFFF; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 22px">A version, no tag needed</h3>
+<p style="margin: 0; color: #4A4A52">Exactly one collection entry has the same album title and artist. Anything less certain goes to the review queue.</p>
+</div>
+</div>
+</div>
+</section>
+
+<!-- Install + setup -->
+<section id="install" style="background: #FFFFFF">
+<div style="max-width: 1160px; margin: 0 auto; padding: 56px 24px; display: flex; flex-wrap: wrap; gap: 40px">
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #B53B0A">Requirements</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 36px; line-height: 1.1; letter-spacing: -0.02em">What you need</h2>
+<ul style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 14px">
+<li style="display: flex; gap: 12px"><span style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #D9480F; margin-top: 10px"></span><span>Lyrion Music Server 8.4 or newer — tested on 9.1.1.</span></li>
+<li style="display: flex; gap: 12px"><span style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #D9480F; margin-top: 10px"></span><span>A Discogs account, with your records in your collection.</span></li>
+<li style="display: flex; gap: 12px"><span style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #D9480F; margin-top: 10px"></span><span>A Discogs personal access token.</span></li>
+<li style="display: flex; gap: 12px"><span style="flex: none; width: 8px; height: 8px; border-radius: 50%; background: #B9B8B2; margin-top: 10px"></span><span style="color: #4A4A52">For exact pressings: a tag holding the Discogs release ID on every track — <code style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; background: #F4F4F1; padding: 2px 6px; border-radius: 4px">123456</code>, <code style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; background: #F4F4F1; padding: 2px 6px; border-radius: 4px">[r123456]</code> or a release URL.</span></li>
+</ul>
+<p style="margin: 0; font-size: 15px; color: #4A4A52">No other plugins needed. HTTPS comes from LMS on macOS and from the system Perl elsewhere.</p>
+</div>
+
+<div id="setup" style="flex: 1.4 1 460px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #B53B0A">First-time setup</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 36px; line-height: 1.1; letter-spacing: -0.02em">Six steps to “Records I own”</h2>
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; border-top: 1px solid #E3E2DD">
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">01</span><span>Add the repository URL above and install SqueezeWax from the plugin list.</span></li>
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">02</span><span>Paste your Discogs token and press <strong>Test token</strong>.</span></li>
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">03</span><span>Enter your release-ID tag name, or press <strong>Detect</strong> and copy what it finds. Save.</span></li>
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">04</span><span>Run a library rescan: Basic Settings → Rescan Media Library → “Look for new and changed media files”.</span></li>
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">05</span><span>Wait until the settings page no longer shows “Master releases”. If it says “paused”, press <strong>Sync collection now</strong>.</span></li>
+<li style="display: flex; gap: 20px; padding: 12px 0; border-bottom: 1px solid #E3E2DD"><span style="flex: none; font-family: Archivo, sans-serif; font-weight: 800; font-size: 22px; width: 32px; color: #B53B0A">06</span><span>Press <strong>Sync collection now</strong> once. “You own a version” results appear after this sync.</span></li>
+</ol>
+<div style="background: #FFF4EC; border: 1px solid #F3C9AE; border-radius: 12px; padding: 16px 20px; font-size: 15px; color: #4A2410"><strong>This is a beta.</strong> Updates may change the SqueezeWax database, and you cannot go back to an older version.</div>
+</div>
+</div>
+</section>
+
+<!-- Using it -->
+<section id="using" style="background-color: #16161A; background-image: repeating-radial-gradient(circle at -10% 50%, transparent 0, rgba(255,255,255,.05) 1px, transparent 2.5px, transparent 13px); color: #F4F4F1">
+<div style="max-width: 1160px; margin: 0 auto; padding: 56px 24px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 720px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #F79A63">Using it</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; color: #FFFFFF">Where it shows up in LMS</h2>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 28px; align-items: stretch">
+<div style="flex: 2 1 560px; min-width: 0; display: flex; flex-wrap: wrap; gap: 1px; background: #33333A; border: 1px solid #33333A; border-radius: 16px; overflow: hidden">
+<div style="flex: 1 1 260px; min-width: 0; background: #1D1D22; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px; color: #FFFFFF">Album &amp; track menus</h3>
+<p style="margin: 0; color: #C9C8C2; font-size: 16px">Links to your pressing and to all versions on Discogs. Players show “You own a pressing” or “You own a version”.</p>
+</div>
+<div style="flex: 1 1 260px; min-width: 0; background: #1D1D22; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px; color: #FFFFFF; display: flex; align-items: center; gap: 10px"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#F79A63" stroke-width="2.6" stroke-linecap="round" fill="none"><line x1="7.5" y1="4.2" x2="4.3" y2="19.8"></line><line x1="11.4" y1="4" x2="11.4" y2="20"></line><line x1="15.9" y1="4" x2="15.9" y2="20"></line><line x1="20.4" y1="4" x2="20.4" y2="20"></line></g></svg>Records I own</h3>
+<p style="margin: 0; color: #C9C8C2; font-size: 16px">A library view and My Music entry showing only the albums you own, in the normal album grid.</p>
+</div>
+<div style="flex: 1 1 260px; min-width: 0; background: #1D1D22; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px; color: #FFFFFF">Pressing details</h3>
+<p style="margin: 0; color: #C9C8C2; font-size: 16px">Label, catalogue number, format, haves and wants, rating and copies for sale — fetched only when you open the submenu.</p>
+</div>
+<div style="flex: 1 1 260px; min-width: 0; background: #1D1D22; padding: 22px; display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px; color: #FFFFFF">Review queue</h3>
+<p style="margin: 0; color: #C9C8C2; font-size: 16px">Albums it couldn’t decide. Show tags, choose from your collection, or remove a match.</p>
+</div>
+</div>
+<div style="flex: 0 1 300px; min-width: 0; align-self: center; background: #FFFFFF; color: #16161A; border-radius: 12px; box-shadow: 0 18px 44px rgba(0,0,0,.35); overflow: hidden; font-size: 14px">
+<div style="padding: 11px 16px; border-bottom: 1px solid #E3E2DD; font-weight: 600">[Album title] — [Artist]</div>
+<div style="padding: 9px 16px; border-bottom: 1px solid #EFEEEA">Discogs: Browse your pressing</div>
+<div style="padding: 9px 16px; border-bottom: 1px solid #EFEEEA">Discogs: Show your pressing’s details</div>
+<div style="padding: 9px 16px; border-bottom: 1px solid #EFEEEA">Discogs: Browse all versions</div>
+<div style="padding: 9px 16px">Discogs: Show master details</div>
+</div>
+</div>
+<p style="margin: 0; color: #A9A8A2; font-size: 15px">Your collection is read during each library scan. There is no timer: a record you add on Discogs shows up after the next scan or “Sync collection now”. <a href="https://github.com/d5c0d3/lms-plugin-squeezewax/blob/master/docs/user-guide.md" style="color: #FFFFFF">Read the user guide →</a></p>
+</div>
+</section>
+
+<!-- Privacy -->
+<section id="privacy" style="background: #FFFFFF">
+<div style="max-width: 1160px; margin: 0 auto; padding: 56px 24px; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; flex-direction: column; gap: 12px; max-width: 720px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #B53B0A">Data &amp; privacy</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em">Conclusions are stored. Discogs data isn’t.</h2>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div style="flex: 1 1 320px; min-width: 0; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px">Fetched, then discarded</h3>
+<p style="margin: 0; color: #4A4A52">Your username, currency and whole collection at each sync, 100 items a page. The collection is held in memory for one pass. Details submenus are cached in memory for up to 2 minutes.</p>
+</div>
+<div style="flex: 1 1 320px; min-width: 0; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px">Kept in squeezewax.db</h3>
+<p style="margin: 0; color: #4A4A52">Release and master IDs, whether you own each album and how it was matched — plus details from your own LMS library. No Discogs titles, artists or tracklists.</p>
+</div>
+<div style="flex: 1 1 320px; min-width: 0; border: 1px solid #E3E2DD; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Archivo, sans-serif; font-weight: 750; font-size: 20px">Your token</h3>
+<p style="margin: 0; color: #4A4A52">Stored in plain text in LMS preferences. Uninstalling does not delete it — revoke it in Discogs Developer Settings.</p>
+</div>
+</div>
+<p style="margin: 0; font-size: 15px; color: #4A4A52">Requests stay within Discogs’ limit of 60 a minute. A collection of N items costs about N/100 requests per sync.</p>
+</div>
+</section>
+
+<!-- Worked example teaser -->
+<section id="example" style="background: #FFFFFF; border-top: 1px solid #E3E2DD">
+<div style="max-width: 1160px; margin: 0 auto; padding: 44px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 40px">
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-family: 'IBM Plex Mono', monospace; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #B53B0A">A worked example</p>
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em">From turntable to “You own a pressing”</h2>
+<p style="margin: 0; color: #4A4A52">One record, start to finish: a 13-track various-artists DJ mix, ripped in Audacity, tagged in foobar2000 and matched after one ordinary rescan.</p>
+</div>
+<a href="worked-example.html" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 10px; background: #16161A; color: #FFFFFF; text-decoration: none; font-weight: 600; font-size: 15px">Follow the example →</a>
+</div>
+</section>
+
+<!-- Help -->
+<section id="help" style="background: #F4F4F1">
+<div style="max-width: 1160px; margin: 0 auto; padding: 44px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 32px">
+<div style="flex: 1 1 480px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: Archivo, sans-serif; font-stretch: 108%; font-weight: 800; font-size: 32px; line-height: 1.15; letter-spacing: -0.02em">Something not right?</h2>
+<p style="margin: 0; color: #4A4A52">Open an issue with your LMS version, OS and SqueezeWax version, plus <code style="font-family: 'IBM Plex Mono', monospace; font-size: 14px; background: #FFFFFF; padding: 2px 6px; border-radius: 4px">Plugins::SqueezeWax</code> log lines. <strong style="color: #16161A">Never include your Discogs token.</strong></p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<a href="https://github.com/d5c0d3/lms-plugin-squeezewax/issues" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 10px; background: #16161A; color: #FFFFFF; text-decoration: none; font-weight: 600; font-size: 15px">Open an issue</a>
+<a href="https://github.com/d5c0d3/lms-plugin-squeezewax#readme" style="display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; border-radius: 10px; border: 1px solid #B9B8B2; color: #16161A; text-decoration: none; font-weight: 600; font-size: 15px">Full documentation</a>
+</div>
+</div>
+</section>
+
+<!-- Footer -->
+<footer style="background: #16161A; color: #A9A8A2; font-size: 14px">
+<div style="max-width: 1160px; margin: 0 auto; padding: 28px 24px 32px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px">
+<div style="flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<p style="margin: 0">This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. ‘Discogs’ is a trademark of Zink Media, LLC.</p>
+<p style="margin: 0">Licensed under GPL-2.0-or-later. The license covers the plugin code only, not data obtained from Discogs.</p>
+</div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<span style="color: #FFFFFF; font-family: Archivo, sans-serif; font-weight: 800">SqueezeWax</span>
+<span>by d5c0d3 · Built for Lyrion Music Server</span>
+</div>
+</div>
+</footer>
+
+</div>
+<script>
+document.getElementById('copy-url').addEventListener('click', function () {
+  var button = this;
+  var url = document.getElementById('repo-url').textContent;
+  navigator.clipboard.writeText(url).then(function () {
+    button.textContent = 'Copied';
+  }, function () {
+    button.textContent = 'Select and copy';
+  });
+});
+</script>
+</body>
+</html>

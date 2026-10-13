@@ -3135,6 +3135,17 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
+      `worked-example.html` replace the README as the Pages entry page; the README
+      stays the full documentation and is linked from both. Open:
+      (1) the version **1.0.0b3** is hard-coded in `index.html` (badge and record
+      label) — update it with each `repo.xml` bump until it is generated;
+      (2) `worked-example.html` has three `[Screenshot: …]` placeholders to fill;
+      (3) `assets/owned.svg` is a recoloured copy of the plugin's
+      `owned.svg` (`_config.yml` keeps `SqueezeWax/` out of the site) — keep the
+      two in step; (4) merge `site` into `master` to publish; `repo.xml` and
+      `dist/` must stay where they are.
+
 - [x] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
       **and any Discogs logo use** against the Application Name and Description
       Policy (§15.29).
