@@ -674,6 +674,7 @@ diag('outcomes: 200 with a master, 200 without, 0, 404, 401, 500, no response');
 
 	is( scalar @REARMS, 0,
 		'  ...and the run is NOT re-armed: a minute changes nothing about a bad token' );
+	is( $D->isResumeScheduled, 0, '  ...and none is reported as scheduled' );
 }
 
 {
@@ -694,6 +695,7 @@ diag('outcomes: 200 with a master, 200 without, 0, 404, 401, 500, no response');
 	ok( ( grep { /could not derive the master of release 111: server_error/ } @WARNINGS ),
 		'  ...and warns, naming the release and the error' );
 	is( scalar @REARMS, 0, '  ...and does not re-arm on an error' );
+	is( $D->isResumeScheduled, 0, '  ...so no resume is scheduled after an error stop' );
 }
 
 {
@@ -855,6 +857,8 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 
 	is( scalar @REARMS, 1, '  ...and is re-armed, because work provably remains' );
 	is( $REARMS[0], 60, '  ...a minute later' );
+	is( $D->isResumeScheduled, 1,
+		'  ...and says a resume is scheduled, so the page reads "waiting" (§15.38 item 7)' );
 	ok( ( grep { /resuming in 60s/ } @LOG ), '  ...and says so' );
 
 	# killTimers before setTimer, every time: Timers keys pending timers by
@@ -872,6 +876,9 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 	push @RESPONSES, release_response( id => 1000 + $_, master => 9000 + $_ ) for 31 .. 35;
 
 	$D->arm;
+
+	is( $D->isResumeScheduled, 0,
+		'arming clears the scheduled flag (reset_state aborts; the arm itself is tested below)' );
 
 	is( scalar @REQUESTS, 5, 'the next run takes exactly the releases left over' );
 	is_deeply( [ asked() ], [ map { 1000 + $_ } 31 .. 35 ],
@@ -982,6 +989,7 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 	is( scalar @REQUESTS, 0, '  ...and issues nothing: the write would be refused anyway' );
 	is( scalar @REARMS, 0,
 		'  ...and does NOT re-arm - the scan ends in a rescan-done, which brings a sync' );
+	is( $D->isResumeScheduled, 0, '  ...so no resume is scheduled: the page reads "paused"' );
 	ok( ( grep { /a scan is running/ } @LOG ), '  ...saying why' );
 }
 
@@ -1240,6 +1248,56 @@ my @collection = ( {
 	my $snapshot = allRows();
 	$O->apply( \@collection );
 	is_deeply( allRows(), $snapshot, 'a second pass changes nothing at all' );
+}
+
+# ---------------------------------------------------------------------------
+# Decisions §15.38 item 7: whether a resume is scheduled
+# ---------------------------------------------------------------------------
+
+diag('§15.38 item 7: the scheduled flag follows the re-arm timer');
+
+{
+	reset_state();
+	wipe();
+	is( $D->isResumeScheduled, 0, 'before any run, nothing is scheduled' );
+
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+
+	# A pacing stop: a sync in flight.
+	$SYNCING = 1;
+	$D->arm;
+	is( scalar @REARMS, 1, 'a pacing stop re-arms' );
+	is( $D->isResumeScheduled, 1, '  ...and the flag is set' );
+
+	# Any trigger clears it: arm decides afresh. Here the sync is still running,
+	# so this run stops for pacing again and sets it again - the flag follows the
+	# timer it describes, not the call.
+	$D->arm;
+	is( $D->isResumeScheduled, 1, 'a second pacing stop sets it again' );
+
+	# The timer firing clears it before arming. With nothing left to do, it
+	# stays clear.
+	$SYNCING = 0;
+	$dbh->do('UPDATE squeezewax.discogs_match SET derived_from_release_id = discogs_release_id');
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( $D->isResumeScheduled, 0, 'the re-arm firing clears it, and a finished job leaves it clear' );
+
+	# A plain arm clears it too, even when it starts nothing.
+	$SYNCING = 1;
+	$dbh->do('UPDATE squeezewax.discogs_match SET derived_from_release_id = NULL');
+	$D->arm;
+	is( $D->isResumeScheduled, 1, '(set again by a pacing stop)' );
+
+	$dbh->do('UPDATE squeezewax.discogs_match SET derived_from_release_id = discogs_release_id');
+	is( $D->arm, 0, 'an arm with nothing to do starts nothing' );
+	is( $D->isResumeScheduled, 0, '  ...and clears the flag' );
+
+	# And abort.
+	$dbh->do('UPDATE squeezewax.discogs_match SET derived_from_release_id = NULL');
+	$D->arm;
+	is( $D->isResumeScheduled, 1, '(set again)' );
+	$D->abort;
+	is( $D->isResumeScheduled, 0, 'abort clears it' );
 }
 
 done_testing();

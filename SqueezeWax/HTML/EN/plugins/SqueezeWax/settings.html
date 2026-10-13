@@ -7,20 +7,53 @@
 	[% END %]
 [% END %]
 
+[%# Decisions §15.38 items 1 and 2. The first says why identification is off;
+    the second gives the order of first steps until a collection sync has ever
+    completed.
+
+    Body text in a bare settingSection, NOT a `setting` title (decisions §15.39
+    item 4). b2 put each sentence in the title slot with an empty description,
+    and Material, which renders this page in an iframe through the EN
+    cmdwrappers, lays a .prefHead out as `position:absolute; width:250px` from
+    1000 px up (lms-material html/css/classic-skin/mods.css, `.settingGroup
+    .prefHead`): a long sentence there is squeezed into a narrow column that
+    takes no room in the flow. settingSection is core's own block
+    (HTML/EN/cmdwrappers:383) and core uses it bare
+    (settings/server/basic.html:46). %]
+[% IF noTagNames %]
+	[% WRAPPER settingSection %]
+		<div class="swxNotice">[% "PLUGIN_SQUEEZEWAX_NO_TAG_NAMES" | string %]</div>
+	[% END %]
+[% END %]
+
+[% IF firstSteps %]
+	[% WRAPPER settingSection %]
+		<div class="swxNotice">[% "PLUGIN_SQUEEZEWAX_FIRST_STEPS" | string %]</div>
+	[% END %]
+[% END %]
+
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TOKEN" desc="PLUGIN_SQUEEZEWAX_TOKEN_DESC" %]
 	<input type="password" class="stdedit" size="40"
 		name="pref_discogsToken" value="[% prefs.pref_discogsToken | html %]" />
 	<div><a href="[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS" | string %]" target="_blank"
 		rel="noopener">[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL" | string %]</a></div>
 
-	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
-	[% ELSE %]
+	[%# The three action buttons are always rendered and are `disabled` while a
+	    scan runs, with the notice beside them (decisions §15.39 item 2) - core's
+	    own way for its rescan button (settings/server/basic.html:92). The
+	    server-side refusal in Settings.pm stays: this is only what the page
+	    shows. %]
+	<div id="swxScanToken">
 		<input name="testToken" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]"
-			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]" />
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]"
+			[% IF scanning %]disabled[% END %] />
+	[% IF scanning %]
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSE %]
 		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
+	</div>
 
 	[% IF tokenTestResult %]
 		<div>[% tokenTestResult | html %]</div>
@@ -28,6 +61,7 @@
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC" desc="PLUGIN_SQUEEZEWAX_SYNC_DESC" %]
+	<div id="swxSyncLast">
 	<div>[% "PLUGIN_SQUEEZEWAX_SYNC_LAST" | string %][% "COLON" | string %]
 		[% IF sync.lastSyncedF %]
 			[% sync.lastSyncedF | html %]
@@ -45,17 +79,23 @@
 	[% IF sync.lastError %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_FAIL" | string | replace('%s', sync.lastError) | html %]</div>
 	[% END %]
+	</div>
 
+	[%# A sync already running disables the button too: _syncNow would only
+	    answer "already running" (Settings.pm, _syncResultString). %]
+	<div id="swxScanSync">
+		<input name="syncNow" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]"
+			[% IF scanning || sync.running %]disabled[% END %] />
 	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSIF sync.running %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_RUNNING" | string %]</div>
 	[% ELSE %]
-		<input name="syncNow" type="submit" class="stdclick swxAction"
-			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]"
-			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]" />
 		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
+	</div>
 
 	[% IF syncResult %]
 		<div>[% syncResult | html %]</div>
@@ -76,12 +116,18 @@
 [%# The master-derive job (build-order step 9). Nothing is rendered when
     nothing is pending: `derive` is set only then, so a settled library shows no
     block at all rather than a permanent "0 of 0". No request is made to build
-    it - it is one count over rows we already hold. %]
+    it - it is one count over rows we already hold.
+
+    The outer div is always rendered, empty when there is nothing pending, so
+    the live refresh below has a place to put the block when it appears and to
+    take it away when the job is done. %]
+<div id="swxDerive">
 [% IF derive %]
 	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DERIVE" desc="PLUGIN_SQUEEZEWAX_DERIVE_DESC" %]
-		<div>[% derive.label | html %] &mdash; [% derive.state | html %]</div>
+		<div id="swxDeriveLine">[% derive.label | html %] &mdash; [% derive.state | html %]</div>
 	[% END %]
 [% END %]
+</div>
 
 [%# The two mandatory Discogs notices (decisions §9.6, §15.25 ruling 4). They
     are on THIS page and not in the album menu because the menu carries no
@@ -149,14 +195,20 @@
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DETECT" desc="PLUGIN_SQUEEZEWAX_DETECT_DESC" %]
-	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
-	[% ELSE %]
+	<div id="swxScanDetect">
 		<input name="detectTagNames" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]"
-			data-swx-running="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING" | string | html %]" />
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING" | string | html %]"
+			[% IF scanning %]disabled[% END %] />
+	[% IF scanning %]
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% END %]
+	</div>
 
+	[%# Refreshed with the status lines (decisions §15.39 item 3), so a run's
+	    progress and its result appear without a reload. Text and tables only:
+	    nothing in here is a field the user types into. %]
+	<div id="swxDetectResult">
 	[% IF detection %]
 		[% IF detection.running %]
 			<div>[% "PLUGIN_SQUEEZEWAX_DETECT_RUNNING" | string %]
@@ -212,6 +264,7 @@
 			[% END %]
 		[% END %]
 	[% END %]
+	</div>
 [% END %]
 
 [%# Button feedback, decided 2026-09-22 (design chat).
@@ -245,16 +298,17 @@
     outright. 0.0.0.5 shipped with a synchronous disable and the buttons
     became dead again - they greyed out, they relabelled, and nothing was
     ever sent. See the comment on the setTimeout below.
+
+    The "no polling" above is about the buttons, and still holds for them.
+    Decisions §15.38 item 3 added a separate refresh of the status lines, and
+    §15.39 item 1 made it run whenever the page is open and visible; it is the
+    second half of the script, and is commented there.
 %]
 <script type="text/javascript">
 (function () {
 	var form = document.getElementById('settingsForm');
 
 	if (!form || !form.querySelectorAll) { return; }
-
-	var buttons = form.querySelectorAll('input.swxAction');
-
-	if (!buttons.length) { return; }
 
 	var fired = false;
 
@@ -289,6 +343,8 @@
 			// form data set has been serialised and the request is away, so
 			// disabling can no longer affect it.
 			setTimeout(function () {
+				var buttons = form.querySelectorAll('input.swxAction');
+
 				for (var j = 0; j < buttons.length; j++) {
 					buttons[j].disabled = true;
 				}
@@ -296,9 +352,102 @@
 		};
 	};
 
-	for (var i = 0; i < buttons.length; i++) {
-		buttons[i].onclick = onClick(buttons[i]);
-	}
+	// Looked up afresh rather than captured once: the live refresh below can
+	// bring a button in (a scan ends) that was not on the page when it loaded.
+	var wire = function (root) {
+		var buttons = root.querySelectorAll('input.swxAction');
+
+		for (var i = 0; i < buttons.length; i++) {
+			buttons[i].onclick = onClick(buttons[i]);
+		}
+	};
+
+	wire(form);
+
+	// Live status (decisions §15.38 item 3, §15.39 items 1 and 3). Every 10 s
+	// while the page is open, fetch the page itself and replace the contents of
+	// these regions, and nothing else. The form fields the user types into are
+	// outside all of them.
+	//
+	// Always, not only while something is pending: b2 polled only if the page
+	// loaded showing the derive line or a scan notice, so an idle page never
+	// noticed a scan starting (report 76). Safe while idle because the GET does
+	// nothing but render (decisions §15.38 re-verification); its one side
+	// effect, stillScanning's clean-up after a dead scanner, notifies once,
+	// having cleared scanningProcess first (Slim/Music/Import.pm:736-741).
+	//
+	// No fetch while the page is hidden (another tab, a minimised window): the
+	// loop stops, and the page becoming visible again fetches at once and
+	// restarts it. Inside Material's iframe, document.hidden follows the top
+	// page.
+	//
+	// A plain GET of the page's own path, no query string: Settings.pm's
+	// handler dispatches only on the action parameters a submit carries, so a
+	// GET without them saves nothing, runs no action and sends nothing to
+	// Discogs. The page's own query is dropped on purpose - a doRescanNow=1
+	// there would start a scan (Slim/Web/Settings.pm:139). X-Requested-With is
+	// what LMS's CSRF check accepts for script requests
+	// (Slim/Web/HTTP/CSRF.pm:111-114).
+	//
+	// Never a reload and never a submit. A failed fetch is retried on the next
+	// tick, silently. Stops for good once a button has been pressed, since the
+	// page is then on its way out.
+	var regions = ['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect', 'swxDetectResult'];
+
+	if (!window.fetch || !window.DOMParser) { return; }
+
+	var timer = null;
+	var busy  = false;
+
+	var tick = function () {
+		timer = null;
+
+		if (fired || document.hidden) { return; }
+
+		busy = true;
+
+		window.fetch(window.location.pathname, {
+			method:      'GET',
+			credentials: 'same-origin',
+			headers:     { 'X-Requested-With': 'XMLHttpRequest' }
+		}).then(function (response) {
+			if (!response.ok) { throw new Error(response.status); }
+
+			return response.text();
+		}).then(function (text) {
+			if (fired) { return; }
+
+			var fresh = new DOMParser().parseFromString(text, 'text/html');
+
+			for (var i = 0; i < regions.length; i++) {
+				var mine  = document.getElementById(regions[i]);
+				var theirs = fresh.getElementById(regions[i]);
+
+				if (!mine || !theirs || mine.innerHTML === theirs.innerHTML) { continue; }
+
+				mine.innerHTML = theirs.innerHTML;
+
+				wire(mine);
+			}
+		})['catch'](function () {
+			// Silent: the next tick is the retry.
+		}).then(function () {
+			busy = false;
+
+			if (!fired && !timer) { timer = setTimeout(tick, 10000); }
+		});
+	};
+
+	// A fetch already in flight re-arms the loop when it lands, so becoming
+	// visible then must not start a second one.
+	document.addEventListener('visibilitychange', function () {
+		if (document.hidden || fired || busy) { return; }
+
+		clearTimeout(timer);
+		tick();
+	});
+
+	timer = setTimeout(tick, 10000);
 })();
 </script>
 

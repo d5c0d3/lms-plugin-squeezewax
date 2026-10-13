@@ -928,9 +928,9 @@ sub open_window {
 # The master derive trigger (build-order step 8c, decisions §15.22)
 # ---------------------------------------------------------------------------
 #
-# Two sites, and BOTH matter. The plan names only _syncDone; the skip above is
+# Three sites, and all matter. The plan names only _syncDone; the skip above is
 # the deviation, and it is the site that actually fires on this project's
-# reference server. Everything else that can end a tick or a sync must NOT arm
+# reference server. The settings button is the third (decisions §15.38 item 6). Everything else that can end a tick or a sync must NOT arm
 # the job: it is triggered by a completed sync and by nothing else (§15.15 part
 # 1 - no interval, no startup run).
 
@@ -942,6 +942,17 @@ diag('§15.22: the derive job is armed by a completed sync, and by nothing else'
 	Plugins::SqueezeWax::Plugin::_syncDone( { ok => 1, items => 203, requests => 4 } );
 
 	is( scalar @ARMED, 1, 'a successful fallback sync arms the derive job' );
+}
+
+# The third trigger (decisions §15.38 item 6): Settings::_syncNow calls this
+# entry after a successful button sync. That it is called only then is
+# settings-check.pl's; that the entry arms the job is this file's.
+{
+	reset_state();
+
+	Plugins::SqueezeWax::Plugin::_deriveMasters();
+
+	is( scalar @ARMED, 1, 'the entry the settings button calls arms the derive job' );
 }
 
 for my $error (qw(unauthorized already_running refused no_response count_mismatch)) {

@@ -16,6 +16,35 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [x] **Live status on an idle settings page, and Material behaviour during a
+      scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
+      Owner decided to ship b2 as designed. Findings: (1) the poll starts only
+      if the page loads with the Master line or a scan notice
+      (`settings.html:396`), so an idle page never notices a scan starting —
+      by design, but the hand-off's "open page, then start scan" cannot pass.
+      Candidate fix: poll while idle too (own page only, local GET, no
+      Discogs). (2) Page opened *during* a scan in Material: the buttons
+      vanish and **no notice text was seen**. (3) ~~buttons did not return~~ — owner error: they do return without a
+      reload, polling works; console shows repeated "Refused to set unsafe
+      header Referer", not from our code (grep), probably Material. (4) Owner prefers greyed-out/disabled buttons to
+      removed ones. 2 needs devtools evidence (is `.swxScanNotice` in the DOM and visible).
+      → **§15.39** (2026-10-13): b2 not promoted; 1.0.0b3 polls whenever the
+      page is visible, keeps the buttons (disabled) during a scan, refreshes
+      Detect's result, and renders the notices as body text. Point 2 is still
+      unexplained by reading (§15.39 re-verification); b3's hardware checks
+      under **Waiting** decide it.
+- [x] A7 evidence: the "nothing to derive: …" info line **does** appear, after
+      the manual sync (17:52:21) and from the scan-skip path (17:59:09, 18:11:14).
+
+- [x] **`master` = 1.0.0b1** (2026-10-13, hardware report 74), promoted at
+      `e151111`. Reference server: LMS offered 1.0.0b1 over 0.0.0.24, loads
+      cleanly, `user_version=7`, "You own a version" renders, owned view 205
+      albums. Network check passed: website `repo.xml` names 1.0.0b1, zip sha1 =
+      `cef515a5137bf96624a5992123cfb2724aecfa16`, home page shows the install URL,
+      `TODO.html` 404. Website updated about 2 min after the push (16:31:46
+      polling start to 16:33:17; push time not recorded, so an upper bound).
+      Part C (2026-10-13, owner): production repository entry switched to the
+      website URL; LMS offered 1.0.0b1 over 0.0.0.24, installed, works.
 - [x] **`master` = 0.0.0.24** (2026-10-13, hardware report 71), promoted at
       `151186f`. Network check passed 2026-10-13 (raw `repo.xml`
       names 0.0.0.24 and a `/master/` URL; zip sha1 = `a8386a71dc4b4ee3e215ee24c7f418500c21d944`;
@@ -1351,6 +1380,24 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [x] **2026-10-13: scan progress labels should carry the plugin name.** The
+      scan screen lines read "Discogs matching" and "Discogs collection sync"
+      (`PLUGIN_SQUEEZEWAX_MATCH_PROGRESS`, `PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS`
+      in `strings.txt`); the owner wants "SqueezeWax: Discogs matching" and
+      "SqueezeWax: Discogs collection sync", so a user can tell whose lines they
+      are. Strings only; a new build.
+      **Decided §15.38 item 4; built for 1.0.0b2.**
+- [x] **2026-10-13: empty tag names are silent — a new user is not told
+      identification is off.** Found on the production server (report 74):
+      fresh install, no tag names entered, so the identification importer is
+      gated off (`Importer.pm` `use`, `Tags.pm` default `[]`) and the scan screen
+      shows only "Discogs collection sync"; the queue held 26 title-route items.
+      Nothing in the UI says why. The README lists tag names under "For good
+      results" (optional tier), not as first-time setup. Options: (1) a one-line
+      notice on the settings page when no tag names are set (code + strings, new
+      build); (2) a "First-time setup" list in the README next to the token (docs
+      only). For the design chat.
+      **Decided §15.38 items 1, 2 and 5: both. Built for 1.0.0b2.**
 - [x] **2026-10-13: does a version badge wait for the next sync after Derive?**
       **Yes — measured, hand-off 71 (0.0.0.24, reset test C5/C6).** After a
       fresh scan and a finished Derive (474 releases, 22.6 min) ownership was
@@ -2209,6 +2256,46 @@ Each names its sites so the work is mechanical rather than a search.
       not yet seen on hardware.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
+      skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
+      and 4 there are run on b3 too. Promote only after these pass.
+      1. **Idle page notices a scan:** open the settings page with nothing
+         pending, then start a scan from another tab. Within ~10 s, all three
+         buttons are greyed (disabled) and the "scan is running" notice is
+         beside each; text typed into the token and tag fields beforehand
+         survives. When the scan ends, the buttons are enabled again within
+         ~10 s, without a reload, and a press works.
+      2. **Page opened during a scan:** the same disabled buttons and notices.
+         In Material, **is the notice visible?** If not: devtools, is
+         `.swxScanNotice` in the iframe's DOM, and what is its computed style.
+      3. **Polling:** devtools shows one GET of `settings.html` (no query
+         string) every 10 s while the tab is visible, none while it is in the
+         background, and one at once on returning. No Discogs request in the
+         log from those GETs (`ss`/log check, b2's A6, not yet run).
+      4. **Detect:** press Detect; the progress "(n/total)" counts up and the
+         result appears without a reload.
+      5. **Notices:** with no tag names, and on a server with no sync marker,
+         both notices read as normal paragraphs at the top of the page in both
+         skins, Material at a window wider than 1000 px included.
+
+- [ ] **2026-10-13: 1.0.0b2's hardware checks (decisions §15.38).** Offline
+      suites cover the server side; these need a browser and a server.
+      1. **Empty tag names:** the notice is at the top; it goes after a save
+         with a name. **First steps:** shown on a server with no sync marker,
+         gone after the first sync.
+      2. **Live refresh:** during a scan the three "scan is running" notices
+         turn back into buttons within ~10 s of the scan ending, with no reload,
+         and the buttons work. The "Master releases" line counts up on its own
+         and disappears when done; text typed into the token and tag fields
+         survives. Browser dev tools: one GET every 10 s with no query string,
+         and none once neither line is shown. No Discogs request in the log
+         from those GETs.
+      3. **Scan labels** read "SqueezeWax: Discogs matching" and "SqueezeWax:
+         Discogs collection sync" on the scan progress page.
+      4. **Master job:** with the job paused, the line reads "paused — …";
+         "Sync collection now" restarts it (log: a derive run starts after the
+         sync line). During a pacing stop it reads "waiting".
 
 - [x] **2026-10-13: Test token does not store the currency** (decisions §15.34
       item 3). → 2026-10-13: cause found by reading, and the profile request
@@ -3353,6 +3440,8 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **Settings-page button that starts a scan — v2 (§15.38).**
 
 - [ ] **Website design (beyond the README): later.**
 

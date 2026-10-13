@@ -576,16 +576,22 @@ sub _syncDone {
 }
 
 # Start the master derive job (build-order step 8c, decisions §15.22), from the
-# two places a collection sync has just finished successfully as far as this
-# process is concerned: _syncDone above, and _syncTick's "the scan already
-# synced" skip.
+# three places a collection sync has just finished successfully as far as this
+# process is concerned: _syncDone above, _syncTick's "the scan already synced"
+# skip, and the settings page's "Sync collection now" (Settings::_syncNow, after
+# the button's own result has been handed to the page).
 #
 # ON SUCCESS AND NOTHING ELSE, which is what keeps §15.15 part 1 intact: no
 # startup run, no interval, and a settled library makes the job issue one query
-# and return. The manual button is deliberately NOT a trigger - it has a user
-# waiting on a page, and its callback lives in Settings.pm - so pressing it while
-# a derive run is in flight is the case the job's yielding exists for rather than
-# a second trigger.
+# and return.
+#
+# The button was deliberately NOT a trigger until decisions §15.38 item 6, on
+# the grounds that it has a user waiting on a page. That reason did not hold: the
+# job starts only after the button's sync has finished and its page is rendered,
+# and it yields to syncs and scans anyway (Derive::_yieldReason). What did hold
+# was the cost of the exclusion - on production the job sat at "0 of 471" after
+# a run that never re-armed, the button did nothing for it, and only a rescan
+# restarted it.
 #
 # Required lazily, as the sync is: Derive.pm pulls in SimpleAsyncHTTP and Timers,
 # and a server with no token never reaches here at all.

@@ -210,7 +210,8 @@ sub _setChanged {
 }
 
 # The manual "Sync collection now" button - one of §13.7's three triggers, and
-# the only one that has a user watching it. The other two are timers in
+# the only one that has a user watching it. Since §15.38 item 6 a successful
+# press also starts the master job, once the page has its answer. The other two are timers in
 # Plugin.pm, which is where they have to be: they must work on a headless
 # server, and this file is loaded only under main::WEBUI.
 #
@@ -272,6 +273,11 @@ sub _syncNow {
 		$params->{syncResult} = _syncResultString($result);
 
 		_finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+
+		# The master job, after the page has its answer and only on success
+		# (decisions §15.38 item 6) - the same entry the two server-side
+		# triggers use, so whether there is anything to do is decided there.
+		Plugins::SqueezeWax::Plugin::_deriveMasters() if $result->{ok};
 	} );
 
 	return;
@@ -581,10 +587,27 @@ sub _urlEscape {
 	return $text;
 }
 
+# The derive line's state (decisions §15.38 item 7). "waiting" only while a
+# resume is actually scheduled; otherwise the job does nothing until the next
+# completed sync, and the line says what starts it.
+sub _deriveState {
+	my ( $running, $scheduled ) = @_;
+
+	return 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING' if $running;
+	return 'PLUGIN_SQUEEZEWAX_DERIVE_WAITING' if $scheduled;
+
+	return 'PLUGIN_SQUEEZEWAX_DERIVE_PAUSED';
+}
+
 sub beforeRender {
 	my ( $class, $params ) = @_;
 
 	$params->{prefs}->{pref_discogsTagNames} = Plugins::SqueezeWax::Tags->tagNames;
+
+	# Decisions §15.38 item 1: with no tag names the identification importer is
+	# off (Importer.pm `use`), so only title-and-artist matching runs, and until
+	# 1.0.0b2 nothing on screen said so.
+	$params->{noTagNames} = @{ $params->{prefs}->{pref_discogsTagNames} || [] } ? 0 : 1;
 
 	$params->{dbReady} = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
 	$params->{dbError} = Plugins::SqueezeWax::Schema->lastError;
@@ -614,6 +637,12 @@ sub beforeRender {
 	# server's own shortdateFormat/timeFormat prefs (Slim/Utils/DateTime.pm:81,
 	# :103), so the timestamp reads the way every other date in the web UI does
 	# rather than in whatever this plugin would have invented.
+	# Decisions §15.38 item 2: the order of first steps, until a collection sync
+	# has ever completed - no marker row, whichever path would have written it.
+	# Not with a broken database, which cannot say either way and has its own
+	# notice at the top of the page.
+	$params->{firstSteps} = ( $params->{dbReady} && !$params->{sync}->{lastSynced} ) ? 1 : 0;
+
 	if ( $params->{sync}->{lastSynced} ) {
 		$params->{sync}->{lastSyncedF} =
 			Slim::Utils::DateTime::shortDateF( $params->{sync}->{lastSynced} ) . ' '
@@ -640,9 +669,9 @@ sub beforeRender {
 				label => sprintf( string('PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS'),
 					$derive->{done}, $derive->{total} ),
 
-				state => string( Plugins::SqueezeWax::Derive->isRunning
-					? 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING'
-					: 'PLUGIN_SQUEEZEWAX_DERIVE_WAITING' ),
+				state => string( _deriveState(
+					Plugins::SqueezeWax::Derive->isRunning,
+					Plugins::SqueezeWax::Derive->isResumeScheduled ) ),
 			};
 		}
 	}
