@@ -19,7 +19,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 Things that must happen before v1 ships, and that nothing else will force.
 Each names its sites so the work is mechanical rather than a search.
 
-- [x] **Remove `discogsTestExcludeReleases`.** Done, SHA_PLACEHOLDER (migrate(4) in `Plugin.pm`, asserted in `plugin-check.pl`). A development aid that hides
+- [x] **Remove `discogsTestExcludeReleases`.** Done, `048014c` (migrate(4) in `Plugin.pm`, asserted in `plugin-check.pl`). A development aid that hides
       release ids from the ownership pass, so "a record left the collection"
       can be exercised without altering a real one. It **keeps its place
       through the build-out** — it proved steps 6-7's check 6 on hardware
