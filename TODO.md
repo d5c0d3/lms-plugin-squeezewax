@@ -1,6 +1,6 @@
 # SqueezeWax — TODO
 
-Synced branch: structural-matching @ c7193e9, 2026-09-07
+Synced branch: v1-buildout, 2026-09-07
 
 Shared reminder list. Both I and Claude Code read and update this.
 
@@ -11,6 +11,81 @@ Shared reminder list. Both I and Claude Code read and update this.
   **Waiting** with what specifically is being waited for.
 - Claude Code: check this at the start of a session, and add items here rather
   than only mentioning them in chat.
+
+---
+
+## v1 RELEASE CHECKLIST
+
+Things that must happen before v1 ships, and that nothing else will force.
+Each names its sites so the work is mechanical rather than a search.
+
+- [x] **Remove `discogsTestExcludeReleases`.** Done, `048014c` (migrate(4) in `Plugin.pm`, asserted in `plugin-check.pl`). A development aid that hides
+      release ids from the ownership pass, so "a record left the collection"
+      can be exercised without altering a real one. It **keeps its place
+      through the build-out** — it proved steps 6-7's check 6 on hardware
+      without touching anyone's collection, and steps 8-10 will want it — but
+      it is a back door into the badging rules and must not ship by inertia.
+      Sites, all of them:
+      - `SqueezeWax/Plugin.pm` — the pref default `discogsTestExcludeReleases
+        => ''` in `$prefs->init`, and the comment above it.
+      - `SqueezeWax/API.pm` — `_testFilter` (the sub, its POD and its
+        header comment; moved from `API/Async.pm` at step 8b), and its call
+        sites: `API/Async.pm`'s `_finish`, which becomes
+        `[ values %{ $run->{entries} || {} } ]` again, and `API/Sync.pm`'s
+        `_fetch`, which becomes `[ values %entries ]`.
+      - `scripts/api-check.pl` — the two `_testFilter` assertions.
+      - `scripts/scan-sync-check.pl` — the "test filter, after the gate"
+        block.
+      - `scripts/sync-check.pl` — the "test-only collection filter" block
+        (15 assertions) and the `@WARNINGS`/`$PREFS` uses it introduced.
+      - `docs/dev-repo-workflow.md` §6a — the "On the live server" paragraph
+        and the `pref` command example; keep the offline-harness half, which
+        is not going away.
+      **The removal needs a `$prefs->migrate` step, and this is not optional.**
+      The key CAN be set on a real server: it has no settings-page field, but
+      it is an ordinary pref and LMS's own `pref` command writes it —
+      `["pref","plugin.squeezewax:discogsTestExcludeReleases","..."]`
+      (`Slim/Control/Request.pm:604`), which is exactly how it was set during
+      the 2026-09-22 hardware check. So a server that used it carries the key
+      in `squeezewax.prefs` and would keep it forever. Add
+      `$prefs->migrate(N, sub { $_[0]->remove('discogsTestExcludeReleases'); 1 })`
+      beside the existing `migrate(1)` to `migrate(3)` in `Plugin.pm`, at
+      N = 4 (3 is step 8b's, which retired the last-synced prefs).
+      Two sites the list above missed, both handled in `048014c`: `API.pm`'s
+      `$prefs` (removed with its `use Slim::Utils::Prefs`), and
+      `scripts/syntax-check.sh`'s API comment.
+
+- [ ] **2026-10-12: a public beta (forum announcement) waits for step 10**
+      (owner, design chat). Before announcing, in this order:
+      1. **A fixed beta channel.** `repo.xml` on `v1-buildout` follows every dev
+         build, and migrations are one-way (`_migrate`'s downgrade guard,
+         decisions §6a), so a tester could not step back. A `beta` branch whose
+         `repo.xml` names one hardware-checked zip, moved only on purpose.
+         Master stays the rollback point (working agreement §5).
+         **[x] decided §15.36 part 1: `master` carries it, not a `beta`
+         branch; `scripts/promote-master.sh`.**
+      2. **A way out of a bad state.** Clear & rebuild (decisions §10) is still
+         unbuilt (item 2026-09-24). At minimum, the README documents a manual
+         reset (stop server, delete `squeezewax.db`, restart; manual links are
+         lost). That this is safe is inferred from `Schema.pm`, not tested.
+         **[x] decided §15.36 part 3; README "Starting over". Whole-reset
+         safety stays unverified until hand-off 71.**
+      3. **The build being announced is hardware-checked**, including its
+         wording. Passed, report 64 check 11.
+      4. **How testers report**: where (GitHub issues: whether they are enabled is
+         not checked), what to send (LMS version, OS, SqueezeWax log at INFO,
+         queue counts), and **never the token**. **[x] decided §15.36 part 4;
+         README "Reporting problems".**
+      Remaining: hand-off 71 passes, then promote (hand-off 72), then announce.
+      Also remaining for v1: the user guide; hand-offs 69-72; then the release
+      step (`TODO.md` "At SqueezeWax's first real release": Pages, release
+      `repo.xml`, real `install.xml` version).
+      State plainly in the announcement: no marketplace lookup or pressing
+      details before step 10 (if the beta follows it, drop this), the open
+      Discogs Help Center question (Request #1281019), and untested platforms
+      (scanner HTTPS outside macOS; Windows, Docker, piCorePlayer never run).
+      Venue: the Lyrion forum's third-party plugins section; the official
+      plugin directory waits for v1.
 
 ---
 
@@ -54,12 +129,775 @@ Shared reminder list. Both I and Claude Code read and update this.
       reports while `dbFile()` is never canonicalised, and a raw comparison
       would have disabled the plugin on any symlinked prefs directory.
 - [x] `Schema.pm`: plugin-owned attached SQLite file, `postDBConnect`
-      registration, `PRAGMA user_version` migrations, per `docs/v1-decisions.md` §2.
+      registration, `PRAGMA user_version` migrations, per `docs/squeezewax-v1-decisions.md` §2.
 - [x] Configurable Discogs tag names + detection action (v1, per §3 of the
       decisions doc). Done 2026-09-03/04 (15d19e4, 939819b, fee0aac, 1b18e45).
 
 ## Next — build-order steps 3–5 (matching)
 
+- [x] **2026-09-22, SHIPPED BUG, FIXED: `syncNow` and `testToken` were dead
+      buttons.** Found on the reference server — the manual "Sync collection
+      now" button did nothing at all: no sync, no pref change, no log line.
+      `settings/footer.html:39` puts a **hidden** `saveSettings=1` in the
+      settings form beside the visible Save button at `:38`, so every submit
+      carries `saveSettings` whichever button was clicked. `Settings.pm`'s
+      `handler` tested `saveSettings` second in its `elsif` chain, so it
+      swallowed `syncNow` and `testToken`, which sat behind it.
+      `detectTagNames` was tested first and so always worked — which is why
+      this was never noticed. Fixed by testing every named action first and
+      leaving `saveSettings` as the fallback.
+- [x] **2026-09-22, FIRST REAL RUN of the sync and the ownership pass**, on
+      the reference server at 0.0.0.4. Recorded here because it is the first
+      evidence that steps 5–7 work end to end on real rows, and nothing else
+      tracked holds it.
+      Sync: `203 items over 4 requests` (1 identity + 3 pages) — matches
+      §9.4's measured collection size.
+      Pass: `764 albums, exact=149 version=50 absent-with-row=305; wrote
+      inserted=26 updated=477 deleted=0 promoted=0 demoted=327; queue-to-be
+      gated=0 ambiguous=5 artist-disagree=2 artist-absent=0 undecodable=0`.
+      **No identification was touched.** All 481 pre-existing rows still
+      carry their original `match_tier`, `discogs_release_id` and
+      `snapshot_track_count` — diffed against
+      `BASELINE-discogs_match.csv`: 0 lost, 0 added, 0 changed. The 26
+      inserts are ownership-only rows from the title route (NULL tier), for
+      507 rows total and 199 with ownership.
+      **demoted=327 is design §3 node E working, not a regression.** Step 3
+      wrote `confirmed` with no collection check (the defect step 4 fixed);
+      478 strict rows were confirmed, only 149 are owned exactly, so 327
+      dropped back to `candidate`. The identification stands in every case.
+      **Three rows look wrong and are not.** `strict/confirmed/absent` ×2 and
+      `manual/confirmed/absent` ×1 all carry synthetic release ids (999999,
+      77777, 888888) from earlier hand testing. The manual one keeps
+      `confirmed` because a manual link is not subject to the collection
+      cross-check (design §3). The other two are orphans: album 3633 has no
+      tracks left, and `ab8737fa…` claims `lms_album_id 2919` but album
+      2919's real `album_key` is `f0be6395…`, which has its own row and WAS
+      correctly demoted. An orphan carrying an identification keeps its state
+      for orphan recovery, exactly as `Ownership::_apply` says it should.
+      **`gated=0`, against the page-1 measurement's 6.** Not a contradiction:
+      `scripts/title-agreement.pl` measures the title route over every album,
+      while the pass reaches node H only for albums no tag resolved first.
+      Those compilations are tagged, so they never reach the gate. The
+      script's figures bound the title route, not the pass.
+- [x] **2026-09-24, BUILD-ORDER OBLIGATION from the stub audit: step 8's plan
+      must name the seam it will test end to end, and say which suite owns
+      it.** This is the audit's third finding and the one no stub edit
+      addresses. Five stubs were made faithful; none of them tests a *join*,
+      and all three regressions of 2026-09-22..24 were joins — the browser
+      against the dispatcher, the click against the form submission, the sync
+      against the pref write. Each suite asserted something true about the
+      piece it owned while the seam went untested.
+      Step 8 touches `Settings.pm`, `API/Async.pm` and the queue at once, so it
+      is where this stops being avoidable. Two candidates are already on
+      record: a **browser-level check of the settings page** (that page's
+      dispatch has been broken twice by facts no server-side test can reach),
+      and a **join-level check of sync → pass → pref writes** (the 0.0.0.7
+      shape). The plan must pick one, or name a third, and say which file
+      owns it — not leave it as a wish.
+      **Caveat, recorded so it is weighed rather than assumed:** three seam
+      defects is a pattern, not a law. The fourth may be somewhere else
+      entirely, and an integration suite aimed at the last three failures can
+      be precise about the past and blind to the next one.
+      → 2026-09-24: named. Queue → sync → link → pass, owned by
+      scripts/queue-check.pl (step 8 plan §3.2, decisions §15.16 part 10).
+      Ticked in commit C2.
+- [ ] **2026-09-24, STUB AUDIT #5, not fixed: the Scheduler task is recorded
+      but never run.** `settings-check.pl` stubs
+      `Slim::Utils::Scheduler::add_task`/`remove_task` as counters, so
+      `_detectionTick` is never driven by its real driver — a tick that dies,
+      or never terminates, looks identical to one that works.
+      **Revisit when step 8, or §13.5's all-tags read, puts real work in a
+      Scheduler task** (§15.2 obligation 2 requires that shape). Right now the
+      only task is tag detection, whose logic `tags-check.pl` covers directly;
+      the scheduling is the untested part and it carries little.
+      → 2026-09-24: step 8 does not put work in a Scheduler task after all
+      (decisions §15.16 part 8), so this revisit trigger does not fire at
+      step 8. Stays parked.
+- [ ] **2026-09-24, STUB AUDIT #8, DECIDED not to fix: the plain DBI
+      connection.** `Slim::Schema::dbh` is stubbed as a plain `DBI` handle in
+      `library-check.pl`, `match-check.pl`, `ownership-check.pl` and
+      `ownership-offline-check.pl`. It does not model LMS's own connection
+      settings — notably `sqlite_use_immediate_transaction`
+      (`Slim/Utils/SQLiteHelper.pm:358`), which makes `BEGIN` take a write lock
+      on **every attached database**. A defect hiding there would be lock
+      contention against a running scanner: finding 2b, the whole reason
+      `_writeOk` exists.
+      **Recorded as a decision, not an omission.** A faithful version costs
+      more than it protects: the refusal it would test is already asserted by
+      overriding `_writeOk`, and the real lock behaviour was observed on
+      hardware in build-order step 6-7's check 4 — the pass was refused
+      mid-scan, at info, exactly as designed. Revisit only if a lock-related
+      defect appears that `_writeOk` does not explain.
+- [ ] **2026-09-24, STUB AUDIT #9, not fixed: the `readTags` fixtures.**
+      `tags-check.pl` builds tag hashrefs by hand and stubs `Slim::Formats`
+      entirely, so nothing proves `Slim::Formats->readTags`
+      (`Slim/Formats.pm:153`) returns what we assume. A defect there looks like
+      a real tagger whose output is shaped differently from every fixture.
+      Not cheap, and the designed answer already exists: the settings page's
+      **Detect tag names** button reads real files on a real library and
+      reports what it found. Revisit if detection ever disagrees with the
+      fixtures.
+
+- [x] **2026-09-24: the Test token button's rejected-token path is verified end
+      to end** — the last piece of shipped code that had no evidence behind it.
+      `settings-check.pl`'s transport never called its callbacks, so
+      `_tokenTested` and the third-argument status read inside `_testToken`
+      were unreachable offline; the button was also never checked on hardware
+      with a wrong token in a way anyone recorded.
+      Now both. Offline: a 401 classifies as `unauthorized` and selects
+      `PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED` (with the fix reverted,
+      that assertion and four others fail). On hardware at 0.0.0.8 the page
+      shows *"Discogs rejected this token. Check that it was copied correctly
+      and has not been revoked."*
+      **What it used to show:** *"Got no response from Discogs. Check this
+      server's network connection."* — so the button sent users to debug their
+      network for a token problem, on the one control whose entire job is
+      telling those two apart. §14.2's complaint, rendered.
+
+- [x] **2026-09-24: decisions §15.15's hardware checks, at 0.0.0.7 and 0.0.0.8.**
+      Prompt D's post-install list. Three pass, one not observed by decision,
+      and one regression was found and fixed between the two versions.
+      (1) **PASS** (0.0.0.7). `discogsSyncInterval` and its `_ts_` twin are gone
+          from `squeezewax.prefs`; `_version` is 2; the settings page has no
+          interval field. Ten full minutes after the 12:23:54 load the only
+          SqueezeWax lines were the load and two `postDBConnect` lines,
+          `discogsLastSynced` stayed at the previous day's 16:03:51 and
+          `discogs_match` was untouched. Under 0.0.0.6 a startup sync would
+          have fired at 12:28:54.
+      (2) **PASS** (0.0.0.7). Rescan at 12:34:22, scan finished 12:34:49, TWO
+          `_rescanDone` notifications 0.34s apart, collapsed into exactly one
+          sync at 12:35:49.34 — 60s after the last, the debounce. 203 items
+          over 4 requests; `discogsLastSynced` advanced; `discogs_match`
+          unchanged.
+      (3) **PASS at 0.0.0.8**, after failing at 0.0.0.7 — see the regression
+          item below. At 0.0.0.8, in order:
+          16:05:39 a wrong token, manual sync: `collection sync failed: Discogs
+          rejected the token` at **error**, `discogsLastSyncError` =
+          `unauthorized` **not** `no_response`, `discogsLastSynced` unchanged,
+          `discogs_match` unchanged. **That is §15.15 part 2's whole point,
+          working against real Discogs.**
+          16:06:15 a scan finished (two `_rescanDone`), and at 16:07:15
+          `_syncTick` logged *"Discogs rejected the token; skipping the
+          scan-triggered sync until the token changes or a manual sync
+          succeeds"* at info, **once**. The pause works.
+          16:11:48 the real token restored, manual sync: 203 items over 4
+          requests, error cleared, pause cleared.
+      (4) ~~**NOT OBSERVED, by decision** (prompt D): killing the network
+          mid-sync is not to be run.~~ **RUN AFTER ALL, 2026-09-24, at the
+          owner's request — PASS.** Scoped so only LMS's own outbound HTTPS
+          was dropped (`iptables -m owner --uid-owner squeezeboxserver`), so
+          nothing else on the machine was affected, with cleanup on a trap;
+          the owner ran it and confirmed the rule was gone afterwards.
+          16:19:20.73 the identity request got through, 16:19:21 the drop
+          landed, and 16:19:37.09 — 16.3s later, the 15s request timeout — the
+          sync failed as `no_response`, **logged at warn** via
+          `Settings.pm:310`, not at error via `:283`. So the connection died
+          genuinely mid-sync rather than before it started.
+          `discogsLastSyncError` = `no_response`, `discogsLastSynced`
+          unchanged, `discogs_match` unchanged.
+          **And the pause stayed unset**, which is the half this check exists
+          for and the only part not readable from a pref: a scan finished at
+          16:21:00 and its sync RAN at 16:22:00 and succeeded, with no skip
+          line. The whole log carries exactly one skip line, from 16:07's
+          rejected token. Transient and permanent failures are now
+          distinguishable in behaviour, not just in vocabulary — §14.2's
+          actual requirement.
+      **An unplanned 5xx validated the fix further.** At 16:11:07 a manual
+      sync with the REAL token failed as `server_error` — a genuine transient
+      from Discogs, which the owner saw as "a server error" and which needed a
+      second press. Two things it proves that no test could: `server_error` is
+      now reachable at all (before §15.15 part 2 it would have read
+      `no_response`), and a transient failure correctly does **not** set the
+      pause — the log carries exactly one skip line, from 16:07, and the next
+      sync ran normally.
+      `discogs_match` is byte-identical at 507 rows across every check.
+- [x] **2026-09-24, REGRESSION FOUND ON HARDWARE AND FIXED: PART 4 undid PART
+      3.** At 0.0.0.7 a rejected token set the pause and the save that followed
+      immediately wiped it, so the next finished scan synced anyway (observed
+      14:37:02 rejected, 14:38:55 synced regardless).
+      The shared form saves every scalar pref through `SUPER::handler` in
+      `_finishSyncNow`, which runs from the SYNC'S OWN CALLBACK — so the save
+      lands after the sync finishes, and `Plugin.pm`'s `setChange` on
+      `discogsToken` cleared the pause the sync had just set. Fixed in 0.0.0.8
+      by writing the field token BEFORE starting the sync;
+      `Slim/Utils/Prefs/Base.pm:94-97` then suppresses the later no-op write,
+      onchange included, so the hook cannot fire twice.
+      **Neither suite could see it**: `settings-check.pl` stubbed Async
+      wholesale so `clearTokenRejected` was a counter, and `sync-check.pl`
+      never goes through the save path. `StubPrefs` now models both real
+      behaviours and the ordering is asserted against an event log; with the
+      fix reverted, 3 assertions fail.
+- [ ] **2026-09-24, STANDING LESSON: three regressions this round were found on
+      hardware, not offline, and all three were interactions the stubs had
+      smoothed over.** The hidden `saveSettings` field, the synchronous button
+      disable, and the save-after-sync ordering. Each suite asserted something
+      true about the piece it owned; none modelled the seam. The stubs have
+      since been made faithful one at a time, each after the fact. Worth a
+      deliberate pass over the remaining stubs asking what else they smooth
+      over — the transport already was one, and `StubPrefs` was another.
+
+- [ ] **2026-09-22, RECORDED NOT DESIGNED: on a fresh install the first sync
+      only happens at the first library scan or a press of "Sync collection
+      now".** Neither "Test token" nor Save triggers one, and §15.15 part 1
+      removed the startup sync that used to cover this. So a user who installs
+      the plugin, pastes a token and saves, sees no badges at all until they
+      rescan or press the button. Revisit if first-run users report no badges.
+
+- [x] **DECIDED 2026-09-22 by §15.15 part 2; being fixed in prompt D PART 3.**
+      **2026-09-22, DEFECT: `unauthorized` is unreachable through
+      `API/Async.pm`, so a rejected token reads as a dropped connection.**
+      Found by step 5 check (c) on hardware at 0.0.0.6. A wrong token
+      produces `no_response` at **warn**, never `unauthorized` at error, and
+      `discogsLastSyncError` reads `no_response`.
+      **Mechanism, verified in refs:**
+      `Slim/Networking/SimpleAsyncHTTP.pm:76-101` (`onError`) sets `error` and
+      calls the error callback but never calls `$self->code(...)`; only
+      `onBody` at `:112` sets the code, and that runs on success only. So on
+      the error path `$http->code` is unset and `API::classifyResponse` takes
+      its `!$code` branch. `classifyResponse` itself is correct — its 401
+      branch is simply never reached from the async side.
+      `Async.pm:331-334`'s comment records the wrong assumption: "the error
+      path means no response". A 401 is a real response that also takes the
+      error path. `Settings.pm`'s `_testToken` shares the pattern and the
+      hole.
+      **Confirmed end to end 2026-09-22**, not only by reading: from the
+      reference server `GET https://api.discogs.com/` returns 200 in 0.25s,
+      so the host has connectivity, and an unauthenticated
+      `GET /oauth/identity` returns **401**. A sync against that same endpoint
+      with a rejected token reported `no_response`. The 401 is real, reaches
+      the error callback, and is discarded before `classifyResponse` sees it.
+      **This breaks §14.2** ("a rejected token must read differently from a
+      dropped connection") and it is not cosmetic: a rejected token is
+      treated as transient, so the interval retries it forever, at warn, with
+      nothing naming the real cause.
+      **Likely fix:** `onError` passes `$http->response` as its THIRD
+      callback argument, so the real code is available there. Not applied —
+      it changes retry behaviour on a recorded decision, and belongs in a
+      design ruling first.
+- [x] **DECIDED 2026-09-22 by §15.15 part 3; being fixed in prompt D PART 4** —
+      both buttons act on the token on the page, both save, the page says so.
+      **2026-09-22: EVERY action button saves the settings, and the two token
+      buttons then disagree about which token they used.** Corrected and
+      widened by the owner, 2026-09-22.
+      `_finishTestToken` and `_finishSyncNow` are character-identical: both
+      call `$class->SUPER::handler( $client, $params )`, which saves every
+      scalar in `prefs()` whenever `saveSettings` is present — and
+      `settings/footer.html:39`'s hidden field means it always is.
+      `detectTagNames` reaches the same call by falling through. So all three
+      buttons save.
+      What differs is only which value the ACTION consults:
+      - **Test token** reads the FIELD (`Settings.pm:321`, deliberate — the
+        point of a Test button is to check before committing), then saves it.
+        Effectively "Test and Save".
+      - **Sync collection now** reads the STORED pref (`:220`) and only saves
+        the field afterwards, in `_finishSyncNow`. Effectively "Sync with the
+        old token, then Save".
+      Observed end to end: a fake token typed and Test-token'd was both
+      tested and stored; a later Sync then failed against it. Restoring the
+      real token by Test token alone was enough to make the next sync
+      succeed.
+      Neither behaviour is discoverable from the page. Decide whether
+      `_syncNow` should prefer the field as `_testToken` does, whether the
+      buttons should stop saving at all, or whether the page should say what
+      each one does.
+- [x] **SETTLED 2026-09-22 by §15.15 part 1: the scheduled sync is REMOVED**,
+      not given an off switch. The design chat recommended keeping the timer
+      with `0 = off`; the user chose removal, on the ground that a server
+      plugin should not call a third party on its own schedule. The accepted
+      cost is recorded in §15.15 part 1: staleness is silent.
+      **2026-09-22, FOR THE DESIGN CHAT: the scheduled sync cannot be turned
+      off.** `Plugin.pm:77` validates `discogsSyncInterval` with
+      `intlimit, low => 3600`, so the smallest legal value is one hour and
+      there is no `0 = off`. For a plugin that makes unattended third-party
+      network calls from someone's music server, "you may choose the
+      frequency but not whether" is the wrong default. Compounded by the
+      defect above: with a bad or revoked token the schedule retries daily
+      forever and reports a misleading transient error each time. The 86400
+      default is already recorded in `Plugin.pm:46-50` as a product call, not
+      a measured or specified figure.
+- [x] **2026-09-22, REGRESSION SHIPPED AND FIXED IN ONE SESSION: 0.0.0.5's
+      disable-on-click made the buttons dead again.** Disabling a submit
+      button inside its own click handler does not merely drop its name from
+      the form data set — it **cancels the submission**. On the reference
+      server the buttons greyed out, relabelled, and produced no server-side
+      activity at all; the only sync in the window was the 300s first-poll
+      timer. Fixed in 0.0.0.6 by deferring the disable with `setTimeout(…, 0)`,
+      after the form data set has been serialised.
+      **Why the suite missed it:** `settings-check.pl` asserted that the name
+      is copied BEFORE the disable, which was still true. The defect was that
+      the disable happened synchronously at all. Two assertions added: the
+      script must defer with `setTimeout`, and the disable must be inside the
+      deferral.
+      Second time in one session that this page's dispatch has been broken by
+      something invisible to the server (the hidden `saveSettings` field, then
+      this). Both were browser-side facts, and neither offline suite could
+      have found them without being told what to look for. **A browser-level
+      check of this page is the only thing that would catch the third.**
+- [x] **2026-09-22: `discogsTestExcludeReleases` is a development aid and must
+      not outlive v1's testing.** A hidden pref, empty by default, no settings
+      field: `API/Async.pm`'s `_testFilter` hides the listed release ids from
+      the ownership pass, after the completeness gate and before
+      `Ownership->apply`, so "a record left the collection" can be exercised
+      on a live server without altering a real collection. The fetch is
+      untouched and nothing is sent to Discogs. Every sync warns while it is
+      set, including with a count of 0. Documented in
+      `docs/dev-repo-workflow.md` §6a; asserted in `sync-check.pl` (15
+      assertions). **Before v1 ships, decide whether it stays.** It is a
+      back door into the badging rules that no user should ever need, and its
+      only defence is that it warns.
+- [x] **2026-09-22, NAMED COST of decisions §15.13 part 3 (artists at L2): two
+      correct badges lost on the reference library** — Future Sound Of London,
+      albums 3124 and 3127, against Discogs `The Future Sound Of London`.
+      §13.10.4's trade, accepted; these reach the review queue (step 8).
+      Revisit only if the pattern repeats.
+      → 2026-09-26: resolved itself. FSOL albums 3124 and 3127 now badge
+      exact and are not queue items (step 8 hardware report §2.5).
+- [x] **2026-09-22, STEP 8 CONSTRAINT, restated with a number:** after the
+      first real pass the reference server has 329 `strict`/`candidate` rows,
+      of which 305 are ownership `absent` — tagged albums the user does not
+      own. None of them is a queue item (§13.4, §14.3, design §3: candidate is
+      not the queue). The queue selects §13.10.5's four contents only; on this
+      run that is 5 ambiguous + 2 artist-disagree, plus Strict conflicts and
+      (later) tag disagreements.
+      → 2026-09-24: honoured by the step 8 plan (§0.3). The queue selects
+      on review_reason, never on state. Three contents in v1, not four
+      (decisions §15.16 part 8). Ticked in commit C1.
+- [x] **2026-09-22, DECIDED (design chat): settings-page action buttons
+      disable and relabel on click**, client side, showing the existing
+      running string. A polling interim page is recorded, not designed:
+      revisit if syncs longer than ~10s are seen.
+      DONE 2026-09-22. Plain DOM in `settings.html`, no framework and no
+      polling; the page still works with JavaScript off. **Deviation worth
+      knowing:** the existing `*_RUNNING` strings are sentences ("A collection
+      sync is running.") that read wrong as a button label, so three short
+      labels were added — `PLUGIN_SQUEEZEWAX_{SYNC,TOKEN_TEST,DETECT}_BUTTON_RUNNING`
+      — and the sentence strings keep their existing server-rendered uses.
+      The subtlety the implementation turns on: a disabled control is not part
+      of the form data set, so the clicked button's name and value are copied
+      into a hidden input BEFORE anything is disabled, or every action would
+      fall through to a plain save. `settings-check.pl` asserts that ordering,
+      that the wired buttons are exactly the three `handler()` dispatches on,
+      and that each running string exists in `strings.txt`.
+      No core pattern was followed because none exists:
+      `settings/server/basic.html:11-30` polls `rescan ?` on an Ext TaskRunner,
+      which is the shape this was decided against.
+- [x] **2026-09-22: `Settings.pm` has an offline suite.**
+      `scripts/settings-check.pl`, 43 assertions. It drives the REAL
+      `handler()`, not an extracted dispatcher: extracting the chain would
+      have left the shipped dispatch as untested as it was when the bug
+      shipped. Which action ran is observed at the module's real boundaries
+      (`Async->sync`, `SimpleAsyncHTTP->get`, `sample_albums`/`add_task`, the
+      pref write), never by overriding the action subs. It also reads
+      `settings/footer.html` out of `refs/` and asserts the hidden
+      `saveSettings` field is still there, so a core change to that template
+      fails here rather than in the field.
+      **Verified to catch the original bug:** restoring 0.0.0.3's dispatch
+      order fails 10 of the 43, including "saveSettings + syncNow reaches
+      _syncNow".
+      Also adds `scripts/check-all.sh` — there was no all-suites runner
+      before, which is part of why a missing suite was easy to miss. 733
+      assertions across eight suites.
+- [x] **2026-09-22: the offline check-6 harness is not committed.** DONE —
+      landed as `scripts/ownership-offline-check.pl`. Takes its paths as
+      arguments like `title-agreement.pl`, defaults to the committed page-1
+      fixture and to dropping releases 9701013 and 443973, and takes its own
+      copies of both databases through SQLite's online backup from a
+      read-only handle — so it is safe to point straight at a running LMS and
+      it does not trust the caller to have passed a copy. Verified against
+      the live files: same two-row result, and `discogs_match` byte-identical
+      afterwards. **Not in `scripts/check-all.sh`**, and its header says why:
+      it needs a real library, which no other suite does.
+
+- [ ] **2026-09-22, UI: the action buttons give no "working on it" feedback.**
+      Asked for after the first real sync. `_syncNow` defers the page render
+      through `$callback` until the sync's own callback fires, so the browser
+      sits on a pending POST for the whole sync and the person who clicked
+      sees nothing at all — no spinner, no "syncing…", just a page that has
+      not come back yet. It happened to be ~2s on the reference collection
+      (203 items, 4 requests); a larger collection, a rate-limit wait or
+      §15.2's retry makes it long enough to look broken, and the natural
+      response to a button that looks dead is to click it again.
+      The template already has a `sync.running` branch
+      (`settings.html:49-50`, `PLUGIN_SQUEEZEWAX_SYNC_RUNNING`), but it only
+      renders for someone who RELOADS the page while a sync is running —
+      never for the person who started it. So the string exists and the state
+      exists; what is missing is showing it to the clicker before the work
+      finishes.
+      Same gap on "Test token" and "Detect tag names", which defer the same
+      way. Worth solving once for all three rather than three times.
+      Needs a decision on the shape: a client-side disable-and-relabel on
+      submit is the cheap one and needs no new round trip; rendering an
+      interim page that polls is the honest one and is what a long sync
+      actually wants. Design chat, not a unilateral pick.
+- [x] **2026-09-22, NO SUITE COVERS `Settings.pm`'s dispatch.** DONE — see
+      `scripts/settings-check.pl` above.
+      ~~ The dead-button
+      bug above shipped in 0.0.0.3 and would have been caught by one offline
+      test asserting that a params hash carrying BOTH `saveSettings` and
+      `syncNow` reaches `_syncNow`. There is no `scripts/settings-check.pl`;
+      `Settings.pm` is the only module with no offline exercise, and it is the
+      one module whose inputs come from a browser. Worth one, at least for the
+      dispatch chain — the async render paths are harder and can wait.~~
+
+- [x] **2026-09-13, CHANGES MIGRATION 3'S SHAPE: migration 3 is a 12-step table
+      rebuild of `discogs_match`, not an `ALTER TABLE ADD COLUMN`.** DONE
+      e275221 (`Schema.pm::_migration_3`) — every obligation below is ticked
+      individually. The 3.53.0 reasoning held up: LMS bundles SQLite 3.46.1
+      (VERIFIED 2026-09-20), so `ALTER COLUMN ... DROP NOT NULL` was not
+      available and the rebuild was required rather than chosen. Verified
+      against `sqlite.org/lang_altertable.html` (page dated 2026-06-04): SQLite
+      cannot modify an existing CHECK constraint; the ALTER TABLE page's §8
+      names the create-copy-drop-rename procedure as the only route. `ALTER COLUMN ...
+      DROP NOT NULL` exists as of SQLite 3.53.0 (2026-04-09) but covers the
+      nullability half only. The ownership column (§13.3) and the narrowed
+      `match_tier` CHECK (§14.1) therefore ride one rebuild. Two obligations,
+      both blocking:
+      (a) DONE e275221. COUNT any `match_tier IN ('structural','fuzzy')` rows before copying
+          and REFUSE LOUDLY if any exist — the narrowed CHECK would otherwise
+          fail mid-copy on the one table that is not disposable. That none
+          exist is INFERRED (step 4 stopped after item 3), not verified.
+          Inference is not sufficient for a destructive migration.
+      (b) DONE e275221. ASSERT in the offline suite that a NULL `match_tier` is accepted by
+          `CHECK(match_tier IN ('strict','manual'))`. Standard SQL treats a
+          CHECK evaluating to NULL as not violated, so no explicit
+          `OR match_tier IS NULL` should be needed — expected, NOT verified
+          here. Assert alongside the existing cases (rejects `'Strict'`,
+          accepts `'manual'`). ALSO FLIP the existing cases that assert
+          `match_tier` ACCEPTS `'structural'` and `'fuzzy'`
+          (`scripts/schema-check.pl`, the `for my $tier (qw(strict
+          structural fuzzy))` loop): after the narrowing both must be
+          REJECTED. Added 2026-09-15 — obligation (h) carried this for
+          `discogs_no_match.tier` and (b) did not for `match_tier`.
+      (c) DONE e275221. DROP the `state` column's `DEFAULT 'candidate'`. Decisions §14.8
+          makes `state` nullable; with the default retained, any insert
+          omitting it writes `candidate` instead of NULL and drops an
+          auto-badged album into the review queue — silently wrong rather
+          than an error. ASSERT in the offline suite that an insert omitting
+          `state` yields NULL.
+      (d) ~~CONFIRM the orphan-recovery index `(state, snapshot_track_count)`
+          needs no change. Recovery selects `state = 'confirmed'`, so NULL
+          rows should be excluded by the predicate — INFERRED from the
+          predicate, not verified against a query plan (decisions §14.8).~~
+          **CORRECTED 2026-09-18 (decisions §15.9): SUPERSEDED BY (g).** This
+          was written under §14.8, when recovery keyed on `state =
+          'confirmed'`. §15.5 moved the predicate off `state` and (g) rebuilds
+          the index accordingly. Do (g); do not "confirm no change" here.
+          The struck text is kept because the reasoning it carries — that a
+          predicate-based exclusion is inferred rather than verified against a
+          query plan — still applies, and (g) inherits it.
+      (e) DONE e275221. COPY `state` AND `match_tier` FORWARD UNCHANGED, and set
+          `ownership = 'absent'` on every copied row (decisions §15.3). COUNT
+          rows before and after the rebuild and assert equal; assert that no
+          row's `state` differs from its pre-migration value. The ownership
+          pass, not the migration, re-derives `state`.
+      (f) DONE e275221. DROP `snapshot_total_duration` (decisions §15.5). Nothing in v1
+          reads or writes it; the rebuild makes dropping it free. COUNT the
+          columns of the rebuilt table and assert the expected set.
+      (g) DONE e275221, IN PART — and (d), which it superseded, is discharged
+          with it. REBUILD the orphan index to match §15.5's predicate
+          (`match_tier`, `snapshot_track_count`) instead of
+          `(state, snapshot_track_count)`. Verify with EXPLAIN QUERY PLAN
+          that the recovery lookup uses it, per obligation (d)'s standard.
+          The rebuild is done and asserted (`schema-check.pl`, the orphan-index
+          case). The EXPLAIN QUERY PLAN half is NOT done and cannot be: there
+          is no such lookup to plan. VERIFIED 2026-09-20 by Claude Code against
+          HEAD — `Match::snapshotRows` (`Match.pm:259-268`) selects the whole
+          table and `Importer::_prePass` (`:355-359`) filters in Perl, and the
+          only two statements naming `snapshot_track_count`
+          (`Match.pm:412-416`, `:662-672`) are keyed on `album_key`, the
+          PRIMARY KEY. Replaced by the recorded finding at the 2026-09-19 item
+          below, approved with the plan (N2). This is the same defect shape as
+          (d): an obligation written against a query that was never built as
+          SQL.
+      (h) DONE e275221. NARROW `discogs_no_match.tier` to `CHECK (tier IN ('strict'))`
+          (decisions §15.6), by `DROP TABLE IF EXISTS` and recreate — NOT by
+          copying, so surviving `'structural'` rows are discarded rather than
+          failing the copy. Three sub-obligations:
+          - GREP first and confirm nothing writes `'structural'` to this
+            table. §15.6 records that as inferred, not verified.
+          - UPDATE `scripts/schema-check.pl`: `'structural'` must now be
+            REJECTED, and the "same album_key takes a second row under a
+            different tier" case has no second valid tier in v1, so it
+            changes shape rather than being deleted.
+          - The drop costs one rescan's worth of re-reads for untagged
+            albums. Expected, not a defect.
+      (i) DONE e275221. DROP `discogs_collection` and its index `discogs_collection_release`
+          (decisions §15.10). A plain `DROP TABLE IF EXISTS` — the table is
+          entirely regenerable and carries no decision, unlike
+          `discogs_match`. Two sub-obligations:
+          - CONFIRM FIRST that nothing in `SqueezeWax/` reads or writes it.
+            The 2026-09-13 item requires this and it still stands.
+            ALREADY KNOWN, so do not report "zero": `scripts/schema-check.pl`
+            inserts into the table at two sites (verified 2026-09-18).
+          - UPDATE `scripts/schema-check.pl` in the same change. THREE sites,
+            not two — corrected 2026-09-18, the earlier text named only the
+            inserts: the two inserts, the `list_state` CHECK assertions around
+            them, AND the "expected tables exist" loop, which asserts the
+            table is present. Do not work from this list alone: grep the suite
+            for `discogs_collection` and account for every hit, because this
+            enumeration has already been wrong once.
+- [x] **2026-09-13: `SqueezeWax/Schema.pm` migration 1 creates
+      `discogs_collection`, which v1 must not have.** DONE e275221 by obligation
+      (i). The "CONFIRM ZERO READERS AND WRITERS FIRST" condition was met:
+      Phase 0 (2026-09-20) grepped `SqueezeWax/` and `scripts/` and found 11
+      references, zero readers, and no writers outside `_migration_1`'s own
+      DDL — and found the table present with 0 rows on the reference server,
+      so the drop discards nothing. The inference the item refused to migrate
+      on is now a verified count. VERIFIED in
+      `_migration_1`: the table plus an index on
+      `(discogs_release_id, list_state)` commented as "the badge-derivation
+      join in design §4" — a join decisions §13.3 replaced with a column
+      read. Migration 1 is shipped and hardware-verified, so the table exists
+      on the reference server. The ruling against it (`TODO.md` 2026-09-07,
+      reaffirmed decisions §13.2) postdates the code by days and nobody went
+      back for it. Design describes the intended model and omits the table.
+      **Migration 3 should drop it — but CONFIRM ZERO READERS AND WRITERS
+      FIRST.** Collection sync was never built so there are almost certainly
+      none, but that is INFERRED and a destructive migration should not run
+      on an inference. `discogs_price_snapshot` and `discogs_release_cache`
+      are NOT the same case: both are unwritten in v1 by plan, serve v2/v3,
+      and are named in design §10.
+- [x] **2026-09-13: the ownership pass must not write a row per album.**
+      DONE 3b197cb (`Ownership::_apply`, the `!$row` branch). Decisions
+      §14.8's invariant: absence of a row already means "nothing
+      known", so a row with NULL `state`, NULL `match_tier` and
+      `ownership = 'absent'` asserts nothing and must never be written. A row
+      exists only where there is an identification, or an ownership
+      conclusion other than `absent`. Without this the pass would write 765
+      rows on the reference library, most of them empty. The invariant is
+      NEW in §14.8 — it follows from the columns but was never stated.
+      Asserted in `scripts/ownership-check.pl`: an untagged album owning
+      nothing gets no row, an ambiguous one gets no row, a Various-gated one
+      gets no row, and §15.13 part 5's delete removes a row whose ownership
+      lapsed. The hardware check is (2) of the step 6-7 entry below.
+- [x] **2026-09-13: is a master-id tag among the configurable tag names?**
+      UNVERIFIED — `SqueezeWax/Tags.pm` settles it. Design §3's flowchart
+      node F asks whether an album's master is in the collection, and it
+      fires only where the master is ALREADY known: from a configured tag, or
+      stored on the row. It must never look one up — a `GET /releases/{id}`
+      per tagged unowned album is exactly the per-album cost decisions §13.1
+      removed. If no master tag is configured by default, node F is near-dead
+      in v1 and essentially all version ownership comes from the
+      title-and-artist route. That does not make the flow wrong; it changes
+      which path is the main one.
+      2026-09-15, RESOLVED — decisions §15.1. No master tag is configurable:
+      `Tags.pm`'s `@MASTER_KEYS` is a fixed list of three spellings, read only
+      on `decide()`'s clean-hit path. The "near-dead if not configured by
+      default" reasoning above was built on the wrong premise — node F is
+      live for those spellings, and its real reach is unmeasured (see the
+      node F measurement item).
+- [ ] **2026-09-13: confirm the no-master sentinel against a fixture.**
+      Design's ownership test guards against it, and the reconciliation
+      carried the guard forward without verifying it. Reported as `0` in
+      collection `basic_information` and `null` in the release payload —
+      RECALLED from the existing design text, NOT verified. One of the ten
+      captured fixtures should settle it.
+- [x] 2026-09-12, BLOCKS THE BUILD ORDER: docs/squeezewax-design.md is partly
+      superseded by decisions §13 and §13.10 and has NOT been reconciled.
+      working-agreement §2 makes design win over everything and calls decisions
+      "not live spec", so the precedence rule currently points at the stale
+      document — a build session following the rule would build the
+      search-first Structural flow. Temporary markers are in place as of this
+      commit; they are scaffolding, not the fix. 20 contradicted places surveyed,
+      listed in plans/design-reconciliation-survey.md along with what survives
+      untouched. The reconciliation is a design-chat session: design gets
+      rewritten in its own voice around the collection-first flow, citing
+      decisions §13 for the reasoning, with no superseded prose retained (design
+      is live spec, not a record). Do the reconciliation BEFORE the build order.
+      2026-09-15: done. Reconciled 2026-09-13, f9a7644..32a6504; rulings in
+      decisions §14; banner removed. Ticked late — the reconciliation session
+      did not close this item.
+- [x] 2026-09-12: Importer.pm's local_tracks == 0 gate and the comment above
+      it now contradict decisions 13.10.1 and must be changed by the build
+      order. ~~The gate came from Structural's duration fingerprint, which no
+      longer runs.~~ It excluded 186 of 765 albums, 24%.
+      2026-09-19, CORRECTED AND CLOSED — decisions §15.11. The struck reason
+      belongs to decisions §8's Structural gate, a different gate. The
+      importer's own comment gives its reason as "nothing to read tags from",
+      which still holds: all-remote albums have no local candidates. The gate
+      STAYS in the importer; §13.10.1's all-albums scope is carried by the
+      ownership pass (step 7). Closed without a code change.
+- [ ] **2026-09-12: plans/build-order-step-4-structural-matching.md is stale in
+      its entirety** — it plans decisions §8's search-first flow, which
+      decisions §13.8 supersedes. Its §6 still calls for a "design §13 rewrite"
+      of a request budget that no longer has per-album searches to budget for.
+      Do not patch it; it is superseded by the build-order rewrite.
+- [ ] **2026-09-12: the review queue must not fill with albums the user does
+      not own (§13.4).** An album identified from a tag but absent from the
+      collection needs no human decision. Against a few-hundred-item
+      collection and a ~~764~~ — corrected 2026-09-12: 765 — album library,
+      most albums are unowned, so a candidate predicate that catches them
+      turns the queue into noise. This
+      is a constraint on step 5's predicate, not a preference.
+- [ ] **2026-09-11: plan §5 item 4 measures the confirm/candidate split as ONE
+      ratio, but there are now five routes into the review queue** —
+      durations absent Discogs-side (7.5% of 40), zero countable tracks (2.5%
+      of 40), NULL secs (unmeasured), incompletely-ripped sets (present in the
+      reference library, count unknown), and compilations whose title-only
+      retry surfaces a master the fingerprint correctly rejects (unmeasured).
+      decisions §8's ~10% expectation was built from the first two only.
+      Measure the split BY ROUTE. If the total lands materially above 10%, the
+      answer is bulk confirm actions in step 5's queue, NOT a laxer matcher —
+      see §12.3. Recorded, not designed.
+- [ ] **2026-09-11: Library.pm's iterator supplies neither per-track durations
+      nor an album artist.** The artist gap is recorded (decisions §11.4); the
+      duration gap was not recorded anywhere. Both items 4 and 5 depend on it,
+      and it touches a module with an existing suite
+      (scripts/library-check.pl). Sequencing, not a decision: it wants its own
+      commit ahead of item 4 rather than being folded into either.
+- [ ] **2026-09-11, verified: tracks.secs is a NULLABLE FLOAT, and a NULL local
+      duration yields (structural, candidate)** — see
+      squeezewax-v1-decisions.md §12.2. SQL/SQLite/schema_16_up.sql,
+      CREATE TABLE tracks, "secs float", no NOT NULL; no later migration
+      redefines the table. Reachable rather than theoretical:
+      Slim/Schema/Album.pm sub duration carries
+      "return if !defined $_->secs;". Unhandled, the failure is undef-as-0
+      falling inside the ±2–3 s margin of a short Discogs track — a spurious
+      match, and Structural auto-confirms silently. Checked against a fresh
+      slimserver clone at 4015c6a8 (public/9.1, 2026-09-07), which is NEWER
+      than refs/'s a670a38c — re-verify by symbol per working agreement §6.
+- [x] **2026-09-07, verified: step 4's master-only Structural row needs NO
+      migration.** `discogs_match.discogs_release_id` is already nullable
+      (`Schema.pm::_migration_1`: `discogs_release_id INTEGER`, no
+      `NOT NULL`), consistent with §3a's conflict rows and with
+      `Match.pm::_recordNoMatch`'s `discogs_release_id IS NULL` predicate.
+- [ ] **2026-09-07: no cheap discriminating filter exists for Structural
+      candidates — track count and durations appear only in the release
+      payload.** Strategy must be rank, fetch in rank order, stop early, cap
+      hard — not filter-then-fetch. Ranking signals, none exclusionary:
+      `stats.community.in_collection` (strongest), country, released,
+      format, title. **A hard per-album fetch cap is REQUIRED** and is what
+      makes the budget bounded now that the format gate is a ranking signal
+      (see the falsified-claims item below), not a filter. Over-cap albums
+      go to the review queue rather than grinding. Blocks the design §13
+      rewrite.
+      ~~OPEN: enumerate candidates via `/masters/{id}/versions` or
+      `/database/search`? Take it with the budget.~~ — **RESOLVED
+      2026-09-07: `/database/search` with `type=master`. See the settled
+      step-4 candidate-enumeration flow below.**
+      2026-09-12: superseded by decisions §13 — v1 performs no per-album
+      Discogs search.
+- [ ] **2026-09-07, SETTLED DESIGN: step-4 candidate enumeration, ranking,
+      comparison and write rule.** Superseded as the design record by
+      `squeezewax-v1-decisions.md` §8 — see there for the full design
+      (flow, ranking, comparison, write rule, multi-disc handling).
+      Not in §8, kept here: `type=master` search results also carry
+      `barcode`/`catno`. A barcode is a **Strict-grade identifier** — some
+      taggers write a `BARCODE` tag, and where present it identifies a
+      pressing more decisively than durations can, so it is a possible
+      future tag-based path alongside the Discogs release ID. Recorded,
+      not designed; v2.
+- [x] **2026-09-07: tracklist-entry parsing must allowlist, not denylist,
+      and must not assume duration format.** From a 40-release sample:
+      entries have at least three `type_` values (`"track"`, `"heading"`,
+      `"index"`) though the documentation shows only `"track"` — count and
+      compare ONLY `type_ == "track"`, an ALLOWLIST, so an unknown fourth
+      value is ignored rather than counted as a track. 2 of 40 releases
+      (5%) contain non-track entries, so `.tracklist|length` is wrong for
+      them; the filter is mandatory. Headings are sub-sections, NOT disc
+      boundaries (release 14772 has four headings spanning two per disc
+      across two discs) — discarding headings loses no disc structure.
+      Disc membership appears in `position` as `"D-T"` (`1-1` … `2-8`) on
+      that one sample; ~~vinyl (A1/B2) and other formats are unsurveyed~~ —
+      **corrected 2026-09-12, Phase 0:** vinyl A1/B2 positions occur in four
+      of eight fixtures (42 of 98 tracks), the most common format in the
+      corpus — what is unsurveyed is multi-record vinyl disc membership,
+      since both vinyl fixtures are `format_quantity: 1`; and
+      position is not parsed regardless (see the settled comparison flow
+      above). After filtering to tracks: 36 of 40 releases (90%) have
+      complete durations, 3 (7.5%) have none at all, 1 (2.5%, release 2516)
+      has zero countable tracks. Unverified: whether long tracks use
+      H:MM:SS — all observed are M:SS, longest 9:10, but the parser must
+      handle both, since mis-parsing `1:02:33` would silently poison a
+      comparison. Duration availability is a property of the Discogs
+      ENTRY, not the endpoint: master 18080 (Violator) has durations,
+      master 3855547 (*Escape The Chaos*) and its main release 33986376 are
+      both blank — fetching the release does not recover what the master
+      lacks.
+      2026-09-12: superseded in operative part by §13 — no Discogs tracklist
+      is parsed in v1. The allowlist finding stands as evidence about the API.
+- [ ] **2026-09-07: `data_quality` is not usable as a pre-fetch ranking
+      signal.** 40-release sample: 20 "Correct" (0 with missing durations),
+      20 "Needs Vote" (3 with missing durations) — direction is real but
+      doesn't narrow (85% of "Needs Vote" releases have complete
+      durations; Fisher exact p ~ 0.23 on n=40, suggestive not
+      established), and it's absent from search results, so it can't rank
+      candidates before the fetch is paid for. Usable only as (a) a
+      tiebreaker between already-fetched candidates and (b) a confidence
+      note in step 5's review queue — do not build on it. No-durations and
+      masterless are largely independent populations (of 3 genuine
+      no-duration releases, 2 have masters; n=3).
+- [ ] **2026-09-07: Structural skips `local_tracks == 0` for its own
+      reason** (no local files, no evidence about a physical object), not
+      inherited from Strict. Needs its own test.
+- [x] **2026-09-07: the `use` gate's max-tier default is decided.** RESOLVED
+      2026-09-07 — see `plans/build-order-step-4-structural-matching.md` §0.7.
+- [ ] **2026-09-07, verified: the "no master" sentinel is
+      endpoint-dependent — both representations must be guarded.**
+      Collection `basic_information`: `0` (5 of 100 sampled, zero nulls).
+      Release payload: `null` (verified, release 9701013). Every master
+      comparison needs both an explicit `!= 0` guard AND a definedness
+      check, depending on which endpoint's `master_id` is in hand.
+      Fixtures need TWO masterless releases, because the failure mode is
+      that distinct masterless releases collide on the same sentinel.
+- [ ] **2026-09-07: ownership test needs BOTH sets** —
+      `release_id in owned_releases` OR (`master_id != 0` AND
+      `master_id in owned_masters`). The release arm is required, not a
+      fallback — it's the only arm that fires for the ~5% masterless
+      releases. Ownership is decided at MASTER level; identity stays at
+      RELEASE level (resolves the ripped-the-CD-owns-the-LP case).
+- [ ] **2026-09-07, FALSIFIED: "one request per master answers ownership
+      across every pressing."** `/masters/{id}/versions` is paginated and
+      unbounded — Depeche Mode, *Violator*: 529 versions, and the owned
+      release was not in the first 100 under default sort. A negative
+      answer requires exhausting every page, so "not owned" is the
+      expensive case. Dropped as the ownership mechanism; the collection
+      sync's owned-master set replaces it.
+- [ ] **2026-09-07, FALSIFIED: "`/database/search` requires
+      authentication."** Returns 200 unauthenticated, despite the
+      documentation stating otherwise. Consequence: requiring a token is a
+      throughput/setup-coherence choice (60/min vs 25/min), not a technical
+      necessity — the use-gate rationale needs rewriting accordingly; the
+      gate condition itself is unchanged.
+- [ ] **Implement stable sort pinning on every paged Discogs endpoint.**
+      Hazard and remedy recorded in `squeezewax-v1-decisions.md` §9.4.
+- [ ] **2026-09-07: no `discogs_collection` mirror in v1.** Ownership is a
+      derived per-album label, written by a sync that fetches transiently
+      and stores only the conclusion. The column lands in migration 3, in
+      the step that reads it — NOT step 4 (step 2 finding 8: don't add a
+      column nothing reads yet). Sync has its own trigger: ~~interval pref
+      plus~~ **(corrected 2026-09-22, §15.15: a finished scan, plus)** a visible
+      manual "Sync collection now" — a music rescan does not
+      refresh it, since the skip contract keys on file state and ownership
+      isn't in it. Settings page shows collection last-synced time.
+- [ ] **2026-09-07: artist pre-filter** to shrink any master backfill from
+      library-sized to collection-sized, at zero request cost. Needs a
+      conservative fallback for various-artists and album-artist
+      mismatches.
+      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
+- [x] **2026-09-07: mandatory Discogs attribution.** Both required notices
+      are recorded in `squeezewax-v1-decisions.md` §9.6. Still open: **a
+      grid badge has no natural place for the "Data provided by Discogs"
+      notice — decide before step 6 starts.** 2026-09-19: "step 6" is the
+      2026-09-07 numbering and meant the badge, now build-order step 9.
+      Decide before step 9 starts.
+      → 2026-09-29: DECIDED, decisions §15.25. No grid badge; the menu shows no
+      Discogs data; both notices on the settings page.
+- [ ] **Step 4's plan must open with an enumerated "what step 3 established
+      that step 4 must honour" section**, each item citing its decision
+      record or symbol — the same shape step 3's plan used for step 2's
+      findings 2a, 3 and 9. This is a contract problem, not a git problem:
+      one long-lived branch (`v1-buildout`) and full visibility of step 3's
+      code do not by themselves stop step 4 from writing `recordStructural`
+      alongside `recordStrict` in a way that skips `_writeOk`, reimplements
+      the manual-match guard wrongly, widens the narrow delete predicate, or
+      breaks invariant 1. At minimum, enumerate: `_writeOk`/`_writeRefusal`;
+      the manual guard as rule one of the write path; the narrow delete
+      predicate and the rule behind it; invariant 1 and `_clearNoMatch`; the
+      skip contract (row exists AND `source_timestamp` equals current
+      `MAX(tracks.timestamp)`; NULL never skips); and §3b invalidating
+      `tier='strict'` only, with its note that a pref-derived tier needs its
+      own clause.
 - [x] **`album_key` computation.** Resolved during step 2, deliberately not
       implemented: raw SQL on `Slim::Schema->dbh` (the pattern in
       `Slim/Plugin/FullTextSearch/Plugin.pm:547-556`), not DBIC — the
@@ -70,14 +908,26 @@ Shared reminder list. Both I and Claude Code read and update this.
       `md5_hex`. **Zero qualifying tracks must yield `undef`, never
       `md5_hex('')`** — that is one constant every empty album would collide
       on. Reachable because `Album->rescan` counts unfiltered while we filter.
-- [ ] **Orphan recovery writes an UPDATE, not an INSERT.** Relink by updating
+- [x] **Orphan recovery writes an UPDATE, not an INSERT.** Relink by updating
       the orphaned row's `album_key`, `lms_album_id` and snapshot, carrying
       `discogs_release_id`, `match_tier`, `state` and `matched_at` forward:
       relinking re-identifies which local album the match belongs to, it does
       not re-decide which release it is. An INSERT would need a provenance
       value nothing re-evaluated.
+      — done in step 4 commit 5. `Match->relinkOrphan` is an UPDATE of
+      `album_key` and `lms_album_id` only, asserting exactly one row changed.
+      **One correction to this item's own wording:** the snapshot is NOT
+      updated, it is carried. §15.4 captures the snapshot at identification,
+      and a relink is not one — it re-identifies the album, not the release,
+      so there is nothing to re-snapshot. `source_timestamp` is carried too,
+      which is what makes the moved album skip on the same scan (plan §0.5).
+      The ambiguous branch is step 8's (§15.5 part 4).
 - [ ] **`lms_album_id` refresh** on `['rescan','done']`, debounced — *not*
       `Slim::Utils::Scanner::API->onFinished`. Reasoning in decisions §6.
+      → 2026-09-29: still open, and now documented as such. Design §10 claimed
+      a refresh that no code does (decisions §15.25). Step 9 routes around it by
+      keying on `album_key`. Anything new that looks an album up by
+      `lms_album_id` is wrong until this is built.
 - [x] **`Slim::Music::Import->addImporter`** registration, which step 2
       deliberately omitted: an importer whose `startScan` does nothing would
       only put a dead row in the scan progress UI.
@@ -106,17 +956,936 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [x] **Anomalous-run summary at `warn`** when
       `matched == 0 && examined > 0`. Done 2026-09-04 (cec7a46).
 - [x] **`startScan` returns an integer** (matched count). Done (cec7a46).
-- [ ] **Step 5's review queue must offer reject / dismiss, not only confirm.**
-      A confirmed match demoted to candidate by a tag conflict keeps its
-      adjudicated `discogs_release_id` and its snapshots (decisions §3a); if the
-      user then removes the tags entirely, the importer may not delete the row —
-      it carries a decision, and §2a forbids that — and Structural skips it
-      because a `discogs_match` row exists. With a confirm-only queue the album
-      would propose a release with no tag behind it forever. Recorded in design
-      §3.
+- [x] **Step 5's review queue must offer reject / dismiss, not only confirm.**
+      Recorded three times over — corrected 2026-09-07; previously miscounted
+      as four, with two cases that don't actually belong (see below):
+      (a) **A confirmed match demoted to candidate by a tag conflict** keeps
+      → 2026-09-24: this is today's step 8. Reject deletes the row; there
+      is no stored dismiss (decisions §15.16 part 7). Ground (a) is the
+      incumbent conflict only: a fresh one already deletes itself. Ticked in
+      commit C1.
+          its adjudicated `discogs_release_id` and its snapshots (decisions
+          §3a); if the user then removes the tags entirely, the importer may
+          not delete the row — it carries a decision, and §2a forbids that —
+          and Structural skips it because a `discogs_match` row exists. With a
+          confirm-only queue the album would propose a release with no tag
+          behind it forever. Recorded in design §3.
+      (b) **A wrong manual row** is not fixable by "clear & rebuild matches"
+          (decisions §10.5) — the action deliberately preserves manual rows,
+          so a user who confirmed the wrong pressing has no recovery path.
+      (c) **A wrong Structural auto-confirm, introduced by step 4.**
+          Structural confirms silently, so a wrong edition-level match
+          produces a badge with no trace of the disagreement and no way to
+          reverse it. The strongest of the three; not previously recorded
+          anywhere.
+      NOT reject/dismiss cases: the phantom-conflict row, which
+      `Match.pm::_recordNoMatch`'s delete predicate clears automatically; and
+      the edition-level context menu, which needs a version picker promoting
+      to manual — refinement, not rejection.
+      2026-09-13: ground (c) is obsolete — Structural no longer exists
+      (decisions §13.8). The failure shape moved rather than vanished: a wrong
+      VERSION badge from the title-and-artist route auto-badges without ever
+      entering the queue, so there is nothing to reject. v1 ships no recovery
+      path for it by decision — decisions §14.4 — on the stated assumption of a
+      well-tagged library and a maintained Discogs collection. Grounds (a) and
+      (b) are unaffected and still require reject/dismiss.
+- [x] **2026-09-15, BUILD ORDER MUST HANDLE: `Match::_recordMatch` writes
+      `state = 'confirmed'` on every clean tag hit, with no collection
+      check.** VERIFIED: the SQL literal is `'strict','confirmed'`, and
+      `match-check.pl` asserts "a clean hit auto-confirms". Design §3 node E
+      and decisions §13.4 confirm only when the tagged id is in the
+      collection. INFERRED, not observed in the database: reference-server
+      rows are therefore confirmed regardless of ownership. Knock-ons: existing strict rows need their state re-derived
+      (Q1 in the build-order rewrite item below); `hasAnyStrictMatch`
+      keys on strict+confirmed, so the anomaly warning changes meaning
+      (INFERRED); snapshots are captured at confirm time, which moves if
+      confirmation moves to the server-side pass; comments saying "the badge
+      join is state='confirmed'" are stale.
+      — done in step 4 commit 4. `_recordMatch` writes `'strict','candidate'`
+      and returns `'identified'`; `hasAnyStrictMatch` keys on a non-NULL
+      `discogs_release_id` at strict tier in any state; the stale
+      badge-join comments in `Match.pm` and `match-check.pl` are rewritten.
+      The two knock-ons this item could not settle were ruled on rather than
+      coded: re-derivation of existing rows is the ownership pass's (§15.3),
+      and snapshot capture stays at identification (§15.4).
+- [ ] **2026-09-15: build-order rewrite from step 4 — in progress, NOT
+      decided.** ~~The design chat has proposed a sequence; no plan file exists
+      yet.~~ **2026-09-19: the sequence is decided (decisions §15.9, and
+      `CLAUDE.md`'s Build order), and step 4's plan is
+      `plans/build-order-step-4-identification-rework.md`. The item stays
+      open for Q9 and Q10.** Recorded so it is not re-derived from scratch,
+      not as a ruling.
+      2026-09-19: step 4 code complete at a50c9d0; hardware checks open below.
+      Proposed, in order:
+      4 identification rework (importer stops writing `confirmed`; write
+        `snapshot_artist` from `albums.contributor`, §11.4 and §15.5; build
+        the unambiguous orphan relink, §15.5; remove `discogsMaxTier`, §15.8;
+        detection bare-master fix; stale comments; `hasAnyStrictMatch`
+        semantics. Neither the `use` gate nor the `local_tracks` gate
+        changes, §15.8 and §15.11);
+      5 collection sync (server-side, async — decisions §15.2). Testable on
+        its own: three requests, last-synced timestamp advances, nothing
+        written to `discogs_match`;
+      6 migration 3 (its obligations as already recorded in this file).
+        REORDERED 2026-09-18 by decisions §15.9, and it SHIPS WITH step 7 —
+        reviewable as its own step, not merged ahead of the code that
+        exercises it;
+      7 ownership pass (design §3 nodes C–K, decisions §14.8).
+        Iterates EVERY album, all-remote included — this is where §13.10.1
+        lands, not in the importer (§15.11). §13.5's all-tags read moved to
+        step 8 on 2026-09-19 (decisions §15.13 part 7). Plan:
+        `plans/build-order-step-6-7-ownership.md`;
+      8 review queue and manual re-match (decisions §13.10.5, §14.9);
+      9 owned badge and context menu (design §4, decisions §14.5, §14.10);
+      10 on-demand marketplace lookup (design §7).
+      Open questions blocking it. CONVENTION: an open one ends with
+      "Not decided."; a settled one carries a "RESOLVED <date>" line naming
+      the decision record. Grep for "Not decided." to list what is still
+      open — two design-chat reports were wrong about this because the
+      marker had not been applied consistently. The two occurrences of the
+      phrase inside THIS note are expected hits; count from the Q lines
+      below, not from a raw grep total.
+      Q1 — existing `strict`/`confirmed` rows: migration 3 demotes them all
+        and the first ownership pass re-promotes owned ones, or the ownership
+        pass demotes the unowned ones. Demoting first removes them from
+        orphan recovery (`state = 'confirmed'`) until a sync completes.
+        Leaning: the pass does it, now that §15.2 runs it after identification.
+        RESOLVED 2026-09-15 — decisions §15.3, as the leaning above: the pass
+        promotes and demotes; migration 3 copies `state` unchanged
+        (obligation (e) on the migration item).
+      Q2 — `discogs_no_match.tier`'s CHECK still allows `'structural'`. Does
+        it narrow in migration 3? The table is regenerable, so it could be
+        dropped and recreated rather than rebuilt. Not in migration 3's
+        recorded obligations as far as the design chat read.
+        RESOLVED 2026-09-15 — decisions §15.6: it narrows to `strict`, by
+        DROP and recreate inside migration 3, keeping the `tier` column and
+        the composite PK. Now obligation (h) on the migration item.
+      Q3 — RESOLVED, decisions §15.2.
+      Q4 — does the ownership pass treat "Various" and "Various Artists" as
+        the same artist? Discogs uses the former, LMS the latter (7 of 100
+        fixture entries, against 95 compilations). Under the badging rule an
+        artist disagreement sends the album to the review queue, so without a
+        rule most matched compilations queue for a lexical reason. The
+        title-agreement measurement reports the bucket split both ways and
+        deliberately does not add the equivalence. Recorded 2026-09-15: the
+        question is open and blocks step 7.
+        RESOLVED 2026-09-15 — decisions §15.7: they agree. The LMS side is
+        `Slim::Music::Info::variousArtistString()`, never a literal; the
+        Discogs side is `Various` or `Various Artists` after the ` (N)`
+        strip, both case-folded. `albums.compilation` is deliberately not
+        sufficient on its own. GATED: the ownership pass must not auto-badge
+        an album whose artist agreement is reached only through this
+        equivalence until the pages 2–3 measurement reports — see that item's
+        four added questions, and Q9. Corrected 2026-09-19 (§15.11): the gate
+        first keyed on `compilation = 1`, which §11.3(c) measured as wrong for
+        11 Various-ish albums.
+      Q5 — RESOLVED 2026-09-15 — decisions §15.5: recovery considers any
+        orphaned row with an identification and a snapshot
+        (`match_tier IS NOT NULL AND snapshot_track_count IS NOT NULL`),
+        not rows selected on `state`. The premise of the original item was
+        partly wrong; see its own item, now ticked.
+      Q6 — when is the orphan-recovery snapshot captured? Design §10 says
+        "at confirm time", which was the same instant as identification while
+        `_recordMatch` confirmed. Decisions §15.2 and §15.3 split them across
+        two processes. Leaning: capture at identification, since the scanner
+        has the LMS album data in hand and the pass would otherwise re-read it
+        per promotion. CONSTRAINT, verified in `Match.pm::_recordNoMatch`: the
+        one permitted deletion requires `state = 'candidate' AND
+        discogs_release_id IS NULL AND snapshot_track_count IS NULL`, so
+        capturing a snapshot on a CONFLICT row would make that delete
+        unreachable and leave phantom conflict rows in the queue forever.
+        Whatever is decided must leave conflict rows without a snapshot.
+        RESOLVED 2026-09-15 — decisions §15.4: capture stays at
+        identification, conflict rows never carry a snapshot, and the pass
+        neither captures nor refreshes. No code change; the residual is
+        design §10's wording, now item (e) of the design-fix list.
+      Q7 — which step owns orphan recovery? It is NOT built: its `TODO.md`
+        item ("writes an UPDATE, not an INSERT") is unticked and `Match.pm`
+        has no relink path. The step-2 plan deferred it to "step 3/4" and
+        step 3 did not take it. The proposed sequence above does not name it.
+        RESOLVED 2026-09-15 — decisions §15.5: recovery belongs to the
+        identification step (step 4), which builds the unambiguous relink.
+        The ambiguous branch is an obligation on the review-queue step.
+      Q8 — what happens to the `discogsMaxTier` pref? VERIFIED 2026-09-15:
+        `Settings.pm` initialises it to `'strict'` and lists it in `sub
+        prefs`, and `HTML/EN/plugins/SqueezeWax/settings.html` offers a
+        `structural` option. Structural and Fuzzy do not exist (§13.8,
+        §14.3), so the settings page lets a user select a tier that cannot
+        run, and picking it does nothing at all — no error, no log line.
+        Four things touch it: the importer's `use` gate (the stale step-4
+        plan wanted `@discogsTagNames || ($maxTier ne 'strict' && $token)`),
+        decisions §10.2 which lists "tier selector" among the prefs that
+        survive clear & rebuild, design §9's settings list, and §3b's
+        per-pref invalidation clauses. Design-chat leaning: REMOVE the pref —
+        a selector with one valid value is a control that can only be set
+        wrong. Against: it is shipped and hardware-verified, so removal needs
+        a prefs migration or an accepted orphan key. Blocks step 4, because
+        the `use` gate is part of the identification rework.
+        RESOLVED 2026-09-18 — decisions §15.8: the pref is REMOVED, by a
+        `$prefs->migrate` step in the identification rework. Design §9 already
+        says matching is not configurable, so this is compliance rather than a
+        choice, and the code was the thing out of line. The `use` gate does NOT
+        change — it stays `scalar @{discogsTagNames}`, which is correct for
+        tag-driven identification.
+        (The snapshot-column question informally numbered Q8 in chat is
+        settled by §15.5; this is the only Q8 in the record.)
+      Q9 — should the badging rule gain a CONFIRMATION TEST on the
+        single-candidate path: label, catalogue number or year checked
+        against the one remaining collection entry? Raised 2026-09-15 by
+        §15.7: once `Various` agrees with the LMS label, artist carries no
+        information for compilations (§11's placeholder finding), so title
+        uniqueness alone bounds a compilation badge — and §14.4 gives a
+        wrong version badge no recovery path. VERIFIED against slimserver
+        `a670a38c2b14`: `albums.label` exists (`schema_23_up.sql`) but
+        nothing in 9.1 writes or reads it and `Slim/Schema/Album.pm` does
+        not declare it, so label means a per-album file read; and
+        `albums.year` is the file's YEAR tag (often the original year) while
+        Discogs' `year` is the pressing's. This AMENDS §13.10.3, so it is a
+        decisions change, not build order. Decide from the pages 2–3
+        measurement's four added questions, not from these two facts alone.
+        2026-09-19: step 7 ships with this open (decisions §15.13 part 8) —
+        matches reached only through the `Various` equivalence stay
+        unbadged, per §15.7/§15.11, until the measurement reports.
+        2026-09-20, FOUND WHILE BUILDING B2, must be settled with Q9: the
+        gate has a seam. §15.13 part 8 gates matches reached ONLY through
+        the equivalence, and §2.2 consults the equivalence only after plain
+        equality fails. So with `variousArtistsString` at its English
+        default, a Discogs credit of `Various Artists` is plain equality and
+        BADGES, while `Various` on the same record reaches the equivalence
+        and is GATED — the outcome turns on which of its two
+        various-artists spellings Discogs used, though §15.7 calls both the
+        same vocabulary. Asserted as-built in
+        `scripts/ownership-check.pl`. Q9's answer must cover both spellings
+        or the gate is arbitrary.
+        2026-09-20: the SEAM is closed by decisions §15.14 — the gate now
+        holds every Various-to-Various match, however spelled, until the
+        pages 2–3 measurement reports. Q9 itself (a confirmation test) is
+        still open. Not decided.
+      Q10 — which LMS album artist does the ownership pass compare with
+        Discogs'? Decisions §11.4 recommended `Slim::Schema::Album::artists`,
+        and §15.12 found its rationale false at slimserver `a670a38`:
+        `artists` never reads `albums.contributor`, and it can reach
+        `variousArtistsObject`, which §11.3(d) forbids because it writes to
+        the library. Step 4 uses the `albums.contributor` column for the
+        snapshot, which compares LMS with LMS only. Step 7 compares with
+        Discogs, where the choice decides which albums badge — including the
+        11 Various-ish albums §11.3(c) measured with `compilation = 0`, and
+        §15.11's equivalence gate. Must not be `Album::artists`. Blocks
+        step 7.
+        RESOLVED 2026-09-19 — decisions §15.13 part 2: the rule
+        `scripts/title-agreement.pl` measured with — first ALBUMARTIST
+        (role 5) by contributor id, else first ARTIST (role 1), else
+        `albums.contributor`, by raw SQL, decoded to characters — compared
+        at L2 after the ` (N)` strip (§15.13 part 3, which departs from the
+        script's L5 for artists). The snapshot keeps `albums.contributor`.
+      Dependencies the design chat believes are already in TODO.md, not
+      verified by it: (i) Various/Various Artists: FOUND at line 613
+      (ii) version-menu picker: FOUND at lines 370, 423, 533
+      (iii) marketplace minimum scope: FOUND at line 445
+      (iv) migration 3 obligations: FOUND at lines 63, 292, 937
+      (i) matched only the pages 2-3 measurement item, not a decision item.
+- [x] **2026-09-15: nothing writes `snapshot_artist`, so orphan recovery
+      cannot work.** VERIFIED 2026-09-15: one grep hit, the DDL in
+      `Schema.pm::_migration_1`. `Match.pm::_recordMatch` writes
+      `snapshot_album_title` and `snapshot_track_count` only. Decisions §15.5
+      makes artist part of the fit predicate, so the identification step
+      (step 4) must start writing it. Conflict rows still carry no snapshot
+      (§15.4). Offline assertions to add: a clean hit writes all three
+      snapshot columns; a conflict row's snapshot columns are NULL; the
+      narrow delete still fires on a conflict row whose tags were removed.
+      — done in step 4 commit 4. `_recordMatch` writes `snapshot_artist` from
+      `$album->{artist}` in both the INSERT and the ON CONFLICT list;
+      `_recordConflict` still names no snapshot column. All three assertions
+      are in `match-check.pl`, plus one that a non-ASCII artist is stored
+      byte-identical and one that an existing row's snapshots are carried
+      through a conflict rather than lost.
+- [ ] **2026-09-19: "Structural" wording survives outside plan §3's list.**
+      There is no Structural tier (decisions §13.8, §14.3). Hits at step 4
+      commit 4: strings.txt:68 (USER-VISIBLE — the token is "Required for
+      Structural matching"; after step 5 the token serves the collection
+      sync, so step 5 rewrites this string), Tags.pm:126, API.pm:4, :48,
+      :266, tags-check.pl:114, title-agreement.pl:227, api-check.pl:388.
+      Comment-only except strings.txt:68. Sweep in step 5's first commit.
+      Also: Importer.pm _prePass uses `my $b` as a loop variable, which masks
+      sort's $b in that scope — rename in the same commit.
+- [x] **2026-09-19: the orphan relink runs only in the importer, which runs
+      only when tag names are configured** (`Importer.pm`'s `use` gate, kept
+      by §15.8). A user with manual matches and no tag names gets no relink.
+      INFERRED from reading. Step 8 must place the relink so manual-only
+      users are covered, or record why not.
+      → 2026-09-24: RECORDED WHY NOT. Accepted for now, a possible future
+      feature (decisions §15.16 part 11). Ticked in commit P.
+- [x] **2026-09-19: the ambiguous orphan relink is a step-8 obligation.**
+      Decisions §15.5 part 4 and §15.12 part 2: step 4 relinks only
+      one-to-one fits. An orphan fitting several new albums, or a new album
+      fitting several orphans, is left untouched and counted as unresolved
+      in the importer's summary. Step 8's review queue must offer it,
+      pre-filled with the previous answer (decisions §2). Until then those
+      rows stay orphaned: no loss, no automatic relink.
+      → 2026-09-24: offered from the orphan list (step 8 plan R5, D4).
+      Ticked in commit C1.
+- [ ] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
+      albums with no album artist.** VERIFIED at slimserver `a670a38`:
+      `Slim::Schema::_createOrUpdateAlbum` sets `albums.contributor` per
+      track from `_postCheckAttributes`'s primary contributor (`ALBUMARTIST`,
+      else `ARTIST`, else `TRACKARTIST`, first entry), so the last track
+      written wins. A rescan in a different order can change it; the snapshot
+      then does not fit, which fails safe for a tagged album
+      (identification recovers it) and loses a manual row's choice. Same
+      shape as the retagged-title hole. Recorded, not solved — revisit if
+      seen on hardware.
+- [x] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
+      part 4: step 7 stores none. An ambiguous or artist-disagreeing album
+      is `ownership = 'absent'` if tagged and has NO ROW if untagged, and
+      the collection is discarded (§13.2), so step 8 cannot find these
+      without stored state. Step 8 adds a nullable reason column
+      (ambiguous | artist disagrees | artist absent | Various-gated) by
+      `ADD COLUMN`, and the ownership pass writes it. `ADD COLUMN` with a
+      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and LMS bundles
+      SQLite 3.46.1 (DBD::SQLite 1.76, perl 5.32–5.42 trees in
+      `refs/slimserver/CPAN/arch`; VERIFIED 2026-09-20 by Claude Code, Phase
+      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0. Step 7's pass
+      already counts all four buckets in its summary, so the queue's size is
+      known before it is built.
+      → 2026-09-24: six values, not four. conflict and orphan are added by
+      decisions §15.16 parts 2, 3 and 5. Migration 4 in commit A1, written
+      by the pass in B1. Ticked in B1.
+- [x] **2026-09-19, STEP 8: an ownership-only row blocks a later relink.**
+      `Importer::_prePass` treats any `discogs_match` row as "not a key
+      miss", so once a sync has written an ownership-only row (NULL
+      `match_tier`) on a new album, an orphan can no longer relink onto it.
+      INFERRED from reading: reachable only when the relink did not happen
+      at the scan that moved the files — an ambiguous fit, or a user with no
+      tag names — since the pass runs after the scan. The ambiguous-relink
+      work must delete that row first (§15.13 part 5's predicate), or
+      `relinkOrphan`'s UPDATE hits the primary key and dies in the scanner.
+      → 2026-09-24: _prePass treats a NULL-tier row as a key miss, and
+      relinkOrphan deletes a regenerable row on its target key first
+      (decisions §15.16 part 9). Ticked in commit A2.
+- [x] **2026-09-19, STEP 8: a conflict row with an incumbent id looks like a
+      tagged candidate.** Both are `strict`, `candidate`, non-NULL release id
+      (decisions §3a, §13.4). The ownership pass treats it as an
+      identification and may promote it to `confirmed`. The queue's "Strict
+      conflicts" entry (§13.10.5) has no way to select these rows today.
+      → 2026-09-24: the importer marks every conflict review_reason =
+      'conflict', and the pass treats such a row as untagged (decisions
+      §15.16 parts 3-4). Ticked in commit B1.
+- [x] **2026-09-19, MEASURE BEFORE STEP 7 SHIPS: the auto-badge split under
+      the step-7 rules.** Decisions §15.13 parts 2–3: artist source as
+      measured, but artists at L2 rather than the script's L5. Re-run
+      `scripts/title-agreement.pl` with an L2 artist rule on the reference
+      `library.db` and the page-1 fixture — no token needed. Expected, not
+      verified: only moves albums from badge to queue. Report; add no rule
+      mid-run.
+      **MEASURED 2026-09-20**, `scripts/title-agreement.pl --step7` on a
+      scratch copy of the reference `library.db` (764 albums) and
+      `scripts/fixtures/collection-page1.json`. The split is taken through
+      `Ownership`'s own `_titleKey` / `_artistKey` / `_artistsAgree`, so it
+      measures the shipped module rather than a re-implementation of it.
+      `variousArtistsString` is unset in `server.prefs` (`~`), so the label
+      used is the English `VARIOUSARTISTS` default, `Various Artists` — which
+      is what `Slim::Music::Info::variousArtistString()` resolves to on this
+      install.
+
+      | | old (L5 artist) | step 7 (L2 + gate) |
+      |---|---|---|
+      | auto-badge | 87 | **79** |
+      | Various-gated (§15.14) | — | **6** |
+      | artist disagrees | 8 | **10** |
+      | LMS artist absent | 0 | 0 |
+      | Discogs artist absent | 0 | 0 |
+      | several candidates | 1 | 1 |
+      | total L2 title matches | 96 | 96 |
+
+      **Nothing flagged.** All 8 albums that move, move badge → queue, which
+      is the direction §15.13 part 3 inferred. None moves queue → badge. Of
+      the 8: two are `Future Sound Of London` against Discogs' `The Future
+      Sound Of London` (albums 3124, 3127) — L5 stripped the leading article,
+      L2 does not, so these are two badges genuinely lost on the same record;
+      six are §15.14's gate firing on `Various`/`Various` (albums 3345, 3347,
+      3351, 3355, 3356, 3358). Of the 79 that still badge, 77 are exact
+      string matches on both sides and the other two differ only by Discogs'
+      ` (2)` disambiguator (`Oasis (2)`, `Snow (2)`) — read, and the same
+      record in both cases. No auto-badge pairs two records that look
+      different.
+
+      Two corrections to the record, for the next design chat: §15.14 says
+      "measured page 1 has no matched compilation, so nothing about this is
+      measured either way" — it has six, and the gate costs six badges on
+      page 1 alone. And the distinct-release-id index collapses zero
+      duplicates on this fixture, so the artist rung accounts for the whole
+      difference.
+- [x] **2026-09-19, MEASURE: the ownership pass's run time** on the
+      reference library. It runs synchronously in the server process over
+      every album; INFERRED to be well under a second, not measured. If it is
+      not, it needs the Scheduler shape `Settings.pm`'s detection uses.
+      **MEASURED 2026-09-22 on 0.0.0.4**, from INFO timestamps between
+      `_gotPage`'s "collection sync complete" and `_apply`'s summary, over
+      764 albums and 203 collection items: **49.6 ms** with 503 writes
+      (the first pass), **39.3 ms** and **39.5 ms** with zero writes. Three
+      orders of magnitude inside the budget, so it does **not** need the
+      Scheduler shape. Re-measure if the library grows by an order of
+      magnitude.
+- [ ] **2026-09-19: migration 3 obligation (g)'s EXPLAIN QUERY PLAN check has
+      no query to check.** VERIFIED 2026-09-19 (design chat): nothing in
+      `SqueezeWax/` queries through the orphan index — the relink loads every
+      row and matches in Perl (`Match::snapshotRows`,
+      `Importer::_prePass`), and the two statements naming
+      `snapshot_track_count` are keyed on `album_key`. The index is rebuilt
+      as (g) requires and the check is replaced by this finding (approved
+      2026-09-19). Same defect shape as (d)/(g): an obligation written
+      against a query that was never built as SQL. Revisit if a SQL lookup
+      is ever added, or drop the index by its own ruling.
 
 ## Open design questions
 
+- [x] **2026-10-13: does a version badge wait for the next sync after Derive?**
+      **Yes — measured, hand-off 71 (0.0.0.24, reset test C5/C6).** After a
+      fresh scan and a finished Derive (474 releases, 22.6 min) ownership was
+      unchanged at exact 150 / version 50 / absent 307; only "Sync collection
+      now" moved it to version 54 / absent 303. README "Starting over" step 5 is
+      right as written.
+- [x] **2026-10-13: five `conflict` albums keep a release id and derived master
+      across an upgrade but not across a reset.** Explained by design, inferred
+      from reading `Match.pm` `_recordConflict`: a conflict on an existing row
+      keeps its release id; on a new row it writes none (§3a). After a reset
+      every row is new, so these five lose the id and with it the derived
+      master (443 -> 437 = these 5 + the manual row). Ownership is unaffected: a
+      conflict row counts as untagged (§15.16 part 4), which matches the counts.
+      Recorded in §15.36 part 3's "Lost" list.
+- [ ] **2026-10-13: hardware sessions cannot read our `info` log lines.** Hand-off
+      71 C5: `Derive`'s `info` lines were absent from `server.log` (running level
+      for the category back at ERROR, §4.1 rule 3), so Derive runs and request
+      count were inferred from `derived_at` only (one request per release
+      assumed). A hand-off needing them must first have the owner raise the
+      plugin's own category (never `network.*`).
+- [ ] **2026-10-13: rules before a v2 branch is created (not designed).** Its
+      own build version series (whether LMS ranks e.g. `0.0.1.N` above
+      `0.0.0.N` is unverified); database and prefs migration numbers cannot be
+      used on both lines; where project knowledge points; beta fixes land on the
+      v1 line and merge forward only.
+
+- [x] **2026-09-29, NEXT: a logic change to identification has no way to say
+      "re-decide".** Decisions §15.23. `_canSkip` skips unchanged albums, so step
+      8c's group B never reached any album identified before it shipped — and
+      between 0.0.0.12 landing and a hand-run invalidation, album 3421 was badged
+      as OWNED on tags the same build recorded as contested. Decided: a **logic
+      version** constant checked at startup, running `Match->invalidateStrict`
+      once when the code's value is newer than the stored one. Built as step 8c's
+      follow-up, before step 9. Cost: one full re-examination per logic change,
+      measured at 63.9 s over 578 albums.
+      → BUILT 2026-09-29, decisions §15.24: `Tags::LOGIC_VERSION` (first value
+      2), `discogs_meta` and migration 7 with two `Schema` accessors, and
+      `Plugin::_checkLogicVersion` after `Schema->init`. The version is recorded
+      only when `invalidateStrict` returns defined, so a refusal retries at the
+      next start rather than becoming permanent. It does not start a scan.
+      Packaged as 0.0.0.13; hardware checks below.
+
+- [x] **2026-09-29: a derive session is invisible.** Badges change for up to 25
+      minutes after a scan and nothing on any page says why. An informational
+      line on the settings page — "deriving masters: 226 of 475 releases" — would
+      answer it without making the sync button wait on the job (decisions §15.23
+      rules against that). Observation from the hardware round, not a proposal
+      this step carries.
+      → built at step 9, decisions §15.25 ruling 7. `Derive->progress` counts
+      distinct releases against `_pending`'s own predicate, and the line renders
+      only while something is pending.
+
+- [ ] **2026-09-29: could not provoke a wipe-and-rescan.** → 2026-09-30: RUN
+      (decisions §15.26). Every album id moved; D1 held. Still open: an album
+      *taking* a previously used id, which LMS did not do. Covered offline only
+      (`menu-check.pl` part 3). Skipped deliberately
+      once `_canSkip` showed it would re-examine nothing. **Inferred from
+      reading, not tested:** `album_key` (an md5 over track `urlmd5`s) and
+      `source_timestamp` (file mtime) both survive a wipecache, so it should not
+      help. Worth one test before anyone relies on it either way.
+
+- [ ] **2026-09-29: the manual sync button does not arm the master derive job.**
+      Decided 2026-09-29 and recorded as a named cost in decisions §15.22's
+      as-built note. Consequence: on an already-scanned library, a freshly
+      configured plugin badges immediately but derives no masters until the next
+      rescan, so about 1% of albums stay unbadged until then. The remedy is one
+      call to `Plugin::_deriveMasters` from `Settings.pm`'s sync success path —
+      arming is a timer, not work, and the job already yields to a running sync.
+      Revisit if a first-run report ever mentions it.
+- [ ] **2026-09-28: `The Baseballs – Strike (Originals)` (album 3396) carries two
+      different release ids.** Found by M1; 12 tracks, outside the
+      `Cover Versions/` folder, so it is the only cross-track disagreement in the
+      library proper. A covers album whose tracks may be tagged with the
+      originals' releases is exactly the shape that misleads a first-track rule.
+      Worth the owner's eyes on the files before step 8c's cross-track rule
+      starts queueing it.
+
+- [x] **2026-09-28, PROCESS: a session must not read the prefs file.** A hardware
+      session printed the Discogs token into its transcript while looking up pref
+      key names, and the token was rotated. Pref **key names** come from the
+      source (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** is
+      supplied by the owner if it is needed at all. Belongs in
+      `docs/working-agreement.md` at the next edit of that file, not only in
+      hand-offs.
+      → 2026-09-29: written into `docs/working-agreement.md` §4.1, together with
+      the sanctioned install method.
+
+- [ ] **2026-09-28: the one restricted-set album above 110% fit was not
+      identified.** More local tracks than its release has. It falls outside
+      every candidate rule and changes no conclusion, so it was left unchased;
+      the row is in the M2 results if anyone wants it later.
+
+- [x] **2026-09-28, NEXT STEP: node F, the release cache, and implausible
+      identifications.** Decisions §15.20. Needs a survey and a plan before any
+      code: where the backfill runs and what triggers it; what "the release
+      contradicts the identification" means in numbers; whether the ownership
+      pass reads the cache directly; whether a cached row ever expires; and the
+      §13.8 argument in full. Sequence it **before step 9**, since the badge step
+      displays what this step corrects.
+      → 2026-09-28: surveyed, and the answers are decisions §15.21 and §15.22 and
+      `plans/build-order-step-8c-master-arm.md`. The plausibility half is DROPPED
+      (§15.21: measured zero albums to catch), so there is no "contradicts" number
+      to define. The release cache is not written at all - §9.5 forbids it, and
+      what is stored is a bare master id on `discogs_match`. Shipped as step 8c;
+      the hardware checks are the item below.
+
+- [ ] **2026-09-28: one tagged track decides a whole album.**
+      `Importer.pm:479-494` stops at the first candidate carrying a release id,
+      and `Library.pm:230-244` supplies at most two candidates. There is no check
+      that the album resembles the release. That is how a three-track
+      `Cover Versions/` folder came to be strict-matched to a ten-track album
+      (measurement, 2026-09-28). Currently harmless only because node F cannot
+      fire; harmful the moment it can. Decisions §15.20 ruling 2 is the intended
+      answer — the cached release contradicts the identification and the album is
+      queued — so this item closes with that step unless the survey finds
+      otherwise.
+      → 2026-09-28: this is step 8c's group B (decisions §15.22,
+      `plans/build-order-step-8c-master-arm.md` §2). `_examine` will read both
+      candidates and a disagreement becomes a `conflict` with no release id.
+      Tick when that ships and its hardware check passes.
+      → 2026-09-29: SHIPPED in code (`c79948d`). `_examine` delegates to
+      `Tags::examineCandidates`, which reads both and compares. Still open on the
+      hardware check below - plan §6 check 5.
+
+- [ ] **2026-09-28: compare the two candidate tracks instead of stopping at the
+      first?** Cheap version of "scan the whole folder", considered 2026-09-28.
+      `_examine` already fetches up to two candidates but stops at the first that
+      answers; always reading both and comparing them would catch a folder whose
+      first two tracks name different releases, at one extra file read per
+      **changed** album — near nothing in steady state, since unchanged albums
+      are skipped. It would **not** catch the covers folder, where only one file
+      is tagged at all. Decide in the next step's survey.
+      → 2026-09-28: ADOPTED, both halves, on M1's measurement — 467 albums agree,
+      2 partial, 3 disagree. It is step 8c's group B. The decisive finding: the
+      `Cover Versions/` folder carries two different ids, so the rule catches it
+      at identification time with no Discogs request (decisions §15.21).
+      → 2026-09-29: SHIPPED (`c79948d`). One thing the plan did not settle and the
+      build did: an UNREADABLE file is not a voice. `readTrack` returns an empty
+      hash on failure and a populated one for a readable file with no Discogs tag,
+      so the two are distinguishable — and without the distinction an album whose
+      second file sits on an unmounted disc would become a conflict and lose its
+      release id. Worth a hardware check of its own if one can be contrived.
+
+- [ ] **2026-09-28: one physical record, two badges.** A 2-LP set filed as two
+      LMS albums (*Kinetik - Vinyl I* and *Vinyl II*, both master 214725, one
+      owned release 34285) would badge twice once node F works. Correct per
+      album; wrong for any future "how many of my records are in my library"
+      count. Single observation, recorded before it becomes a surprise.
+      → 2026-09-29: node F now works (step 8c), so this stops being hypothetical
+      at the next sync. Both albums name one release, so the derive job settles
+      them with ONE request - that half is asserted offline. Confirm the two
+      badges on hardware and leave the item open: nothing counts records yet.
+
+- [ ] **2026-09-29: build-order step 8c's hardware checks, on the reference
+      server.** Code complete on `v1-buildout`; the checks are
+      `plans/build-order-step-8c-master-arm.md` §6, and none of them has run.
+      Before anything: back up both databases and record `discogs_match`'s row
+      count, the queue's contents and the ownership counts.
+      1. Migration 6 in the live server: `user_version` 6, three columns present
+         and NULL on every row, nothing else changed.
+      2. The job runs and finishes: after a sync, ~475 releases over ~16 runs of
+         30, no 429, the log showing it yield when a manual sync is pressed, and a
+         second pass after completion issuing **zero** requests.
+      3. The five measured albums badge — 2927, 2974, 3022, 3023 become `version`
+         via node F; **3421 must not**, because group B should have made it a
+         conflict first.
+      4. 404 is quiet: albums 2895, 2944, 3045 name deleted releases. One info
+         line each, the three columns written with a NULL master, no retry next run.
+      5. The covers folders queue: all four `Cover - …` albums become `conflict`
+         items whose detail names what each file said. *The Baseballs* (3396) too —
+         check its files first, per the item at the top of this section.
+      6. Nothing Content-shaped is stored: dump the three columns and confirm
+         integers only; `discogs_release_cache` still holds 0 rows.
+      7. Scan interaction: the job during a scan is refused and resumed after.
+      8. Timings for the record: a derive run's wall time, `_examine`'s extra read
+         on a wipe-and-rescan, and the pass unchanged at 41-46 ms.
+      Anything that cannot be provoked goes here rather than being marked passed.
+
+- [ ] **2026-09-29: the derive job's trigger deviates from the plan, and the
+      deviation is the interesting part.** The step 8c plan says the job is armed
+      "from `Plugin::_syncDone` on success, and from nothing else". On a server
+      whose scan-time sync works — which is the reference server — that trigger
+      never fires: the scan writes a `'scan'` marker, `_syncTick`'s §15.18 part 8
+      skip returns, and `_syncDone` is never reached. Group A would have shipped
+      as dead as the master arm it exists to wake up. So the job is also armed
+      from that skip (`c18a62b`), and `plugin-check.pl` pins both sites plus the
+      six ways nothing must arm it. Worth a line in decisions §15.22 at the next
+      edit of that file, since the plan text still says otherwise.
+
+- [ ] **2026-09-28: the measurement's lookup cache needs a home.**
+      `tmp/18-release-masters.tsv` holds 328 `release_id → master_id` pairs and
+      `tmp/` is git-ignored, so a clean deletes it. If the next step wants it as
+      seed data rather than re-fetching, move it somewhere tracked — or accept
+      that re-running the lookups costs about eight minutes.
+
+- [x] **2026-09-28, MEASUREMENT BEFORE DESIGN: how many albums does node F's gap
+      mislabel?** Decisions §15.19. `discogs_master_id` comes only from a tag, so
+      node F has never fired and at least one album the owner demonstrably owns a
+      pressing of is reported `absent` with a queue item. Before any fix is
+      designed, measure: for each `discogs_match` row with a release id the
+      collection does not hold, look up that release's master and count how many
+      share a master with an owned entry. ~305 requests on the reference library,
+      one-off, read-only, run as a script by the owner (the session's credential
+      guard refuses collection reads; `tmp/17-check-a-fetch.py` is the working
+      shape). The same lookups are the data a backfill would cache, so nothing is
+      wasted either way. **The fix is a step of its own** and cannot sit inside
+      the scan-time sync (§15.18 part 10 bounds it at 120 s; ~481 requests is
+      about eight minutes at 60/minute). `discogs_release_cache` exists and holds
+      0 rows.
+      → 2026-09-28: MEASURED. 332 requests, 8 minutes, read-only. Five albums are
+      mislabelled `absent` where a pressing of the same master is owned; 21 more
+      would be decided by node F and are already correct via the title route; 303
+      of the 329 population rows cannot be helped, and 29 of their releases have
+      no master at all. Decisions §15.20 has the ruling: it is fixed, as its own
+      step, by caching the release rather than only its master. The lookup cache
+      from this run (328 of the 475 release ids) is reusable input.
+
+- [ ] **2026-09-28: keep `anv`?** Decisions §15.19. The collection already
+      carries the artist name as credited per release, in
+      `basic_information.artists[]`, and we discard it at `API.pm:393-395`. It is
+      non-empty on 11 of 203 entries on the reference collection, nine of them
+      abbreviations or article drops (`The Orb` → `Orb`,
+      `The Future Sound Of London` → `FSOL`). Costs no requests. It is an
+      ownership-rule change (§13.10.3 territory) and the family it would serve is
+      **untested**: the 2026-09-28 run proved rule 3 for a longer name and
+      abbreviated nothing.
+
+- [ ] **2026-09-28: match on Discogs aliases?** Decisions §15.19. Separate from
+      `anv` and much more expensive: one `/artists/{id}` per artist. It is what
+      would have matched *Gling-Gló* — `aliases = ['Björk']` on artist 517951 —
+      and the owner's file is tagged with Discogs' own alias. Caution: the same
+      artist carries 48 `namevariations`, all misspellings; an alias is a
+      distinct entity and a name variation is not, so any rule must take the
+      former and refuse the latter. Decide only after the node F measurement,
+      since fixing the master arm removes this album from the queue without
+      touching artist matching at all.
+
+- [ ] **2026-09-28: §15.14's compilation gate has no testable album.** The
+      queue's second item, *Blood Sugar Sex Magik*, cannot be exercised by
+      retagging: all 19 of its tracks are `spotify:track:…` URLs, so there are no
+      tags and no files to copy. Its reason is `artist-disagree` and **not** the
+      gate — LMS has it as `compilation = 1` with contributor `Various Artists`,
+      but the gate needs the **Discogs** side to be various too
+      (`Ownership.pm:200-204`) and the collection credits it to the band. Any
+      future check of the gate on real data needs a different album.
+
+- [ ] **2026-09-28, FOR THE NEXT HARDWARE ROUND: two environment facts that cost
+      a session time.** There is no system `sqlite3` and no system `DBD::SQLite`
+      on the reference server; the `sqlite3` on `PATH` is under
+      `/home/denny/android/platform-tools` and `sudo`'s `secure_path` cannot see
+      it. The route that works is
+      `sudo -u squeezeboxserver python3 -c "import sqlite3; …"` — as that user
+      rather than root, because the server holds the file open in WAL and root
+      would leave `-wal`/`-shm` unwritable by it. Separately, a Claude Code
+      session's credential guard refuses the Discogs token, the username, and
+      even the account-scoped collection URL unauthenticated, so any check
+      needing a collection read must ship as a script for the owner to run.
+
+- [ ] **2026-09-27: five things the reference server cannot provoke.** All from
+      the step 8b hardware run; none is blocked on a decision, and none should be
+      marked passed.
+      (a) **The timeout** (plan §7 check 7). No passwordless `sudo`, so no
+      firewall rule and no `/etc/hosts` entry for `api.discogs.com`. `webproxy`
+      is not a route: it is read by `Async/HTTP.pm` and friends but **not** by
+      `SimpleSyncHTTP`/`LWP::UserAgent`, which would need `env_proxy` and does
+      not call it. So the 15 s inactivity bound against the 120 s whole-sync
+      budget is unobserved.
+      (b) **The reach case** (plan §7 check 10). With FullTextSearch disabled the
+      scan still forked the external scanner, because Spotty's importer forces it
+      too. Reaching it would mean disabling the owner's Spotty.
+      (c) **An abort inside the pass** rather than the fetch. The pass runs in
+      41–46 ms and its abort point is a throttled `update`, so there is no window
+      to aim at from outside the process. The pass's rollback is covered only by
+      `scan-sync-check.pl`.
+      (d) **A badge appearing on a newly arrived remote album.** Needs the
+      streaming library itself to gain an album on demand.
+      (e) **The pause clearing on a successful sync** rather than on a token
+      change. Probably reachable only after a transient 401 — decisions §15.18's
+      hardware addendum, correction 3.
+
+- [ ] **2026-09-27: should `ScanSync` check `hasSSL` itself?** On a platform
+      whose system perl lacks `IO::Socket::SSL` and `Net::SSLeay`, LMS's
+      `Slim/Networking/SimpleSyncHTTP.pm:22-41` only **warns**, so every
+      scan-time sync would fail with nothing but a warning in the scanner log
+      while the fallback quietly did all the work. The reference server gets both
+      modules from Debian's system perl, not from LMS's `CPAN/`, which bundles
+      them for darwin only. Cheap options: log at error once when `hasSSL` is
+      false, or skip the scan-time path outright and say so. Neither is built.
+
+- [ ] **2026-09-27: the skip window can span two scans, on servers with
+      auto-rescan enabled.** Decisions §15.18's as-built note. The auto-rescan
+      is in-process (`Slim/Utils/AutoRescan.pm:126`, `:205` →
+      `Slim::Utils::Scanner::Local->rescan`), so our importer does not run, but
+      it still notifies `['rescan','done']`. If one finishes within
+      `DEBOUNCE_AFTER_RESCAN` of an ordinary scan, the ordinary scan's marker
+      suppresses the fallback the auto-rescan needed, and its albums stay
+      unbadged until the next scan or the button. The `autorescan` pref defaults
+      to 0 (`Slim/Utils/Prefs.pm:165`). Accepted 2026-09-27; the remedy, if this
+      is ever seen, is the one-timestamp rule recorded in §15.18's as-built
+      note. **Not observed.**
+
+- [ ] **2026-09-27: `ownership-offline-check.pl` cannot reach the pass's scanner
+      branch.** It opens its handle with `AutoCommit => 1`, like every suite
+      before `scan-sync-check.pl`, so `Ownership::_write`'s scanner path is
+      exercised only by the new suite's fixtures and never against a copy of a
+      real database. If that script is ever run again on real data, give it a
+      second pass with `AutoCommit => 0`.
+
+- [ ] **2026-09-27: the scan-time sync has no proxy support.**
+      `Slim::Networking::SimpleSyncHTTP` passes no proxy to `LWP::UserAgent`
+      (`:89-93`), while the async stack honours `webproxy`
+      (`Slim/Networking/Async/HTTP.pm:175`). So behind a web proxy the button
+      works and the scan-time sync cannot, failing with `no_response` on every
+      scan. **Unverified** whether any user has that setup. If one does, the
+      remedy is to read `webproxy` and pass it, or to skip the scan-time path
+      when it is set.
+
+- [ ] **2026-09-27: a token entered seconds before a rescan may be invisible to
+      that scan.** The server writes prefs 10 s after a change
+      (`Slim/Utils/Prefs/Namespace.pm:305`) and the scanner reads the file when
+      it starts, so a rescan begun immediately after saving a token can run with
+      no token and skip the scan-time sync. The fallback then syncs 60 s later,
+      so nothing is lost — but the first scan after configuring the plugin may
+      look as though the feature does not work. **Unverified** in practice.
+      Consider whether Settings should `savenow` after a token change.
+
+- [ ] **2026-09-27: identification runs on playlist-only and online-library-only
+      rescans.** Today's behaviour, not introduced by 8b: the post-processing
+      loop filters neither mode (`Slim/Music/Import.pm:452-459`), so a `rescan
+      playlists` walks the whole library reading tags. 8b gates its own sync on
+      the mode (§15.18 part 16) and deliberately leaves identification alone.
+      Measure the cost before deciding; on the reference server a full walk is
+      26 ms but tag reads are 19–137 ms per NAS file.
+
+- [ ] **2026-09-27: the two sync paths share one Discogs budget with no shared
+      state.** The scanner is a fresh process each scan, so its local throttle
+      starts cold (decisions §15.18 part 11). Inferred low risk at three or four
+      requests against 60 a minute; revisit only if a 429 is ever seen on a
+      scan-time sync.
+      → 2026-09-29: still open, and narrowed. Step 8c fixed the SERVER side of it
+      (`5eb2dc8`): the rate state moved to `API.pm`, so the collection sync and the
+      derive job now share one throttle, which matters because the derive job
+      spends up to 30 requests a minute. The CROSS-PROCESS half is unchanged and
+      unfixable by the same means - the scanner has no way to see the server's
+      state - so the exposure is now "a scan-time sync's four requests against a
+      derive run's thirty", still against 60 a minute, and still inferred rather
+      than observed. Plan §6 check 2 watches for a 429.
+
+- [x] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
+      Strict identification (steps 3/4) calls buildRequest and
+      classifyResponse directly". Nothing in the scanner has called either
+      since decisions §13.8 removed the per-album search. Correct it in step
+      8b, which makes it true again for a different reason.
+      → 2026-09-27: corrected in step 8b's commit C1. The header names both
+      transports and both callers; the scanner calls buildRequest through
+      `API/Sync.pm`.
+
+- [ ] **2026-09-27: no HTTPS request has ever been made from the scanner
+      process.** Step 8b is the first. Unobserved: whether
+      `IO::Socket::SSL` is available there (`Slim/Networking/SimpleSyncHTTP.pm`
+      `hasSSL` only warns if not), how `LWP::UserAgent`'s per-operation
+      timeout behaves against `api.discogs.com`, and whether the scanner's
+      reduced process priority (`scanner.pl:217`) changes any of it. Needs the
+      reference server.
+
+- [x] **2026-09-27: "the streaming plugins sync during the scan" is
+      inferred, not read.** It is decisions §15.18 part 1's stated motivation.
+      Read `refs/lms-plugin-tidal`'s importer and confirm or correct it.
+      → 2026-09-27: VERIFIED. TIDAL's importer calls its sync from startScan (refs/lms-plugin-tidal/Importer.pm:21, :24, :67, :90) over SimpleSyncHTTP with timeout => 15 (API/Sync.pm:104-105). Decisions §15.18's amendment to part 1 records it; our 15 s is the same figure.
+- [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
+      count of 0.** Recorded, not changed (decisions §15.17). Its fit key
+      (artist, title, 0) is shared by every all-remote copy of the album.
+      Revisit if a relink ever pairs the wrong one.
+- [x] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
+      queue re-reads conflict tags on every list render, not when an entry is
+      opened.** Plan §3.1 said "re-read … when opened" (§3a). `Queue.pm:562`
+      re-reads up to `MAX_TAG_REREADS` (25, `:72`) conflict rows per render,
+      synchronously in the server: up to 50 file reads per page view on a
+      library with many conflicts. On a maintained collection conflicts are a
+      handful, so the cost is INFERRED small. Decide: accept as built (record
+      it in the plan), or move the re-read behind a per-entry action. Revisit
+      at hardware check 7, and time a page render there.
+      → 2026-09-26: MEASURED 19–137 ms per NAS file, up to ~7 s per render.
+      Reversed: re-read on demand, decisions §15.17 part 1, commit E1
+      db88c68.
+- [x] **2026-09-24: `MAX_TAG_REREADS = 25` is a judgement, not a
+      measurement** (`Queue.pm:67-72`). Past it the page shows the reason
+      without which tags disagree. Revisit only if a real library shows more
+      than 25 conflicts.
+      → 2026-09-26: superseded. The constant is removed with the per-render
+      re-read (§15.17 part 1, E1 db88c68).
+- [x] **2026-09-24: "tags unreadable" is inferred, not detected.**
+      `Tags->readTrack` catches its own failure and returns `{}`
+      (`Tags.pm:290-297`), so an unreadable file and a file with no tags look
+      the same. The queue page infers unreadable from "no candidate gave up any
+      tags at all". Honest, but unverified. Test on hardware with a conflict
+      row whose files were then deleted (a variant of check 7).
+      → 2026-09-26: OBSERVED to work on hardware. With the files unreadable
+      the page said "tags no longer readable"; restoring permissions
+      restored the tag list.
+- [x] **2026-09-24: link and relink walk the library a second time.**
+      `Queue::_albumFor` walks once per action, on top of the render's walk,
+      so a link costs two walks. Plan D6 said one walk per render; an action is
+      not a render. INFERRED fine (the whole pass, which does the same walk
+      plus its writes, measured 39–50 ms on 764 albums). Time it at hardware
+      check 4.
+      → 2026-09-26: MEASURED. A full walk is 26 ms over 764 albums; a link
+      POST including both walks, 66–70 ms. Fine.
+- [ ] **2026-09-24: an album that vanished since the page rendered is
+      reported only after the user presses.** A link or relink on an
+      `album_key` no longer in the library answers "that album is no longer
+      there" and writes nothing. Correct and fail-safe; recorded as a UX note,
+      not a defect.
+      → 2026-09-26: not triggered on hardware. Stays open as a UX note.
+- [ ] **2026-09-24: clear & rebuild (decisions §10) is decided and has never
+      been built, and no step owns it.** It was item 9 of the stale step-4
+      Structural plan, and dropped out when the build order was renumbered.
+      Decisions §10.1 called it "not a convenience": §3b's coverage gap relies
+      on it as the escape hatch, and design §9 names it as the only thing that
+      clears orphaned `discogs_no_match` rows. DEFAULT (decisions §15.16 part
+      12): a later step of its own, after step 8. Not decided which.
+      → 2026-10-13: moved to **Deferred by decision**, v2 (§15.36 part 6).
+- [ ] **2026-09-24: the discogs.com link format.** The re-match list links
+      each release as `https://www.discogs.com/release/{id}`. OBSERVED by the
+      user to redirect to the canonical page
+      (`…/release/14590709-Depeche-Mode-Violator?redirected=true`), and
+      corroborated by captured payloads' `uri`. NOT documented as a stable
+      address. Revisit if it stops resolving; the fix is one format string.
+- [ ] **2026-09-24: may collection images be shown?** `basic_information`
+      carries `thumb` and `cover_image`. Unverified against Discogs' terms, and
+      decisions §9.9 already records that image URLs are withheld without
+      authentication. The step 8 re-match list shows none. Not decided.
+- [ ] **2026-09-24: an orphan that fits no current album can only be
+      rejected.** DEFAULT (decisions §15.16 part 13). Relinking one to an album
+      the user picks is future work. Revisit if a manual row is lost this way.
+- [ ] **2026-09-24: incumbent conflicts written before migration 4 cannot be
+      found.** Nothing recorded them and `scanner.log` is rewritten each scan.
+      They get `conflict` when their files next change. Fresh ones are found by
+      §3a's own predicate. Recorded, not solvable.
+- [ ] **2026-09-24: design §9's "Review-queue behavior (auto-open after scan?
+      notification?)"** — not v1. The queue is a page the user opens. Revisit
+      only on request.
+
+- [x] **2026-09-13: v1's configurable tag names are promised twice and
+      specified nowhere.** Design §11 lists "Configurable Discogs tag names"
+      as v1 and cross-references "(§3, §9)"; §3 describes an ordered list of
+      tag names being read; §9 has never carried a bullet for it, before or
+      after the reconciliation. ~~A v1 setting with no specification of its
+      default order, its UI, or which tags are in the default set.~~
+      Surfaced by the post-reconciliation read: the rewritten §9 says
+      "Which tag names are read is a setting (§3)", which points at the gap
+      more directly than the old text did. Related and still open: whether a
+      MASTER-ID tag is among them, which bounds design §3's flowchart node F.
+      Settle both together — they are one question about the same list.
+      2026-09-15, CORRECTED — the premise was false. Default and order are
+      specified in decisions §3, invalidation in §3b, and all of it is built
+      in step 3: pref `discogsTagNames`, default `[]` (`Tags.pm` file-scope
+      init), user-set order, detection action (`Settings.pm` over
+      `Tags::candidateKeys`). The residual is design text only: design
+      carries none of it. Design-fix pass, not the build order. The
+      master-id half is decisions §15.1.
+- [ ] **2026-09-13: design §3's "Find on Spotify" backfill bullet is
+      orphaned.** It says a successful manual "Find on Spotify" (§6) can
+      retroactively backfill or promote the original scan-time match. Nothing
+      in design explains how a Discogs-to-streaming cross-browse action would
+      backfill a Discogs IDENTIFICATION — and under collection-first it is
+      harder to see, since identification comes from a tag and ownership from
+      the collection, neither of which a Spotify lookup touches. It was
+      already unclear before decisions §13 and the reconciliation carried it
+      verbatim rather than inventing a meaning for it. Either work out what it
+      means and say so, or delete it.
+- [ ] **2026-09-13: what does a `version`-ownership context menu offer beyond
+      stating the fact?** A version picker promoting the choice to a manual
+      match is the candidate, recorded in the reject/dismiss item as
+      "refinement, not rejection" and never decided. Design §4 states what
+      the menu says and stops there, because design does not specify
+      mechanisms only a `TODO.md` note proposes.
+- [ ] **2026-09-13, v2: should the sync retain the release id of the owned
+      collection entry?** Decisions §14.10 rules NO for v1, so pressing
+      details, credits and value are ABSENT from the context menu for an
+      album owned by version alone — the majority case (87 of 96 auto-badged
+      on the measured page). The data is in hand at the moment of the
+      decision, in `basic_information.id`, and discarded one line later by
+      §13.2. Rejected for v1 on three grounds, all in §14.10; none of them is
+      that it would not work. **Revisit with wantlist**, which needs
+      collection-entry data of its own and forces the same question about
+      what a sync may keep. A later fix is a migration on `discogs_match`.
+- [x] **2026-09-13, RESOLVED: one badge state, not two.** Decisions §13.8 left
+      exact-versus-version open as a UI question; both design §3's and §4's
+      flowcharts terminate in a node that cannot be drawn without it. Version
+      ownership is the main path (§13.10.2), so two colours would teach a
+      distinction that is almost always one value. Distinction shows in the
+      badge context menu only. Revisit after the hardware pass. Decisions §14.5.
+- [x] **2026-09-13: define the minimum scope for on-demand marketplace
+      lookup.** → 2026-10-12: CLOSED by decisions §15.31 (step 10): two submenus
+      fetched on open, one request each; listing, filters, sort and the
+      marketplace preferences dropped outright. Marketplace lookup stays in v1 (decisions §1 item 10, §13.1,
+      §14.3), but "at a minimum" was the instruction and design §7 currently
+      specifies a compact summary line, an expandable full listing, and five
+      user-configurable filter/sort axes in Settings. Design §7 is on the
+      reconciliation survey's List 2 as surviving untouched, so the
+      reconciliation session must NOT trim it. Its own session. Candidate cut:
+      summary line plus link-out, no filters, filters to v2.
+- [ ] **2026-09-13: does Discogs expose a per-release lookup of the caller's
+      own collection entry?** UNVERIFIED — not checked against the API
+      documentation, and decisions §9 does not cover it. Needed only if the
+      badge context menu is ever to show date added, acquisition date or
+      condition/grading; decisions §14.6 drops those from v1 precisely because
+      the mechanism is unverified and §13.2 persists nothing. If the only route
+      is paging the whole collection, the feature is a sync-shaped cost wearing
+      a context-menu shape. Settle before collection value or statistics
+      (v2/v3) are designed.
+- [ ] 2026-09-12: examine the 8 artist disagreements individually. Eight
+      unrelated cases are noise the queue absorbs; one repeated pattern is a
+      data-format fact deserving a declared rule, like the Discogs ` (N)`
+      strip. Undetermined. See decisions 13.10.6.
+- [x] **2026-09-12, RESOLVED 2026-09-13: what `match_tier` value does a
+      collection-derived match carry?** None. `match_tier` becomes NULLABLE,
+      NULL meaning "no identification was made", and the CHECK narrows to
+      `strict | manual`. A collection match establishes ownership, not
+      identity, so there is no provenance to record; a fifth value would put
+      an ownership fact in an identification column, which is what decisions
+      §13.3 exists to prevent. Decided BEFORE migration 3 rather than at it,
+      because design §3 and §10 could not be written around the hole. See
+      decisions §14.1.
+- [x] **2026-09-11, RESOLVED: sub_tracks is an unrecorded tracklist shape, and
+      the type_ allowlist does not recurse into it.** See
+      squeezewax-v1-decisions.md §12.1. release-2516.json's single type_
+      "index" entry carries sub_tracks with five type_ "track" entries, all
+      with durations; the string appeared nowhere in docs/, plans/ or TODO.md
+      before that record. Revisit trigger is v2 and is stated in §12.1.
+- [x] **2026-09-10, RESOLVED: various-artists compilations are no longer an
+      open problem for Structural.** See `squeezewax-v1-decisions.md` §11.
+- [x] **2026-09-07, ANSWERED: decisions §3a's v1 invariant NULL-id
+      question.** Landed — see `squeezewax-v1-decisions.md` §3a (amended)
+      and §8.
+- [x] **2026-09-07, recorded not designed: a user with both a local rip and
+      a streaming copy sees the album twice in the grid, and only the
+      local row is badged.** Arguably correct; will read oddly. A UI
+      question for step 6, not a matching one.
+      2026-09-19: "step 6" is the 2026-09-07 numbering — the badge is now
+      step 9. The premise is also stale: under decisions §13.10.3 a rip and
+      a stream of one owned record BOTH badge (design §3 walkthrough 4), so
+      "only the local row is badged" no longer happens. Re-check at step 9;
+      likely closable.
+      → 2026-09-29: closed by step 9. No grid badge exists; both albums appear in
+      the "Records I own" view (hardware check §7.4).
 - [ ] **Detection has no progress feedback, and the fix depends on the next
       item.** The Settings worker runs through `Slim::Utils::Scheduler` and the
       page never refreshes, so it shows "Reading files... (0/79)" until the user
@@ -146,50 +1915,976 @@ Shared reminder list. Both I and Claude Code read and update this.
       Open question is whether that is worth it at all, since the sample is
       already stratified per format, which is the property that matters for the
       one decision it informs.
-- [ ] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
-      §3 says the action wipes the match table and re-runs the cascade; §2a says
-      never delete a row that carries a decision, and `match_tier='manual'` is
-      exactly that - a pressing the user chose by hand, unrecoverable once gone.
-      Options: (a) wipe everything, literal §3, but one click silently destroys
-      every override; (b) wipe everything except manual, so "rebuild" still
-      re-matches the 400+ automatic rows, which is what the action is for;
-      (c) two actions - "rebuild automatic matches" and "clear everything" with
-      a confirmation. Leaning (b). **Blocks implementing the action**, which is
-      otherwise small - Match.pm already has the machinery, and the SQL reset is
-      the workaround meanwhile.
+- [x] **Does "clear & rebuild matches" (design §9) destroy `manual` rows?**
+      ANSWERED 2026-09-07 — see `squeezewax-v1-decisions.md` §10.
+- [x] **2026-09-07: `discogs_no_match` tier `'structural'` skip predicate.**
+      Two-part, unlike Strict's one-part: `source_timestamp` unchanged AND
+      `checked_at` within TTL. Proposed TTL 30 days as a pref — not
+      TOU-constrained, a UX/freshness choice. The clear & rebuild decision is
+      no longer blocking (decisions §10); its implementation is tracked in
+      the step-4 build order (build-order-step-4-structural-matching.md §3
+      item 9).
+      2026-09-15, SUPERSEDED — Structural does not exist (§13.8), so there
+      is no `'structural'` no-match row to expire and no TTL to set.
+      Decisions §15.6 removes the value from the CHECK entirely. Closed by
+      the build-order rewrite, not implemented.
+- [x] **2026-09-07: §3b needs a `tier='structural'` invalidation clause
+      keyed on the duration-margin pref** — §3b's own "Step 4 note" trigger
+      has fired. The clear & rebuild decision is no longer blocking
+      (decisions §10); its implementation is tracked in the step-4 build
+      order (build-order-step-4-structural-matching.md §3 item 9).
+      2026-09-15, SUPERSEDED — the duration margin pref it keys on belongs
+      to Structural, which does not exist (§13.8). §3b's "a pref-derived
+      tier needs its own clause" note still stands for any future tier; it
+      has no v1 subject. Closed by the build-order rewrite, not implemented.
+      NOTE: §3b's note now applies to `discogsMaxTier` instead, if that pref
+      survives Q8.
+      2026-09-19: moot — the pref is removed in step 4 commit 2.
+- [ ] **2026-09-07, recorded not designed: an edition-level (Structural)
+      match has no pressing to show in design §4's badge context menu.**
+      Proposed shape — show master-level info plus a version picker ("you
+      own a version — which pressing?"); the user's choice promotes the
+      row to `match_tier='manual'` with a real `discogs_release_id`. Gives
+      `'manual'` a refinement purpose alongside override, and reuses the
+      review queue's machinery. Product decision, not taken.
+- [ ] **2026-09-07, recorded not designed: no index on
+      `discogs_match.discogs_master_id`, and `discogs_collection_release`
+      is on `(discogs_release_id, list_state)` only.** The master arm of
+      the badge's dual test (see design §10) is unindexed on both sides —
+      matters for grid rendering. Belongs in the migration for the step
+      that reads it, NOT step 4 (step 2 finding 8).
+- [ ] **2026-09-07, recorded not designed: master-level badge fallback vs.
+      pressing-level collectors.** Keep both answers recoverable — product
+      decision, not yet taken.
+- [x] **2026-09-07, recorded not designed: is a derived "owned" label our
+      conclusion, or one bit of Restricted Data under the Discogs TOU?**
+      Leaning conclusion; NOT settled. Kept academic by choosing the sync
+      interval on UX grounds regardless. Do not record as decided.
+      → 2026-09-29: no longer academic. Step 9's menu and view show the
+      conclusion with no "Data provided by Discogs" beside it, which is compliant
+      only on the "our conclusion" reading (decisions §15.25 ruling 4). Revisit
+      trigger: any Discogs guidance on derived data.
+      → 2026-10-12: CLOSED as a design question. Decided as the "our conclusion"
+      reading, with the source evidence and its thin spots, in decisions §15.29.
+      The optional Discogs confirmation is a new item under Housekeeping.
+- [ ] **`type=master` search results carry `user_data.in_collection`/
+      `in_wantlist` per token holder, undocumented.** Recorded in
+      `squeezewax-v1-decisions.md` §9.9.
 
-- [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
-      no handover: step-3 finding 3 shows `album_key` covers structural
-      change and `MAX(tracks.timestamp)` covers in-place tag edits, both
-      readable in either process. Still open: immediate re-match on a
-      single-directory rescan, which never reaches `runScanPostProcessing`
-      (`scanner.pl:348` is its only live caller). Decide before v1 whether
-      the `Slim::Utils::Scanner::API` track hooks are needed for that, or
-      whether "the next full rescan picks it up" is enough.
+- [x] **Scanner→server handover — closed 2026-10-13.** A single-folder rescan
+      runs our importer and the scan-time sync when tag names are set
+      (`rescanCommand` → `scanner.pl` with `singledir` → `runScanPostProcessing`).
+      Observed, report 71 E: `examined 0 ... skipped 765`, sync 205 items in 4
+      requests, database unchanged. Inferred, not observed: a new album there
+      would be examined. No README line needed; the in-process `rescan
+      album|track` path does not run it and is not a user action
+      (records-step-8b). Decisions §15.36 part 7.
 - [ ] **Structural no-match staleness policy (step 4).** `discogs_no_match`
       carries `checked_at` so step 4 can add a policy without a migration;
       the policy itself is undecided. A Discogs search that found nothing
       today may find something in six months.
-- [ ] **Step 4 must relax the `use` gate.** It is currently
+      2026-09-12: superseded by §13 — v1 performs no per-album Discogs search.
+- [x] **Step 4 must relax the `use` gate.** It is currently
       `scalar @{discogsTagNames}`, which would wrongly disable the importer for
       a user who wants Structural only — Structural needs no tag names. Becomes
       wrong the moment step 4 lands.
+      2026-09-18, SUPERSEDED — decisions §15.8. The replacement gate existed
+      to let a user with no tag names run Structural; Structural does not
+      exist (§13.8). `scalar @{discogsTagNames}` is correct for tag-driven
+      identification and is left alone. Closed by the build-order rewrite,
+      not implemented.
 - [ ] **v2 triage page must distinguish "unparseable tag" from "tags
       disagree".** Both write `(strict, candidate, NULL)` in v1, which is
       correct for v1 — neither is a match — but they are different user actions
       (fix one file's tag vs. decide between two). Recorded, not designed.
-- [ ] **`discogs_collection` wantlist rekey (v2).** `instance_id` as primary
-      key cannot hold wantlist rows — a Discogs want has no instance id. The
-      table is entirely regenerable (design §10), so the migration is DROP +
-      re-sync, ~20 requests. Note the obvious fix does **not** work:
-      `UNIQUE(list_state, discogs_release_id, instance_id)` with `instance_id`
-      NULL for wants constrains nothing, since SQLite treats NULLs as distinct
-      in unique indexes — verified, three identical rows inserted without
-      error. Needs a partial unique index (`... WHERE instance_id IS NULL`) or
-      a non-NULL sentinel.
+- [ ] ~~**`discogs_collection` wantlist rekey (v2).** `instance_id` as
+      primary key cannot hold wantlist rows — a Discogs want has no
+      instance id. The table is entirely regenerable (design §10), so the
+      migration is DROP + re-sync, ~20 requests. Note the obvious fix does
+      **not** work: `UNIQUE(list_state, discogs_release_id, instance_id)`
+      with `instance_id` NULL for wants constrains nothing, since SQLite
+      treats NULLs as distinct in unique indexes — verified, three
+      identical rows inserted without error. Needs a partial unique index
+      (`... WHERE instance_id IS NULL`) or a non-NULL sentinel.~~ —
+      **2026-09-07: no longer applicable.** v1 holds no `discogs_collection`
+      mirror at all (see the "Next — build-order steps 3–5" item above);
+      ownership is a derived per-album label, not a synced table. Revisit
+      if/when a collection mirror is actually built.
+- [ ] **2026-09-15: design-fix pass — wording defects recorded, not fixed,
+      during the build-order rewrite.** The rewrite session was scoped away
+      from design, so these wait for a bounded pass of their own
+      (working-agreement §2 wants same-session fixes; the session brief
+      overrode it deliberately).
+      (a) Design §3, node F: "from a configured master tag". None exists —
+          decisions §15.1.
+      (b) Design §5: "Each page is matched against LMS albums in memory, the
+          conclusion is written to the ownership column". Per-page writes
+          break decisions §13.7 (recompute only from a completed sync) and
+          §13.10.3 ("exactly one collection entry" needs the whole
+          collection). The pass needs a whole-sync in-memory index, no writes
+          until the last page, discarded after. INFERRED from reading.
+      (c) Design's wording of the sync's scan trigger, if it places it at
+          scan start: decisions §15.2 moves it to scan completion, in the
+          server. Locations: design §3.
+      (d) Design carries none of decisions §3's tag-name specification (see
+          the ticked tag-names item).
+      (e) Design §10: the `snapshot_*` comment says "captured at confirm
+          time". Decisions §15.4 puts capture at identification, which is
+          where the code has always put it; confirm time is now a different
+          moment in a different process (§15.2, §15.3).
+      (f) Design §10 lists `snapshot_total_duration`; decisions §15.5 drops
+          it in migration 3. Design §10's snapshot comment also still names
+          four columns.
+      (g) Design §10's orphan index is `(state, snapshot_track_count)`;
+          decisions §15.5 keys recovery on having an identification, and
+          migration 3 rebuilds the index accordingly (obligation (g)).
+      (h) Design §3's artist gate says nothing about the `Various`
+          equivalence decided in §15.7 — check that when the design-fix pass
+          runs. The other half of this item is ANSWERED and needs no pass:
+          design §9 does NOT carry the tier selector, because the
+          reconciliation deleted it. That is precisely why decisions §15.8
+          rules the pref out of the code rather than out of design.
+- [x] **2026-09-15: detection likely offers a bare master id as a RELEASE
+      candidate.** `Tags::candidateKeys` corroborates a bare integer when the
+      key matches `/DISCOG/i`, and bare digits parse through
+      `_parseReleaseId`, so `DISCOGS_MASTER_ID=999` would be listed as a
+      corroborated release-id key. A user who ticks it alone stores master ids
+      as release ids. INFERRED from reading, untested — `tags-check.pl`
+      covers only the master-URL form. Step-3 code; schedule in the build
+      order. — fixed in step 4 commit 1 (decisions §15.12 part 4)
+- [ ] **2026-09-15, recorded not acted on: `API.pm`'s synchronous `get` has no
+      v1 caller** once Structural is gone and the sync is server-side
+      (decisions §15.2). Keep it, or record why it stays, when the sync step
+      is planned.
+- [x] **2026-09-15: orphan recovery's reach shrinks under decisions §13.4, and
+      it can lose user work.** Recovery selects `state = 'confirmed'`
+      (§14.8, inferred from the predicate; the index is commented "confirmed
+      rows whose snapshot might fit a new album" in
+      `Schema.pm::_migration_1`). ~~Under §13.4 only OWNED albums reach
+      `confirmed`, so two classes now sit permanently outside recovery: a
+      tagged-but-unowned album, and — the one that matters — **a MANUAL match
+      on an unowned album**, which is work the user typed.~~ When `album_key`
+      changes (files moved, retagged, library rebuilt) those rows orphan with
+      no relink path and the manual choice is gone, silently.
+      Recovery may need to key on "has an identification"
+      (`match_tier IS NOT NULL`) rather than on `state`, or `manual` rows may
+      need their own clause. This is a consequence of §13.4 that predates the
+      build-order rewrite and was never followed through. Recovery is not yet
+      built (see Q7), so deciding it now costs nothing but a ruling. Blocks
+      the review-queue/manual-re-match step.
+      2026-09-15, CORRECTED AND RESOLVED — decisions §15.5. The struck claim
+      was wrong: design §3 says confirming a manual link writes
+      `match_tier = 'manual'` and `state = 'confirmed'`, and a manual link is
+      explicitly exempt from the collection cross-check that governs Strict.
+      So manual rows DO reach `confirmed` and were never outside a
+      `state`-keyed predicate. What was right: `state` is the wrong key.
+      Conflict-demoted rows keep an adjudicated id and their snapshots (§3a)
+      while sitting at `candidate`, and they are the rows whose tags can no
+      longer reproduce their identification. §15.5 keys reach on having an
+      identification instead.
+- [ ] **2026-09-15: a retagged album title defeats orphan recovery, and a
+      manual row's work is lost.** Decisions §15.5's predicate is exact
+      equality on artist, album title and track count. Change the title tag
+      and nothing fits, so the row stays orphaned — for a tagged album
+      identification re-derives the match anyway, but a MANUAL row's choice
+      is gone with no notice. Recorded rather than solved: two-of-three
+      matching and normalised comparison both trade a fail-safe predicate for
+      a guess. Revisit if it happens on hardware.
+- [ ] **2026-09-18: `docs/implementation-plan.md` needs its own
+      survey-then-reconcile session.** Same shape as the design
+      reconciliation, and deliberately NOT done during the build-order
+      rewrite — that session's scope was the build order, and reopening a
+      second document because a plan found it convenient is how a boundary
+      erodes. §1 is fixed (it now points at `CLAUDE.md` and decisions §15.9).
+      Known-stale entries, not a complete survey:
+      (i)   §2's file-skeleton table describes `Importer.pm` as the
+            "Scan-time matching cascade (Strict → Structural → Fuzzy)";
+      (ii)  §4.3 and §4.6 are declared superseded by decisions' own header;
+      (iii) anything else in §2-§4 written against the per-album Discogs
+            search (§13.1) or the `discogs_collection` mirror (§13.2).
+      Working-agreement §2 makes this a defect to reconcile, so it should not
+      sit indefinitely. Survey first, as the design reconciliation did, so
+      the session starts from a list rather than deriving one.
+
+- [ ] **2026-09-29: ask upstream for a per-album cover emblem hook.** Material
+      (emblems are a fixed list keyed on `extid`) and LMS core (one icon slot in
+      the Default UI's `xmlbrowser.html`). Needed for design §4's artwork badge.
+      Not decided whether or when to ask. Decisions §15.25.
+- [ ] **2026-09-29, future feature: a SqueezeWax app** (Listen Later's `is_app`
+      pattern) as a low-level Discogs browse. Design §11 v3, beside Flow 2.
+- [ ] **2026-09-29, v2: master search for version albums**, so a version album
+      matched by title gets a master link. Belongs with the wantlist (decisions
+      §14.10's revisit).
+- [ ] **2026-09-29: Re-match from the album menu** — not in v1. A version album
+      with no tag cannot be given a pressing except by tagging. Revisit with the
+      master search.
+- [ ] **2026-09-29: pressing details and credits in the menu** — cut from v1;
+      return only with "Data provided by Discogs" placed next to them.
+- [x] **2026-09-29: Jivelite and service logos.** The owner reports seeing
+      online-library logos on a player skin; Jivelite `d43a20b` has no such
+      code. Needs a photo and the skin's name before anything rests on it.
+      → 2026-09-30: SETTLED, the owner was right. A SqueezePlay screenshot shows
+      Spotify emblems (decisions §15.26). The upstream item below now names three
+      UIs.
+- [ ] **2026-09-29, noticed, not changed: "Test token" bypasses the shared rate
+      state.** `Settings.pm`'s token test makes a bare `SimpleAsyncHTTP`
+      request with no `API->rateWait` check and no `noteResponse`, against
+      `CLAUDE.md`'s "every server-side consumer shares it". One user-pressed
+      request; small risk.
+
+- [x] **2026-09-29: the two Discogs notices have no README to go into.** Step 9
+      put both on the settings page (decisions §15.25 ruling 4), and the plan
+      also asked for them "in the repository README / usage documentation".
+      There is no README and no user-facing usage doc in this repo — the only
+      other user-visible description is `install.xml`'s
+      `PLUGIN_SQUEEZEWAX_DESC`, and putting the trademark sentence there
+      changes the plugin's Manage Plugins description, which is
+      naming-sensitive (design §1). Not decided. The text is verbatim in
+      `strings.txt` under `PLUGIN_SQUEEZEWAX_ATTRIBUTION_*`.
+      → 2026-10-12: README.md added with the non-affiliation notice; the
+      "Data provided by Discogs" line stays on the settings page only (§15.29).
+- [ ] **2026-09-30: plugin log categories revert to ERROR after startup.** Seen
+      on 0.0.0.14: ours, Spotty's and four others ran at `ERROR` in the server
+      while `log.conf` said otherwise; core categories kept theirs (decisions
+      §15.26). The test that separates the install from any restart: a plain
+      restart with nothing else changed, then read the logging page. If it
+      reproduces, it is LMS behaviour worth raising upstream.
+      → 2026-10-12: not reproduced on two install-and-restart rounds (0.0.0.15,
+      0.0.0.16); `plugin.squeezewax` came up at its `log.conf` level both times.
+      Left open, as one unexplained observation. Close it if it never recurs.
+- [ ] **2026-09-30, v2: link the release the user actually owns.** Owner's
+      request 8. Needs the owned release id(s) per album stored, one-to-many
+      (several pressings of one record is normal), a migration, and §14.10
+      reversed. Goes with the wantlist and the master search.
+
+- [x] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
+      next sync.** → 2026-10-13: FIXED, decisions §15.32: `rateWait` counts down
+      from the last counted reply, so a busy submenu and Derive both clear when
+      the window passes. `API->rateWait` is a stored figure, not a countdown: it changes
+      only when a reply is noted (`API.pm` `noteResponse`). Step 10's rule (plan
+      §3, ruling 9) is "rateWait non-zero → busy line, no request", so once it is
+      non-zero no submenu open can clear it; only a sync or derive reply does.
+      Ways in: a reply saying `remaining: 0`, a 429, or a reply with no rate
+      headers and nothing known before it (a dropped connection as the first
+      request of the process) - `accountRequest`'s last rung assumes the budget
+      spent. Then every Release details and Master details open says "busy, try
+      again in 60 s", indefinitely. `details-check.pl` records it (the "RECORDED,
+      NOT ENDORSED" block). Built to the plan, not changed: the fix touches the
+      shared throttle. Candidate: `rateWait` returns what is left of the window
+      since the state's `checked_at` (already stored, unused). **Same root,
+      older:** `Derive.pm` re-arms on "the rate budget is spent" every 60 s and
+      re-checks the same stale figure, so with no sync it never fetches again -
+      inferred from code, not seen on hardware.
+- [x] **2026-10-13: README still describes step 9b's menu.** → 2026-10-13:
+      DONE, decisions §15.32: menu paragraph, data and privacy, roadmap. `README.md` (the
+      menu paragraph, "On Discogs: your pressing" / "the pressing your files
+      name" / "all versions") names strings step 10 replaced or retired, and its
+      roadmap line says marketplace lookup is "not yet implemented". Plan step
+      10 §8 lists no README edit, so the build left it: the wording is the
+      owner's to choose.
+- [ ] **2026-10-12: derive fetches masters a tag already gives.** One request per
+      release whose files carry a `DISCOGS_MASTER_ID`-family tag. The answer is
+      never read while the tag is there (`_effectiveMaster`, tag first). Kept by
+      decision (decisions §15.28; the comment above `Derive.pm`'s `$UNSETTLED`).
+      **Revisit trigger:** master-tagged rows exceed ~10% of identified rows (3 of
+      507 on 2026-10-12). Then add "and no master tag" to `$UNSETTLED`, which also
+      changes the settings page's derive count.
+- [ ] **2026-10-12: the "release tag, no master tag" ownership delay is still
+      unobserved.** Such an album, if the owner holds a different pressing, should
+      show unowned after its first scan and become a version only at the next sync,
+      because nothing re-runs the pass after a derive. Real, inferred from code, and
+      not yet seen on hardware.
 
 ## Waiting — needs a real server
 
+- [x] **2026-10-13: Test token does not store the currency** (decisions §15.34
+      item 3). → 2026-10-13: cause found by reading, and the profile request
+      dropped from Test token (decisions §15.35). Only a sync learns it.
+- [ ] **2026-10-13, low priority: Test token's username is cleared by its own
+      save** (decisions §15.35 item 3). With a token that differs from the
+      stored one, the "Data provided by Discogs" link falls back to discogs.com
+      until the next sync. Fix: save the token first, as `_syncNow` does.
+
+- [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
+      **Observe when the internet happens to drop; do not schedule a test or ask
+      the owner** (owner, report 66; unchecked in reports 64 and 66).
+      Restart the server with Discogs unreachable (network off, or a wrong DNS
+      entry for `api.discogs.com`), open Release details: "Discogs did not
+      answer", and opened again, "busy, try again in N s". Restore the network,
+      open it again a few times: N falls, and once it reaches 0 the submenu shows
+      the details without a sync in between.
+- [ ] **2026-10-12: step 10 hardware checks** (`plans/build-order-step-10-details.md`
+      §7), on 0.0.0.18, together with the 0.0.0.17 wording item below.
+      1. **Log level first** (working agreement §4.1): `plugin.squeezewax` at INFO.
+      2. **Material:** album E shows four rows in plan §1's order and wording; open
+         each submenu, the lines match plan §2, and the notice is a link that
+         opens the Discogs page. V1: "Browse all versions" and "Show master
+         details" only, with **no** release link. V2 / A: no entries.
+      3. **Default UI:** the same, via album info.
+      4. **SqueezePlay:** E shows the ownership line plus both submenus; opened,
+         they show text lines, the notice and the plain address, with no link
+         row. **Does SqueezePlay wait for the replies?**
+      5. **Requests per open:** the log shows exactly 1 per open, and 0 when the
+         album menu opens without a submenu. If Material asks again for a second
+         page, record it (inferred not to happen).
+      6. **Busy:** press "Sync collection now", then open Release details at
+         once. Expect the busy line, or normal lines if the budget allows.
+         Record which.
+      7. **Token removed** (then restored): the token line.
+      8. **Currency:** after "Test token", Release details shows "… EUR". Change
+         the token: the price line shows the count only, until the next test or
+         sync.
+         (Saving an *unchanged* token keeps the label: no change handler fires,
+         decisions §15.33 item 4.)
+- [ ] **2026-10-12: at the next design-step build, check the 0.0.0.17 wording on
+      hardware:** on the settings page (`SYNC_DESC`, `TOKEN_DESC`) and in the
+      review queue (`QUEUE_TOKEN_PAUSED`, `QUEUE_BADGE_LATER`).
+- [x] **2026-10-01: the "Records I own" menu icon's hardware checks (decisions
+      §15.27).**
+      → 2026-10-12, on 0.0.0.16: all PASS (decisions §15.28). Material right on
+      three themes; SqueezePlay and Classic show the icon (owner); zip contents,
+      serving and recolouring checked by the session.
+      1. **Material**: the icon shows, and recolours, on a light, a dark and a
+         coloured theme.
+      2. **Jivelite/SqueezePlay**: the node shows `owned_svg.png`, not a default
+         or blank icon (unverified: an id-based `iconStyle` may win).
+      3. **Default web skin and Classic skin**: the PNG shows.
+      4. **The zip** contains both `owned_svg.png` and `owned.svg`.
+
+- [x] **2026-09-30: build-order step 9's hardware checks (the ownership menu
+      and the owned view).**
+      → 2026-09-30, on 0.0.0.14: all PASS (decisions §15.26). Check 6's second
+      half, an album taking an old id, was not provokable; see its own item. Plan `plans/build-order-step-9-badge.md` §7, in
+      full, on the reference server. The ones that settle something no offline
+      suite can:
+      1. **The Discogs URL forms.** `/master/{id}` is inferred from captured
+         `uri` fields, which spell it `/master/{id}-{slug}`; `/user/{name}/collection`
+         is inferred outright (§0.2 D4). Open one of each.
+      2. **The library pickers.** Whether the Default UI's picker lists the view
+         at all, and whether Material's My Music shows a `registerNode` entry,
+         were not read (§0.5, "unverified").
+      3. **Zero requests at INFO** while opening menus.
+      4. **The view equals the owned set** — 204 albums expected — with a rip
+         and a stream of one record both present.
+      5. **Rebuild without a rescan**: change the collection by one record,
+         press "Sync collection now", the view follows.
+      6. **D1 on hardware**: record whether a re-created album can be provoked
+         at all. If not, it stays here rather than being marked passed.
+      7. **Settings page**: both notices, the link carrying the username and no
+         `nofollow` (view source), the derive line appearing and disappearing.
+      8. **A player skin / Jivelite**, if there is one: does the entry show?
+      9. **Timings**: menu open, and view rebuild on this library.
+
+- [x] **2026-09-29: the logic version's hardware checks (0.0.0.13).** Decisions
+      §15.24. Short, on the reference server, in order:
+      1. **Upgrade and start.** `user_version` 6 → 7, and expect **exactly one
+         invalidation** — even though the tag-name trick was already run by hand
+         on 2026-09-29, the `logic_version` key does not exist yet and
+         `discogs_match` has rows. One info line naming 1 → 2, ~500 rows nulled,
+         the strict no-match rows emptied.
+      2. **Rescan.** ~64 s measured; the five conflicts and the four node F
+         badges come back as §15.23 recorded them, and the row and ownership
+         counts land where it says.
+      3. **Restart again and confirm NOTHING happens** — no invalidation, no log
+         line, and `SELECT value FROM discogs_meta WHERE key = 'logic_version'`
+         reads 2. That is the stored version doing its job, and it is the check
+         the whole mechanism exists to pass.
+      → 2026-09-29: all three **PASS** on 0.0.0.13. Migration 7 and exactly one
+      invalidation on the first start (578 rows, 47 ms); the next scan
+      re-examined 578 albums in 61.2 s and returned the library to §15.23's
+      recorded state with **one** column changed across 506 rows (`matched_at`);
+      the second restart did nothing and the scan after it examined 0 of 764 in
+      0.079 s. The refusal path is unreachable on a settled install by design and
+      stays covered offline — decisions §15.24's as-observed note says why.
+
+
+- [x] **2026-09-24: build-order step 8's hardware checks (the review queue and
+      manual re-match).** Plan `plans/build-order-step-8-review-queue.md` §6.
+      Code complete at `6b02c95`; offline-verified (`check-all.sh` 1127
+      assertions, of which `queue-check.pl` 91 are the new seam suite). None of
+      these can be checked without a real server, a real library and a real
+      Discogs collection. Run them in order; 0 must be run BEFORE upgrading.
+      0. **Before upgrading**, read-only against copies of `squeezewax.db` and
+         `library.db`, and record the three figures:
+         (a) fresh conflicts —
+         `SELECT album_key, lms_album_id, match_tier, state, ownership,
+          discogs_master_id, matched_at, source_timestamp
+            FROM discogs_match
+           WHERE match_tier = 'strict' AND discogs_release_id IS NULL
+           ORDER BY album_key;`
+         (b) manual rows —
+         `SELECT album_key, lms_album_id, discogs_release_id, discogs_master_id,
+          state, ownership, matched_at, source_timestamp, snapshot_artist,
+          snapshot_album_title, snapshot_track_count
+            FROM discogs_match WHERE match_tier = 'manual' ORDER BY album_key;`
+         (c) orphans. These CANNOT be found from `squeezewax.db` alone. §15.5
+         part 3's predicate is `match_tier IS NOT NULL AND snapshot_track_count
+         IS NOT NULL` **and the album_key is no longer in the library**, and
+         that last clause exists nowhere in our database — the first two
+         clauses alone return ~479 rows, almost all of them current. Recompute
+         every current `album_key` from `library.db` and anti-join, which is
+         how the 2026-09-19 item found the three. The recipe, from
+         `Library.pm`'s own `$ALBUM_TRACKS_SQL` (:71-81) and digest (:260):
+         connect read-only to `library.db`; `SELECT t.album, t.urlmd5 FROM
+         tracks t WHERE t.album IS NOT NULL AND t.audio = 1 AND t.content_type
+         NOT IN ('cpl','src','ssp','dir') ORDER BY t.album, t.urlmd5`; group by
+         album and take `md5_hex(join '', @urlmd5)` per album — never
+         `md5_hex('')`; then select the rows above from `squeezewax.db` and
+         print those whose key is not in that set. Expect 764 current albums
+         and 3 orphans: releases 999999 (12 tracks, strict), 77777 (12 tracks,
+         strict, album 3633 gone) and 888888 (18 tracks, MANUAL).
+      1. **Upgrade:** `user_version` 3 → 4; 507 rows unchanged; `review_reason`
+         NULL on every row.
+      2. **First sync:** the reasons written match the summary line, which now
+         carries two different figures and says which is which ("queue decided"
+         is verdicts over every album, "reasons wrote" is rows that changed).
+         Expect ambiguous 5, artist-disagree 2, gated 0 (TODO 2026-09-22
+         figures); orphans 3, including the manual row 888888.
+      3. **Queue page:** lists exactly those, plus 0(a)'s fresh conflicts; none
+         of the 305 unowned candidates.
+      4. **Re-match** on one FSOL album (3124 or 3127): requests = 4; the
+         choices include `The Future Sound Of London`'s entry with its year,
+         format and label; confirm → a manual row; the **next** sync → `exact`,
+         and it leaves the list.
+      5. **Reject** the three orphans from 0(c) (999999, 77777, 888888) from
+         the orphan list; the rows are gone; nothing else changed (full
+         `SELECT *` diff against the 0(b)/0(c) capture).
+      6. **Relink** an ambiguous orphan (two copies of one album folder, as
+         step 4 check 6) from the orphan list.
+      7. **Conflict:** retag one owned album with two different ids; scan →
+         `review_reason = 'conflict'`; sync → no promotion, and the badge only
+         via the title route; fix the tags; scan → the reason is cleared.
+      8. **Scanning:** every queue action refused mid-scan.
+      → 2026-09-26, on 0.0.0.9 (`850ed09`): checks 0, 1, 2, 3, 4, 5, 7 and 8
+      PASS. Check 2's figures matched exactly: ambiguous 5, artist-disagree 2,
+      gated 0, orphans 3 (manual 888888 included); 507 → 510 rows, the 3 being
+      reason-only. Check 3: the page's keys and the database's reason rows were
+      identical sets (10). Check 4: 4 requests, 2.72 s, all fields rendered,
+      next sync `exact`. Check 5: 3 rows removed, nothing else changed. Check 7:
+      the conflicted copy stayed `candidate` / `version` beside an `exact`
+      control — §15.16 part 4 observed. Check 0(a) found 0 fresh conflicts.
+      **Check 6 could not pass as written**: the orphan relink was unreachable
+      after a scan (decisions §15.17 part 2).
+      → 2026-09-27, re-run on 0.0.0.10 (`b6773ef`): **check 6 PASS**, and every
+      other check that E1–E5 touched. One tagged original plus two copies with
+      the release-id tag stripped scanned as `examined 3, identified 1, no tag
+      2`, no-match rows 100 → 102; deleting the original orphaned its row with
+      snapshot (Aphex Twin, Windowlicker, 3). The orphan list then offered
+      **both** untagged copies, where 0.0.0.9 offered none. The relink left the
+      target with one match row and **no** no-match row, cleared the `orphan`
+      reason, and the next sync promoted it to `strict` / `confirmed` / `exact`.
+      §2a invariant 1 held. Queue render is flat with and without a conflict
+      (0.031–0.034 s either way), which is E1 observed: the page reads no files.
+      "Show tags" on local files 0.033–0.037 s. All four "Greatest Hits" items
+      left the queue as **not owned**, not badged — §15.17 part 5's rule 6 on
+      real data (decisions §15.17, hardware addendum). "Gling-Gló / Björk"
+      renders correctly and no template comment leaks. Check 8 re-run with the
+      fifth action: all five refused mid-scan, database byte-identical.
+      Two things could not be exercised and have items of their own below: a
+      NAS-backed conflict, and the rejection-pause notice.
+
+- [x] **2026-09-27: the rejection-pause notice on the queue page has never
+      been seen on hardware.** Decisions §15.17 part 4, commit `7be7323`.
+      The 2026-09-27 re-run could not exercise it: no 401 occurred, and
+      breaking a working token to force one was rightly declined. It is
+      covered offline against real `API::Async` state
+      (`queue-check.pl`), which is the stronger test of the *logic* — but
+      nobody has yet seen the notice render. Fold it into the next hardware
+      round that has a reason to change the token.
+      → 2026-09-27: SEEN. With the token deliberately broken, the fallback's 401
+      set the pause and the queue page gained exactly one line — the notice —
+      with nothing else changed; after the token was restored the page was
+      byte-identical to its pre-break baseline. Decisions §15.18's hardware
+      addendum records which of the pause's two exits did the clearing, and why
+      the other one is still unobserved.
+
+- [ ] **2026-09-27: a NAS-backed conflict cannot be created on the reference
+      server, so the worst-case "Show tags" is still inferred.** The NAS mount
+      is read-only, and `squeezewax.db` is mode 644 owned by
+      `squeezeboxserver` while the checks run as `denny`, so neither a real
+      conflicting tag nor a synthetic conflict row can be written for a NAS
+      album. Measured instead: two NAS files read in 58.6 ms min / 97.5 ms
+      mean, against a 33 ms render — so a NAS "Show tags" is inferred at
+      roughly 95–135 ms, paid once on request rather than on every render
+      (§15.17 part 1). To settle it, a future round needs write access as
+      `squeezeboxserver`, or a writable copy of one album on a slow mount.
+
+- [x] **2026-09-27: build-order step 8b's hardware checks (the sync and the
+      ownership pass inside the scan).** Plan
+      `plans/build-order-step-8b-sync-in-scan.md` §7, eleven checks. Check 5 is
+      the one that can stop the step working at all: no HTTPS request has ever
+      been made from this plugin's scanner process, and `IO::Socket::SSL` is
+      bundled in `CPAN/` only for darwin, so whether it resolves in the
+      scanner's perl on Linux is **unverified**. Check 4 is the other unknown:
+      how the scan UI and the Material skin render a progress row whose total is
+      0 and is set later. Run check 2 first — it is §15.18 part 1's whole claim,
+      that the badges are right the moment the scan finishes.
+      → 2026-09-27, on 0.0.0.11 (`9b397c2`): checks 0, 1, 2, 3, 4, 5, 6, 8, 9
+      and 11 **PASS**; 7 and 10 could not be provoked (see the grouped item
+      below). Check 5, the stop condition, passed: the scanner's perl resolves
+      `IO::Socket::SSL` 2.085 and `Net::SSLeay` 1.94 from the Debian system
+      perl, `hasSSL` is true, and a live `GET https://api.discogs.com/` returned
+      200 in 0.690 s — then eight real scanner fetches over the run. Check 2:
+      the badge was already `confirmed`/`exact` at the instant the scan reported
+      finished, with the marker written, and the fallback skipped sixty seconds
+      later; its other half was closed by the owner on 2026-09-28, adding a
+      record to the collection (203 → **204**) and removing it again (→ **203**),
+      each visible as the scan finished. Check 4: the row reads "0 of 0" while
+      running and completes at 768 of 768; no skin breaks (decisions §15.18's
+      hardware addendum, correction 2). Check 6: the scan-time failure left both
+      pages byte-identical, and the rejection-pause notice rendered and cleared.
+      Timings: fetch 2.49–3.30 s, pass 41–46 ms over 764–765 albums, four
+      requests per sync, the whole ownership importer 3–12 % of a scan.
+
+- [x] **2026-09-28: build-order step 8c's hardware checks (the master arm, and
+      tags that disagree across tracks).** Plan
+      `plans/build-order-step-8c-master-arm.md` §6, eight checks. Two matter most.
+      **Check 3:** of the five albums the measurement says node F should fix,
+      2927, 2974, 3022 and 3023 should badge `version` — and **3421 should not**,
+      because group B should have made it a conflict before ownership is derived.
+      If 3421 badges, the two halves are fighting. **Check 2:** the job must
+      finish (~475 releases over ~16 runs), yield to a manual sync, and then issue
+      **zero** requests on a second pass. Also confirm nothing Content-shaped
+      reaches the database and `discogs_release_cache` still holds 0 rows.
+      → 2026-09-29, on 0.0.0.12: all nine checks **PASS**, one of them only after
+      an invalidation run by hand — see decisions §15.23 and the item below.
+      Node F fired for the first time: `version` 50 → 55, four albums badged,
+      *Gling-Gló* left the queue. The job armed from the skip path, ran 475
+      releases over 18 runs in 25 min with no 429, yielded to both a sync and a
+      scan, and then issued zero requests. 404 quiet three times. Nothing
+      Content-shaped stored; `discogs_release_cache` still 0 rows. The
+      cross-track rule produced every shape the library can make, and album 3421
+      ended the round `absent` with `review_reason = 'conflict'` — the wrong
+      badge gone. Net: +4 correct badges, −1 wrong badge, +5 honest review items.
+
+- [x] **2026-09-20: build-order steps 6-7's hardware checks (migration 3 and
+      the ownership pass).** Plan
+      `plans/build-order-step-6-7-ownership.md` §5. Code complete and
+      offline-verified (`schema-check.pl` 110 assertions, `ownership-check.pl`
+      96, `match-check.pl` 153, `sync-check.pl` 104); none of these can be
+      checked without a real server, a real library and a real Discogs
+      account.
+      (1) **Upgrade.** `user_version` goes 2 → 3; the row count equals Phase
+          0's figure of 481; no row's `state` changed; `discogs_collection`
+          is gone; the log shows rows copied and the per-state counts.
+      (2) **First sync.** Requests = pages + 1. `discogsLastSynced` advances
+          only after the pass logs its summary. Report
+          exact/version/gated/ambiguous against §13.10's page-1 figures —
+          they will not match exactly, because the rules differ per §15.13
+          parts 2-3 and the full collection is 203 items, not 100.
+          **EXPECT A LARGE DEMOTION HERE.** Phase 0 found all 478 strict rows
+          `confirmed`, written by step 3 before §13.4. Every one whose
+          release is not in the collection drops to `candidate`, which could
+          be most of them. That is §13.4/§15.3 working as designed and it
+          closes §15.3's accepted window. Record the promoted and demoted
+          counts. Check (1)'s "no state changed" applies to the UPGRADE only.
+      (3) **Second sync, nothing changed:** zero writes. This is §13.2's
+          determinism on real data; the offline suite asserts it on fixtures.
+      (4) **Start a scan mid-sync:** the pass is `refused`, the log says so at
+          info, and the next rescan-done brings a sync that applies. Inherits
+          step 5's checks (d) and (e).
+      (5) **An untagged local album that is owned:** an ownership-only row
+          appears, and the next scan logs NO invariant-1 error. This is the
+          one that would catch §15.13 part 6 being wrong.
+      (6) **Remove a record from the Discogs collection:** after a sync its
+          ownership-only row is deleted, and a tagged row goes to `absent` /
+          `candidate` while keeping its release id.
+
+      **RUN 2026-09-22 on 0.0.0.4.** All six pass. Evidence below; the
+      backups are `/home/denny/squeezewax-backups/2026-09-20-pre-step-6-7`
+      (pre-migration) and `.../2026-09-22-pre-hardware-checks` (pre-checks,
+      plus a `-pre-collection-change` pair taken before check 6).
+      (1) **PASS**, observed 2026-09-20, re-verified 2026-09-22.
+          `user_version` 3; the migration logged `481 rows copied ... by
+          state: candidate=2, confirmed=479`, which equals the Phase 0
+          baseline exactly, so no state changed at the upgrade; a row-level
+          diff of tier/release id/snapshot against
+          `BASELINE-discogs_match.csv` is 0 lost, 0 added, 0 changed;
+          `discogs_collection` and its index are absent from `sqlite_master`;
+          `discogs_no_match` carries `CHECK (tier IN ('strict'))`;
+          `discogs_match_orphan` is rebuilt on `(match_tier,
+          snapshot_track_count)` per obligation (g); the log carries all four
+          migration lines.
+      (2) **PASS**, observed 2026-09-20/22, re-verified. 203 items over 4
+          requests = 3 pages + 1 identity. `discogsLastSynced` advances only
+          after the pass: `Async.pm:570` sets it strictly after
+          `Ownership->apply` at `:561`, and check 4 below proves the negative
+          case. Split: exact=149 version=50 gated=0 ambiguous=5
+          artist-disagree=2 artist-absent=0 undecodable=0; inserted=26
+          updated=477 deleted=0 promoted=0 **demoted=327**. The demotion is
+          confirmed by query: exactly 327 rows moved `confirmed` ->
+          `candidate`, 154 unchanged, 481 total. `gated=0` against the page-1
+          measurement's 6 is NOT a discrepancy - the script measures the
+          title route over every album, while the pass reaches node H only
+          for albums no tag resolved first, and all six of those compilations
+          are tagged.
+      (3) **PASS**. Sync driven through the settings form's own `syncNow`
+          button (`POST /plugins/SqueezeWax/settings.html`;
+          `csrfProtectionLevel` is 0, so `CSRF.pm:179` admits it). Log:
+          `inserted=0 updated=0 deleted=0 promoted=0 demoted=0`, and a full
+          `SELECT *` diff of `discogs_match` before and after is byte
+          identical.
+      (4) **PASS**, both halves. Sync started 12:44:34.86; rescan fired
+          12:44:35.56 via `["rescan"]` (`Request.pm:607`); fetch finished
+          12:44:37.1155; 1.1 ms later `Match::_writeOk` logged *refusing to
+          write to squeezewax.db: a scan is running* and Settings reported
+          *ownership pass declined*. `discogsLastSynced` did NOT advance and
+          `discogsLastSyncError` read `refused`. Then `_rescanDone` at
+          12:45:11.81 scheduled a sync that fired at 12:46:11.31 (the 60 s
+          `DEBOUNCE_AFTER_RESCAN`) and applied - timestamp advanced to
+          12:46:13, error cleared.
+      (5) **PASS**, and not vacuous. The check-4 rescan repopulated
+          `discogs_no_match` to exactly 100 strict rows (migration 3 had
+          emptied it per obligation (h)). Exactly two albums then carried a
+          row in BOTH tables at once - 3204 *Here Comes The Night* and 3233
+          *Route 66*, each NULL `match_tier`, NULL `state`,
+          `ownership = 'version'` in `discogs_match` and `strict` in
+          `discogs_no_match` - and the scan logged no invariant-1 error.
+          **This is the check that would have caught §15.13 part 6 being
+          wrong. It did not.**
+      (6) **PASS — offline first, then ON HARDWARE 2026-09-22 at 0.0.0.6.**
+          The owner declined to
+          alter a real Discogs collection, which is a reasonable refusal: the
+          designed check mutates data this project does not own and cannot
+          restore if a step fails. Run instead against COPIES of the live
+          `squeezewax.db` (507 rows) and `library.db` (764 albums), driving
+          the real `Ownership->apply` and the real `Library::eachAlbum` /
+          `ownershipArtists`, with the committed page-1 fixture as the
+          collection. Three sequential passes on one database, which is how
+          the real thing behaves since every sync re-derives everything:
+          A = full fixture, B = fixture minus releases 9701013 (*Route 66*,
+          Nat King Cole) and 443973 (*Jagged Little Pill*, Alanis
+          Morissette), C = full fixture again. Albums whose owned release is
+          not on page 1 conclude `absent` in all three passes and cancel out,
+          so the two removals are the only variable.
+          A -> B differs in **exactly two rows**: album 3233's ownership-only
+          row is **DELETED** (§15.13 part 5's permitted deletion), and album
+          2898 goes `confirmed` -> `candidate` and `exact` -> `absent`
+          **while keeping release id 443973**. A -> C is **empty**: adding
+          them back restores both rows exactly.
+          What this does NOT prove, and why the hardware check stays open:
+          the sync handing the pass a genuinely changed list, the live write
+          path in the server process, and Discogs itself.
+          **Then proved on hardware**, without touching the collection, using
+          `discogsTestExcludeReleases` (0.0.0.6). With the filter set to
+          `9701013,443973` a real sync fetched the real collection — 203 items
+          over 4 requests, the unfiltered count — logged `test filter active:
+          hiding 2 releases from the ownership pass` at warn, and wrote
+          `updated=1 deleted=1 demoted=1`. The diff against a copy taken
+          beforehand is **exactly two rows**: album 3233's ownership-only row
+          deleted, and album 2898 `confirmed` -> `candidate`,
+          `exact` -> `absent`, keeping release id 443973, its snapshot
+          (`Alanis Morissette`, 13 tracks) and its `source_timestamp`.
+          Clearing the pref and syncing again restored the table
+          **byte-identical** to the copy (`inserted=1 promoted=1`). This is
+          what the harness could not prove: the real fetch handing a changed
+          list to the pass, and the live write path in the server process.
+      **Live data was never written by any check.** `discogs_match` is
+      identical across checks 3, 4, 5, (d) and 6, and identical to the
+      `-pre-collection-change` backup: 507 rows, 100 no-match rows,
+      `user_version` 3 throughout.
+- [ ] **2026-09-19: build-order step 5's hardware checks (collection sync).** PARTLY DONE — (a) (b) (d) (e) pass; (c) not observed.
+      Plan `plans/build-order-step-5-collection-sync.md` §3. Code complete and
+      offline-verified; none of these can be checked without a real server and
+      a real Discogs account.
+      (a) A sync produces exactly `ceil(items/100) + 1` requests — the pages
+          plus the `/oauth/identity` lookup — and `discogsLastSynced` advances.
+          `discogs_match` row count unchanged before and after. The offline
+          suite asserts the arithmetic and the request sequence against a stub
+          transport (`scripts/sync-check.pl`, 67 assertions); what it cannot
+          assert is that the real transport issues them.
+      (b) The manual button, the interval timer and a rescan's
+          `['rescan','done']` do not start overlapping syncs. Exercise the
+          guard, or say explicitly that it simply was not hit in practice.
+      (c) A revoked token produces the `error`-level log line and
+          `discogsLastSynced` stops advancing; a simulated transient failure
+          (kill the network mid-sync) produces `warn` and leaves prior state
+          untouched.
+      (d) The existing "abort a scan mid-run" check below becomes load-bearing
+          for the first time here — decisions §15.2 obligation 1 rests on an
+          inference from `SQLiteHelper`'s `_notifyFromScanner` exit branch that
+          has never been observed. Run it: abort an external scan mid-run,
+          confirm a second `['rescan','done']` arrives, and confirm a pending
+          sync then completes.
+      (e) Not covered offline at all, and the reason (a)-(d) are here: nothing
+          in `scripts/sync-check.pl` touches a real event loop. Both its stubs
+          are synchronous — a stubbed request calls back before `->get`
+          returns, a stubbed timer fires before `setTimer` returns. The real
+          `Slim::Utils::Timers` / `SimpleAsyncHTTP` interaction is unproven.
+
+      **PARTLY RUN 2026-09-22 on 0.0.0.4**, alongside the steps 6-7 checks.
+      (a) **PASS.** 203 items over 4 requests = `ceil(203/100) + 1`, on four
+          separate syncs. `discogsLastSynced` advances on each that applies.
+          `discogs_match` row count unchanged at 507 before and after.
+      (b) **PASS for the rescan-done trigger**, via (d) below: three
+          `_rescanDone` events in 2.7 s produced exactly ONE sync, because
+          `_scheduleSync` kills any armed timer before arming the next
+          (`Plugin.pm:159-160`). ~~The manual button against the interval timer
+          was not hit in practice and stays unproven - the interval is 24 h.~~
+          **Moot from 2026-09-22 (§15.15): there is no interval timer. The
+          remaining pair is the button against `['rescan','done']`, and the
+          guard between them is the same `killTimers`.**
+      (c) **PARTLY OBSERVED 2026-09-22 at 0.0.0.6, and it FOUND A DEFECT.**
+          The owner pasted a deliberately wrong token and synced. State
+          protection passes: `discogsLastSynced` stayed at the last
+          successful sync and `discogs_match` was byte-identical to a
+          507-row snapshot. **The error vocabulary does not:** the failure
+          came out as `no_response`, logged at **warn**, and the
+          `Discogs rejected the token` line appears nowhere in the log. See
+          the `unauthorized`-is-unreachable item above. ~~Killing the network
+          mid-sync is still NOT OBSERVED.~~ **Both halves of (c) are now
+          observed: see the §15.15 hardware-check item (4), 2026-09-24. The
+          rejected token reports as `unauthorized` at error and pauses; a
+          killed connection reports as `no_response` at warn and does not.**
+      (d) **PASS — and this is the one that was load-bearing.** §15.2
+          obligation 1 rested on an INFERENCE from `SQLiteHelper`'s
+          `_notifyFromScanner` exit branch that had never been observed. It
+          is now observed: a full rescan started 12:46:49, `abortscan`
+          (`Request.pm:474`) issued at 12:46:57 while `rescan ?` still
+          reported 1. `_rescanDone` fired immediately at 12:46:57.7134, then
+          twice more at 12:47:00.0579 and .3963 as the scanner exited. One
+          sync was scheduled, fired at 12:48:00.3555 (60 s after the last
+          notification) and applied. **The inference holds.**
+      (e) **PASS by implication.** Every observation above ran through the
+          real `Slim::Utils::Timers` and `SimpleAsyncHTTP`: the 300 s
+          first-poll timer fired on its own at 12:30:33, the 60 s debounce
+          fired twice to the second, and four real HTTP syncs completed. The
+          stub-only gap this item names is closed for the paths exercised.
+
+- [ ] **2026-09-19: prove the `discogsMaxTier` removal on a real prefs file.**
+      Check 1 could not, because this server's `squeezewax.prefs` never had the
+      key (it predates the pref). Stop LMS, put `discogsMaxTier: 2` and
+      `_ts_discogsMaxTier: 1` and `_version: 0` into a copy of the file, start,
+      and confirm both keys are gone and `_version` is 1. Read but not observed:
+      `Namespace.pm:355-377`, `Base.pm:242-258`.
+- [ ] **2026-09-19: the pre-step-4 rows with a NULL `source_timestamp` are
+      re-examined once, and a `confirmed` one is demoted to `candidate`.**
+      Observed after `Amorph` was removed from the local folder: two old
+      "Isolar" rows (`state = 'confirmed'`, NULL `source_timestamp`) became
+      current again, were examined, and came out `candidate` with a timestamp
+      and `snapshot_artist`. This is §15.3's accepted consequence, recorded
+      because it is the first time it was seen on real rows.
+- [x] **2026-09-19: `unrelinked orphans` is the absolute count, not a per-scan
+      figure.** It is 3 on the reference server after the test data was removed,
+      all three identified by recomputing every current `album_key` from
+      `library.db` and diffing against `discogs_match` (481 rows, 764 current
+      albums): the manual row for Isolar (release 888888, 18 tracks) and the
+      strict row for "Isolar: Unidentified Explorers" (999999, 12 tracks) —
+      both taken when the local `Amorph` folder joined the NAS copy — and the
+      strict row for "ZZ SqueezeWax Test v2" (77777, 12 tracks, album 3633 no
+      longer exists) — its local folder was deleted. All three are pre-existing
+      rows from 6–7 Sep with fake release ids, not check 6's row; check 6's
+      three rows were deleted with the other test data. Nothing sweeps orphans
+      in v1 (§2a invariant 4); make sure the step 8 review queue shows them
+      rather than growing them silently.
+      → 2026-09-24: the pass marks orphans, manual included, and the queue
+      page lists them (decisions §15.16 part 5). Ticked in commit C1.
+      Hardware check 5 rejects the three test rows.
+- [ ] **2026-09-19: test albums for future hardware checks.** The local
+      `Music/` folder is now empty. A repeatable setup is documented by
+      what worked here: copy albums off the read-only NAS with `cp`, retag the
+      album title with mutagen so LMS does not join them to the originals, keep
+      the release-id tag, and rescan with the JSON-RPC `rescan` command (the
+      changes-rescan; `rescan album|track` runs in-process and skips our
+      importer, `Commands.pm:2676-2790`). `scanner.log` is rewritten per scan.
+
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 3.** "After the first scan
+      on commit 5, count rows with a non-NULL `snapshot_track_count` and a
+      NULL `snapshot_artist`: expect zero among rows whose album is current."
+      **Done 2026-09-19 on 0.0.0.2 (package-build 835920a).** First scan on the
+      new code, changes-rescan: BEFORE 481 rows with a snapshot and 0 with
+      `snapshot_artist`; AFTER 479 with it, `backfilled 479`, `unrelinked
+      orphans 2` (479 + 2 = 481). The two without are stale "Isolar" rows whose
+      album grew from 9/6 to 18/12 tracks when the NAS copy joined the local one
+      (inferred at the time from the track counts and the newer rows; later observed:
+      when the local `Amorph` folder was removed, those two keys became current
+      again and were re-examined). Every
+      other column of all 481 rows was identical to the pre-scan copy. 44 rows
+      hold non-ASCII artists, stored as single-encoded UTF-8 bytes.
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 4.** "Move one tagged
+      album's folder, rescan: its row is relinked (new `album_key`, same
+      release id), no `discogs_no_match` row appears for it, and the summary
+      counts one relink."
+      **Done 2026-09-19.** Folder renamed with `mv` (mtime unchanged), changes-
+      rescan: `examined 0, … relinked 1, unrelinked orphans 2`. Same release id,
+      tier, state, `matched_at`, `source_timestamp` and snapshot; new
+      `album_key` and `lms_album_id`. Row counts (`discogs_match` / `discogs_no_match`)
+      were 483 / 101 immediately before this scan (copy taken right after the
+      scan that first identified the two test albums) and 483 / 101 after, so no
+      row was added and no `discogs_no_match` row appeared. The 481 → 483 seen
+      since check 3 came from two earlier scans: the untagged test album (+1
+      `discogs_no_match`, 100 → 101, `no tag 1`), then the tagged test albums
+      first matched (+2 `discogs_match`, 481 → 483, `identified 2`).
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 5.** "The same with a
+      **manual** row. None exist until step 8, so insert one with `sqlite3`
+      on a copy of `squeezewax.db`." Plan §6 check 7 asks for checks 4 and 5
+      repeated with a non-ASCII artist name; do that at the same time, since
+      the byte-level comparison is only proven offline.
+      **Done 2026-09-19, checks 5 and 7 both.** A row hand-set to `manual`
+      (ASCII artist) and one with a non-ASCII artist (`Blüchel & Von Deylen`,
+      bytes `42 C3 BC 63…` identical before and after) were relinked in one scan:
+      `relinked 2`, both still `manual`. The non-ASCII artist also relinked as
+      `strict` (check 7 part 1). The db edit needed
+      `sudo -u squeezeboxserver sqlite3` because `squeezewax.db` is owned by the
+      server user. The test rows were deleted afterwards.
+- [x] **2026-09-19: step 4 commit 5, plan §6 check 6.** "Copy one album folder
+      so that two new albums fit a single orphan: neither is relinked, and the
+      summary counts it unresolved."
+      **Done 2026-09-19.** `mv` plus `cp -a` gave two separate LMS albums (no
+      DISC tag, so the same-folder rule in `Slim/Schema.pm` keeps them apart):
+      `relinked 0, unrelinked orphans 3` (baseline 2). The original row was
+      untouched. Note the two new albums each got fresh rows from their tags in
+      the same scan, so the orphan stays an orphan.
+- [x] **2026-09-19: time the pre-pass on the reference library, and time the
+      FIRST post-upgrade scan specifically.** It adds a second full walk over
+      `tracks` before the main loop. The first scan after this ships is the
+      expensive one: every row identified before step 4 has a NULL
+      `snapshot_artist`, so that scan backfills all of them — hundreds or
+      thousands of UPDATEs, not a handful. Later scans backfill nothing.
+      **The pre-pass cannot be aborted.** VERIFIED by reading, not observed:
+      `$progress->update` is the entire abort mechanism in the scanner — it
+      reaches `Slim::Utils::SQLiteHelper::updateProgress`, which POSTs to the
+      server and calls `exit` when the answer matches `/abort/`
+      (`Slim/Utils/SQLiteHelper.pm:443-458`, called from
+      `Slim/Utils/Progress.pm:244`) — and the pre-pass makes no such call.
+      Deliberately not worked around with synthetic `update` calls. If the
+      measurement comes back long, that is its own decision.
+      **Measured 2026-09-19:** the whole importer took 0.093 s on the first
+      scan (765 albums, 8,693 file tracks, 479 UPDATEs); 0.08 s on every later
+      scan. The scan's ~4 minutes were ContributorPictureScan (199 s), not ours.
+      The "cannot be aborted" property is real but costs nothing at this size.
+      Re-measure only if the library grows by an order of magnitude.
+- [x] **2026-09-19: step 4 commit 4 — a rescan of a healthy library shows no
+      "check the configured tag names" warning, and the summary reads
+      "identified N".** Plan §6 check 2. The warning's condition is now
+      `$count{identified} == 0 && !hasAnyStrictMatch`, and
+      `hasAnyStrictMatch` no longer reads `state`. Offline coverage proves
+      the predicate; only a real library proves the warning stays quiet.
+      **Done 2026-09-19.** The first scan (`examined 0`) could not exercise the
+      warning, so a proper case was built: one untagged album added to a library
+      with strict matches gave `examined 1, identified 0, no tag 1` logged at
+      INFO with no "check the configured tag names" line, which is the case the
+      old `state = 'confirmed'` predicate would have warned on. Summary reads
+      "identified N" throughout.
+- [ ] **2026-09-13: the pages 2–3 measurement is now also the revisit trigger
+      for two decisions.** Already recorded above as its own item; noting the
+      dependants so they are not missed. Decisions §14.4 (no recovery path for
+      a wrong version badge) rests on zero wrong badges measured at L2 on page
+      1, and §13.10.6's generic-title hazard is the shape that would falsify
+      it. Any wrong badge on pages 2–3 reopens §14.4.
+- [ ] **2026-09-13: confirm the badge's single-state rendering after the
+      hardware pass.** Decisions §14.5 chose one badge on the reasoning that
+      version ownership is the common case. If the hardware pass shows exact
+      ownership is the common case instead, the trade-off inverts. Data
+      supports either (§13.8); no schema consequence.
+- [ ] **2026-09-13: observe a complete collection sync end to end.** Design
+      §13's budget says a 203-item collection is 3 requests. The per-page
+      mechanics are VERIFIED (decisions §9.4) and `ceil(203 / 100) = 3` is
+      ARITHMETIC — but a full three-request sync has NOT been run; the
+      title-agreement measurement worked from page 1 only. Design is worded
+      as the arithmetic it is rather than as "measured 3". The pages 2–3
+      measurement will produce a full sync anyway; record the observed count
+      when it does.
+- [ ] 2026-09-12: measure collection pages 2 and 3. Page 1 is 100 of 203
+      items, sorted by label, not a random sample. Decisions 13.10.6 carries
+      the Various / Various Artists vocabulary risk as UNRESOLVED, not
+      absent: it measured zero on page 1 only because no compilation matched
+      there, and there are 95 LMS compilations. Pages 2-3 could move the
+      auto-badge rate materially. Needs a token and a live sync.
+      2026-09-15, SCOPE ADDED — decisions §15.7 gates compilation
+      auto-badging on this measurement. Four questions it must answer, all
+      answerable from the same fixture plus pages 2 and 3, at no extra
+      request cost:
+      (i)   how many LMS albums match a collection entry at L2 with artist
+            agreement reached only through the `Various` equivalence —
+            counted separately from `compilation = 1`, which §11.3(c)
+            measured as unreliable (corrected 2026-09-19, §15.11). Page 1
+            measured ZERO compilations matching, so §15.7's premise that most
+            matched compilations would queue is a projection;
+      (ii)  whether any two collection entries, or a collection entry and a
+            DIFFERENT LMS album, share a normalised compilation title —
+            this is the wrong-badge exposure §15.7 accepts;
+      (iii) for each matched compilation, whether `albums.year` equals the
+            Discogs `basic_information.year` — is year usable as a
+            confirmation test at all (Q9);
+      (iv)  whether `albums.label` is populated on the reference server, and
+            whether the files carry a LABEL or ORGANIZATION tag. VERIFIED in
+            slimserver `a670a38c2b14` that nothing in 9.1 writes the column;
+            (iv) checks that empirically and asks what a file read would
+            cost to get it (Q9).
+      (v)   Count the albums that actually reach the title route (node H): no
+            identification, or a strict identification not resolved at node D
+            or F. The gate governs only those; (i)-(ii) over every album
+            measure the title route, not the gate (decisions §15.14
+            correction, 2026-09-22). Needs a copy of squeezewax.db beside
+            library.db.
+      Add no rule mid-run: report the numbers, decide afterwards. That is
+      the same trap warning this measurement's first run honoured over the
+      `Various` equivalence itself.
+- [ ] **2026-09-11: measure how many of the ~~764~~ — corrected 2026-09-12:
+      765 — reference albums have any local track with secs IS NULL.** Feeds
+      the review-queue sizing item below; the §12.2 rule is correct at any
+      frequency, only its cost varies.
+- [x] **LMS multi-disc grouping, verified 2026-09-07.** LMS GROUPS
+      multi-disc sets into one `albums` row. Verified three ways: (a)
+      whole-set track counts — "Die 100 besten Ostsongs" `discc=6` with
+      100 tracks in one row, DMBX4 `discc=6` with 52; (b) no title appears
+      once per disc — the only duplicated titlesorts at `discc>=2` are
+      *Delta Machine* and *Singles 86>98*, both "2,2", i.e. two complete
+      copies, not two halves; (c) `albums.disc` always equals
+      `albums.discc` where non-null (1/1, 2/2, 3/3, 6/6). **TRAP:
+      `albums.disc` is NOT a disc index on a grouped album — it equals the
+      disc COUNT.** A filter reading `disc=2` as "the second disc" would
+      silently drop albums. `tracks.disc` exists and is indexed
+      (`trackDiscIndex`), so per-disc structure is reconstructible from
+      track rows if step 5 wants to report which disc mismatched — not
+      needed for matching. Incompletely-ripped sets already exist in the
+      library (*Akasha*: `discc=2`, 7 tracks; *Fourteen Pieces*: `discc=2`,
+      14 tracks) and correctly fail count equality, falling to the review
+      queue — design §3 walkthrough 3, arriving from real data.
+      `albums.extid` carries the online-library URI (Spotify) and is empty
+      for local albums — observed for Spotty only, 2 samples; the
+      `local_tracks == 0` guard remains the primary mechanism.
+- [x] **Discogs API, second hardware-testing session, 2026-09-07.**
+      `type=master` search results do not carry `main_release` (moot —
+      masters carry their own tracklist). Master tracklists sometimes lack
+      durations entirely and fetching the release does not recover what
+      the master lacks (see the tracklist-parsing item above). Artist +
+      title search on `type=master` returns multiple wrong masters (7 for
+      Depeche Mode / Violator, 1 correct) — not sufficient identification
+      on its own, hence the track-shape fingerprint. Dropping `artist=`
+      returns unrelated artists. Search results carry `community.have`/
+      `community.want` (free ranking signal) and `user_data.in_collection`/
+      `in_wantlist` per token holder (confirmed true on master 18080,
+      which the user owns a pressing of — independent confirmation that
+      master-level ownership is Discogs-native, but undocumented and a
+      cross-check only). See the settled step-4 design above for how these
+      feed the candidate-enumeration flow.
+- [x] **Discogs API, hardware-tested with a personal access token,
+      2026-09-07.** Authentication, the rate-limit header, the collection
+      listing path, and collection sync cost are now recorded in
+      `squeezewax-v1-decisions.md` §9 (§9.1, §9.2, §9.7) — this entry kept
+      only for what isn't there: `stats.user.in_collection`/`in_wantlist`
+      on `/masters/{id}/versions` is per-token-holder (null
+      unauthenticated, 0/1 authenticated) — kept, not orphaned: it is the
+      fallback ownership mechanism if the collection sync proves
+      unworkable, and it independently confirms master-level ownership is
+      Discogs-native. See the derived-owned-label open question above. See
+      "Next —
+      build-order steps 3–5" above for the two falsified claims and the
+      master_id-sentinel finding from the same session.
+- [ ] **2026-09-07, still unverified: unauthenticated rate tier.** Is the
+      header actually 25/min? Documented, not confirmed by header.
+- [ ] **2026-09-07, still unverified: do unauthenticated search results
+      differ in content?** Docs say image URLs are withheld.
+- [ ] **2026-09-07, still unverified: collection pages 2–3 unchecked for
+      `master_id` population.** Only page 1 of the 203-item sample was
+      checked.
+- [x] **2026-09-07, ANSWERED: does LMS ever group local and streaming
+      copies of one album under a single `albums.id`?** No. Verified —
+      *Delta Machine* and *Singles 86>98* each exist as two rows, one
+      all-local (`flc`) and one all-remote (`spt`), with `albums.extid`
+      carrying the Spotify URI on the remote row. No mixed album exists.
 - [ ] **Failed `<importmodule>` load visibility.** Does LMS surface the
       failed-to-load module as a persistent error state on the Plugins page?
       Does that state clear on its own once the module exists (next scan or
@@ -248,15 +2943,317 @@ Shared reminder list. Both I and Claude Code read and update this.
       have been dropped there. Scanner-fails-safely-on-missing-database check
       unreachable on real server (server recreates during startup); marked as
       untested-on-hardware, covered by offline suite.
+- [ ] **2026-09-12, HIGHEST VALUE MEASUREMENT: how often do LMS album titles
+      and Discogs `basic_information.title` agree well enough to match?**
+      Title-led matching against the collection is §13's entire foundation
+      and this has never been measured. §8 measured title normalisation
+      against SEARCH RESULTS, not against a collection. If real agreement is
+      60%, the design still works but the review queue is far larger than
+      anyone is picturing. Measurable now: `collection-page1.json` is
+      captured and the ~~764~~ — corrected 2026-09-12: 765 — album reference
+      library is on hand. Do this BEFORE the build order is rewritten.
+      Recorded as §13.9's largest unmeasured assumption.
+- [ ] **2026-09-12: what proportion of the ~~764~~ — corrected 2026-09-12:
+      765 — reference albums match the collection at all?** Every cost
+      estimate in §13.5 and §13.6 rests on "a few hundred", which is the
+      collection's size, not the measured overlap.
+- [ ] **2026-09-12: confirm that a full rescan cannot recover a
+      newly-bought record's badge (§13.6).** Inferred from `_canSkip` and
+      `source_timestamp`'s definition, both read, but never observed. If
+      false, §13.6's reasoning needs revisiting — though the separate
+      ownership pass is right either way.
+- [ ] **2026-09-12: confirm that `https://www.discogs.com/release/{id}`
+      resolves without a title slug (§13.9).** The context-menu link is
+      constructed from the stored id because `basic_information` carries
+      only `resource_url` (`api.discogs.com`), which is not the web page
+      §9.6's attribution requirement names. `Tags.pm` documents
+      `/release/<id>` as canonical and accepts it, but `Tags.pm`'s own
+      header records that discogs.com returns 403 to automated fetches, so
+      it was never confirmed against the live site. One browser click
+      settles it.
+- [ ] **2026-09-15, NEEDS A REAL SERVER: node F's reach.** Custom tags are not
+      in `library.db` (decisions §3), so count from files: albums with a clean
+      release tag AND a master key (`Tags.pm` `@MASTER_KEYS`) AND release id
+      not in the collection AND master in the collection; of those, how many
+      node H would NOT badge. Decisions §15.1's revisit trigger.
+- [ ] **2026-09-15, NEEDS A REAL SERVER: abort a scan mid-run** and confirm a
+      second `['rescan','done']` arrives after the scanner exits, and that a
+      pending ownership pass then completes. Decisions §15.2 obligation 1
+      rests on this; inferred from `_notifyFromScanner`'s `exit` branch,
+      not observed.
+- [ ] **2026-09-19, NEEDS A REAL SERVER: step 4 commit 2's pref migration.**
+      After upgrading, `squeezewax.prefs` no longer carries `discogsMaxTier`
+      and `_version` is 1; the settings page has no tier selector. Plan §6
+      check 1.
+      **PARTIAL 2026-09-19, left open.** Proven: `_version` went 0 to 1 (BEFORE
+      copy `_version: 0`, live file after the 0.0.0.2 install `_version: 1`),
+      and the settings page (`GET /plugins/SqueezeWax/settings.html`) has no
+      tier selector (0 matches for "tier"; token and tag-name fields render).
+      NOT PROVEN: that the migration removes `discogsMaxTier` and
+      `_ts_discogsMaxTier` — the live prefs file never contained either key, so
+      the removal code did not run on anything. Closed by the separate item
+      "prove the `discogsMaxTier` removal on a real prefs file" above.
 
 ## Waiting — external
 
+- [ ] **2026-10-13: two more questions for Help Center Request #1281019 (or a
+      follow-up)** (§15.36). (a) Plain-text attribution on players (§15.31
+      ruling 10): is "Data provided by Discogs" plus the address as text
+      enough where a link cannot be offered? (b) `curr_abbr` is ignored on
+      `/releases` and `/masters`: intended? The owner sends.
+
+- [ ] **2026-10-12: add the players' notice question to Help Center Request
+      #1281019** (decisions §15.31 ruling 10). On a player the step 10 submenus
+      show "Data provided by Discogs" and the page address as plain text, because
+      a player cannot open a link. Ask whether that meets the TOU's hyperlink
+      requirement. Also worth asking there (Phase 0, T1b): whether `/releases`
+      and `/masters` ignoring `curr_abbr` is intended.
+- [ ] **Waiting: Discogs Help Center Request #1281019, filed 2026-10-12.**
+      Revisit §15.29 part 3 when answered.
+
+- [x] **2026-09-08: collection-page fixture not captured.** Six of the plan's
+      seven §4 fixtures are in `scripts/fixtures/` (step 4 item 3 commits);
+      the seventh — a page of a real collection, needed to re-verify the
+      `master_id: 0` sentinel and the two-masterless-rows collision — needs a
+      real Discogs personal access token for an account with a collection to
+      page. None was available in the session that ran
+      `scripts/fetch-fixtures.pl` (`$DISCOGS_TOKEN` unset). Run
+      `scripts/fetch-fixtures.pl <token>` (or set `$DISCOGS_TOKEN`) once one
+      is available; it skips fixtures that already exist, so it's safe to
+      re-run. Not blocking build-order items 4-5 (out of scope this session
+      regardless) but should land before Structural's comparison code is
+      tested against it.
+      ANSWERED 2026-09-11: the fixture exists — scripts/fixtures/
+      collection-page1.json. This item was stale twice: the "six of seven"
+      count predates the three 2026-09-10 fixtures, and the token blocker is
+      resolved. Release 9701013 observed inside it carrying master_id: 0 and
+      master_url: null, the §8 sentinel. NOT confirmed: the plan §4 table's
+      claim of TWO masterless rows — one was observed.
 - [ ] **Lyrion forum question** about plugin-owned attached databases. Drafted;
       not posted. Not blocking — an own-file layout cannot collide with anything
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
 
+- [x] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
+      **and any Discogs logo use** against the Application Name and Description
+      Policy (§15.29).
+      → Checked 2026-10-12, no change needed; findings in the build report
+      (name, no Discogs mark; the only images are `owned.svg`/`owned_svg.png`, a
+      generic four-stroke glyph).
+- [x] **2026-10-12: `strings.txt` `PLUGIN_SQUEEZEWAX_SYNC_DESC` is inaccurate.** It says
+      nothing about the collection is stored, but the last-sync time and item
+      count are stored in `discogs_sync_state`. Make it accurate.
+      → `1c1f6fe`.
+- [x] **2026-10-12: `strings.txt` `TOKEN_DESC` and `QUEUE_TOKEN_PAUSED` still say
+      "owned badge" / "badged".** No badge exists (§15.25).
+      → `1c1f6fe`; `QUEUE_BADGE_LATER` too.
+- [x] **2026-10-12, optional: `ATTRIBUTION_NOTAFFILIATED` uses straight quotes;**
+      Discogs' own text uses curly ones.
+      → Won't do, `settings-check.pl` asserts the text; same words.
+- [x] **2026-10-12: audit every delete path for `discogs_match`;** confirm the README's
+      "no expiry" statement.
+      → `1c1f6fe`: no expiry; token change and uninstall delete nothing. README
+      reworded.
+- [x] **2026-10-12: audit `use` lines for Perl modules outside core LMS;** confirm the
+      README's "no add-ons required".
+      → `1c1f6fe`: all shipped by LMS or core Perl; HTTPS (`IO::Socket::SSL`) is
+      bundled for macOS only and README now says so.
+- [ ] **2026-10-12, needs a real server: install via Additional Repositories end
+      to end,** and whether LMS needs a restart.
+
+- [ ] **2026-09-24: `Plugin.pm:90-97` is a comment about the removed interval
+      pref's floor and `intlimit`, with no code under it.** The pref hash closes
+      above it and the next code is `DEBOUNCE_AFTER_RESCAN`. Delete the eight
+      lines. Found by the step 8 survey; verified by Phase 0.
+- [ ] **2026-09-24, minor: `SqueezeWax/Settings.pm:47` cites
+      `Slim/Web/Settings.pm:135-176`.** The base handler's save loop runs to
+      `:182` (Phase 0, step 8). Correct the citation.
+
+- [ ] **2026-09-19: `decisions §9.4` / `design §9` state a documented default
+      for the collection listing that the documentation does not state.** Both
+      say the endpoint "defaults to `sort=label&sort_order=asc`". The API
+      documentation states no default for this endpoint at all — the figure is
+      an observation from this repo's own fixture,
+      `scripts/fixtures/collection-page1.json`, whose `pagination.urls.next`
+      carries those two parameters. The hazard §9.4 draws from it is real and
+      unaffected; the provenance is what is wrong, and a decision record that
+      presents an observation as documentation is the kind of thing a later
+      session will build on. Design-chat's to fix, not Claude Code's.
+      Read 2026-09-19 from the Wayback snapshot `20251226151912` of
+      `discogs.com/developers` (the live page is behind a Cloudflare
+      interstitial and returns 403 to any non-browser client).
+- [ ] **2026-09-19: the Discogs collection-listing pagination read, recorded so
+      it is not re-derived.** Same source as above, section "Collection Items
+      By Folder".
+      - `page` and `per_page` confirmed, "up to 100" confirmed as the
+        documented maximum. This is what `ceil(items/100)` rests on.
+      - Valid `sort` keys, complete: `label`, `artist`, `title`, `catno`,
+        `format`, `rating`, `added`, `year`. `sort_order` is `asc` or `desc`.
+      - **There is no id-based sort key** — neither `id` nor `instance_id` is
+        offered — so no sort Discogs provides is guaranteed unique, and §9.4's
+        "pin an explicit stable sort" cannot be satisfied outright. Decided:
+        pin `sort=added&sort_order=asc`. Every other key but `rating` is
+        release metadata any contributor can edit mid-sync and `rating` is
+        user-mutable, while the time an instance entered a collection is not
+        editable at all. Residual risk, documented rather than dropped: a bulk
+        add gives many instances the same timestamp and ties may reorder
+        between requests. Near-theoretical for step 5, which reports only a
+        count; load-bearing for step 7, which consumes the rows.
+      - Nothing is documented about pagination stability or snapshot
+        consistency. There is no cursor.
+- [ ] **2026-09-19: `discogsSyncInterval`'s 86400s (24h) default is a product
+      call, not a sourced figure.** Made in step 5's plan; no prior decision
+      sets one, and nothing measured it. The 3600s floor on the field is
+      likewise a judgement call, as are `DELAY_FIRST_SYNC` (300) and
+      `DEBOUNCE_AFTER_RESCAN` (60) in `Plugin.pm`. Recorded so a later reader
+      does not mistake any of the four for measured or specified.
+- [ ] **2026-09-19: a shared `['rescan','done']` debounce helper, if a third
+      caller ever appears.** Step 5 built one in `Plugin.pm` (`_scheduleSync`,
+      kill-then-arm). The `lms_album_id` refresh hook found in build-order
+      step 2 still needs its own `['rescan','done']` subscription and is still
+      unbuilt; when it lands, the two debounces could be one helper. Flagged as
+      scope creep and deliberately not done in step 5 — two callers is not yet
+      a pattern.
+
+- [ ] **2026-09-13: grep design for definite references to a resolved
+      pressing.** Two findings this session — the token-revocation
+      degradation path and the empty `version` context menu — have the same
+      shape: decisions §13 removed a guarantee and the places relying on it
+      went on reading as though it held. A survey hunting CONTRADICTIONS
+      cannot find these, because nothing contradicts anything; a promise
+      simply became unreachable. If a third exists it is somewhere design
+      says "the release" or "the pressing" without asking whether one is
+      known. Check each against the version case. Cheap, and it is the one
+      defect class the reconciliation's method is structurally bad at
+      catching.
+- [ ] **2026-09-13: four stale passages left unswept by the reconciliation,
+      because the survey did not flag them.** Recorded rather than fixed, to
+      keep List 2 binding — rewriting unflagged prose because it reads oddly
+      beside rewritten prose is the drift that list prevents. Listed in the
+      order I would fix them:
+      (AC) design §9's Authentication bullet — "required for
+           Collection/Wantlist features" understates the dependency: under
+           collection-first there are no badges at all without a token, not
+           a reduced feature set. MATERIALLY MISLEADING, one line, the
+           strongest candidate.
+      (Z)  design §3's closing Constraints block — references "the tier
+           system" (removed, decisions §13.8) and says large-library scans
+           "must be batched/throttled" (matching now issues no requests at
+           all, decisions §13.1). Wrong twice over.
+      (AB) design §4's artist-level badge — "off by default to avoid the
+           extra API calls". There are none, and the reason is stronger than
+           first recorded: artist ownership is a LOCAL JOIN over the already
+           written ownership column, not a cheap API call. No Discogs request
+           of any kind is involved. The default may still be right for other
+           reasons — a per-artist badge is visual noise some users will not
+           want — but the stated justification is simply false.
+      (AD) design §9's Badge section lists wantlist settings among v1
+           settings without the v2 scoping design §4 now carries.
+- [ ] **2026-09-13: which SQLite version ships in the DBD::SQLite under
+      `refs/`?** UNVERIFIED — not checked. It did not change the §14.1
+      decision, since the CHECK forces a table rebuild whatever `ALTER COLUMN`
+      supports, but it will matter the next time a schema change looks cheap.
+      One grep by Claude Code.
+- [ ] **2026-09-13: `sqlite.org/lang_altertable.html`'s prose and its syntax
+      diagram disagree.** The diagram shows `ADD CONSTRAINT <name> CHECK
+      (expr)` and `DROP CONSTRAINT <name>`; the prose never mentions either and
+      that page's §8 list of supported changes omits both. The diagram looks
+      newer than the text. Recorded because a future reader hitting the diagram
+      will conclude a CHECK can be altered in place. It could not have helped
+      §14.1 regardless: our CHECK is inline and unnamed, so there is nothing to
+      `DROP CONSTRAINT`, and CHECKs combine conjunctively so adding one narrows
+      rather than widens.
+- [ ] 2026-09-12: decisions §13 and §13.10 were written into
+      docs/squeezewax-v1-decisions.md, which working-agreement §2 defines as
+      reasoning and evidence rather than live spec. The spec change went into
+      the reasoning file, across several sessions, and nothing caught it until
+      the design doc was surveyed. Recorded so the pattern is visible: a
+      decision that changes WHAT the plugin does belongs in design, with
+      decisions carrying WHY. Worth a line in working-agreement §7.4, which
+      currently lists decision records as a design-chat output without saying
+      that a scope change also needs a design edit.
+- [ ] 2026-09-12: two defects in docs/squeezewax-design.md found during the §13
+      marker survey, outside §13's scope and not fixed. §10 cites "roughly 20
+      requests (§4)" — wrong figure, and §4 is the Badge section, not a
+      request-budget section. §11 says "OAuth + Collection sync", contradicted
+      by decisions §9.1. Both predate decisions §13. Sweep them up during the
+      reconciliation rather than separately.
+- [ ] **2026-09-12: bare §N references are ambiguous across design, decisions
+      and the plans.** Convention recorded in working-agreement §2 as of this
+      commit; the two known collisions (§12, §13) are fixed. Older bare
+      references elsewhere are NOT swept — fix them when touched, not in a
+      sweep, since a sweep would rewrite text nobody is reading.
+- [ ] **2026-09-11: tmp/ is where prompts and hand-off markdown are served to
+      Claude Code, and it is git-ignored.** Recorded in CLAUDE.md as of this
+      commit. Same class of undocumented convention as the plans/ filename
+      item above. Consequence worth keeping: anything durable that starts life
+      in tmp/ must reach a tracked file in the same session, or it exists only
+      in an ignored directory and a chat.
+- [ ] **2026-09-10: refs/ citation drift — decisions §§1-10 cite commit
+      `50e5b725`, §11 cites `a670a38c` (`public/9.1`, 2026-06-19).** Nothing
+      contradicted; recorded per working-agreement §6. Worth one pass to
+      confirm the earlier citations still hold at the newer commit before
+      step 5.
+- [ ] **2026-09-10: `Slim::Schema->variousArtistsObject` is NOT
+      side-effect-free — never call it from plugin code.** It creates a
+      contributor row when no `namesearch` matches (`Slim/Schema.pm:
+      2096-2100`) and renames an existing one when the stored name no
+      longer matches the resolved string (`:2105-2111`). The read-only
+      alternative is in decisions §11.3(d).
+- [ ] **2026-09-10: `_pluginVersion`'s scanner-vs-server branch is
+      untestable within a single test process, by design of how
+      `main::SCANNER` works — recorded so it isn't rediscovered.**
+      `Plugins::SqueezeWax::API::_pluginVersion` asks
+      `Slim::Utils::PluginManager->dataForPlugin` for a different module
+      name depending on `main::SCANNER` (the scanner never loads
+      `Plugin.pm`, so its entry is keyed by `Importer` instead — see
+      `SqueezeWax/API.pm`'s own comment on `_pluginVersion`). Tried
+      reassigning `*main::SCANNER` mid-file in `scripts/api-check.pl` to
+      cover both branches; it silently didn't take (Perl printed "Constant
+      subroutine main::SCANNER redefined" and the User-Agent kept the
+      first value) because `main::SCANNER` is a `()`-prototyped stub, the
+      same shape `use constant` produces, and gets constant-folded into
+      `API.pm` at compile time — the identical mechanism CLAUDE.md
+      documents for why `Match.pm`'s scanner branch of `_writeRefusal`
+      needed pulling out as a pure function in the first place. One test
+      process fixes `main::SCANNER` for its whole life. The approach that
+      works, when this needs covering: a second script, compiled with
+      `main::SCANNER` predefined `=> 1`, the same way
+      `scripts/syntax-check.sh` already runs every module in both `scanner`
+      and `server` mode via two separate `perl -e` invocations rather than
+      one process. Not blocking — `_pluginVersion`'s module selection is a
+      single ternary, not decision-shaped the way `_writeRefusal` is, and
+      wasn't in step 4 §4's minimum coverage list — but the next thing that
+      needs both branches covered shouldn't have to re-derive this.
+- [x] **2026-09-07: `plans/` filenames are inconsistent.** Steps 2 and 3
+      use invented verb-adjective-noun names
+      (`build-order-step-2-read-effervescent-squirrel.md`,
+      `build-order-step-3-tag-jolly-minsky.md`); step 4 uses a descriptive
+      one (`build-order-step-4-structural-matching.md`). Descriptive is the
+      convention going forward. Renaming 2 and 3 requires a `grep -rn`
+      reference sweep across `docs/`, `plans/`, `CLAUDE.md` and `TODO.md`;
+      cosmetic, optional, not blocking. — 2026-09-19: steps 2 and 3 renamed to
+      build-order-step-2-importer-schema.md and
+      build-order-step-3-strict-identification.md. Step 4's stale
+      structural-matching plan keeps its name: it is cited 20 times,
+      including by decision records.
+- [x] **2026-09-07: fold `docs/squeezewax-design.md`'s inline
+      strikethrough-and-correction blocks into clean prose — WITHDRAWN
+      2026-09-07.** Measured: §3 carries 9 superseded lines of 160, and
+      the file has 11 correction blocks total. The premise was an
+      impression, not a measurement. Corrections stay inline by decision
+      — see the correction-labels note at the top of
+      `docs/squeezewax-design.md`. The one genuine readability issue —
+      §3's tiers table packing two falsification blocks into a single
+      cell at line ~167 — is cosmetic and not blocking.
+- [ ] **2026-09-07: this is the third, fourth and fifth instance of a
+      pattern step 3 identified** — a claim derived from one path, or from
+      a documented example, stated as a general property. (The
+      `/database/search` auth claim, the one-request-per-master claim, and
+      the format-exclusion claim, all in "Next — build-order steps 3–5"
+      above.) The specific lesson from this pass: **reading a documented
+      response example is not verification.**
 - [x] **`package-dev-build.sh` writes git history as a side effect.** Done
       2026-09-06: the SqueezeWaxDev/repo-dev.xml arrangement is dropped
       entirely (see decisions §6a, `docs/dev-repo-workflow.md`). Its
@@ -284,9 +3281,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       doesn't (`git log --all -- working-agreement.md` shows no root copy
       was ever committed). Stale; the file exists only at
       `docs/working-agreement.md`.
-- [ ] **`working-agreement.md` §2 names `docs/v1-decisions.md`;** the file is
+- [x] **`working-agreement.md` §2 names `docs/v1-decisions.md`;** the file is
       `docs/squeezewax-v1-decisions.md`. TODO's ticked step-2 line repeats
       the wrong name. Two documents disagreeing is a defect (§2's own rule).
+      Fixed 2026-09-12: both references corrected.
 - [ ] **`discogs_no_match` rows orphaned by an `album_key` change are not
       swept in v1.** Bounded by library churn; the table is regenerable and
       design §9's "clear & rebuild matches" action clears it. Revisit only if
@@ -304,6 +3302,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## Waiting — needs a real server (packaging)
 
+- [x] **The dev LMS's Additional Repositories entry still points at
+      `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. Done
+      2026-09-07: `v1-buildout` cut its first build
+      (`SqueezeWax_0_0_0_1.zip`, commit `8522050`), the entry was moved to
+      `https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/repo.xml`
+      (confirmed live, HTTP 200, and confirmed as the only SqueezeWax entry
+      in the dev LMS's `repos` pref), and `packaging-rewrite` was deleted
+      (local and remote).
 - [x] **Install `SqueezeWax` over the existing `SqueezeWaxDev` on the dev
       server and confirm the transition `docs/dev-repo-workflow.md` §8
       describes.** Done 2026-09-07, on the `packaging-rewrite` branch build.
@@ -327,9 +3333,83 @@ Shared reminder list. Both I and Claude Code read and update this.
       `d5c0d3.github.io/...` `<url>` instead of a raw one, and give
       `SqueezeWax/install.xml`'s `<version>` its first real value instead of
       the placeholder `0.1.0`. See `docs/dev-repo-workflow.md` §2.
+      **Open since §15.36 part 1:** testers use the raw `master` URL; moving to
+      Pages makes them change URL once. Decide at release.
+      Also bump the extension repo URL's `?v=` cache-buster, which still reads
+      `?v=0.0.0.8` on the reference server. GitHub happened to serve 0.0.0.11
+      through it anyway, so it did not bite — but it is now stale and will not
+      bust anything next time. Cheapest at the next package build.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **Clear & rebuild matches (decisions §10): v2** (§15.36 part 6). The
+  manual reset in the README ("Starting over") covers a bad state; the cost
+  accepted is that it loses hand-made matches. Unverified: whether old "no
+  match" records still need clearing in today's code (item 2026-09-24).
+
+- [x] ~~**Remove plugin data on uninstall.**~~ Won't do, 2026-10-12: LMS gives
+  plugins no uninstall hook (decisions §15.30 part 2).
+
+- SPDX license headers in source files: deferred. Adding a line at the top of
+  each file shifts every file:line citation in the docs.
+
+- [ ] **2026-09-15: size of decisions §13.5's all-tags read** (albums both
+      owned and tagged). It now runs server-side in a Scheduler task
+      (decisions §15.2), so its size bounds how long the ownership pass takes.
+      Unmeasured.
+      → 2026-09-24: DEFERRED past step 8, possibly for good (decisions §15.16
+      part 8). v1's queue holds three contents. Revisit trigger: a wrong
+      `exact` badge seen on hardware.
+- [ ] **2026-09-19, STEP 8: decisions §13.5's all-tags read.** Moved out of
+      step 7 by §15.13 part 7: its only product is a queue item. Runs as a
+      Scheduler task (§15.2 obligation 2). Accepted gap until then: an owned,
+      tagged album whose tracks 3..N carry a different release id can badge
+      `exact`. Size still unmeasured (the 2026-09-15 item).
+      → 2026-09-24: DEFERRED past step 8, possibly for good (decisions §15.16
+      part 8). v1's queue holds three contents. Revisit trigger: a wrong
+      `exact` badge seen on hardware.
+
+- **2026-09-20: `invalidateStrict`'s tier scoping is untested in v1.** With
+  `discogs_no_match` narrowed to `CHECK (tier IN ('strict'))` (§15.6), no second
+  tier exists to prove the DELETE's `WHERE tier = 'strict'`. The v1 assertion is
+  "the table is empty afterwards". When v2 widens the CHECK for fuzzy negatives
+  (§15.6 Scope), restore a two-tier assertion: `'strict'` rows deleted, the other
+  tier kept.
+- **2026-09-07: pressing-vs-edition conflation remains in two ILLUSTRATIVE
+  passages of `docs/squeezewax-design.md`, deliberately uncorrected**
+  pending the step-5/6 "what does an edition-level match show" product
+  decision (see "Open design questions" above), since that decision
+  determines the replacement wording rather than another strikethrough:
+  §2 Core Concept item 1 ("inspect details and value of the owned
+  pressing") and §4's badge-derivation walkthrough ("matched to a
+  different pressing that's on the Wantlist"). Both are illustrative. The
+  NORMATIVE instance — §10's badge join — was corrected 2026-09-07, as
+  were §3's Structural table cell, §4's context-menu list and §3's
+  walkthrough 2. §6 Flow 1's "owns one of the listed pressings" is **NOT**
+  an instance: Flow 1 browses real versions, so the release arm of the
+  dual ownership test applies directly. Recorded so it is not "fixed" by
+  mistake.
+- **2026-09-07: monthly CC0 data dumps as an alternative to the API for
+  tracklists — recorded in `squeezewax-v1-decisions.md` §9.8.** v2/v3.
+- **2026-09-07: register `SqueezeWax` at discogs.com/settings/developers;
+  obtain key and secret; commit neither.** DONE 2026-09-07 — see
+  `plans/build-order-step-4-structural-matching.md` §2.2.
+- **2026-09-07: settle the User-Agent string.** RESOLVED 2026-09-07 —
+  see `plans/build-order-step-4-structural-matching.md` §3 item 2.
+- **2026-09-07: token storage — settings-page action items.** Risk
+  described in §9.1 (unscoped bearer credential, plaintext prefs). DONE
+  2026-09-08 (step 4 item 1): `discogsToken` scalar pref, settings-page
+  warning stating the token's real scope plus a revocation link to Discogs
+  Developer Settings, and a "Test token" action. Checked
+  `refs/lms-plugin-tidal/API/Auth.pm:139` — TIDAL keeps its OAuth access
+  token in `Slim::Utils::Cache`, not prefs, but that token is short-lived
+  and refreshed from a refresh_token; a Discogs personal access token is
+  long-lived and user-generated with no refresh flow, so prefs (survives
+  restarts) is the right place, not an oversight to fix. No secure-storage
+  convention found in either reference plugin beyond that — plaintext-with-
+  warning per decisions §9.1 stands.
+- **2026-09-07: `discogs_price_snapshot` vs. Discogs TOU item 5 (v2/v3) —
+  recorded in §9.8.** If built, label snapshots with observation dates.
 - **v3: Discogs artist ID — add the column and the capture together.** Decisions
   §3 originally said to capture it while the file is open, justified as saving a
   later re-read. Migration 1 has no artist column and nothing reads one before
@@ -343,3 +3423,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.
 - Not planned: any write to the Discogs Collection.
+- Future: a field picker for the re-match list (decisions §15.16 part 6). v1
+  shows a fixed set.
+- Future: orphan relink for users with manual links and no tag names
+  (decisions §15.16 part 11).

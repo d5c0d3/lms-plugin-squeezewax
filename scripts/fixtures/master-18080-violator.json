@@ -1,0 +1,204 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 2725,
+         "join" : "",
+         "name" : "Depeche Mode",
+         "resource_url" : "https://api.discogs.com/artists/2725",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/crPqcsdlqMhq94oTHwZCab4tT2obPmERmp5K-dVeTUA/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTI3MjUt/MTc2ODcxMTQwNy0z/MzMwLmpwZWc.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "data_quality" : "Correct",
+   "genres" : [
+      "Electronic"
+   ],
+   "id" : 18080,
+   "images" : [
+      {
+         "height" : 599,
+         "resource_url" : "https://i.discogs.com/DTZx33OqUlUowjvskQDAhExfHXlkaULg9vFSA0iUQys/rs:fit/g:sm/q:90/h:599/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTE2NjYyMDQ3Mzgt/OTUzMC5qcGVn.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/DTZx33OqUlUowjvskQDAhExfHXlkaULg9vFSA0iUQys/rs:fit/g:sm/q:90/h:599/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTE2NjYyMDQ3Mzgt/OTUzMC5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/8zLvWW9tJV7eZU1zCssIoOcWrTVTAcAQq8FP-8cYydo/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTE2NjYyMDQ3Mzgt/OTUzMC5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 585,
+         "resource_url" : "https://i.discogs.com/qu4D3bc0RCQlM7Al5I7Yxwhzm2M0K1yIyjr8qU_oTX8/rs:fit/g:sm/q:90/h:585/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0NzAt/ODMwMy5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/qu4D3bc0RCQlM7Al5I7Yxwhzm2M0K1yIyjr8qU_oTX8/rs:fit/g:sm/q:90/h:585/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0NzAt/ODMwMy5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/Pi22cFymiKuB0ofoWa95vWpRVHC7AbWPI0LUdaa9Xk4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0NzAt/ODMwMy5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 590,
+         "resource_url" : "https://i.discogs.com/B2OtIYG3NzP4k_mK6jkTnc1oHUWjujyDHROXp8M_fRM/rs:fit/g:sm/q:90/h:590/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0NjEt/MjIyMi5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/B2OtIYG3NzP4k_mK6jkTnc1oHUWjujyDHROXp8M_fRM/rs:fit/g:sm/q:90/h:590/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0NjEt/MjIyMi5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/ix9CxoQEe-_MutgtGNeBEV9Q3DaIlES2KCQN_1wa7SY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0NjEt/MjIyMi5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/YHKdv9gikX9d38fOOO9pnmnOWMAMxUAzt38EJAn76CA/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0Njct/ODY4Ny5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/YHKdv9gikX9d38fOOO9pnmnOWMAMxUAzt38EJAn76CA/rs:fit/g:sm/q:90/h:600/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0Njct/ODY4Ny5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/v1hwFl16bzkSLBAcLdJferjRjDURYEP4R0iNooylEYc/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjQwODI0Njct/ODY4Ny5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 592,
+         "resource_url" : "https://i.discogs.com/ufbfbMEy4jjBIU3R0Uias3XYwMVkYLUfGLihrN4MSXo/rs:fit/g:sm/q:90/h:592/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODkt/NDI3Ny5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ufbfbMEy4jjBIU3R0Uias3XYwMVkYLUfGLihrN4MSXo/rs:fit/g:sm/q:90/h:592/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODkt/NDI3Ny5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/4TguZVGyscXk7IDut4mMGDKJZq5AFC58BQzgWmDwZYY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODkt/NDI3Ny5qcGVn.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 591,
+         "resource_url" : "https://i.discogs.com/P9t_9kiKHln5sjYeZ2I0c724DNg5aj4hMVspYCmwiQk/rs:fit/g:sm/q:90/h:591/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODYt/NjIzMC5qcGVn.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/P9t_9kiKHln5sjYeZ2I0c724DNg5aj4hMVspYCmwiQk/rs:fit/g:sm/q:90/h:591/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODYt/NjIzMC5qcGVn.jpeg",
+         "uri150" : "https://i.discogs.com/sTawxPTM6TKRYcutcnYVJwzXQ9bFDvOD_q0xA2UmwAM/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTQ2OTA1/LTEzNjI4NDE0ODYt/NjIzMC5qcGVn.jpeg",
+         "width" : 600
+      }
+   ],
+   "lowest_price" : 1.74,
+   "main_release" : 46905,
+   "main_release_url" : "https://api.discogs.com/releases/46905",
+   "most_recent_release" : 37863888,
+   "most_recent_release_url" : "https://api.discogs.com/releases/37863888",
+   "notes" : "Seventh studio album, released 19 March 1990.\r\nThere are two incidental instrumental tracks on side 2 which are not referenced on the release. The first one, at the end of \"Enjoy The Silence\", is called \"Crucified\" (sometimes referred to as Interlude No. 2) and the second one, at the end of \"Blue Dress\", is referred to as \"Interlude No. 3\"",
+   "num_for_sale" : 1505,
+   "resource_url" : "https://api.discogs.com/masters/18080",
+   "styles" : [
+      "Synth-pop"
+   ],
+   "title" : "Violator",
+   "tracklist" : [
+      {
+         "duration" : "4:27",
+         "position" : "A1",
+         "title" : "World In My Eyes",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:42",
+         "position" : "A2",
+         "title" : "Sweetest Perfection",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:19",
+         "position" : "A3",
+         "title" : "Personal Jesus",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:28",
+         "position" : "A4",
+         "title" : "Halo",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:07",
+         "position" : "A5",
+         "title" : "Waiting For The Night",
+         "type_" : "track"
+      },
+      {
+         "duration" : "6:13",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 9857,
+               "join" : "",
+               "name" : "Daniel Miller",
+               "resource_url" : "https://api.discogs.com/artists/9857",
+               "role" : "Mixed By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 20661,
+               "join" : "",
+               "name" : "Flood",
+               "resource_url" : "https://api.discogs.com/artists/20661",
+               "role" : "Mixed By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "B1",
+         "title" : "Enjoy The Silence",
+         "type_" : "track"
+      },
+      {
+         "duration" : "4:54",
+         "position" : "B2",
+         "title" : "Policy Of Truth",
+         "type_" : "track"
+      },
+      {
+         "duration" : "5:38",
+         "position" : "B3",
+         "title" : "Blue Dress",
+         "type_" : "track"
+      },
+      {
+         "duration" : "5:33",
+         "position" : "B4",
+         "title" : "Clean",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/master/18080-Depeche-Mode-Violator",
+   "versions_url" : "https://api.discogs.com/masters/18080/versions",
+   "videos" : [
+      {
+         "description" : "Depeche Mode's official music video for 'Enjoy The Silence'. Click to listen to Depeche Mode on Spotify: http://smarturl.it/DepMSpotify?IQid=DepMETS\n\nAs featured on Best of Depeche Mode, Vol. 1. Click to buy the track or album via iTunes: http://smarturl.",
+         "duration" : 280,
+         "embed" : true,
+         "title" : "Depeche Mode - Enjoy the Silence (Remastered)",
+         "uri" : "https://www.youtube.com/watch?v=aGSKrC7dGcY"
+      },
+      {
+         "description" : "Music video by Depeche Mode performing World in My Eyes (Official Video). (C) 1990 Venusnote Ltd. under exclusive license to Sony Music Entertainment International Ltd",
+         "duration" : 354,
+         "embed" : true,
+         "title" : "Depeche Mode - World in My Eyes (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=nhZdL4JlnxI"
+      },
+      {
+         "description" : "Depeche Mode - \"Clean\" (Official Video) directed by Anton Corbijn\nOriginal song from the 'Violator' album (Sire/Mute Records - 1990)\nBuy the 12” Singles Box Sets - https://depechemodeboxsets.com\nListen to more Depeche Mode - https://lnk.to/depeche_mode\n\nS",
+         "duration" : 356,
+         "embed" : true,
+         "title" : "Depeche Mode - Clean (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=h1mD-_DKHc0"
+      },
+      {
+         "description" : "Official video for ”Policy of Truth” by Depeche Mode\nListen to Depeche Mode: https://DepecheMode.lnk.to/listenYD\nWatch more videos by Depeche Mode: https://DepecheMode.lnk.to/listenYD/youtube\n \nSubscribe to the official Depeche Mode YouTube channel: https",
+         "duration" : 249,
+         "embed" : true,
+         "title" : "Depeche Mode - Policy of Truth (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=M2VBmHOYpV8"
+      },
+      {
+         "description" : "Music video by Depeche Mode performing Halo (Official Video). (C) 2004 The copyright in this sound recording is owned by Depeche Mode under exclusive licence to Mute Records Ltd",
+         "duration" : 270,
+         "embed" : true,
+         "title" : "Depeche Mode - Halo (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=iEH4eqtK8SU"
+      },
+      {
+         "description" : "Depeche Mode's official live video for 'Personal Jesus (Live On Letterman)'. Click to listen to Depeche Mode on Spotify: http://smarturl.it/DModeSpotify?IQid=JesusL\n\nAs featured on The Best Of Depeche Mode, Vol. 1. Click to buy the track or album via iTun",
+         "duration" : 226,
+         "embed" : true,
+         "title" : "Depeche Mode - Personal Jesus (Official Video)",
+         "uri" : "https://www.youtube.com/watch?v=u1xrNaTO1bI"
+      }
+   ],
+   "year" : 1990
+}

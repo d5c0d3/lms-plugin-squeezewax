@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -)",
+      "Bash(./scripts/check-all.sh)",
+      "Bash(./scripts/package-build.sh --dry-run)",
+      "Bash(./scripts/package-build.sh)",
+      "Bash(git commit *)",
+      "Bash(git commit -m ' *)",
+      "Bash(systemctl is-active *)",
+      "Read(//var/lib/squeezeboxserver/**)",
+      "Read(//var/lib/squeezeboxserver/cache/**)",
+      "Read(//var/lib/squeezeboxserver/Plugins/**)",
+      "Read(//usr/share/squeezeboxserver/**)",
+      "Bash(systemctl list-units *)"
+    ]
+  }
+}

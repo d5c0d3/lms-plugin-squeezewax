@@ -10,6 +10,7 @@ use strict;
 
 use base qw(Slim::Web::Settings);
 
+use Slim::Utils::DateTime;
 use Slim::Utils::Log;
 use Slim::Utils::Prefs;
 use Slim::Utils::Scheduler;
@@ -33,6 +34,23 @@ use constant DETECTION_TIMEOUT => 600;
 # and writing it to disk would outlive the library it describes.
 my %detection;
 
+# The queue page is constructed from here, not from Plugin.pm, so that the two
+# pages are registered together and by the one file that already knows about the
+# web UI. Slim/Plugin/OnlineLibrary/Settings.pm:23 constructs its
+# EditGenreMappings the same way, and Spotty's Settings.pm:24 its Auth page.
+#
+# SUPER::new is still called, so THIS page keeps its settings-menu entry; the
+# queue's own `new` deliberately does not, so it appears only through the link
+# on this page (decisions §15.16 part 1).
+sub new {
+	my $class = shift;
+
+	require Plugins::SqueezeWax::Queue;
+	Plugins::SqueezeWax::Queue->new();
+
+	return $class->SUPER::new(@_);
+}
+
 sub name { Slim::Web::HTTP::CSRF->protectName('PLUGIN_SQUEEZEWAX_NAME') }
 
 sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html') }
@@ -41,7 +59,16 @@ sub page { Slim::Web::HTTP::CSRF->protectURI('plugins/SqueezeWax/settings.html')
 # generic prefs() path only handles scalars; a list pref is edited with indexed
 # form fields assembled by the plugin's own handler, which is how core edits
 # mediadirs (Slim/Web/Settings/Server/Basic.pm:88-121).
-sub prefs { return ($prefs) }
+#
+# discogsToken IS a scalar, so unlike discogsTagNames it goes through this
+# generic path (Slim/Web/Settings.pm:135-176): the base handler saves
+# pref_discogsToken on saveSettings and populates params.prefs.pref_discogsToken
+# for the template, same as core's own password field (HTML/EN/settings/
+# server/security.html).
+#
+# discogsSyncInterval was here until §15.15 part 1 removed the scheduled sync.
+# Nothing replaces it: there is no setting for a thing that no longer happens.
+sub prefs { return ($prefs, qw(discogsToken)) }
 
 sub handler {
 	my ( $class, $client, $params, $callback, @args ) = @_;
@@ -52,8 +79,33 @@ sub handler {
 	# metainformation.isScanning.
 	my $scanning = Slim::Music::Import->stillScanning ? 1 : 0;
 
+	# ORDER MATTERS, and not for a stylistic reason. settings/footer.html:39
+	# puts a HIDDEN saveSettings=1 in the form, beside the visible Save button
+	# at :38, so EVERY submit from this page carries saveSettings whichever
+	# button was clicked. Tested before the named action buttons it swallows
+	# them: the page re-renders having saved, the action never runs, and
+	# nothing is logged, because the action's own code was never reached.
+	#
+	# So every named action is tested first and saveSettings is the fallback -
+	# "no action button was clicked, so this is a plain Save". detectTagNames
+	# was already ahead of it and worked; syncNow and testToken were behind it
+	# and did not (found on the reference server 2026-09-22, both buttons dead
+	# in 0.0.0.3).
 	if ( $params->{detectTagNames} ) {
 		_startDetection($params, $scanning);
+	}
+	elsif ( $params->{syncNow} ) {
+		# Same deferral as _testToken below, for the same reason.
+		return _syncNow( $class, $client, $params, $callback, \@args, $scanning );
+	}
+	elsif ( $params->{testToken} ) {
+		# Async and self-contained: renders the page itself via $callback
+		# once Discogs answers, the same deferral shape
+		# Slim::Plugin::JiveExtras::Settings uses around a settings-page
+		# SimpleAsyncHTTP call (refs/slimserver/Slim/Plugin/JiveExtras/
+		# Settings.pm:83-101,134). Must return here rather than fall through
+		# to the synchronous SUPER::handler call below.
+		return _testToken( $class, $client, $params, $callback, \@args, $scanning );
 	}
 	elsif ( $params->{saveSettings} ) {
 		_saveTagNames($params, $scanning);
@@ -155,6 +207,248 @@ sub _setChanged {
 	}
 
 	return 0;
+}
+
+# The manual "Sync collection now" button - one of §13.7's three triggers, and
+# the only one that has a user watching it. The other two are timers in
+# Plugin.pm, which is where they have to be: they must work on a headless
+# server, and this file is loaded only under main::WEBUI.
+#
+# Everything that decides anything lives in API/Async.pm - including the guard
+# that stops this button and the ['rescan','done'] fallback from starting two
+# overlapping syncs. This sub renders a result; it does not own one.
+sub _syncNow {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	# Refused during a scan, not queued. The sync itself would survive one - it
+	# touches no database at all - but the settings page's own conventions
+	# refuse every action while scanning, and a button that appears to work and
+	# then reports nothing is worse than one that says why it did not.
+	if ($scanning) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_BUSY_SCANNING');
+		return _finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	# The token in the FIELD, exactly as _testToken does (§15.15 part 3).
+	#
+	# This read the stored pref until 2026-09-22, while the shared form saved
+	# the field afterwards in _finishSyncNow - so pasting a token and pressing
+	# this button synced with the OLD token and stored the new one, and the
+	# page gave no hint that it had. Observed on the reference server while
+	# testing a deliberately wrong token: the first press succeeded against the
+	# previous token. Both buttons now mean the same thing by "the token", and
+	# the page says so.
+	my $token = $params->{pref_discogsToken};
+	$token = $prefs->get('discogsToken') unless defined $token && length $token;
+
+	if ( !defined $token || $token eq '' ) {
+		$params->{syncResult} = string('PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN');
+		return _finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	require Plugins::SqueezeWax::API::Async;
+
+	# Saved BEFORE the sync, not after, and the order is the whole point.
+	#
+	# The shared form saves every scalar pref in _finishSyncNow, via
+	# SUPER::handler - which runs from the SYNC'S OWN CALLBACK, so it lands
+	# after the sync has finished. Plugin.pm's setChange on discogsToken clears
+	# the rejection pause, because a new token deserves a new chance (§15.15
+	# parts 2 and 3). Put together, a sync that was rejected set the pause and
+	# the save that followed it immediately wiped it: observed on the reference
+	# server 2026-09-24, where a wrong token was rejected at 14:37:02 and the
+	# next finished scan synced anyway rather than being skipped.
+	#
+	# Writing it here makes the order what it reads as: the token changes, the
+	# pause clears, the sync runs, and a rejection sticks. SUPER::handler's
+	# later write is then a no-op - Slim/Utils/Prefs/Base.pm:94-97 suppresses a
+	# scalar set that does not change the value, onchange included - so the
+	# hook cannot fire twice either.
+	$prefs->set( 'discogsToken', $token );
+
+	Plugins::SqueezeWax::API::Async->sync( $token, sub {
+		my ($result) = @_;
+
+		$params->{syncResult} = _syncResultString($result);
+
+		_finishSyncNow( $class, $client, $params, $callback, $args, $scanning );
+	} );
+
+	return;
+}
+
+# §14.2: a rejected token must read differently from a dropped connection, and
+# both must be distinguishable from "it worked". The error vocabulary is
+# API.pm's classifyResponse plus API/Async.pm's own three.
+sub _syncResultString {
+	my ($result) = @_;
+
+	if ( $result->{ok} ) {
+		$log->info( "collection sync: $result->{items} items in $result->{requests} requests" )
+			if main::INFOLOG && $log->is_info;
+
+		return sprintf( string('PLUGIN_SQUEEZEWAX_SYNC_OK'),
+			$result->{items} // 0, $result->{requests} // 0 );
+	}
+
+	my $error = $result->{error} || 'unknown';
+
+	# error, not warn, and separately from the rest: this one is not going to
+	# fix itself, and every future sync will fail the same way until the user
+	# does something about it.
+	if ( $error eq 'unauthorized' ) {
+		$log->error('collection sync failed: Discogs rejected the token');
+
+		return string('PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED');
+	}
+
+	if ( $error eq 'already_running' ) {
+		return string('PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING');
+	}
+
+	# The three ways step 7 can stop a sync short of writing ownership. Each
+	# reads differently because each calls for something different from the
+	# user: wait, nothing, or look at the log.
+	if ( $error eq 'refused' ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('ownership pass declined - a scan is running');
+
+		return string('PLUGIN_SQUEEZEWAX_SYNC_REFUSED');
+	}
+
+	if ( $error eq 'count_mismatch' || $error eq 'count_unknown' ) {
+		$log->warn("collection sync could not be shown complete: $error");
+
+		return string( $error eq 'count_mismatch'
+			? 'PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH'
+			: 'PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN' );
+	}
+
+	$log->warn("collection sync failed: $error");
+
+	return sprintf( string('PLUGIN_SQUEEZEWAX_SYNC_FAIL'), $error );
+}
+
+sub _finishSyncNow {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	$params->{scanning} = $scanning;
+
+	$callback->( $client, $params, $class->SUPER::handler( $client, $params ), @$args );
+}
+
+# GET /oauth/identity (decisions §9.7's "Token sanity check"). Server-side, so
+# SimpleAsyncHTTP per CLAUDE.md. Request construction and response
+# classification are API.pm's job - it owns no transport of its own - and only
+# the wiring differs between here and API/Async.pm, which does the same thing
+# for the collection sync with retry and rate-limit accounting on top.
+sub _testToken {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	if ($scanning) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_BUSY_SCANNING');
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	if ( !Plugins::SqueezeWax::Schema->isReady ) {
+		$params->{warning} = string('PLUGIN_SQUEEZEWAX_DB_UNUSABLE') . ' '
+			. ( Plugins::SqueezeWax::Schema->lastError || '' );
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	# Test what's currently in the field, even if unsaved - the point of a
+	# "Test token" button is to check before committing to Save.
+	my $token = $params->{pref_discogsToken};
+	$token = $prefs->get('discogsToken') unless defined $token && length $token;
+
+	if ( !defined $token || $token eq '' ) {
+		$params->{tokenTestResult} = string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_MISSING');
+		return _finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+	}
+
+	require Plugins::SqueezeWax::API;
+	require Slim::Networking::SimpleAsyncHTTP;
+
+	my ( $url, @headers ) = Plugins::SqueezeWax::API->buildRequest( '/oauth/identity', {}, $token );
+
+	# Same shape, and the same correction, as API/Async.pm's _handle: every
+	# status that is not 2xx or 3xx reaches the ERROR callback
+	# (Slim/Networking/Async/HTTP.pm:434-436), and onError sets neither code nor
+	# content on $http - it passes the HTTP::Response as its third argument
+	# instead (SimpleAsyncHTTP.pm:96). Reading only $http->code made a 401
+	# indistinguishable from a dropped connection, which is precisely what this
+	# button exists to tell apart.
+	my $done = sub {
+		my ( $http, undef, $response ) = @_;
+
+		my $code    = $http->code;
+		my $content = $http->content;
+
+		if ( !defined $code && $response ) {
+			$code    = $response->code;
+			$content = $response->content;
+		}
+
+		my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
+
+		_tokenTested( $class, $client, $params, $callback, $args, $scanning, $result, $token );
+	};
+
+	Slim::Networking::SimpleAsyncHTTP->new( $done, $done, { timeout => 15 } )->get( $url, @headers );
+
+	return;
+}
+
+sub _tokenTested {
+	my ( $class, $client, $params, $callback, $args, $scanning, $result, $token ) = @_;
+
+	if ( $result->{ok} ) {
+		my $username = $result->{data} && $result->{data}->{username};
+
+		# One of the two places the username is learned (the other is the async
+		# sync's identity step). Kept for the "Data provided by Discogs" link,
+		# and for nothing else - see Plugin.pm's pref block. On a server whose
+		# syncs all happen inside the scan this is the ONLY place it is ever
+		# written, which is why it is written here rather than only there.
+		$prefs->set( 'discogsUsername', $username ) if $username;
+
+		$params->{tokenTestResult} = $username
+			? sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK'), $username )
+			: string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER');
+	}
+	else {
+		$params->{tokenTestResult} = _tokenTestFailureString($result);
+	}
+
+	_finishTestToken( $class, $client, $params, $callback, $args, $scanning );
+}
+
+sub _tokenTestFailureString {
+	my ($result) = @_;
+
+	my %tokens = (
+		unauthorized   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED',
+		not_found      => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND',
+		rate_limited   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED',
+		server_error   => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR',
+		no_response    => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE',
+		empty_body     => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY',
+		malformed_json => 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON',
+	);
+
+	my $token = $tokens{ $result->{error} || '' };
+
+	return string($token) if $token;
+
+	return sprintf( string('PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN'), $result->{code} // '?' );
+}
+
+sub _finishTestToken {
+	my ( $class, $client, $params, $callback, $args, $scanning ) = @_;
+
+	$params->{scanning} = $scanning;
+
+	$callback->( $client, $params, $class->SUPER::handler( $client, $params ), @$args );
 }
 
 sub _startDetection {
@@ -275,6 +569,18 @@ sub _detectionTick {
 	return 1;
 }
 
+# A Discogs username is [A-Za-z0-9_-] in practice, but the pref is a string the
+# user's Discogs account decides and this one is interpolated into a URL. Escape
+# rather than assume: an unescaped name would at worst build a link pointing
+# somewhere else on discogs.com.
+sub _urlEscape {
+	my ($text) = @_;
+
+	$text =~ s/([^A-Za-z0-9._~-])/sprintf '%%%02X', ord $1/ge;
+
+	return $text;
+}
+
 sub beforeRender {
 	my ( $class, $params ) = @_;
 
@@ -282,6 +588,84 @@ sub beforeRender {
 
 	$params->{dbReady} = Plugins::SqueezeWax::Schema->isReady ? 1 : 0;
 	$params->{dbError} = Plugins::SqueezeWax::Schema->lastError;
+
+	# The count beside the queue link. One COUNT(*) on a small table, not the
+	# queue's own render - the page walks the library to build its lists, and
+	# doing that here would make every settings page load pay for a page the
+	# user may not open. The predicate is the queue's own, D3's second clause
+	# included, so the number and the list cannot disagree.
+	if ( $params->{dbReady} ) {
+		my ($open) = Slim::Schema->dbh->selectrow_array(
+			q{SELECT COUNT(*) FROM squeezewax.discogs_match
+			   WHERE review_reason IS NOT NULL
+			      OR ( match_tier = 'strict' AND discogs_release_id IS NULL )}
+		);
+
+		$params->{queueOpenItems} = $open || 0;
+	}
+
+	# Required lazily, as _syncNow does: this is the only other reader, and
+	# Async.pm pulls in SimpleAsyncHTTP and Timers for a page that may never
+	# trigger a sync at all.
+	require Plugins::SqueezeWax::API::Async;
+	$params->{sync} = Plugins::SqueezeWax::API::Async->status;
+
+	# Formatted here, not in the template: Slim::Utils::DateTime honours the
+	# server's own shortdateFormat/timeFormat prefs (Slim/Utils/DateTime.pm:81,
+	# :103), so the timestamp reads the way every other date in the web UI does
+	# rather than in whatever this plugin would have invented.
+	if ( $params->{sync}->{lastSynced} ) {
+		$params->{sync}->{lastSyncedF} =
+			Slim::Utils::DateTime::shortDateF( $params->{sync}->{lastSynced} ) . ' '
+			. Slim::Utils::DateTime::timeF( $params->{sync}->{lastSynced} );
+	}
+
+	# The master-derive job, and why the page says anything about it at all:
+	# ownership can go on changing for up to 25 minutes after a scan finishes,
+	# because the job is rate-limited to one release a second and runs in the
+	# background (decisions §15.23). Without a line here that is a badge moving
+	# on its own with nothing on screen to explain it.
+	#
+	# Nothing when nothing is pending - progress() returns undef - so a settled
+	# library shows no line rather than "0 of 500". And no request: it is one
+	# count over rows we already have.
+	if ( $params->{dbReady} ) {
+		require Plugins::SqueezeWax::Derive;
+
+		if ( my $derive = Plugins::SqueezeWax::Derive->progress ) {
+			$params->{derive} = {
+				# Built here rather than in the template: two numbers in one
+				# sentence cannot go through the template's replace('%s'),
+				# which is global and would put the same number in both.
+				label => sprintf( string('PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS'),
+					$derive->{done}, $derive->{total} ),
+
+				state => string( Plugins::SqueezeWax::Derive->isRunning
+					? 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING'
+					: 'PLUGIN_SQUEEZEWAX_DERIVE_WAITING' ),
+			};
+		}
+	}
+
+	# The currency label the price lines use (decisions §15.33). Read from the
+	# pref the token test and the sync write; nothing is fetched for the page.
+	my $currency = $prefs->get('discogsCurrency');
+
+	$params->{currencyCode} = ( defined $currency && $currency ne '' ) ? $currency : '';
+
+	# The attribution link (decisions §9.6, §15.25 ruling 9). The terms want it
+	# to point at the discogs.com page the data came from, and for ownership
+	# that is the user's own collection page. An empty username - never synced,
+	# never tested, or a token just changed - falls back to discogs.com rather
+	# than building a URL with a hole in it.
+	#
+	# No request at render. No rel on the link either, here or in the template:
+	# nofollow on an attribution link is exactly what §9.6 forbids.
+	my $username = $prefs->get('discogsUsername');
+
+	$params->{discogsCollectionUrl} = ( defined $username && $username ne '' )
+		? 'https://www.discogs.com/user/' . _urlEscape($username) . '/collection'
+		: 'https://www.discogs.com/';
 
 	return unless %detection;
 

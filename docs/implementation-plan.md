@@ -12,17 +12,21 @@ invented APIs).
 
 ## 1. Build order
 
-Per `CLAUDE.md` / spec §11, v1 only, in this order:
+**The build order lives in `CLAUDE.md`, and the sequence from step 4 is
+`docs/squeezewax-v1-decisions.md` §15.9.** It is not restated here.
 
-1. Plugin skeleton + `install.xml` that LMS actually loads
-2. SQLite schema per spec §10 (`discogs_match`, `discogs_collection`,
-   `discogs_price_snapshot`)
-3. Strict-tier matching (release ID already in file tags)
-4. Structural-tier matching (track count + per-track durations)
-5. Review queue + manual re-match
+Both documents carried the same five-step list until 2026-09-18, and both went
+stale together when decisions §13.8 removed the Structural tier — which is the
+duplication `docs/working-agreement.md` §2 calls a defect rather than a
+convenience. One statement, in the document Claude Code loads at the start of
+every session.
 
-OAuth, badges beyond the skeleton, marketplace lookup, and anything in
-v2/v3 do not start until matching works end to end.
+**What this section's neighbours still assume.** The file skeleton in §2 and
+parts of §4 were written against the Strict → Structural → Fuzzy cascade and
+have not been reconciled; decisions' own header already declares §4.3 and §4.6
+superseded. Treat this document as a record of how v1 was planned to be built,
+not as live instructions, until that reconciliation happens. It is tracked in
+`TODO.md`.
 
 ---
 
@@ -34,10 +38,10 @@ v2/v3 do not start until matching works end to end.
 | `Plugin.pm` | Entry point. `initPlugin`: init prefs, register `Settings.pm`/`Settings/Auth.pm` under `main::WEBUI`, register the importer via `Slim::Music::Import->addImporter`, register `AlbumInfo`/`ArtistInfo`/`TrackInfo`/`GlobalSearch` menu providers for the badge context menu and cross-browse entries (§4, §6). No `ProtocolHandler` registration, no transcoding table — this plugin never plays audio. | `refs/lms-plugin-tidal/Plugin.pm:36-96` for shape; explicitly *not* Spotty's `Plugin.pm:121,157,236-289` (protocol handler / transcoding logic) | §2, §13 |
 | `Importer.pm` | Scan-time matching cascade (Strict → Structural → Fuzzy). Runs in the scanner process (`main::SCANNER`), registered via `Slim::Music::Import->addImporter`. Does **not** subclass `Slim::Plugin::OnlineLibraryBase` — that base class exists to let a plugin *create* tracks for a service it streams from (TIDAL/Spotty's job); SqueezeWax never creates tracks, it annotates albums LMS already scanned from disk. Deliberate divergence from both reference plugins. | Structurally similar to `refs/lms-plugin-tidal/Importer.pm:21-49` (`startScan`, progress reporting via `Slim::Utils::Progress`) but without the `OnlineLibraryBase` inheritance | §3, §8 |
 | `API.pm` | Shared Discogs constants/helpers: base URL, rate-limit constant (60/min), response-shape → internal-hash transforms, image URL helpers. | `refs/lms-plugin-tidal/API.pm:12-25`, `:79-118` | §1, §13 |
-| `API/Async.pm` | Server-side (LMS process) Discogs calls — search, release lookup, marketplace lookup, OAuth-authenticated collection/wantlist pulls — via `Slim::Networking::SimpleAsyncHTTP` (confirmed: `refs/lms-plugin-tidal/API/Async.pm:13,801`). Handles the 60 req/min throttle. | `refs/lms-plugin-tidal/API/Async.pm:717-886` (`_call`, caching/throttling pattern) | §5, §7, §13 |
+| `API/Async.pm` | Server-side (LMS process) Discogs calls — search, release lookup, marketplace lookup, token-authenticated collection/wantlist pulls — via `Slim::Networking::SimpleAsyncHTTP` (confirmed: `refs/lms-plugin-tidal/API/Async.pm:13,801`). Handles the 60 req/min throttle. | `refs/lms-plugin-tidal/API/Async.pm:717-886` (`_call`, caching/throttling pattern) | §5, §7, §13 |
 | `API/Sync.pm` | Scanner-side Discogs calls for the matching cascade, via `Slim::Networking::SimpleSyncHTTP` (resolved — see §4.4 below). | `refs/lms-plugin-tidal/API/Sync.pm:9,104` | §3, §13 |
 | `Settings.pm` | Matching-tier selector, duration margin, badge colors/toggles, marketplace filter defaults, sync intervals. | `refs/lms-plugin-tidal/Settings.pm:1-51` | §9 |
-| `Settings/Auth.pm` | Discogs OAuth flow page + credential storage. | `refs/lms-plugin-tidal/Settings/Auth.pm:1-89` — structural inspiration only; Discogs uses OAuth 1.0a, not TIDAL's device-code flow, so the actual handshake will differ | §5, §9 |
+| `Settings/Auth.pm` | Discogs personal-access-token entry page + credential storage. | `refs/lms-plugin-tidal/Settings/Auth.pm:1-89` — structural inspiration only; ~~Discogs uses OAuth 1.0a, not TIDAL's device-code flow, so the actual handshake will differ~~ — **corrected 2026-09-07: v1 uses a personal access token (BYOK), not OAuth. OAuth 1.0a exists but requires shipping a consumer secret in a distributed plugin, which Discogs' developer documentation forbids disclosing. See `squeezewax-v1-decisions.md` and TODO.md.** | §5, §9 |
 | `Schema.pm` | Owns `discogs_match` / `discogs_collection` / `discogs_price_snapshot`: creation, migration, query helpers. No reference plugin demonstrates *persistent* custom tables — see §4 below. | Primitive confirmed real (`Slim::Schema->dbh()->do('CREATE TABLE ...')`, `refs/slimserver/Slim/Plugin/OnlineLibraryBase.pm:47-52`), pattern itself unprecedented in refs/ | §10 |
 | `InfoMenu.pm` | Badge context-menu actions (pressing details, credits, re-match, "View on Discogs") and the JSON-RPC dispatch for them. | `refs/lms-plugin-tidal/InfoMenu.pm:20-28` (`Slim::Control::Request::addDispatch`) | §4 |
 | `HTML/EN/plugins/SqueezeWax/settings.html`, `auth.html` | TT templates for the settings pages above. | `refs/lms-plugin-tidal/HTML/EN/plugins/TIDAL/settings.html` | §9 |

@@ -3,6 +3,16 @@
 Design ideas and decisions for **SqueezeWax**, a Discogs plugin for Lyrion
 Music Server (LMS), collected from brainstorming sessions (August 2026).
 
+**Correction labels.** Inline corrections in this document are dated and
+labelled. The labels are not interchangeable:
+*falsified* — measurement disproved the claim;
+*superseded* — the claim was true but a later decision replaced it;
+*defect found* — the claim was always wrong, nothing external changed;
+*corrected* — a figure moved; the claim's shape did not.
+Corrections stay inline rather than moving to an appendix: reading a claim
+next to what was believed and why it was wrong is what stops the error
+being reasoned back into existence.
+
 ---
 
 ## 1. Background & Research Findings
@@ -12,7 +22,8 @@ Music Server (LMS), collected from brainstorming sessions (August 2026).
 - Discogs data currently reaches LMS only indirectly:
   - **Music and Artist Information (MAI)** plugin (Michael Herger) uses Discogs
     as one of several sources (alongside Wikipedia, AllMusic, Last.fm) for
-    artist pictures and metadata.
+    artist pictures and metadata. Its Discogs client is not reused; see
+    `squeezewax-v1-decisions.md` §9.10.
   - **extGUI4LMS** (alternative, now-inactive web interface, last active
     ~2016) offered basic Discogs lookup via a user-supplied API token —
     pulling release/artist metadata and cover art (including back covers)
@@ -42,7 +53,7 @@ Typical plugin layout (per lyrion.org/reference/music-service-plugin/):
 | `API/Sync.pm` | Synchronous calls (scanner/importer side) |
 | `Importer.pm` | Scan-time import/matching (synchronous HTTP only) |
 | `Settings.pm` | Configuration pages |
-| `Settings/Auth.pm` | Discogs OAuth handling |
+| `Settings/Auth.pm` | Discogs personal-access-token entry and storage |
 
 ### Naming (resolved)
 
@@ -124,7 +135,11 @@ Discogs) with their LMS library (local rips + streaming services), in both
 directions:
 
 1. **Ownership awareness** — see at a glance which albums in LMS you own
-   physically; inspect details and value of the owned pressing.
+   physically. Ownership comes in two strengths: *exact*, where the collection
+   holds the very release the album is identified as, and *version*, where it
+   holds the record but not that pressing. Both paint the same badge (§4);
+   where a pressing is known, its details and current value are one tap away
+   (`squeezewax-v1-decisions.md` §13.3, §13.10.2).
 2. **Marketplace lookup** — on demand, check availability and price range of a
    release on the Discogs marketplace.
 3. **Cross-browsing** — jump from a streaming album to its physical editions on
@@ -138,12 +153,29 @@ browse, play elsewhere).
 
 ## 3. Matching: Linking LMS Albums to Discogs Releases
 
-Matching runs at **library scan time** via `Importer.pm` (synchronous, like
-Spotty). Each result is stored in a plugin-owned table:
+Matching answers two questions that are not the same question, in two passes
+that run at different times.
 
-```
-album_key → discogs_release_id, match_tier, state, matched_at
-```
+**Identification** — *which Discogs release is this album?* Runs at library scan
+time, per album, inside `Importer.pm`, from the album's own file tags. It skips
+an album whose files have not changed since the last attempt, keyed on
+`source_timestamp` (§10).
+
+**Ownership** — *does the user own this record?* Runs as a separate pass,
+triggered by a completed collection sync rather than by a scan. It **does not**
+use the file-state skip: buying a record changes nothing on disk, so an album
+whose files are untouched is exactly the album whose ownership may have changed.
+A rescan alone never recovers a badge; a sync does. The sync's own triggers are
+in §9.
+
+The two passes write into one row, and the conclusion is the tuple
+
+`album_key → discogs_release_id, discogs_master_id, ownership, match_tier,
+state, matched_at`
+
+with the ownership label and the identification kept in separate columns because
+they answer separate questions. See §10 for the columns and
+`squeezewax-v1-decisions.md` §13.3 for why conflating them fails.
 
 `album_key` — a hash over the album's tracks' `urlmd5`, sorted — is the
 match's identity, not `lms_album_id`. LMS's own `albums.id` is
@@ -153,140 +185,321 @@ wipe; `urlmd5` is LMS's own cross-wipe key (see §10, and
 still cached alongside for fast lookups, refreshed whenever a rescan
 completes, but is never treated as identity.
 
-### Three matching tiers — a cascading pipeline
+### Two routes, and they conclude different things
 
-The tiers run as a **cascade** per album: Strict is tried first; if it can't
-apply (no release ID in tags), Structural is tried; if that finds nothing,
-Fuzzy is tried. The Settings option (§8) selects the **maximum tier enabled**
-(e.g. "Structural" = try Strict then Structural, never Fuzzy) — it is not a
-single-mode picker.
+The v1 flow is collection-first: the user's own Discogs collection is synced,
+and LMS albums are matched against it. There is no per-album search of the
+Discogs database. Reasoning, and the measurement that produced it, in
+`squeezewax-v1-decisions.md` §13.1 and §13.10.
 
-| Tier | Signal | Behavior |
+| Route | What it reads | What it concludes |
 |---|---|---|
-| **Strict** | Authoritative Discogs release ID already present in local file tags | Auto-confirm **when the configured tags agree** — the ideal case for rips tagged with Discogs, which is most of a tagged library. When two configured tags name different releases, or a configured tag's value will not parse, there *is* ambiguity and the album goes to the review queue as a candidate instead. See `squeezewax-v1-decisions.md` §3a. |
-| **Structural** | Artist + album title + **track count** + **per-track durations within a margin** (e.g. ±2–3 s, since rips trim silence differently) | Auto-confirm. Fingerprints the release by its track *shape*, same approach as the foobar2000 Discogs tagger. Strong enough to disambiguate near-identical pressings/reissues. Before fetching any candidate's tracklist, filters search results on **format, year and country** — already present in the search response, so this costs nothing — a CD rip never pulls vinyl-pressing data. This is what keeps Structural's request cost bounded; see §13 for the exact budget. |
-| **Fuzzy** | Artist + title only (optionally year tolerance) | Never auto-confirms. Goes to a **review queue** as a "candidate match". Needed for streaming tracks (Spotify etc.) where no local file/tags exist. |
+| **Strict** | Configured tags on the album's **two candidate files**, compared | An **identification**, where they agree. Ownership only if that same id, or its master, is in the collection |
+| **Collection** | The synced collection, by title then artist | An **ownership** conclusion. Never an identification — it does not say which pressing |
 
-These three are the *cascade's* tiers. The stored `match_tier` records
-**provenance**, so it has a fourth value the cascade never produces:
-`manual`, written when the user establishes the link themselves from the
-review queue or the "re-match" action. That case genuinely is none of the
-three — leaving `strict` would claim a file tag names the release the user
-just overrode, and writing `fuzzy` would claim a search produced it and make
-a resolved row indistinguishable from an unresolved candidate.
+Neither route searches Discogs, and neither reads track durations. Structural
+and Fuzzy matching are gone: both were narrowings of a whole-database search
+that no longer runs (`squeezewax-v1-decisions.md` §13.8).
+
+**Every album is in scope**, including albums with no local files at all. The
+old `local_tracks == 0` gate came from duration fingerprinting, which needed
+files to read durations from; a title comparison needs none. On the reference
+library the gate excluded 186 of 765 albums, and removing it matched 10
+additional owned records (`squeezewax-v1-decisions.md` §13.10.1).
+
+**Strict reads two files and compares them, and it reads no more than two.**
+Reading every track was rejected on measured cost — 19–137 ms per file on a NAS,
+some 9,000 reads and ten to fifteen minutes added to every scan. Until
+build-order step 8c it read the second file only when the first had nothing to
+say, so an album whose files name **different** releases was identified from
+whichever came first and the disagreement was invisible; the second read costs no
+Discogs request and catches it at identification time. Both halves count as a
+disagreement — two different ids, and one file tagged with another untagged — and
+both produce a **conflict**, which leaves a fresh row with no release id, so no
+ownership is derived from contested tags and no badge can be painted from them
+(`squeezewax-v1-decisions.md` §15.21, §15.22). A file that could not be read at
+all is not a voice, so an unmounted disc cannot turn a tagged album into a
+conflict. A single-track album has one candidate and cannot disagree with itself.
+
+**Title comparison normalises no further than case-folding and whitespace
+collapse.** Both sides are decoded to character strings first; then leading and
+trailing whitespace is trimmed and internal runs collapsed to one space; then
+case is folded. Punctuation-stripping, article-stripping and bracket-suffix
+removal are **not** used — measured, punctuation-stripping gained one album and
+produced one wrong badge, which is a bad trade at 1:1
+(`squeezewax-v1-decisions.md` §13.10.4).
+
+**Artist gates every auto-badge and is not a tiebreak.** An ownership conclusion
+from the collection route requires exactly one collection entry agreeing on both
+title *and* artist. Several candidates, artist disagreeing, or artist absent on
+either side: the album goes to the review queue instead of badging
+(`squeezewax-v1-decisions.md` §13.10.3).
 
 ### Matching pipeline (flowchart)
 
 ```mermaid
 flowchart TD
-  A[LMS album at scan time] --> B{Strict:<br/>release ID in tags?}
-  B -- "yes, release exists" --> C[Confirmed]
-  B -- no --> D{Structural:<br/>track shape matches?}
-  D -- "all discs match" --> C
-  D -- "partial multi-disc match" --> E[Review queue<br/>candidate]
-  D -- "no match" --> F{Fuzzy:<br/>artist + title candidate?}
-  F -- "candidate found" --> E
-  F -- none --> G[Unmatched]
-  E -- "user confirms" --> C
-  C --> H[Badge painted<br/>color from Collection list state]
+    A[Collection sync completes] --> B[For each LMS album]
+
+    B --> C{Tag names a<br/>Discogs release id?}
+
+    C -- yes --> D{That release id<br/>in the collection?}
+    D -- yes --> E["ownership = exact<br/>state = confirmed"]
+
+    D -- no --> F{"The release's master,<br/>and it is in the collection?<br/>(a master tag, or one derived<br/>and stored for this release id)"}
+    F -- yes --> G["ownership = version<br/>identification kept, state = candidate"]
+
+    C -- no --> H
+    F -- no --> H{"Collection entries whose<br/>normalised title matches?"}
+
+    H -- "exactly one,<br/>artist agrees" --> I["ownership = version<br/>no identification"]
+    H -- "several, or artist<br/>disagrees or is absent" --> J["review queue<br/>ownership = absent"]
+    H -- none --> K["ownership = absent"]
+
+    E --> L[Badge painted]
+    G --> L
+    I --> L
 ```
 
-**Example walkthroughs:**
+The tests are ordered, and the order is the point: a tag the user supplied
+themselves outranks a title comparison. An album that reaches **H** carrying a
+tag keeps its identification — `discogs_release_id` and `match_tier = 'strict'`
+stay as they are, and only `ownership` is written by the collection route.
 
-1. *Strict:* A rip of *Kind of Blue* carries a Discogs release ID in its file
-   tags (written by the tagger at rip time). The scanner looks up that ID
-   directly → **Confirmed** without any search. This is the expected path for
-   most of the user's ripped library.
-2. *Structural:* An untagged-by-ID rip of a 1994 CD reissue: artist + title
-   search yields six pressings; only one has the same 12 tracks with all
-   durations within ±3 s → **Confirmed** automatically, and it identified the
-   *specific pressing*, not just the album.
-3. *Partial multi-disc:* A 2-CD deluxe edition where disc 1 matches perfectly
-   but disc 2 (bonus disc) has an extra track → **not** auto-confirmed; lands
-   in the **review queue** for the user to resolve (maybe they own the
-   standard edition, maybe Discogs' tracklist differs).
-4. *Fuzzy:* A Spotify album (no local files, no durations to fingerprint
-   reliably against a pressing): artist + title search finds a master release
-   → **candidate** in the review queue; the user picks the pressing they own,
-   promoting it to Confirmed.
+**No step in this flow makes a Discogs request.** Identification reads tags from
+files the scanner is already opening; ownership reads the collection the sync
+has already fetched. Node **F** uses a master id only where one is already
+stored on the row, and never looks one up inside the pass, because a per-album
+lookup inside ownership is the cost `squeezewax-v1-decisions.md` §13.1 removed.
+
+**Node F's master has two sources, and it had only one until build-order step
+8c.** `discogs_master_id` is written only from a `DISCOGS_MASTER_ID`-family tag.
+On the reference library that left it NULL on all but 2 of 506 rows, so **node F
+had never once fired** and every `version` badge came from the title route —
+including for albums the owner demonstrably owned, which were reported `absent`
+and sent to the review queue to adjudicate a question their own collection
+already answered (`squeezewax-v1-decisions.md` §15.19).
+
+So a **bounded background job** (`SqueezeWax/Derive.pm`) fetches
+`GET /releases/{id}` once per identified release and stores the master id in
+`derived_master_id`, with `derived_from_release_id` recording which release it
+came from and `derived_at` when. It is **not part of this pass**: it runs in the
+server after a completed sync, at most 30 requests a run one a second, yields to
+a scan, to a running sync and to a spent rate budget, and on a settled library
+issues no request at all. A 404 is an ordinary answer — the release is gone,
+there is no master, and there is no reason to ask again until the tags change.
+
+Node F prefers the **tag** and falls back to the derived value **only while
+`derived_from_release_id` still equals the row's `discogs_release_id`**. A tag is
+the user's own assertion and the derived value never overrides it; a derivation
+whose release id no longer matches is **stale** and is ignored rather than
+trusted, because trusting it would badge a retagged album from the master of the
+record it used to be. A stale value is left in place, since it is what tells the
+job the row needs re-deriving. Only a **bare identifier** is stored: everything
+else the release payload carries is compared in memory, if at all, and dropped
+with the response (§9.5, and §15.20's errata).
+
+**A badge does not require a confirmed state, a tag, or a local file.** Path
+**I** is the common one: 87 of 96 matches on the measured page auto-badged, most
+of them by this route (`squeezewax-v1-decisions.md` §13.10.2, §13.10.4).
+
+**K writes no row.** Absence of a row already means "nothing known", so an album
+identifying nothing and owning nothing is not recorded
+(`squeezewax-v1-decisions.md` §14.8).
+
+**The pass must be deterministic.** The collection payload is discarded after
+the sync (§10), so a re-sync re-derives every conclusion from scratch. The same
+collection against the same library must reach the same answers, or badges
+change between syncs with no visible cause.
+
+1. *Tagged, and owned.* A ripped CD tagged `DISCOGS_RELEASE_ID=1234567`. The
+   scanner reads the tag; the sync finds 1234567 in the collection →
+   **ownership `exact`, state `confirmed`**, badge painted. The expected path
+   for a well-tagged rip of a record the user owns.
+
+2. *Tagged, and owned in a different pressing.* The tag names release 123; the
+   collection holds release 456, a different pressing of the same master. The
+   user owns the record, not that pressing → **ownership `version`**, with the
+   identification left alone: `discogs_release_id` stays 123, `match_tier`
+   stays `strict`, state stays `candidate`. Badge painted. NULLing the release
+   id here would destroy an identification the user supplied
+   (`squeezewax-v1-decisions.md` §13.3).
+
+3. *No tag, no local files, and owned.* A streaming-only album. Exactly one
+   collection entry agrees on normalised title and on artist → **ownership
+   `version`, no identification at all**: NULL release id, NULL `match_tier`,
+   NULL state. Badge painted. This whole population was excluded from matching
+   before `squeezewax-v1-decisions.md` §13.10.1 removed the `local_tracks == 0`
+   gate — 186 of 765 albums on the reference library, of which 10 turned out to
+   be owned.
+
+4. *One record, two albums.* A rip and a stream of the same record are two LMS
+   albums matching one collection entry. **Both badge.** This is the expected
+   shape, not a collision to resolve — measured 9 of 10 cases in that direction
+   (`squeezewax-v1-decisions.md` §13.10.3). The ambiguous direction is the other
+   one: one LMS album matching several collection entries, measured once in 765,
+   which goes to the queue.
+
+5. *Title agrees, artist does not.* A collection entry and an LMS album share a
+   title, but the artists disagree or one side has no artist at all. **No badge
+   — review queue.** Measured 8 of 96 matches. Artist gates every auto-badge
+   rather than only breaking ties (`squeezewax-v1-decisions.md` §13.10.3).
+
+   The stricter behaviour is deliberate. *Substrata* and *Substrata²* are
+   different Biosphere records, and artist cannot separate them; the
+   normalisation rung was chosen so that they do not share a key and the second
+   simply does not match. A missing badge is preferred to a wrong one
+   (`squeezewax-v1-decisions.md` §13.10.4).
 
 ### Match states per album
 
-1. **Unmatched** — no link attempted or no candidate found.
-2. **Candidate** — match awaiting user resolution (review queue). Reached from
-   every tier, not only Fuzzy and partial Structural:
-   - **Strict**, when the configured tags disagree or one will not parse. Two
-     variants, distinguished by `discogs_release_id` — NULL means "we examined
-     this and could not decide", non-NULL means "we propose this, confirm it".
-     The second arises when a conflict demotes a previously *confirmed* row: the
-     adjudicated id is kept, because a decision survives (decisions §2a), while
-     the demotion to Candidate stops the badge immediately.
-   - **Structural**, on a partial multi-disc match.
-   - **Fuzzy**, always.
-3. **Confirmed** — the album is linked to a specific Discogs release.
+`state` describes the **identification** only. Ownership is a separate column
+and is not encoded here (§10).
 
-**Note:** the match state records only *that* a link exists and how sure we
-are of it. Whether the badge paints as "owned" or "wantlist" (and its color)
-is **derived at render time** by joining the confirmed release against
-`discogs_collection.list_state` (§9) — ownership is a property of the user's
-Collection, not of the match itself. (An earlier draft called the state
-"confirmed owned"; that conflated the two.)
+1. **Unmatched** — no identification was made. Either there is no row at all,
+   or there is a row carrying only an ownership conclusion, with NULL `state`,
+   NULL `match_tier` and NULL `discogs_release_id`. Walkthrough 3 is the second
+   form (`squeezewax-v1-decisions.md` §14.8).
+2. **Candidate** — an identification exists that the collection has not
+   corroborated. Reached by every tagged album whose release id is not in the
+   collection, which is most of a library. Two Strict variants remain,
+   distinguished by `discogs_release_id`: NULL means "we examined this and could
+   not decide" — a tag conflict — and non-NULL means "we propose this". The
+   second arises when a conflict demotes a previously confirmed row: the
+   adjudicated id is kept, because a decision survives
+   (`squeezewax-v1-decisions.md` §2a), while the demotion stops the badge
+   immediately.
+3. **Confirmed** — the tagged release id is present in the collection, or the
+   user linked the album by hand (`squeezewax-v1-decisions.md` §13.4).
+
+**`candidate` does not mean "in the review queue".** Most candidates are simply
+albums the user does not own, and nothing needs deciding about them. The queue's
+contents are enumerated in `squeezewax-v1-decisions.md` §13.10.5 and are a much
+smaller set. Anything selecting queue items on `state = 'candidate'` is wrong. The queue
+selects on `review_reason` (§10). §13.5's all-tags read, which would have added
+a fourth kind of item, is deferred (§15.16 part 8).
+
+**Badge derivation** (see §4): the badge reads the `ownership` column. There is
+no join and no render-time test — the ownership pass has already decided, and a
+badge paints for `exact` and `version` alike. Confirmation is not required.
 
 ### Confirmation & feedback loops
 
-- The review queue offers search-as-you-type against Discogs to manually link
-  an album to a specific pressing; confirming promotes candidate → confirmed and
-  writes `match_tier = 'manual'`.
-- **The queue must also offer reject / dismiss, not only confirm.** One state the
-  importer can create is otherwise terminal: a confirmed match demoted to
+- The review queue is its own page, reached from Settings. It lists three kinds
+  of item: ambiguous matches, artist disagreement or absence, and Strict tag
+  conflicts. Orphaned matches (§10) are a second list on the same page.
+- **A tag conflict is one `review_reason` value and three messages.** The column
+  records only that the album's tags are contested, because the remedy is the
+  same for all three; what differs is what the user is told, and "Show tags"
+  re-reads that album's two candidates on demand and says which of the three it
+  is — two tags in one file, two files naming different releases, or only some
+  files carrying a tag — naming the files it is talking about
+  (`squeezewax-v1-decisions.md` §15.22).
+- **Manual re-match chooses from the user's own Discogs collection.** It never
+  searches the Discogs database and never offers a release the user does not
+  own. Opening it runs a normal collection sync. Your collection's entries
+  whose title matches the album come first, then the whole collection, which
+  you can filter. Confirming writes `match_tier = 'manual'` and
+  `state = 'confirmed'`. A manual link is the user's own decision and is not
+  subject to the collection cross-check that governs Strict. **The badge
+  changes at the next sync**, not at confirm (`squeezewax-v1-decisions.md`
+  §15.16).
+- **Reject deletes a manual link, a Strict conflict, or an orphan**, at the
+  user's explicit request. There is no "dismiss": an ambiguous or
+  artist-disagreeing album leaves the queue only through a manual link or a
+  change in tags or collection.
+- **The queue must also offer reject / dismiss, not only confirm.** One state
+  the importer can create is otherwise terminal: a confirmed match demoted to
   candidate by a tag conflict keeps its adjudicated `discogs_release_id` and its
-  snapshots (decisions §3a), and if the user then removes the tags altogether the
-  importer may not delete it — the row carries a decision, and §2a forbids that.
-  It is skipped by Structural because a `discogs_match` row exists, so with a
-  confirm-only queue the album would propose a release with no tag behind it
-  forever. A human has to be able to say no.
+  snapshots (`squeezewax-v1-decisions.md` §3a), and if the user then removes the
+  tags altogether the importer may not delete it — the row carries a decision,
+  and §2a forbids that. Nothing else will clear it, so with a confirm-only queue
+  the album would propose a release with no tag behind it forever. A human has
+  to be able to say no. Reject deletes the row (§15.16 part 7).
+- **A wrongly auto-badged album has no recovery path in v1.** Ownership `version`
+  is written without a confirmation step, so such an album never reaches the
+  queue and there is nothing to reject. v1 assumes a well-tagged library and a
+  maintained Discogs collection; the fix is to correct the collection or the
+  tags. Measured zero wrong badges at the chosen normalisation rung
+  (`squeezewax-v1-decisions.md` §14.4, §13.10.4).
 - A successful manual "Find on Spotify" (see §6) can retroactively backfill /
   promote the original scan-time match.
 
-### Multi-disc releases & box sets (resolved)
+### Multi-disc releases & box sets
 
-- **Decision: strict per-release matching — all discs must match.**
-  A multi-disc release/box set is only promoted to Structural-tier
-  confirmation if **every disc** in the set matches (track count +
-  per-track duration margin) against the corresponding LMS discs. A partial
-  match (e.g. disc 1 of 2 matches, disc 2 doesn't) does **not** auto-confirm —
-  it falls back to the review queue as a candidate, same as a Fuzzy-tier
-  match, so the user can resolve the discrepancy manually.
+No special rule. A multi-disc release or box set is matched by title and artist
+like any other album, and its ownership is a collection fact rather than a
+property of its discs.
+
+The former rule — a box set confirmed only if every disc matched on track count
+and per-track duration — belonged to Structural matching, which no longer exists
+(`squeezewax-v1-decisions.md` §13.4, §13.8). Whether duration comparison returns
+later as a *ranker* among candidates, rather than as a verdict, is open and is
+not v1 (`squeezewax-v1-decisions.md` §13.8).
 
 ### Re-match triggers
 
-An album is (re-)matched when:
+The two passes are triggered separately, and the difference matters.
 
-- it is **new** at scan time (no `discogs_match` row);
-- its **tags changed** since the last scan (detected via LMS's own
-  changed-file handling during rescan) — the old match row is invalidated and
-  the cascade runs again;
-- the user triggers a **manual "re-match"** action from the album's Discogs
-  context menu (e.g. after fixing tags or learning the auto-match picked the
-  wrong pressing);
-- a full **"clear & rebuild matches"** maintenance action in Settings wipes
-  the match table and re-runs the cascade for the whole library.
+**Identification** re-runs when:
 
-Confirmed matches are otherwise **stable across rescans** — a routine rescan
-does not re-run searches for already-confirmed albums (this is what keeps
-rescans cheap under the rate limit).
+- the album is **new** at scan time (no `discogs_match` row);
+- its **tags changed** since the last scan, detected via LMS's own changed-file
+  handling during rescan — the old identification is invalidated and Strict runs
+  again;
+- the user triggers a **manual "re-match"** from the album's Discogs context
+  menu;
+- a **"clear & rebuild matches"** maintenance action in §9 wipes the match table
+  and re-runs from scratch.
+
+Confirmed identifications are otherwise **stable across rescans**: a routine
+rescan does not re-examine an album whose files have not changed.
+
+**Ownership** re-runs whenever a collection sync completes, for every album —
+**there is no file-state skip**. Buying a record changes nothing on disk, so an
+album whose files are untouched is precisely the album whose ownership may have
+changed; skipping it would mean a badge that never appears until the user edits
+a tag (`squeezewax-v1-decisions.md` §13.6). A sync is three requests for a
+203-item collection and takes seconds, so re-deriving every conclusion is
+cheaper than tracking which ones could have moved.
+
+The sync itself has **two** triggers — a library scan, and a manual "Sync
+collection now" button in Settings — set out in §9 and
+`squeezewax-v1-decisions.md` §13.7, as corrected by §15.2 (the scan trigger fired
+on `['rescan','done']`, not at scan start), §15.15 (the configurable interval and
+the startup sync are removed; the plugin makes no unattended call to Discogs on a
+schedule) and §15.18, which moves the scan trigger **inside** the scan: our own
+scan step fetches the collection and derives ownership before the scan ends, and
+the `['rescan','done']` path survives as the fallback for scans our importer did
+not run.
+
+The cost is accepted and stated rather than hidden: a record added to the Discogs
+collection does not badge until the next scan or a press of the button — since
+§15.18, the scan itself rather than a minute after it — and a missing badge looks
+the same as a record the user does not own. The last-synced timestamp in §9 is the
+only visible signal, and it reflects whichever path synced last (§15.18 part 7).
 
 ### Constraints
 
-- Discogs API rate limit: **60 requests/min (authenticated)**. Large-library
-  scans must be batched/throttled; results cached in a local SQLite table so
-  re-scans are cheap.
+- Discogs API rate limit: see §13 for the authoritative figure and how it
+  was verified. Large-library scans must be batched/throttled; results
+  cached in a local SQLite table so re-scans are cheap.
 - Matching a Discogs *pressing* to LMS tracks is inherently ambiguous when only
   generic tags exist — hence the tier system rather than one algorithm.
 
 ---
 
 ## 4. Badge (Ownership Indicator)
+
+**v1 as built (`squeezewax-v1-decisions.md` §15.25, 2026-09-29).** There is no
+badge on artwork in v1: neither LMS core nor Material Skin lets a plugin draw
+one, verified against source. Ownership is shown in three places, each built once
+for every skin: a **"Discogs" entry in the album's menu**, the **same entry in the
+playing track's menu** (Now Playing), and a **"Records I own" library view**, the
+normal album grid filtered to owned albums, also reachable from My Music. The
+bullets below describe the artwork badge as designed. It waits for a hook from
+LMS or Material (`TODO.md`), and each bullet the finding touches is corrected in
+place.
 
 - **Where**: corner overlay on album artwork, in
   - grid view while browsing, and
@@ -295,8 +508,13 @@ rescans cheap under the rate limit).
   the streaming-service badge (e.g. if Spotify/Deezer badge the
   bottom-right/top-right corner, Discogs occupies the left-side corner) —
   the two can coexist on the same tile without overlapping.
-- **When**: for albums in **confirmed** match state whose linked release is in
-  the user's Collection (owned) or — optionally — Wantlist (§9 derivation).
+- **When**: for albums whose `ownership` label is `exact` or `version` (§10).
+  The label is written by the ownership pass (§3); the badge does not compute
+  it, does not require a confirmed match, and does not require the album to
+  have a tag or a local file. An album owned only as a *version* — the user
+  owns the record, not that pressing — badges identically to an exact match;
+  the distinction appears in the context menu, not in the artwork
+  (`squeezewax-v1-decisions.md` §14.5).
 - **What**: a **vinyl-record glyph** (not the Discogs "D" logomark) — kept
   generic/iconographic rather than using Discogs' own brand mark, to sidestep
   branding-guideline questions the way the marketplace-linkout approach
@@ -307,14 +525,17 @@ rescans cheap under the rate limit).
   feature of what a third-party app creates (see §1, naming section). A
   badge rendered as the Discogs "D" logomark on every owned album tile would
   sit squarely inside that restriction; the generic vinyl glyph does not.
-- **Rendering is skin-independent by design**: the intent is a single overlay
+- ~~**Rendering is skin-independent by design**: the intent is a single overlay
   mechanism that works the same way regardless of skin (default web UI,
-  Material Skin, etc.), rather than a per-skin reimplementation. This still
-  needs to be verified once implementation starts — no confirmed generic
-  badge/overlay API was found in LMS core (see "Rendering note" below), so
-  whether true skin-independence is achievable, or whether each skin needs
-  its own CSS/template hook, is something to validate against actual skin
-  source rather than assume.
+  Material Skin, etc.), rather than a per-skin reimplementation.~~ **Corrected
+  2026-09-29 (decisions §15.25):** validated against skin source, and no such
+  mechanism exists for a plugin. Each skin draws exactly one cover icon, keyed on
+  `albums.extid`, meaning "which service this album came from": core's Default
+  template (`HTML/Default/xmlbrowser.html`, block `itemIcon`) and Material's
+  fixed list (`emblems.json`). A plugin can supply the Default UI's icon for its
+  own service prefix and nothing more, and writing `albums.extid` breaks the
+  album (`Slim/Schema/Album.pm`, `url`). What *is* skin-independent is the menu
+  and the library view, which v1 uses instead.
 - **Granularity**: per album *edition* (matching the observed Spotify
   behavior — two editions of the same album can be badged independently).
 - **Artist-level badge**: opt-in via Settings, and scoped **only to artists
@@ -324,6 +545,10 @@ rescans cheap under the rate limit).
 
 ### Owned vs. Wantlist — visual distinction (resolved)
 
+**This is a v2 concern (§11).** v1 has one badge state — owned — so the
+derivation above has one branch. The distinction below applies once the
+wantlist badge ships.
+
 - **Same vinyl glyph for both states, distinguished by color.**
 - Both the "owned" color and the "wantlist" color are **user-configurable in
   Settings** (see §8), rather than fixed.
@@ -332,28 +557,34 @@ rescans cheap under the rate limit).
 
 ```mermaid
 flowchart TD
-  A[Album tile to render] --> B{Confirmed match<br/>in discogs_match?}
-  B -- no --> C[No badge]
-  B -- yes --> D{Release in<br/>discogs_collection?}
-  D -- "list_state = owned" --> E[Vinyl glyph,<br/>owned color]
-  D -- "list_state = wantlist" --> F[Vinyl glyph,<br/>wantlist color]
-  D -- "not present" --> C
+  A[Album tile to render] --> B{ownership label<br/>in discogs_match}
+  B -- "exact" --> C[Vinyl glyph,<br/>owned color]
+  B -- "version" --> C
+  B -- "absent, or no row" --> D[No badge]
 ```
 
+One read of one column. There is no join, no collection table to consult, and
+nothing to decide at render time — the ownership pass decided when the sync
+completed (`squeezewax-v1-decisions.md` §13.2, §13.3).
+
 **Example walkthrough:** Grid view renders a tile for *Blue Train*. The match
-table says it's confirmed against release 123456. The collection cache says
-release 123456 has `list_state = owned` → the tile gets the vinyl glyph in
-the user's configured "owned" color, in the corner opposite the Spotify
-badge. A second edition of the same album (different LMS album entry, matched
-to a different pressing that's on the Wantlist) renders the same glyph in the
-wantlist color — two tiles, same album title, different badge colors, exactly
-the per-edition behavior observed with Spotify badging.
+row's `ownership` is `version` — the last sync found one collection entry
+agreeing on title and artist, though no tag names a pressing — so the tile gets
+the vinyl glyph in the user's configured "owned" color, in the corner opposite
+the Spotify badge. A rip and a stream of the same record are two LMS albums
+against one collection entry, and **both badge**: one owned record, two tiles,
+the same glyph on each (`squeezewax-v1-decisions.md` §13.10.3).
 
 ### Rendering note
 
 No evidence found that LMS core provides a generic badge/overlay mechanism —
-the Spotify badge appears to be plugin/skin-drawn. The Discogs plugin will
-draw its own overlay via template/CSS hooks for the default web UI. Given the
+~~the Spotify badge appears to be plugin/skin-drawn.~~ **Corrected 2026-09-29
+(decisions §15.25):** the Spotify badge is *skin*-drawn. Spotty supplies only an
+icon file, through `Slim::Plugin::OnlineLibrary::Plugin->addLibraryIconProvider`,
+for the Default UI; Material draws its own from a built-in list. Both key it on
+the album's `extid`. ~~The Discogs plugin will
+draw its own overlay via template/CSS hooks for the default web UI.~~ No such
+hook exists (decisions §15.25). Given the
 skin-independence goal above, this should be re-examined during
 implementation to confirm the same hook/approach genuinely applies across
 skins (e.g. Material Skin) rather than requiring a distinct integration path.
@@ -369,12 +600,82 @@ badge would sit on Spotify-sourced art, this is a gray area to keep in mind.
 Tapping the badge / choosing the Discogs context-menu entry on an owned album
 reveals details of the **owned variant**:
 
-- Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year
-- Credits (musicians, producers, engineers — a Discogs strength)
-- Collection data: date added/acquired, condition/grading if tracked
-- Current estimated value (fetched on demand)
+- **Ownership and pressing.** Where `ownership` is `exact`, the menu names the
+  pressing the user owns. Where it is `version`, the menu says the user owns
+  the record but not which pressing. This is where the exact-versus-version
+  distinction surfaces, since the badge itself does not draw it
+  (`squeezewax-v1-decisions.md` §13.3, §14.5).
+- **Pressing details, credits, estimated value and the Discogs link-out need a
+  resolved pressing** — one supplied by a tag or by a manual link. An album
+  owned by *version* alone has none, and v1 does not retain the collection
+  entry's release id, so those four are **absent rather than empty** for it
+  (`squeezewax-v1-decisions.md` §13.2, §14.10). ~~**"Re-match…" is always
+  available**, and is the action that resolves a pressing where none is known.~~
+  **Corrected 2026-09-29:** not in v1's menu (decisions §15.25).
+- ~~Pressing details: format (vinyl/CD/cassette), catalog #, label, country, year~~
+- ~~Credits (musicians, producers, engineers — a Discogs strength)~~
+- ~~Current estimated value (fetched on demand)~~
 - "View on Discogs" link-out
-- **"Re-match…"** — manual re-match action (§3, re-match triggers)
+- ~~**"Re-match…"** — manual re-match action (§3, re-match triggers)~~
+- **Release details** submenu, `exact` only: pressing facts and the release
+  statistics, fetched when opened (decisions §15.31, §7).
+- **Master details** submenu, `exact` or `version` with a usable master id:
+  year, genre and styles, and copies for sale, fetched when opened (§15.31,
+  §7).
+
+~~**Corrected 2026-09-29 (decisions §15.25) — the v1 menu, in full.** On an owned
+album, or on the playing track of one: one line — "You own this pressing"
+(`exact`) or "You own a version of this record" (`version`) — and a link,
+"This album on Discogs", to the release page (`exact`) or the master page
+(`version`, only where a master id is already stored). Nothing else, and no
+Discogs request. Unowned albums show no entry.~~
+
+**Corrected 2026-09-30 (decisions §15.26, after hardware) — the v1 menu, in
+full.** On an owned album, or on the playing track of one:
+- **In an app that can open links** (the web skins, iPeng, Squeezer and others;
+  core's `canFollowWeblinks`): links only — "On Discogs: your pressing"
+  (`exact`) or "On Discogs: the pressing your files name" (`version`) to the
+  release, and "On Discogs: all versions" to the master, each only where its id
+  is stored.
+- **On a player**, and wherever no link exists: one line — "You own a pressing"
+  or "You own a version".
+No Discogs data and no Discogs request. Unowned albums show no entry. Pressing
+details come with step 10, as a submenu that fetches when opened, with "Data
+provided by Discogs" inside it.
+- **Pressing details and credits are cut from v1.** Showing Discogs data puts
+  "Data provided by Discogs" beside it (§9.6), and the user chose to keep the
+  menu free of it. They return only with a placement for the notice.
+- ~~**Estimated value moves to step 10**, with the marketplace lookup.~~
+  **Removed, §15.31:** estimated value is not an item. The API gives no sales
+  history, and "N for sale, from X" in the submenus is what remains.
+- **"Re-match…" is not in the menu in v1.** It stays on the review-queue page,
+  for queue items only. A version album with no tag can be given a pressing only
+  by tagging its files.
+- **The link describes the album, not the copy.** The stored master is the master
+  of the *identified* release. A version album reached by title can own a record
+  under a different master, and nothing stored says which, so the link is never
+  called "your version".
+
+**Corrected 2026-10-12 (decisions §15.31 rulings 16-17) — the v1 menu, in full,
+from step 10.** The links stay at the top level, each followed by its own
+submenu:
+
+| | `exact` | `version` |
+|---|---|---|
+| 1 | Discogs: Browse your pressing (link) | — |
+| 2 | Discogs: Show your pressing's details › | — |
+| 3 | Discogs: Browse all versions (link) | Discogs: Browse all versions (link) |
+| 4 | Discogs: Show master details › | Discogs: Show master details › |
+
+- Rows 1 and 2 need the release id, rows 3 and 4 a usable master id. Rows 1 and
+  3 appear only in an app that can open links.
+- **A `version` album gets no release link** (ruling 17): a link may name only a
+  pressing the user owns, and for `version` the owned one is not stored. "On
+  Discogs: the pressing your files name" is retired.
+- **On a player, and in an app with no link to offer:** the ownership line first,
+  as before, then rows 2 and 4 where they apply.
+- **`conflict`:** the ownership line only, no links and no submenus.
+- Building the menu makes no request; each submenu makes one when opened (§7).
 
 All Discogs-referencing labels here ("View on Discogs," etc.) use the
 descriptive phrasing pattern permitted under Discogs' brand-usage policy
@@ -385,9 +686,14 @@ their mark.
 
 ## 5. Collection Value & Statistics
 
-Requires Discogs **OAuth** (`Settings/Auth.pm`); pulls the user's Collection
-(and optionally Wantlist) into a local cache via a slow background sync job
-(rate-limit-aware).
+Requires a Discogs **personal access token** (`Settings/Auth.pm`). The
+collection sync reads the user's Collection a page at a time —
+`ceil(items / 100)` requests, measured 3 for a 203-item collection — and takes
+seconds rather than running as a slow background job. Each page is matched
+against LMS albums in memory, the conclusion is written to the `ownership`
+column, and the payload is discarded: there is no local cache of the collection
+(§3, §10; `squeezewax-v1-decisions.md` §13.1, §13.2). Wantlist sync is v2
+(§11).
 
 ### Features
 
@@ -510,15 +816,59 @@ can be ambiguous too).
 
 Explicitly **not** automatic/ambient — fires only when the user triggers it.
 
-- **Trigger**: context menu action, e.g. **"Check availability"**, on any
-  release (owned or not, local or streaming or Discogs-grid).
-- **Result**: compact summary line — e.g. "14 copies available, $8–$45" —
+- ~~**Trigger**: context menu action, e.g. **"Check availability"**, on any
+  release (owned or not, local or streaming or Discogs-grid).~~
+- ~~**Result**: compact summary line — e.g. "14 copies available, $8–$45" —
   expandable into the full filtered listing, each entry linking out to the
-  Discogs listing. No in-plugin checkout; link-out only.
-- **User-filterable / sortable** (see Settings, §8): format, condition, seller
-  rating, sort order, ship-to country.
-- Because it is on-demand, rate-limit pressure is low; results can still be
-  cached briefly per release.
+  Discogs listing. No in-plugin checkout; link-out only.~~ **Dropped, §15.31:**
+  the expandable listing.
+- ~~**User-filterable / sortable** (see Settings, §8): format, condition, seller
+  rating, sort order, ship-to country.~~ **Dropped, §15.31.**
+- ~~Because it is on-demand, rate-limit pressure is low; results can still be
+  cached briefly per release.~~ **Dropped, §15.31:** no cache. LMS does not
+  cache a menu list holding code-backed items; amended by the 2-minute in-memory
+  hold, §15.33.
+
+**Corrected 2026-10-12 (decisions §15.31) — what v1 builds.** Two submenus on
+owned albums (§4), each fetching **only when opened**, with **one request**, and
+storing nothing on disk (a reply is held in memory for up to 2 minutes,
+decisions §15.33). All lines are plain text, one per row; a line whose source field
+is missing or empty is left out, never shown blank.
+
+**Release details** (`exact` only, from `/releases/{id}`):
+
+1. Label – cat. no. (`labels[0].name`, `.catno`).
+2. Format · country · date (`formats[0].name` and `descriptions`, `country`,
+   `released_formatted`).
+3. Genre · styles (`genres`, `styles`).
+4. Have N · Want N (`community.have`, `.want`).
+5. Rating A / 5 (C ratings) (`community.rating.average`, `.count`).
+6. For sale: N, from X C (`num_for_sale`, `lowest_price`, and C, the stored
+   pref `discogsCurrency`). With N = 0 or no price: "None for sale". With no C
+   stored: "For sale: N" only — an unlabelled price is never shown.
+7. The notice.
+
+**Master details** (`exact` or `version` with a usable master, from
+`/masters/{id}`): year; genre · styles; for sale, by the same rules; the notice.
+
+- **The notice.** In an app that can open links: "Data provided by Discogs",
+  linked to the reply's own `uri`, with no `rel`. On a player: the same text,
+  then the address as plain text without `https://`. Whether the plain address
+  meets the terms is unverified (Help Center request #1281019).
+- **Numbers.** Price to two decimals, then the currency code as Discogs sends
+  it ("from 1.33 EUR"). Rating to one decimal. Counts as given.
+- **Currency.** `/releases` and `/masters` ignore `curr_abbr` and price in the
+  account's currency, unlabelled. The label is the profile's `curr_abbr`, kept
+  in `discogsCurrency`, written by the token test and the server sync and
+  cleared with the username when the token changes. There is no currency
+  setting.
+- **Budget.** If the shared budget is spent when a submenu opens, it shows
+  "Discogs is busy, try again in N s" and makes no request. No retry.
+- **Errors** are one line each: busy, rejected token, not found, no answer. On
+  any failure no Discogs data is shown, so no notice either.
+- **Not shown, because the API does not provide them:** last sold, low / median
+  / high, highest price, master have / want / rating. Price suggestions are not
+  in v1.
 
 ---
 
@@ -527,9 +877,11 @@ Explicitly **not** automatic/ambient — fires only when the user triggers it.
 The plugin must stay usable (and quiet) when Discogs is slow, rate-limited,
 or unreachable:
 
-- **Badges** render entirely from the **local cache** (match table +
-  collection cache) — no network calls at render time, so badges never
-  disappear or stall the UI when Discogs is down.
+- **Badges** render from the stored `ownership` label in `discogs_match` (§10)
+  — one column read, no join, and no network call at render time, so badges
+  never disappear or stall the UI when Discogs is down. There is no collection
+  cache to fall back to, because there is no collection cache at all
+  (`squeezewax-v1-decisions.md` §13.2).
 - **Scan-time writes ride LMS's own transaction.** The scanner sets
   `AutoCommit = 0` once (`scanner.pl:295`) and commits at intervals, so our
   writes are enclosed by it and `Slim::Schema->forceCommit` commits both files.
@@ -558,34 +910,62 @@ or unreachable:
 - **Marketplace lookup / value fetch** (on-demand actions) fail gracefully
   with a short message ("Discogs not reachable — try again later") and never
   block navigation.
-- **Collection/Wantlist sync** and **price snapshots** are background jobs:
-  on failure they log, back off, and retry at the next scheduled interval —
-  no user-facing errors, stale data simply persists until the next
-  successful sync.
-- **Scan-time matching**: if the rate limit or a network failure interrupts a
-  scan, matching is **resumable** — already-matched albums are skipped
-  (cached), and unprocessed albums are picked up by the next scan or a manual
-  "continue matching" action. A partial scan must never corrupt or discard
-  existing confirmed matches.
-- **OAuth token expiry/revocation**: collection-dependent features degrade to
-  cached data and Settings shows a "re-authenticate" prompt; matching and
-  read-only browsing (which work with app-level auth) continue.
+- **Collection sync** and **price snapshots** are background jobs. On failure a
+  sync logs and changes nothing — at `warn` for anything that may pass, and at
+  `error` for a token Discogs rejected, which will not. There is no retry timer
+  (`squeezewax-v1-decisions.md` §15.15): the next library scan to finish, or a
+  press of "Sync collection now", is the retry. While a token is rejected,
+  the server's scan-triggered fallback is skipped until the token changes or a
+  manual sync succeeds, because retrying a rejected token cannot succeed. The
+  scan-time sync (`squeezewax-v1-decisions.md` §15.18) cannot keep that pause -
+  the scanner is a fresh process each scan - so it logs every failure at
+  `error`, a rejection included, and tries again at the next scan; its
+  failures never reach the settings page or the queue page. **A
+  failed or partial sync leaves the previous ownership conclusions untouched**
+  — it never clears a badge it could not reconfirm. A badge that silently
+  vanishes is the same class of failure as one that is silently wrong, and the
+  visible signal is the last-synced timestamp in §9, which simply stops
+  advancing (`squeezewax-v1-decisions.md` §13.7).
+- **Scan-time identification** is **resumable**: albums already examined are
+  skipped on `source_timestamp`, and the rest are picked up by the next scan. A
+  partial scan must never corrupt or discard existing confirmed matches.
+  Identification makes no Discogs request — it reads tags — so the rate limit
+  does not bear on it at all.
+- **Ownership is not resumable, and does not need to be.** It does not use the
+  file-state skip, because buying a record changes nothing on disk
+  (`squeezewax-v1-decisions.md` §13.6). Every completed sync re-derives every
+  conclusion from scratch, which at `ceil(items / 100)` requests is cheaper
+  than tracking which conclusions could have moved. An interrupted sync
+  therefore has nothing to resume: it simply did not happen, and the previous
+  conclusions stand.
+- **Token revocation**: a personal access token does not expire, but the user
+  can revoke it from their Discogs account at any time. Every sync then fails,
+  and this logs at **`error`** rather than `warn` — a revoked token is not
+  transient and will not clear itself. Settings shows an authentication-failure
+  state beside a last-synced timestamp that has stopped advancing, and the
+  "re-enter token" prompt. Nothing degrades to cached data, because there is
+  none: existing badges persist unchanged, no new ownership is determined, and
+  on-demand actions fail with the same prompt. **v1 promises nothing that keeps
+  working without a valid token** (`squeezewax-v1-decisions.md` §14.2).
 
 ---
 
 ## 9. Settings (`Settings.pm`)
 
 ### Authentication
-- Discogs OAuth (required for Collection/Wantlist features; token storage).
+- Discogs personal access token (required for Collection/Wantlist
+  features; token storage).
 
 ### Matching
-- Maximum matching tier enabled: **Strict / Structural / Fuzzy** — the
-  cascade always starts at Strict and stops at the selected tier (see §3).
-- Duration margin for structural matching (default ±2–3 s).
-- Multi-disc releases require **all discs** to match for auto-confirmation
-  (no separate setting — this is the fixed behavior; partial matches always
-  fall to the review queue).
-- Review-queue behavior (auto-open after scan? notification?).
+Matching itself is not configurable. Which tag names are read is a setting
+(§3), but the comparison is not: title normalisation is fixed at whitespace
+collapse and case-folding, and artist agreement is required rather than
+weighted. Both were chosen by measurement rather than taste, and exposing them
+would let a user opt into wrong badges
+(`squeezewax-v1-decisions.md` §13.10.3, §13.10.4).
+
+- The review queue is a page linked from Settings, with the count of open items
+  (§3). No auto-open and no notification in v1.
 - Maintenance: **"clear & rebuild matches"** action (§3, re-match triggers).
   **It must clear `discogs_no_match` as well as `discogs_match`** — decisions
   §2a invariant 3. Leaving the negative cache behind would make the rebuild skip
@@ -593,26 +973,67 @@ or unreachable:
   what the action promises. It is also the escape hatch for two states nothing
   else clears: `discogs_no_match` rows orphaned by an `album_key` change, and a
   demoted candidate whose tags have since been removed (§3).
+  **The action clears ownership as well as identification**, since both live in
+  `discogs_match` (§10) — so every badge in the library goes dark until a
+  collection sync completes. The action does not itself trigger one; it must
+  say so before it runs, because "rebuild" implies a wait but not an unbounded
+  one (`squeezewax-v1-decisions.md` §14.9).
+  **Corrected 2026-09-22 (§14.9, §15.2, §15.15):** the warning must NOT say that
+  a scan alone will not restore the badges — since §15.2 a finished scan runs a
+  sync, so badges return at the next scan **or** a press of "Sync collection
+  now". The exceptions the warning should name instead: no token set, or a token
+  Discogs has rejected, in which case scan-triggered syncs are paused and the
+  button is the only remedy.
 
 ### Badge
-- Enable/disable badge in grid view.
-- Enable/disable badge on Now Playing.
-- Optional artist-level badge (Collection artists only).
-- Enable/disable Wantlist badge.
-- **Badge color for "owned"** (configurable).
-- **Badge color for "wantlist"** (configurable).
+**Corrected 2026-09-29 (decisions §15.25): v1 has no badge settings.** The menu
+entry and the "Records I own" view are always on, and there is no artwork badge
+to configure. The list below returns with a cover badge.
+- ~~Enable/disable badge in grid view.~~
+- ~~Enable/disable badge on Now Playing.~~
+- Optional artist-level badge (Collection artists only). *(v3, §11.)*
+- Enable/disable Wantlist badge. *(v2, §11.)*
+- ~~**Badge color for "owned"** (configurable).~~
+- **Badge color for "wantlist"** (configurable). *(v2.)*
 
-### Marketplace preferences
-- Format filter: vinyl only / CD only / any.
-- Minimum media condition (Goldmine grading: M, NM, VG+, VG, …).
-- Minimum seller rating (%).
-- Sort order: price ascending / seller rating / condition / newest listing.
-- Ship-to country filter.
-- What to show and **in what order** in the result summary
-  (e.g. amount available first, then price range).
+### ~~Marketplace preferences~~
+**Dropped 2026-10-12 (decisions §15.31 ruling 4):** "better done at the Discogs
+site". Not deferred. There is no currency setting either: Discogs prices in the
+account's currency whatever is asked (§7).
+- ~~Format filter: vinyl only / CD only / any.~~
+- ~~Minimum media condition (Goldmine grading: M, NM, VG+, VG, …).~~
+- ~~Minimum seller rating (%).~~
+- ~~Sort order: price ascending / seller rating / condition / newest listing.~~
+- ~~Ship-to country filter.~~
+- ~~What to show and **in what order** in the result summary
+  (e.g. amount available first, then price range).~~
 
 ### Collection / value
-- Sync interval for Collection/Wantlist.
+- ~~**Collection sync interval.**~~ **Removed 2026-09-22
+  (`squeezewax-v1-decisions.md` §15.15):** there is no scheduled sync and no
+  interval setting. Wantlist sync is v2 (§11).
+- **"Sync collection now"** — a manual trigger, alongside the one automatic
+  trigger in §3, a library scan: inside the scan since
+  `squeezewax-v1-decisions.md` §15.18, with the server's sync after the scan
+  finishes as the fallback (§13.7, §15.2, §15.15, §15.18). Both this button and
+  "Test token" act on the token **currently on the page**, and both save it
+  (§15.15 part 3); the page says so.
+- **Last-synced timestamp**, displayed. When the badges look wrong this is the
+  first thing to check, and a timestamp that has stopped advancing is the only
+  visible sign of a sync that keeps failing. If the failure is an authentication
+  one, an **authentication-failure state** is shown beside it with the
+  "re-enter token" prompt (§8; `squeezewax-v1-decisions.md` §13.7, §14.2).
+- **Derive status** (decisions §15.25): while the master-derive job has releases
+  pending, "Deriving masters: N of M releases", marked running or waiting.
+  Without it, ownership changes for up to 25 minutes after a scan with nothing
+  on screen to say why (§15.23).
+- **Both Discogs notices** (decisions §9.6, §15.25): "This application uses
+  Discogs' API but is not affiliated with, sponsored or endorsed by Discogs.
+  'Discogs' is a trademark of Zink Media, LLC." and "Data provided by Discogs.",
+  the latter linked, without `nofollow`, to the user's collection page. The
+  username comes from a stored pref, `discogsUsername`, written by the server's
+  identity calls and cleared when the token changes; when it's empty the link
+  goes to discogs.com.
 - Price-snapshot interval (for the value-history chart).
 - **Display currency**: default = Discogs' native currency per item; optional
   override to recalculate a normalized total into a chosen display currency.
@@ -627,18 +1048,56 @@ discogs_match
                        identity of the match, not lms_album_id — see §3)
   mb_album_id         (albums.musicbrainz_id where present, secondary
                        resolution path)
-  lms_album_id        (denormalised cache column, refreshed whenever a
-                       rescan completes; never trusted as identity)
-  discogs_release_id
-  discogs_master_id
-  match_tier          (strict | structural | fuzzy | manual — provenance,
-                       not just which cascade tier ran; see §3)
-  state               (candidate | confirmed)
+  lms_album_id        (denormalised cache column; never trusted as identity.
+                       ~~refreshed whenever a rescan completes~~ — corrected
+                       2026-09-29, decisions §15.25: refreshed only when the
+                       importer examines the album or a relink moves it. An
+                       unchanged or all-remote album keeps a stale id after LMS
+                       reassigns albums.id, so nothing may look an album up by
+                       it; compute album_key from the album's tracks instead)
+  discogs_release_id  (which release this album IS. Identity, never
+                       ownership. NULL for a conflict row or an
+                       edition-level match — see §3 and
+                       squeezewax-v1-decisions.md §3a)
+  discogs_master_id   (which edition. TAG ONLY — a DISCOGS_MASTER_ID-family
+                       tag, and nothing else ever writes it, because a tag is
+                       the user's own assertion. See derived_master_id below)
+  ownership           (exact | version | absent — what the user OWNS.
+                       Written by the collection sync; never NULL, since
+                       "absent" is an answer rather than a missing one)
+  match_tier          (strict | manual, or NULL — provenance of the
+                       identification. NULL where there is none)
+  state               (candidate | confirmed, or NULL — as match_tier,
+                       NULL where no identification was made. No default:
+                       an omitted state must not silently become
+                       "candidate")
+  review_reason       (conflict | ambiguous | artist-disagree | artist-absent |
+                       various-gated | orphan, or NULL. Why the album is in
+                       the review queue or the orphan list. `conflict` is
+                       written and cleared only by the importer, and is
+                       sticky; the rest are re-derived by the ownership pass
+                       at every sync. Never on a manual row whose album is
+                       current — squeezewax-v1-decisions.md §15.16)
   matched_at
   source_timestamp    (MAX(tracks.timestamp) over the album's local tracks at
                        match time; the skip key for a rescan. NULL forces
                        re-examination, which is how a settings change
                        invalidates the cached answer — decisions §3b)
+  -- the derived master arm (build-order step 8c, decisions §15.22). Written
+  -- ONLY by Derive.pm, read only by node F, and never by the ownership pass.
+  -- Integers, all three: a bare identifier is all §9.5 permits us to keep.
+  derived_master_id       (the master of discogs_release_id, from
+                           GET /releases/{id}. NULL means "there is none" when
+                           derived_from_release_id is set, and "never looked"
+                           when it is not)
+  derived_from_release_id (which release the master above was derived from.
+                           Unequal to discogs_release_id = STALE: the tags now
+                           name a different release, node F ignores the master,
+                           and the job re-derives it)
+  derived_at              (for the log and for a human reading the table.
+                           Nothing branches on it — an age-based re-fetch is
+                           exactly what keeping only an identifier avoids)
+
   -- orphan-recovery snapshot, captured at confirm time:
   snapshot_artist
   snapshot_album_title
@@ -653,16 +1112,12 @@ discogs_no_match
 
 discogs_release_cache
   discogs_release_id  (PK)
-  -- cached release payload: tracklist, format, year, country, etc.
+  discogs_master_id
+  payload             (cached release payload: tracklist, format, year,
+                       country. Not written in v1; retention is constrained
+                       by the Discogs API Terms of Use, not by usefulness —
+                       see squeezewax-v1-decisions.md §9.5)
   fetched_at
-
-discogs_collection
-  instance_id         (PK — Discogs collection instance; the same release
-                       can be owned in multiple copies, each its own instance)
-  discogs_release_id
-  format, catalog_no, label, country, year
-  condition, added_at, notes
-  list_state          (owned | wantlist)
 
 discogs_price_snapshot
   discogs_release_id
@@ -674,57 +1129,107 @@ discogs_price_snapshot
 `albums.id` (`INTEGER PRIMARY KEY AUTOINCREMENT`) does not survive a
 `library.db` wipe, while `urlmd5` does — see §3 and
 `squeezewax-v1-decisions.md` §2 for the full finding, including the
-orphan-recovery flow the snapshot columns above support. `discogs_release_cache`
-makes relinks and completeness checks (v2) cost no API calls once a release
-has been fetched once — added explicitly rather than left implied.
+orphan-recovery flow the snapshot columns above support.
 
-**`discogs_no_match` is entirely regenerable**, like `discogs_collection` and
-unlike `discogs_match`. It exists so a rescan does not re-read one or two files
-for every unmatched album forever — LMS reads no audio files at all on a
-no-change rescan, so without it we would be adding a cost where there is none.
-Dropping it costs re-reads, never a match. Two rules follow, both in decisions
-§2a: **orphan recovery must never read it** (it answers "which local album does
-this existing match belong to", and a no-match row is not a match), and the
-"clear & rebuild matches" action (§9) must clear it.
+**Identification and ownership are separate columns, and neither substitutes
+for the other.** `discogs_release_id` answers *which release this album is*;
+`ownership` answers *what the user owns*. The case that forces the split is the
+common one: a file tagged `DISCOGS_RELEASE_ID=123` while the collection holds
+release 456, both under the same master. The user owns a version, not that
+pressing. Expressing ownership by NULLing the release id would destroy an
+identification the user supplied themselves. Reasoning in
+`squeezewax-v1-decisions.md` §13.3.
 
-**`discogs_collection` is entirely regenerable, and that is a design property
-worth relying on.** It caches Discogs' own data and holds nothing the user
-entered here — §5 rules out a local "owned" flag deliberately, so there is no
-second source of truth to lose. Rebuilding it costs `DROP TABLE`, recreate,
-and a collection re-sync of roughly 20 requests (§4). Two consequences:
+**`match_tier` is NULL for an album identified by nothing.** The column records
+the provenance of an *identification* — a tag, or the user. A collection match
+makes no identification: it establishes that the user owns a record with this
+title by this artist, and never says which pressing. There is no provenance to
+record, so the column is empty rather than carrying an invented value. `strict`
+and `manual` are the only values written; `structural` and `fuzzy` are gone with
+the tier that produced them. Reasoning in `squeezewax-v1-decisions.md` §14.1,
+which also records why this makes the migration a table rebuild rather than an
+added column.
 
-- Schema changes to this table are cheap at any time, unlike `discogs_match`.
-  The known one is `instance_id` as primary key: a Discogs *wantlist* entry
-  has no instance id, so `list_state = wantlist` rows do not fit the current
-  key. v1 writes owned rows only, so this is deferred rather than urgent.
-- **Orphan recovery must never depend on this table.** The identity snapshot
-  lives in `discogs_match` precisely so that recovering a match survives the
-  collection being wiped and re-synced.
+`state` is NULL for the same reason and in the same rows. The two columns are
+always empty together: they describe an identification, and either there is one
+or there is not. It follows that **a row must be worth its existence** — absence
+of a row already means "nothing known", so a row identifying nothing and owning
+nothing asserts nothing and is never written. A row exists where there is an
+identification, an ownership conclusion other than `absent`, or a review reason
+(`squeezewax-v1-decisions.md` §14.8, §15.16).
 
-**Badge derivation** (see §4 flowchart): badge presence and color are computed
-by joining `discogs_match` (state = confirmed) with `discogs_collection` on
-`discogs_release_id` and reading `list_state`. This join never touches album
-identity — it is unaffected by the `album_key` change above. Ownership is
-never stored in the match table.
+**v1 stores no Discogs Content.** There is no collection table. The sync holds
+each page of the user's collection in memory, matches it against LMS albums
+there, writes the conclusion into `ownership`, and discards the payload
+(`squeezewax-v1-decisions.md` §13.2, applying §9.5's "store conclusions, not
+Content"). One consequence is a requirement rather than a note: **matching must
+be deterministic**, because the payload is gone and a re-sync re-derives every
+conclusion from scratch. The same collection against the same library must
+produce the same answers, or badges change between syncs with no visible cause.
+
+**The `snapshot_*` columns are LMS-side and stay.** `snapshot_artist` and
+`snapshot_album_title` hold the *local* album's identity for orphan recovery
+(`squeezewax-v1-decisions.md` §2), not Discogs' copy of it. They are the one
+place in the schema where stored text could be mistaken for Discogs Content and
+is not.
+
+**`discogs_no_match` is entirely regenerable**, unlike `discogs_match`. It
+exists so a rescan does not re-read one or two files for every unmatched album
+forever — LMS reads no audio files at all on a no-change rescan, so without it
+we would be adding a cost where there is none. Dropping it costs re-reads, never
+a match. Two rules follow, both in decisions §2a: **orphan recovery must never
+read it** (it answers "which local album does this existing match belong to",
+and a no-match row is not a match), and the "clear & rebuild matches" action
+(§9) must clear it.
+
+**Badge derivation** (see §4): the badge reads the `ownership` column directly.
+There is no join and no render-time test — the sync has already decided, and a
+badge paints for `exact` or `version` alike. Confirmation is not required: an
+unambiguous title-and-artist match against the collection badges version
+ownership with no tag, no confirmed state and no local file
+(`squeezewax-v1-decisions.md` §13.10.2 and §13.10.3). Request cost is in §13,
+which budgets the sync rather than the render.
 
 ---
 
 ## 11. v1 Scope & Roadmap
 
+v1 assumes a **well-tagged library and a maintained Discogs collection**. It
+draws its conclusions from what the user has already curated in both places and
+adds no machinery for reconciling them when they disagree — a wrongly badged
+album is fixed by correcting the collection or the tags, not in the plugin
+(`squeezewax-v1-decisions.md` §14.4). A user whose Discogs collection does not
+reflect their shelves is outside what this plugin can usefully do for them.
+
 **v1 (core value, smallest surface):**
 - Configurable Discogs tag names, ordered list, with detection (§3, §9).
-- Strict + Structural matching, review queue, manual re-match.
-- Owned badge (grid + Now Playing) with badge context menu (pressing details,
-  credits, on-demand value, Discogs link-out).
-- OAuth + Collection sync (needed for the owned badge).
+- Strict identification from tags, plus collection matching for ownership,
+  review queue, manual re-match (§3). **Every album is in scope**, including
+  albums with no local files at all (`squeezewax-v1-decisions.md` §13.10.1).
+- ~~Owned badge (grid + Now Playing) with badge context menu (pressing details,
+  credits, on-demand value, Discogs link-out).~~ **Corrected 2026-09-29
+  (decisions §15.25):** ownership in the album and track menus (one line and a
+  Discogs link), and a "Records I own" library view. No artwork badge: no skin
+  offers a hook.
+- Personal access token + collection sync (`squeezewax-v1-decisions.md` §9.1).
+  Not merely "needed for the owned badge" — the collection is where ownership
+  is determined, so without a valid token there are no badges at all (§8).
 - On-demand marketplace lookup.
 
 **v2:**
-- Fuzzy tier (streaming-album matching) + Wantlist sync & wantlist badge.
+- Wantlist sync & wantlist badge.
 - Triage / library-health page (problem releases only).
 - Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
+- A field picker for the review queue's re-match list.
+- Orphan relink for users with manual links and no tag names configured.
 - Collection value total + price snapshots.
+- Master details for albums the user does not own (decisions §15.31).
+- Menus for owned versions: the release link and release details for the
+  pressing a `version` album's owner actually holds, which needs that release id
+  stored (§15.31 ruling 17).
+- "Add to Discogs wantlist" (§15.31). Unverified: whether a personal token may
+  write to the user's wantlist.
 
 **Not planned:** any write to the Discogs Collection (§5) — adding a release
 is a record-in-hand act performed on the Discogs website; LMS has no
@@ -734,6 +1239,8 @@ advantage there and no way to see the physical object.
 - Flow 2 (native Discogs grids, "Find on …" / "Find" fan-out).
 - Statistics dashboard (value trend chart, stat cuts, completeness view).
 - Artist-level badge (opt-in), currency conversion option.
+- A SqueezeWax app (`is_app`, the pattern of the Listen Later plugin) as a
+  low-level forerunner of Flow 2's Discogs browse (decisions §15.25).
 
 ---
 
@@ -743,46 +1250,75 @@ All original open design questions have been resolved (see §3–§9 for the
 decisions and where they now live). Remaining follow-ups to verify during
 implementation, rather than open design questions:
 
-- Confirm whether a genuinely skin-independent badge/overlay mechanism is
+- ~~Confirm whether a genuinely skin-independent badge/overlay mechanism is
   achievable in LMS core, or whether Material Skin (and others) will still
   need a distinct integration path — check against actual skin source rather
-  than assuming.
+  than assuming.~~ **Answered 2026-09-29 (decisions §15.25):** neither core nor
+  Material offers a plugin one; v1 shows ownership in menus and a library view.
 - Choose and verify an actual FX-rate source for the optional currency
   conversion feature (§5/§9) — not yet selected.
-- Multi-disc matching (§3) is defined for standard multi-CD/LP releases;
-  edge cases (e.g. bonus-disc-only mismatches, box sets with non-audio discs)
-  should be validated against real Discogs release data once implementation
-  starts.
-- ~~Verify how LMS's rescan flags changed files~~ — **Resolved.**
-  `Slim::Utils::Scanner::API` provides `onNewTrack` / `onChangedTrack` /
-  `onDeletedTrack` / `onFinished` hooks, confirmed against
-  `refs/slimserver` `public/9.1`. `Importer.pm` registers `onChangedTrack`
-  (and `onNewTrack`/`onDeletedTrack`) to accumulate affected album ids per
-  track event, then runs the deduped re-match cascade once in `onFinished`.
-  See `squeezewax-v1-decisions.md` §6 and `implementation-plan.md` §4.6.
+- **How LMS's rescan flags changed files is settled; what remains is
+  unimplemented, not unknown.** `Slim::Utils::Scanner::API` provides
+  `onNewTrack` / `onChangedTrack` / `onDeletedTrack` / `onFinished`, confirmed
+  against `refs/slimserver` `public/9.1`, and `Importer.pm` registers them to
+  accumulate affected album ids per track event
+  (`implementation-plan.md` §4.6). The corrected hook is in
+  `squeezewax-v1-decisions.md` §6; the outstanding `lms_album_id` refresh is an
+  open item in `TODO.md`.
 
 ---
 
 ## 13. Key Technical Constraints (Summary)
 
-- **Discogs API**: 60 req/min authenticated; OAuth for user data; no
-  historical price endpoint (snapshot locally).
+- **Discogs API rate limit: 60 requests/min, authenticated** — this is the
+  one authoritative statement of this figure; §3 and CLAUDE.md point here
+  rather than repeating it. Confirmed 2026-09-07 via the
+  `x-discogs-ratelimit` response header using a personal access token
+  ([discogs.com/developers](https://www.discogs.com/developers/)).
+  Unauthenticated tier is documented at 25/min but not yet confirmed by
+  header — see TODO.md. v1 uses a user-supplied personal access token, not
+  OAuth 1.0a (`squeezewax-v1-decisions.md` §9.1, CLAUDE.md,
+  `implementation-plan.md`). No historical price endpoint (snapshot locally).
+- **Paged endpoints need an explicit stable sort.** The collection listing
+  defaults to `sort=label&sort_order=asc`, and paging over a mutable,
+  non-unique sort key can shift rows between pages and silently drop or
+  duplicate them. A dropped row is a missing badge; a duplicated one is
+  wasted work (`squeezewax-v1-decisions.md` §9.4).
 
-  **Scan-time budget** (corrected from an earlier flat "1–2 requests per
-  album" estimate — see `squeezewax-v1-decisions.md` §4):
+  **Request budget.** Two parts, because the two costs scale with different
+  things and only one of them recurs.
+
+  **Per collection sync** — the whole recurring cost:
 
   | Operation | Cost |
   |---|---|
-  | Strict match | 0 requests — the tag names the release |
-  | Owned badge | ~20 requests per collection sync (100 items/page) |
-  | Structural match | 1 search + 1 release fetch per candidate remaining after the format/year/country pre-filter (§3) |
-  | Completeness check (v2) | 1 release fetch per matched album, cacheable forever |
+  | Collection sync | `ceil(items / 100)` requests. A 203-item collection is 3. |
+  | Identification (Strict) | **0** — it reads tags from files the scanner is already opening. |
+  | Ownership | **0** beyond the sync itself; the comparison runs in memory. |
+  | Badge render | **0** — one column read (§10). |
 
-  For a well-tagged, Strict-dominant library, cold matching is
-  **disk-bound, not rate-limit-bound**. Structural-heavy libraries can still
-  be expensive — an album with eight pressings on Discogs costs nine
-  requests, not two — so matching must still be incremental, resumable
-  (§8), and cached so it only ever runs cold once.
+  This scales with the **collection**, not the library. A library of 765
+  albums and a library of 20,000 cost the same three requests, because
+  nothing is fetched per album.
+
+  **Per user action** — deliberately not budgeted, under the rule that a
+  request count bounded by user actions goes live rather than being
+  pre-fetched (`squeezewax-v1-decisions.md` §9.5):
+
+  | Action | Cost |
+  |---|---|
+  | Marketplace lookup / "check availability" (§7) | 1 lookup per invocation |
+  | Value fetch in the badge context menu (§4) | 1 fetch per invocation |
+  | Review-queue search (§3) | 1 search **per query sent**, not per keystroke — see below |
+  | "View on Discogs" link-out | 0 — a URL, not a request |
+
+  **Search-as-you-type must send queries on a debounce, not on input.** It is
+  the one user action whose cost is bounded by typing rather than by
+  deciding, and at 60 requests/min an undebounced field can exhaust the
+  budget from a single review-queue session.
+
+  Matching is **disk-bound, not rate-limit-bound** — now trivially so, since
+  it makes no requests at all.
 - **LMS**: single-threaded — server-side calls must be async
   (`Slim::Networking::SimpleAsyncHTTP`), scanner-side calls synchronous
   (`Slim::Networking::SimpleSyncHTTP`); Perl plugin architecture per the

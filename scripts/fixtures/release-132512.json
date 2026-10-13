@@ -1,0 +1,1168 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 519050,
+         "join" : "",
+         "name" : "Nick Ashcroft",
+         "resource_url" : "https://api.discogs.com/artists/519050",
+         "role" : "",
+         "tracks" : ""
+      }
+   ],
+   "artists_sort" : "Nick Ashcroft",
+   "blocked_from_sale" : false,
+   "community" : {
+      "contributors" : [
+         {
+            "resource_url" : "https://api.discogs.com/users/wilmer",
+            "username" : "wilmer"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/DarrenCole",
+            "username" : "DarrenCole"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/anonycatandmouse",
+            "username" : "anonycatandmouse"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/DJ_Dara",
+            "username" : "DJ_Dara"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/sjcee",
+            "username" : "sjcee"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Dennis_G_Druzhin",
+            "username" : "Dennis_G_Druzhin"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/koil",
+            "username" : "koil"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/the_electrician",
+            "username" : "the_electrician"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/kreuztot",
+            "username" : "kreuztot"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/lostgroove",
+            "username" : "lostgroove"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Yasss",
+            "username" : "Yasss"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/helix",
+            "username" : "helix"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Joseph_S",
+            "username" : "Joseph_S"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/aural",
+            "username" : "aural"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/DiscogsUpdateBot",
+            "username" : "DiscogsUpdateBot"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/jondica",
+            "username" : "jondica"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/ornsman",
+            "username" : "ornsman"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/peternovot",
+            "username" : "peternovot"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/rudebwoyselecta",
+            "username" : "rudebwoyselecta"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/keithmac",
+            "username" : "keithmac"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/KnP",
+            "username" : "KnP"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/nik-black",
+            "username" : "nik-black"
+         }
+      ],
+      "data_quality" : "Needs Vote",
+      "have" : 185,
+      "rating" : {
+         "average" : 4.22,
+         "count" : 41
+      },
+      "status" : "Accepted",
+      "submitter" : {
+         "resource_url" : "https://api.discogs.com/users/wilmer",
+         "username" : "wilmer"
+      },
+      "want" : 114
+   },
+   "companies" : [
+      {
+         "catno" : "",
+         "entity_type" : "17",
+         "entity_type_name" : "Pressed By",
+         "id" : 402823,
+         "name" : "Euro CD Norge A/S",
+         "resource_url" : "https://api.discogs.com/labels/402823",
+         "thumbnail_url" : "https://i.discogs.com/o-6ZVwslA_sldM1ib1P1AKS_CEKayD09XB_nUGsZZ2o/rs:fit/g:sm/q:90/h:337/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTQwMjgy/My0xNTM3NTA4NDgy/LTIyMzcuanBlZw.jpeg"
+      }
+   ],
+   "country" : "UK",
+   "data_quality" : "Needs Vote",
+   "date_added" : "2003-04-14T04:26:58-07:00",
+   "date_changed" : "2026-03-04T15:01:24-08:00",
+   "estimated_weight" : 170,
+   "extraartists" : [
+      {
+         "anv" : "",
+         "id" : 684629,
+         "join" : "",
+         "name" : "J (10)",
+         "resource_url" : "https://api.discogs.com/artists/684629",
+         "role" : "Compiled By",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 519050,
+         "join" : "",
+         "name" : "Nick Ashcroft",
+         "resource_url" : "https://api.discogs.com/artists/519050",
+         "role" : "DJ Mix [Digitally Mixed By]",
+         "tracks" : ""
+      },
+      {
+         "anv" : "",
+         "id" : 1541952,
+         "join" : "",
+         "name" : "Carsten Drescher",
+         "resource_url" : "https://api.discogs.com/artists/1541952",
+         "role" : "Layout, Design",
+         "tracks" : ""
+      }
+   ],
+   "format_quantity" : 2,
+   "formats" : [
+      {
+         "descriptions" : [
+            "Compilation",
+            "Mixed"
+         ],
+         "name" : "CD",
+         "qty" : "2"
+      }
+   ],
+   "genres" : [
+      "Electronic"
+   ],
+   "id" : 132512,
+   "identifiers" : [
+      {
+         "type" : "Barcode",
+         "value" : " 5028557005229"
+      },
+      {
+         "type" : "Label Code",
+         "value" : "LC 2323"
+      },
+      {
+         "type" : "Rights Society",
+         "value" : "MCPS"
+      },
+      {
+         "type" : "SPARS Code",
+         "value" : "DDD"
+      },
+      {
+         "type" : "Matrix / Runout",
+         "value" : "EURO CD NORGE A/S MILL 052-CD 1"
+      },
+      {
+         "type" : "Matrix / Runout",
+         "value" : "EURO CD NORGE A/S MILL 052-CD 2"
+      }
+   ],
+   "images" : [
+      {
+         "height" : 530,
+         "resource_url" : "https://i.discogs.com/3VlIboxpWbTgRkoRacfjbElx7-xCPwzeOCP5yCjM2lA/rs:fit/g:sm/q:90/h:530/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMjc4NDExODU2/LmpwZWc.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/3VlIboxpWbTgRkoRacfjbElx7-xCPwzeOCP5yCjM2lA/rs:fit/g:sm/q:90/h:530/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMjc4NDExODU2/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/A_bRjsCRStE2zCgldu5I4nfSiQI8fuKfDp_HEBnLaGM/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMjc4NDExODU2/LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 543,
+         "resource_url" : "https://i.discogs.com/XL4-_lg3SR1bU3zaMnpoi80efTkmlW9zqqaU3CMUxcI/rs:fit/g:sm/q:90/h:543/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NjUz/LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/XL4-_lg3SR1bU3zaMnpoi80efTkmlW9zqqaU3CMUxcI/rs:fit/g:sm/q:90/h:543/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NjUz/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/bd2DwfkPTonMsmb7tjZjicivvIcWZ6KIkRQYrzEEkdo/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NjUz/LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 598,
+         "resource_url" : "https://i.discogs.com/yXrFDqvHEx14SFQq5-SnbRvfFLrFyNbNPK82Aj7KVfA/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2Njcz/LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/yXrFDqvHEx14SFQq5-SnbRvfFLrFyNbNPK82Aj7KVfA/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2Njcz/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/QzJhz0dmM0XDDspmB90rSMEFSziABbiBs9_5Vmg6hBY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2Njcz/LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 598,
+         "resource_url" : "https://i.discogs.com/2a213QWAbpZj7kh9xVhX01EpuzCls9FwpU2uHbS0Tp0/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzQx/LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/2a213QWAbpZj7kh9xVhX01EpuzCls9FwpU2uHbS0Tp0/rs:fit/g:sm/q:90/h:598/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzQx/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/-lZp5kb5osF_tG-zzK008y6rMGUuJ2bGXsUSdv-TJJ4/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzQx/LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 541,
+         "resource_url" : "https://i.discogs.com/7LVFlCMe0rtTRIu7U1PnVEx1pmtQQAUEvAkn8Rmxoh8/rs:fit/g:sm/q:90/h:541/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzY2/LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/7LVFlCMe0rtTRIu7U1PnVEx1pmtQQAUEvAkn8Rmxoh8/rs:fit/g:sm/q:90/h:541/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzY2/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/B9XZBjxbZ6ECrqODA56G_QVBtXhnHqeTZjn9fMCh-zY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2NzY2/LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 536,
+         "resource_url" : "https://i.discogs.com/ppSMU4qbjLlJRPgx2aRXPxBLe6NkuFgFl5b_4zPZv2M/rs:fit/g:sm/q:90/h:536/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2ODE0/LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ppSMU4qbjLlJRPgx2aRXPxBLe6NkuFgFl5b_4zPZv2M/rs:fit/g:sm/q:90/h:536/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2ODE0/LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/ZFyPvmZuw9w7PiN_K9iAl4GRceiUiTofR-YmH08zrpM/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMTY3NDE2ODE0/LmpwZWc.jpeg",
+         "width" : 600
+      }
+   ],
+   "is_offensive" : false,
+   "labels" : [
+      {
+         "catno" : "MILL 052-CD",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 828,
+         "name" : "Millennium Records",
+         "resource_url" : "https://api.discogs.com/labels/828",
+         "thumbnail_url" : "https://i.discogs.com/mdRdWdXJ8jZTSoBIzIaBZNq3EeS5AVghr3GS1XDlIAQ/rs:fit/g:sm/q:90/h:187/w:281/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTgyOC0x/Njg0MjMyNzY2LTU3/NjQuanBlZw.jpeg"
+      }
+   ],
+   "lowest_price" : 3.87,
+   "master_id" : 1861554,
+   "master_url" : "https://api.discogs.com/masters/1861554",
+   "notes" : "Comes in Digipak.\n\nTrack 1-04 is incorrectly titled as \"Maracana\" (Original Version).\nTrack 1-08 is incorrectly attributed to S. Gurley, who is infact only the remixer",
+   "num_for_sale" : 4,
+   "released" : "1997-11-10",
+   "released_formatted" : "10 Nov 1997",
+   "resource_url" : "https://api.discogs.com/releases/132512",
+   "series" : [
+      {
+         "catno" : "Volume 3",
+         "entity_type" : "2",
+         "entity_type_name" : "Series",
+         "id" : 524804,
+         "name" : "Atmospheric Drum & Bass",
+         "resource_url" : "https://api.discogs.com/labels/524804"
+      }
+   ],
+   "status" : "Accepted",
+   "styles" : [
+      "Drum n Bass",
+      "Jungle"
+   ],
+   "thumb" : "https://i.discogs.com/A_bRjsCRStE2zCgldu5I4nfSiQI8fuKfDp_HEBnLaGM/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTEzMjUx/Mi0xMjc4NDExODU2/LmpwZWc.jpeg",
+   "title" : "Atmospheric Drum & Bass Volume 3",
+   "tracklist" : [
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 280,
+               "join" : "",
+               "name" : "Boymerang",
+               "resource_url" : "https://api.discogs.com/artists/280",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "8:12",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 268942,
+               "join" : "",
+               "name" : "Graham Sutton",
+               "resource_url" : "https://api.discogs.com/artists/268942",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-01",
+         "title" : "Soul Beat Runna",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 5465,
+               "join" : "",
+               "name" : "Big Bud",
+               "resource_url" : "https://api.discogs.com/artists/5465",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:10",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 5465,
+               "join" : "",
+               "name" : "Big Bud",
+               "resource_url" : "https://api.discogs.com/artists/5465",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-02",
+         "title" : "Noodles",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 20919,
+               "join" : "",
+               "name" : "Organic Synthetic",
+               "resource_url" : "https://api.discogs.com/artists/20919",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:37",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 709626,
+               "join" : "",
+               "name" : "B. Stone",
+               "resource_url" : "https://api.discogs.com/artists/709626",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "C. Silvermen",
+               "id" : 689335,
+               "join" : "",
+               "name" : "Charlie Silverman",
+               "resource_url" : "https://api.discogs.com/artists/689335",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-03",
+         "title" : "Space Walking",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "Hydroflow",
+               "id" : 10558,
+               "join" : "",
+               "name" : "Hydraflow",
+               "resource_url" : "https://api.discogs.com/artists/10558",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:42",
+         "extraartists" : [
+            {
+               "anv" : "Hydroflow",
+               "id" : 10558,
+               "join" : "",
+               "name" : "Hydraflow",
+               "resource_url" : "https://api.discogs.com/artists/10558",
+               "role" : "Producer",
+               "tracks" : ""
+            },
+            {
+               "anv" : "A. Gubby",
+               "id" : 349931,
+               "join" : "",
+               "name" : "Alan Gubby",
+               "resource_url" : "https://api.discogs.com/artists/349931",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "B. Blackwell",
+               "id" : 567456,
+               "join" : "",
+               "name" : "Barry Blackwell",
+               "resource_url" : "https://api.discogs.com/artists/567456",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "J. Beckett",
+               "id" : 349933,
+               "join" : "",
+               "name" : "Joe Beckett",
+               "resource_url" : "https://api.discogs.com/artists/349933",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-04",
+         "title" : "Dreams Deferred",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 11461,
+               "join" : "",
+               "name" : "Sonartribe",
+               "resource_url" : "https://api.discogs.com/artists/11461",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "5:25",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 11461,
+               "join" : "",
+               "name" : "Sonartribe",
+               "resource_url" : "https://api.discogs.com/artists/11461",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-05",
+         "title" : "Concious",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 288,
+               "join" : "",
+               "name" : "E-Z Rollers",
+               "resource_url" : "https://api.discogs.com/artists/288",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:49",
+         "extraartists" : [
+            {
+               "anv" : "A. Banks",
+               "id" : 10141,
+               "join" : "",
+               "name" : "Alex Banks",
+               "resource_url" : "https://api.discogs.com/artists/10141",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "J. Hurren",
+               "id" : 474638,
+               "join" : "",
+               "name" : "Jay Hurren",
+               "resource_url" : "https://api.discogs.com/artists/474638",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-06",
+         "title" : "Fever",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1415,
+               "join" : "",
+               "name" : "Omni Trio",
+               "resource_url" : "https://api.discogs.com/artists/1415",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:05",
+         "extraartists" : [
+            {
+               "anv" : "R. Haigh",
+               "id" : 74421,
+               "join" : "",
+               "name" : "Robert Haigh",
+               "resource_url" : "https://api.discogs.com/artists/74421",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-07",
+         "title" : "Twin Town Karaoke",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 162303,
+               "join" : "",
+               "name" : "Secret Motion",
+               "resource_url" : "https://api.discogs.com/artists/162303",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:05",
+         "extraartists" : [
+            {
+               "anv" : "A. Swallow",
+               "id" : 709631,
+               "join" : "",
+               "name" : "Andy Swallow",
+               "resource_url" : "https://api.discogs.com/artists/709631",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "K. Mac",
+               "id" : 72734,
+               "join" : "",
+               "name" : "Keith Mac",
+               "resource_url" : "https://api.discogs.com/artists/72734",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "M. Clayton",
+               "id" : 31459,
+               "join" : "",
+               "name" : "Matt Clayden",
+               "resource_url" : "https://api.discogs.com/artists/31459",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "S. Gurley",
+               "id" : 5486,
+               "join" : "",
+               "name" : "Steve Gurley",
+               "resource_url" : "https://api.discogs.com/artists/5486",
+               "role" : "Remix",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-08",
+         "title" : "Lose Her (Representation Of Beatz Mix)",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 2074,
+               "join" : "",
+               "name" : "Nookie",
+               "resource_url" : "https://api.discogs.com/artists/2074",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:21",
+         "extraartists" : [
+            {
+               "anv" : "G. Cheung",
+               "id" : 200919,
+               "join" : "",
+               "name" : "Gavin Cheung",
+               "resource_url" : "https://api.discogs.com/artists/200919",
+               "role" : "Producer, Written-By, Mixed By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-09",
+         "title" : "Moments In Space",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 10574,
+               "join" : "",
+               "name" : "Smoke Screen",
+               "resource_url" : "https://api.discogs.com/artists/10574",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:38",
+         "extraartists" : [
+            {
+               "anv" : "J. Cambridge",
+               "id" : 90050,
+               "join" : "",
+               "name" : "Jason Cambridge",
+               "resource_url" : "https://api.discogs.com/artists/90050",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "M. Carlton",
+               "id" : 90051,
+               "join" : "",
+               "name" : "Matt Carlton",
+               "resource_url" : "https://api.discogs.com/artists/90051",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-10",
+         "title" : "One Day",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1411,
+               "join" : "",
+               "name" : "Justice",
+               "resource_url" : "https://api.discogs.com/artists/1411",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "5:57",
+         "extraartists" : [
+            {
+               "anv" : "A. Boves",
+               "id" : 511636,
+               "join" : "",
+               "name" : "Anthony Bowes",
+               "resource_url" : "https://api.discogs.com/artists/511636",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-11",
+         "title" : "Savage Times",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "Zohar",
+               "id" : 24035,
+               "join" : "",
+               "name" : "Zöhar",
+               "resource_url" : "https://api.discogs.com/artists/24035",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:48",
+         "extraartists" : [
+            {
+               "anv" : "E. Cohen",
+               "id" : 443398,
+               "join" : "",
+               "name" : "Erran Baron Cohen",
+               "resource_url" : "https://api.discogs.com/artists/443398",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-12",
+         "title" : "Surrender",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 945,
+               "join" : "",
+               "name" : "The Starseeds",
+               "resource_url" : "https://api.discogs.com/artists/945",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "3:55",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 945,
+               "join" : "",
+               "name" : "The Starseeds",
+               "resource_url" : "https://api.discogs.com/artists/945",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1-13",
+         "title" : "Timequakes (Li-Sheng Mix)",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "Rob",
+               "id" : 7100,
+               "join" : "&",
+               "name" : "Rob Playford",
+               "resource_url" : "https://api.discogs.com/artists/7100",
+               "role" : "",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 2825,
+               "join" : "",
+               "name" : "Goldie",
+               "resource_url" : "https://api.discogs.com/artists/2825",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "5:17",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 2825,
+               "join" : "",
+               "name" : "Goldie",
+               "resource_url" : "https://api.discogs.com/artists/2825",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 7100,
+               "join" : "",
+               "name" : "Rob Playford",
+               "resource_url" : "https://api.discogs.com/artists/7100",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 6522,
+               "join" : "",
+               "name" : "Rick Smith",
+               "resource_url" : "https://api.discogs.com/artists/6522",
+               "role" : "Remix",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-01",
+         "title" : "The Shadow (Bing Here Mix)",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1461389,
+               "join" : "",
+               "name" : "Recoil (6)",
+               "resource_url" : "https://api.discogs.com/artists/1461389",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "5:22",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 709627,
+               "join" : "",
+               "name" : "Nick Haire",
+               "resource_url" : "https://api.discogs.com/artists/709627",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-02",
+         "title" : "The Bridge",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 319292,
+               "join" : "",
+               "name" : "Twisted (4)",
+               "resource_url" : "https://api.discogs.com/artists/319292",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:06",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 709630,
+               "join" : "",
+               "name" : "Ian Stratford",
+               "resource_url" : "https://api.discogs.com/artists/709630",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-03",
+         "title" : "Elements",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 98693,
+               "join" : "",
+               "name" : "One True Doc",
+               "resource_url" : "https://api.discogs.com/artists/98693",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:37",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 711745,
+               "join" : "",
+               "name" : "D. O'Callaghan",
+               "resource_url" : "https://api.discogs.com/artists/711745",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-04",
+         "title" : "Gary Strange",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1412,
+               "join" : "",
+               "name" : "Tertius",
+               "resource_url" : "https://api.discogs.com/artists/1412",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:34",
+         "extraartists" : [
+            {
+               "anv" : "D. Coffey",
+               "id" : 483162,
+               "join" : "",
+               "name" : "Danny Coffey",
+               "resource_url" : "https://api.discogs.com/artists/483162",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-05",
+         "title" : "Vibes",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 8674,
+               "join" : "",
+               "name" : "The Odd Toot",
+               "resource_url" : "https://api.discogs.com/artists/8674",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:44",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 8674,
+               "join" : "",
+               "name" : "The Odd Toot",
+               "resource_url" : "https://api.discogs.com/artists/8674",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 6750,
+               "join" : "",
+               "name" : "Hoax",
+               "resource_url" : "https://api.discogs.com/artists/6750",
+               "role" : "Remix",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-06",
+         "title" : "Hot Rock Tee (Hoax Remix)",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 248631,
+               "join" : "",
+               "name" : "Mission Control (3)",
+               "resource_url" : "https://api.discogs.com/artists/248631",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:52",
+         "extraartists" : [
+            {
+               "anv" : "T. Best",
+               "id" : 571117,
+               "join" : "",
+               "name" : "Toby Best",
+               "resource_url" : "https://api.discogs.com/artists/571117",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-07",
+         "title" : "Little Black Boxes",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 14175,
+               "join" : "",
+               "name" : "Universal Traveller",
+               "resource_url" : "https://api.discogs.com/artists/14175",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:34",
+         "extraartists" : [
+            {
+               "anv" : "Simon Smith",
+               "id" : 1726,
+               "join" : "",
+               "name" : "Simon \"Bassline\" Smith",
+               "resource_url" : "https://api.discogs.com/artists/1726",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "",
+               "id" : 86666,
+               "join" : "",
+               "name" : "Voyager (3)",
+               "resource_url" : "https://api.discogs.com/artists/86666",
+               "role" : "Remix",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-08",
+         "title" : "Midnite (Voyager Remix)",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 10574,
+               "join" : "",
+               "name" : "Smoke Screen",
+               "resource_url" : "https://api.discogs.com/artists/10574",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "6:17",
+         "extraartists" : [
+            {
+               "anv" : "J. Cambridge",
+               "id" : 90050,
+               "join" : "",
+               "name" : "Jason Cambridge",
+               "resource_url" : "https://api.discogs.com/artists/90050",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "M. Carlton",
+               "id" : 90051,
+               "join" : "",
+               "name" : "Matt Carlton",
+               "resource_url" : "https://api.discogs.com/artists/90051",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-09",
+         "title" : "Nu-Breeze",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1411,
+               "join" : "",
+               "name" : "Justice",
+               "resource_url" : "https://api.discogs.com/artists/1411",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:45",
+         "extraartists" : [
+            {
+               "anv" : "A. Boves",
+               "id" : 511636,
+               "join" : "",
+               "name" : "Anthony Bowes",
+               "resource_url" : "https://api.discogs.com/artists/511636",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-10",
+         "title" : "Tension",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 1412,
+               "join" : "",
+               "name" : "Tertius",
+               "resource_url" : "https://api.discogs.com/artists/1412",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "4:46",
+         "extraartists" : [
+            {
+               "anv" : "D. Coffey",
+               "id" : 483162,
+               "join" : "",
+               "name" : "Danny Coffey",
+               "resource_url" : "https://api.discogs.com/artists/483162",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-11",
+         "title" : "Sky High",
+         "type_" : "track"
+      },
+      {
+         "artists" : [
+            {
+               "anv" : "",
+               "id" : 7055,
+               "join" : "",
+               "name" : "Parallax",
+               "resource_url" : "https://api.discogs.com/artists/7055",
+               "role" : "",
+               "tracks" : ""
+            }
+         ],
+         "duration" : "7:17",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 547614,
+               "join" : "",
+               "name" : "Mike Buchanan (2)",
+               "resource_url" : "https://api.discogs.com/artists/547614",
+               "role" : "Producer, Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2-12",
+         "title" : "Watercolours",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/release/132512-Nick-Ashcroft-Atmospheric-Drum-Bass-Volume-3",
+   "videos" : [
+      {
+         "description" : "Tracklist:\n\n00:00 ~ Boymerang - Soul Beat Runna\n07:34 ~ Big Bud - Noodles\n13:49 ~ Organic Synthetic - Space Walking\n19:01 ~ Hydroflow - Maracana (Original Version)\n25:39 ~ Sonartribe - Concious\n30:03 ~ E-Z Rollers - Fever\n35:34 ~ Omni Trio - Twin Town Kar",
+         "duration" : 4311,
+         "embed" : true,
+         "title" : "Atmospheric Drum & Bass Vol. 3 CD1 1997",
+         "uri" : "https://www.youtube.com/watch?v=4gQLMzE1m_o"
+      },
+      {
+         "description" : "Tracklist:\n\n00:00 ~ ROB & GOLDIE - The Shadow (Bring Here Mix)\n05:18 ~ RECOIL - The Bridge\n10:40 ~ TWISTED - Elements\n16:46 ~ ONE TRUE DOC - Gary Strange\n21:24 ~ TERTIUS - Vibes\n26:00 ~ THE ODD TOOT - Hot Rock Tee (Hoax Remix)\n32:43 ~ MISSION CONTROL - Li",
+         "duration" : 4037,
+         "embed" : true,
+         "title" : "Atmospheric Drum & Bass Vol. 3 CD2 1997",
+         "uri" : "https://www.youtube.com/watch?v=9OleFKslKKk"
+      },
+      {
+         "description" : "Tracklist:\n\n00:00 ~ Boymerang - Soul Beat Runna\n07:34 ~ Big Bud - Noodles\n13:49 ~ Organic Synthetic - Space Walking\n19:01 ~ Hydroflow - Maracana (Original Version)\n25:39 ~ Sonartribe - Concious\n30:03 ~ E-Z Rollers - Fever\n35:34 ~ Omni Trio - Twin Town Kar",
+         "duration" : 4311,
+         "embed" : true,
+         "title" : "Atmospheric Drum & Bass Vol. 3 CD1 1997",
+         "uri" : "https://www.youtube.com/watch?v=4gQLMzE1m_o"
+      },
+      {
+         "description" : "Tracklist:\n\n00:00 ~ ROB & GOLDIE - The Shadow (Bring Here Mix)\n05:18 ~ RECOIL - The Bridge\n10:40 ~ TWISTED - Elements\n16:46 ~ ONE TRUE DOC - Gary Strange\n21:24 ~ TERTIUS - Vibes\n26:00 ~ THE ODD TOOT - Hot Rock Tee (Hoax Remix)\n32:43 ~ MISSION CONTROL - Li",
+         "duration" : 4037,
+         "embed" : true,
+         "title" : "Atmospheric Drum & Bass Vol. 3 CD2 1997",
+         "uri" : "https://www.youtube.com/watch?v=9OleFKslKKk"
+      },
+      {
+         "description" : "Tracklist:\n\n00:00 ~ Boymerang - Soul Beat Runna\n07:34 ~ Big Bud - Noodles\n13:49 ~ Organic Synthetic - Space Walking\n19:01 ~ Hydroflow - Maracana (Original Version)\n25:39 ~ Sonartribe - Concious\n30:03 ~ E-Z Rollers - Fever\n35:34 ~ Omni Trio - Twin Town Kar",
+         "duration" : 4311,
+         "embed" : true,
+         "title" : "Atmospheric Drum & Bass Vol. 3 CD1 1997",
+         "uri" : "https://www.youtube.com/watch?v=4gQLMzE1m_o"
+      }
+   ],
+   "year" : 1997
+}

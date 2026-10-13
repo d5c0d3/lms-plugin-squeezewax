@@ -1,0 +1,603 @@
+{
+   "artists" : [
+      {
+         "anv" : "",
+         "id" : 145288,
+         "join" : "",
+         "name" : "Nat King Cole",
+         "resource_url" : "https://api.discogs.com/artists/145288",
+         "role" : "",
+         "thumbnail_url" : "https://i.discogs.com/_uMkBurBOKueVZBCyXIxZ1CYgTbrWqgOXqAEr9wTjrY/rs:fit/g:sm/q:90/h:349/w:265/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9BLTE0NTI4/OC0xNjQ5NDU0OTE2/LTU4MjMuanBlZw.jpeg",
+         "tracks" : ""
+      }
+   ],
+   "artists_sort" : "Nat King Cole",
+   "blocked_from_sale" : false,
+   "community" : {
+      "contributors" : [
+         {
+            "resource_url" : "https://api.discogs.com/users/Rockcityshop",
+            "username" : "Rockcityshop"
+         },
+         {
+            "resource_url" : "https://api.discogs.com/users/Andreslo",
+            "username" : "Andreslo"
+         }
+      ],
+      "data_quality" : "Needs Vote",
+      "have" : 39,
+      "rating" : {
+         "average" : 4.5,
+         "count" : 2
+      },
+      "status" : "Accepted",
+      "submitter" : {
+         "resource_url" : "https://api.discogs.com/users/Rockcityshop",
+         "username" : "Rockcityshop"
+      },
+      "want" : 3
+   },
+   "companies" : [
+      {
+         "catno" : "",
+         "entity_type" : "13",
+         "entity_type_name" : "Phonographic Copyright (p)",
+         "id" : 30992,
+         "name" : "ACD",
+         "resource_url" : "https://api.discogs.com/labels/30992",
+         "thumbnail_url" : "https://i.discogs.com/41IHbozK0hG5whU_BjzQMXpBhjPHIn3Z1bUP323sqHs/rs:fit/g:sm/q:90/h:140/w:230/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTMwOTky/LTE0NDg3ODU1OTEt/NzQ3Mi5qcGVn.jpeg"
+      },
+      {
+         "catno" : "",
+         "entity_type" : "14",
+         "entity_type_name" : "Copyright (c)",
+         "id" : 30992,
+         "name" : "ACD",
+         "resource_url" : "https://api.discogs.com/labels/30992",
+         "thumbnail_url" : "https://i.discogs.com/41IHbozK0hG5whU_BjzQMXpBhjPHIn3Z1bUP323sqHs/rs:fit/g:sm/q:90/h:140/w:230/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTMwOTky/LTE0NDg3ODU1OTEt/NzQ3Mi5qcGVn.jpeg"
+      }
+   ],
+   "country" : "Europe",
+   "data_quality" : "Needs Vote",
+   "date_added" : "2017-01-21T06:20:23-08:00",
+   "date_changed" : "2022-01-22T02:50:48-08:00",
+   "estimated_weight" : 85,
+   "format_quantity" : 1,
+   "formats" : [
+      {
+         "descriptions" : [
+            "Compilation"
+         ],
+         "name" : "CD",
+         "qty" : "1"
+      }
+   ],
+   "genres" : [
+      "Jazz"
+   ],
+   "id" : 9701013,
+   "identifiers" : [
+      {
+         "description" : "Text",
+         "type" : "Barcode",
+         "value" : "9 002986 549413"
+      },
+      {
+         "description" : "Scanned EAN 13",
+         "type" : "Barcode",
+         "value" : "9002986549413"
+      },
+      {
+         "type" : "Label Code",
+         "value" : "LC10922"
+      },
+      {
+         "type" : "Rights Society",
+         "value" : "Austro Mechana"
+      },
+      {
+         "type" : "Matrix / Runout",
+         "value" : "154.941"
+      },
+      {
+         "type" : "Mastering SID Code",
+         "value" : "IFPI LA41"
+      },
+      {
+         "type" : "Mould SID Code",
+         "value" : "IFPI 6P19"
+      }
+   ],
+   "images" : [
+      {
+         "height" : 589,
+         "resource_url" : "https://i.discogs.com/QyZHLqggGIN52OFcAd2bI9dAToSw-fg8noEnbCkfngU/rs:fit/g:sm/q:90/h:589/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODUz/OC0yMTY1LmpwZWc.jpeg",
+         "type" : "primary",
+         "uri" : "https://i.discogs.com/QyZHLqggGIN52OFcAd2bI9dAToSw-fg8noEnbCkfngU/rs:fit/g:sm/q:90/h:589/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODUz/OC0yMTY1LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/ghIbDXAuwfEYH1gs7oHt9JHHq7wJV0sYkStZJp5vmDg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODUz/OC0yMTY1LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 592,
+         "resource_url" : "https://i.discogs.com/ypsu_01iq2EwkedoVeXI8R3xzxF1Cqpcc_LOemAZwxw/rs:fit/g:sm/q:90/h:592/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU0/Ny02OTc0LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ypsu_01iq2EwkedoVeXI8R3xzxF1Cqpcc_LOemAZwxw/rs:fit/g:sm/q:90/h:592/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU0/Ny02OTc0LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/xpIvM9rCtDtPc9sCT518ZqArQjdJWMd9LI3drOshem0/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU0/Ny02OTc0LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 466,
+         "resource_url" : "https://i.discogs.com/E55auS3fOfwiYvaDH4EH2-lp9cA4sISJpgZsLqjl4BU/rs:fit/g:sm/q:90/h:466/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/Mi0xNzUzLmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/E55auS3fOfwiYvaDH4EH2-lp9cA4sISJpgZsLqjl4BU/rs:fit/g:sm/q:90/h:466/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/Mi0xNzUzLmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/kVgZ8xUHDu9CfdKT2OU89f5D5QTovRK6QZLoVAUUAbo/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/Mi0xNzUzLmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 466,
+         "resource_url" : "https://i.discogs.com/Io7E7RdIF6uMnhtppIFEnsDAzqqhWZA2sO1xqxKpKEo/rs:fit/g:sm/q:90/h:466/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/OS02NTcxLmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/Io7E7RdIF6uMnhtppIFEnsDAzqqhWZA2sO1xqxKpKEo/rs:fit/g:sm/q:90/h:466/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/OS02NTcxLmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/ocDOM7Ub3ohbseV9qkz6AgpWRTQIx5Yr1LfCEP6Zz-8/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU2/OS02NTcxLmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 600,
+         "resource_url" : "https://i.discogs.com/Y8a5DvLuPFNF-QFIJGkmDRWiCY7I_7JS53yPG5Qxq-s/rs:fit/g:sm/q:90/h:600/w:596/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU3/OS00MTQ1LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/Y8a5DvLuPFNF-QFIJGkmDRWiCY7I_7JS53yPG5Qxq-s/rs:fit/g:sm/q:90/h:600/w:596/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU3/OS00MTQ1LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/ca31wpyZ2jffplbFrpYhVLSbgGmLLjz4TeNPA4NqxrY/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU3/OS00MTQ1LmpwZWc.jpeg",
+         "width" : 596
+      },
+      {
+         "height" : 545,
+         "resource_url" : "https://i.discogs.com/P8eAYQOJvoJypPdcCJChrHRGMR_t0XhFcwqWCLWFNp0/rs:fit/g:sm/q:90/h:545/w:548/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU4/Ni0zNjA5LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/P8eAYQOJvoJypPdcCJChrHRGMR_t0XhFcwqWCLWFNp0/rs:fit/g:sm/q:90/h:545/w:548/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU4/Ni0zNjA5LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/CUCD0JycKOu8WdNhIdA1U2g1EwBBjE2aPpwiddXxG7s/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODU4/Ni0zNjA5LmpwZWc.jpeg",
+         "width" : 548
+      },
+      {
+         "height" : 450,
+         "resource_url" : "https://i.discogs.com/NvMu7ccyOn9xGnwo9nKDWK3jGM1Ig0erQ3bmhfPPqfA/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/NS0zMTMxLmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/NvMu7ccyOn9xGnwo9nKDWK3jGM1Ig0erQ3bmhfPPqfA/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/NS0zMTMxLmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/v5cy3KlXlrrHF1Mmar8BZSlK2SfqudWOnsWpB_gLK9o/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/NS0zMTMxLmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 450,
+         "resource_url" : "https://i.discogs.com/PmaMHPRbvXQEEoPJSeKGY34L_HrSjq93pRqiwCeZvfs/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny01NDg3LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/PmaMHPRbvXQEEoPJSeKGY34L_HrSjq93pRqiwCeZvfs/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny01NDg3LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/LpNBI64JIxAp80Or8taM1y2_iHvjKO25JL74vQQixQE/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny01NDg3LmpwZWc.jpeg",
+         "width" : 600
+      },
+      {
+         "height" : 450,
+         "resource_url" : "https://i.discogs.com/ruXHkhRcs0nTSXMvECAIfHfzPxYSC4TsOd2xShtVSR4/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny0zNDM4LmpwZWc.jpeg",
+         "type" : "secondary",
+         "uri" : "https://i.discogs.com/ruXHkhRcs0nTSXMvECAIfHfzPxYSC4TsOd2xShtVSR4/rs:fit/g:sm/q:90/h:450/w:600/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny0zNDM4LmpwZWc.jpeg",
+         "uri150" : "https://i.discogs.com/6n4_ZJlGWdREcjyRfpRoOjEW1gJAiz2HrfG5IemWtiI/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTQ4NTAwODQy/Ny0zNDM4LmpwZWc.jpeg",
+         "width" : 600
+      }
+   ],
+   "is_offensive" : false,
+   "labels" : [
+      {
+         "catno" : "154.941",
+         "entity_type" : "1",
+         "entity_type_name" : "Label",
+         "id" : 30992,
+         "name" : "ACD",
+         "resource_url" : "https://api.discogs.com/labels/30992",
+         "thumbnail_url" : "https://i.discogs.com/41IHbozK0hG5whU_BjzQMXpBhjPHIn3Z1bUP323sqHs/rs:fit/g:sm/q:90/h:140/w:230/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9MLTMwOTky/LTE0NDg3ODU1OTEt/NzQ3Mi5qcGVn.jpeg"
+      }
+   ],
+   "lowest_price" : 0.07,
+   "notes" : "Packaged in a standard clear jewel case.\n\nMade in the EU.\n\nOn the cover (back): \n\"Mit freundlicher Genehmigung Azzurra Music\".\n(Courtesy of Azzurra Music).\n\nOn the CD:\n\"Urheber- und Leistungsschutzreche, besonders Vervielfältigung (außer zum persönlichen Gebrauch), Aufführung, Sendung vorbehalten\".\n(Copyright and ancillary copyrights, especially reproduction (except for personal use), performance, broadcasting reserved).",
+   "num_for_sale" : 6,
+   "resource_url" : "https://api.discogs.com/releases/9701013",
+   "series" : [],
+   "status" : "Accepted",
+   "styles" : [
+      "Swing"
+   ],
+   "thumb" : "https://i.discogs.com/ghIbDXAuwfEYH1gs7oHt9JHHq7wJV0sYkStZJp5vmDg/rs:fit/g:sm/q:40/h:150/w:150/czM6Ly9kaXNjb2dz/LWRhdGFiYXNlLWlt/YWdlcy9SLTk3MDEw/MTMtMTY0Mjg0ODUz/OC0yMTY1LmpwZWc.jpeg",
+   "title" : "Route 66",
+   "tracklist" : [
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 80847,
+               "join" : "",
+               "name" : "Bobby Troup",
+               "resource_url" : "https://api.discogs.com/artists/80847",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "1",
+         "title" : "(Get Your Kicks On) Route 66",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 164572,
+               "join" : "",
+               "name" : "Kay Starr",
+               "resource_url" : "https://api.discogs.com/artists/164572",
+               "role" : "Performer",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Arlen",
+               "id" : 301975,
+               "join" : "",
+               "name" : "Harold Arlen",
+               "resource_url" : "https://api.discogs.com/artists/301975",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Koehler",
+               "id" : 556375,
+               "join" : "",
+               "name" : "Ted Koehler",
+               "resource_url" : "https://api.discogs.com/artists/556375",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "2",
+         "title" : "Stormy Weather (Nat King Cole With Kay Starr)",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "George",
+               "id" : 556378,
+               "join" : "",
+               "name" : "Don George",
+               "resource_url" : "https://api.discogs.com/artists/556378",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Cole",
+               "id" : 145288,
+               "join" : "",
+               "name" : "Nat King Cole",
+               "resource_url" : "https://api.discogs.com/artists/145288",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "3",
+         "title" : "But All I've Got Is Me",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Monaco",
+               "id" : 693835,
+               "join" : "",
+               "name" : "James V. Monaco",
+               "resource_url" : "https://api.discogs.com/artists/693835",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Burke",
+               "id" : 301993,
+               "join" : "",
+               "name" : "Johnny Burke",
+               "resource_url" : "https://api.discogs.com/artists/301993",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "4",
+         "title" : "This Is My Night To Dream",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Kahal",
+               "id" : 628269,
+               "join" : "",
+               "name" : "Irving Kahal",
+               "resource_url" : "https://api.discogs.com/artists/628269",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Norman",
+               "id" : 699209,
+               "join" : "",
+               "name" : "Pierre Norman (2)",
+               "resource_url" : "https://api.discogs.com/artists/699209",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Fain",
+               "id" : 290093,
+               "join" : "",
+               "name" : "Sammy Fain",
+               "resource_url" : "https://api.discogs.com/artists/290093",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "5",
+         "title" : "When I Take My Sugar To Tea",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Atkinson",
+               "id" : 4688430,
+               "join" : "",
+               "name" : "Cholly Atkinson",
+               "resource_url" : "https://api.discogs.com/artists/4688430",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Oliver",
+               "id" : 258007,
+               "join" : "",
+               "name" : "Sy Oliver",
+               "resource_url" : "https://api.discogs.com/artists/258007",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "6",
+         "title" : "But She's My Buddy's Chick",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "McHugh/Fields",
+               "id" : 941280,
+               "join" : "",
+               "name" : "Jimmy McHugh & Dorothy Fields",
+               "resource_url" : "https://api.discogs.com/artists/941280",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "7",
+         "title" : "Don't Blame Me",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 45876,
+               "join" : "",
+               "name" : "Eden Ahbez",
+               "resource_url" : "https://api.discogs.com/artists/45876",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "8",
+         "title" : "Nature Boy",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Andree",
+               "id" : 699205,
+               "join" : "",
+               "name" : "Fabian Andre",
+               "resource_url" : "https://api.discogs.com/artists/699205",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Kahn",
+               "id" : 505455,
+               "join" : "",
+               "name" : "Gus Kahn",
+               "resource_url" : "https://api.discogs.com/artists/505455",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Schwandt",
+               "id" : 699201,
+               "join" : "",
+               "name" : "Wilbur Schwandt",
+               "resource_url" : "https://api.discogs.com/artists/699201",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "9",
+         "title" : "Dream A Little Dream Of Me",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Watson",
+               "id" : 699194,
+               "join" : "",
+               "name" : "Deek Watson",
+               "resource_url" : "https://api.discogs.com/artists/699194",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Best",
+               "id" : 699204,
+               "join" : "",
+               "name" : "William Best",
+               "resource_url" : "https://api.discogs.com/artists/699204",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "10",
+         "title" : "(I Love You) For Sentimental Reason",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "N. Cole",
+               "id" : 145288,
+               "join" : "",
+               "name" : "Nat King Cole",
+               "resource_url" : "https://api.discogs.com/artists/145288",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "11",
+         "title" : "Chant Of The Blues",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Belle",
+               "id" : 645836,
+               "join" : "",
+               "name" : "Barbara Belle",
+               "resource_url" : "https://api.discogs.com/artists/645836",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Klein",
+               "id" : 2555909,
+               "join" : "",
+               "name" : "Johnny Klein",
+               "resource_url" : "https://api.discogs.com/artists/2555909",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Rhodes",
+               "id" : 645837,
+               "join" : "",
+               "name" : "Stan Rhodes",
+               "resource_url" : "https://api.discogs.com/artists/645837",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "12",
+         "title" : "Monday Again",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "Conrad",
+               "id" : 699202,
+               "join" : "",
+               "name" : "Con Conrad",
+               "resource_url" : "https://api.discogs.com/artists/699202",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "DuBois",
+               "id" : 699195,
+               "join" : "",
+               "name" : "Gladys DuBois",
+               "resource_url" : "https://api.discogs.com/artists/699195",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Gregory",
+               "id" : 699208,
+               "join" : "",
+               "name" : "Paul Gregory (3)",
+               "resource_url" : "https://api.discogs.com/artists/699208",
+               "role" : "Written-By",
+               "tracks" : ""
+            },
+            {
+               "anv" : "Columbo",
+               "id" : 255531,
+               "join" : "",
+               "name" : "Russ Columbo",
+               "resource_url" : "https://api.discogs.com/artists/255531",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "13",
+         "title" : "You Call It Madness ( But I Call It Love)",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "",
+               "id" : 80847,
+               "join" : "",
+               "name" : "Bobby Troup",
+               "resource_url" : "https://api.discogs.com/artists/80847",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "14",
+         "title" : "Baby, Baby All The Time",
+         "type_" : "track"
+      },
+      {
+         "duration" : "",
+         "extraartists" : [
+            {
+               "anv" : "J. McHugh/Fields",
+               "id" : 941280,
+               "join" : "",
+               "name" : "Jimmy McHugh & Dorothy Fields",
+               "resource_url" : "https://api.discogs.com/artists/941280",
+               "role" : "Written-By",
+               "tracks" : ""
+            }
+         ],
+         "position" : "15",
+         "title" : "On The Sunny Side Of The Street",
+         "type_" : "track"
+      }
+   ],
+   "uri" : "https://www.discogs.com/release/9701013-Nat-King-Cole-Route-66",
+   "videos" : [],
+   "year" : 0
+}

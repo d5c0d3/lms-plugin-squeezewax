@@ -7,6 +7,115 @@
 	[% END %]
 [% END %]
 
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TOKEN" desc="PLUGIN_SQUEEZEWAX_TOKEN_DESC" %]
+	<input type="password" class="stdedit" size="40"
+		name="pref_discogsToken" value="[% prefs.pref_discogsToken | html %]" />
+	<div><a href="[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS" | string %]" target="_blank"
+		rel="noopener">[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL" | string %]</a></div>
+
+	[% IF scanning %]
+		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSE %]
+		<input name="testToken" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]" />
+		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
+	[% END %]
+
+	[% IF tokenTestResult %]
+		<div>[% tokenTestResult | html %]</div>
+	[% END %]
+[% END %]
+
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC" desc="PLUGIN_SQUEEZEWAX_SYNC_DESC" %]
+	<div>[% "PLUGIN_SQUEEZEWAX_SYNC_LAST" | string %][% "COLON" | string %]
+		[% IF sync.lastSyncedF %]
+			[% sync.lastSyncedF | html %]
+			[% IF sync.lastItems.defined %]
+				&mdash; [% sync.lastItems %] [% "PLUGIN_SQUEEZEWAX_SYNC_ITEMS" | string %]
+			[% END %]
+		[% ELSE %]
+			[% "PLUGIN_SQUEEZEWAX_SYNC_NEVER" | string %]
+		[% END %]</div>
+
+	[%# The last failure is shown even when a previous sync succeeded: decisions
+	    §14.2 wants a sync that has silently stopped working to be visible, and
+	    the timestamp above cannot show it - a failure deliberately leaves the
+	    timestamp alone. %]
+	[% IF sync.lastError %]
+		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_FAIL" | string | replace('%s', sync.lastError) | html %]</div>
+	[% END %]
+
+	[% IF scanning %]
+		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+	[% ELSIF sync.running %]
+		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_RUNNING" | string %]</div>
+	[% ELSE %]
+		<input name="syncNow" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]" />
+		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
+	[% END %]
+
+	[% IF syncResult %]
+		<div>[% syncResult | html %]</div>
+	[% END %]
+[% END %]
+
+[%# The Prices section: the stored currency label, rendered only; nothing is
+    fetched for it. It sits after Sync because only a collection sync learns the
+    currency (decisions §15.35). %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_CURRENCY" desc="PLUGIN_SQUEEZEWAX_CURRENCY_DESC" %]
+	[% IF currencyCode %]
+		<div>[% "PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN" | string | replace('%s', currencyCode) | html %]</div>
+	[% ELSE %]
+		<div>[% "PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN" | string %]</div>
+	[% END %]
+[% END %]
+
+[%# The master-derive job (build-order step 9). Nothing is rendered when
+    nothing is pending: `derive` is set only then, so a settled library shows no
+    block at all rather than a permanent "0 of 0". No request is made to build
+    it - it is one count over rows we already hold. %]
+[% IF derive %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DERIVE" desc="PLUGIN_SQUEEZEWAX_DERIVE_DESC" %]
+		<div>[% derive.label | html %] &mdash; [% derive.state | html %]</div>
+	[% END %]
+[% END %]
+
+[%# The two mandatory Discogs notices (decisions §9.6, §15.25 ruling 4). They
+    are on THIS page and not in the album menu because the menu carries no
+    Discogs data at all - the moment it does, the "Data provided by Discogs"
+    notice has to move next to it.
+
+    NO rel ON THE LINK. The other links on this page carry rel="noopener",
+    which is allowed, but an attribution link must not carry nofollow and the
+    simplest way to be sure of that is to add no rel at all. The href is built
+    in beforeRender: the user's own collection page when we know their Discogs
+    username, discogs.com when we do not. %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_ATTRIBUTION" desc="" %]
+	<div><a href="[% discogsCollectionUrl | html %]" target="_blank">[%
+		"PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA" | string %]</a></div>
+	<div>[% "PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED" | string %]</div>
+	[%# Step 9b ruling 5: a plain link to the site itself, beside the
+	    collection-linked notice above. Same "no rel at all" rule. %]
+	<div><a href="https://www.discogs.com/" target="_blank">[%
+		"PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE" | string %]</a></div>
+[% END %]
+
+[%# The queue is its own page and is reached only from here: its class
+    registers a page function but no `name`, so it has no settings-menu entry
+    (decisions §15.16 part 1). A plain link rather than a button, because it
+    navigates rather than acting - and because a submit button here would carry
+    the form's hidden saveSettings with it. %]
+[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_QUEUE" desc="PLUGIN_SQUEEZEWAX_QUEUE_DESC" %]
+	<div><a href="[% webroot %]plugins/SqueezeWax/queue.html">[%
+		"PLUGIN_SQUEEZEWAX_QUEUE_OPEN" | string %]</a>
+	[% IF queueOpenItems %]
+		&mdash; [% "PLUGIN_SQUEEZEWAX_QUEUE_OPEN_ITEMS" | string | replace('%s', queueOpenItems) | html %]
+	[% END %]</div>
+[% END %]
+
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TAGNAMES" desc="PLUGIN_SQUEEZEWAX_TAGNAMES_DESC" %]
 	[%# loop.index, not a hand-incremented counter: Template Toolkit localises
 	    variables inside FOREACH, so an outer counter reverts to 0 after the
@@ -43,8 +152,9 @@
 	[% IF scanning %]
 		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSE %]
-		<input name="detectTagNames" type="submit" class="stdclick"
-			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]" />
+		<input name="detectTagNames" type="submit" class="stdclick swxAction"
+			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]"
+			data-swx-running="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING" | string | html %]" />
 	[% END %]
 
 	[% IF detection %]
@@ -103,5 +213,93 @@
 		[% END %]
 	[% END %]
 [% END %]
+
+[%# Button feedback, decided 2026-09-22 (design chat).
+
+    Every action on this page defers its render until its own callback fires -
+    _syncNow waits for the collection fetch, _testToken for /oauth/identity -
+    so the browser sits on a pending POST with nothing to look at. The natural
+    response to a button that looks dead is to press it again, which is how
+    the dead-button bug was found in the first place.
+
+    No core settings page does this. The nearest thing is
+    settings/server/basic.html:11-30, which polls `rescan ?` on an Ext
+    TaskRunner and disables anything carrying .disableOnScan. That is the
+    polling shape this was explicitly decided against: it needs a server-side
+    thing to poll, and these actions have none.
+
+    So: no new server state, no polling, no framework. Plain DOM, and the page
+    still works with JavaScript off - the buttons simply submit as they always
+    did.
+
+    Two subtleties, both learned the hard way.
+
+    The hidden field: a disabled control is not part of the form data set, so
+    disabling the clicked submit button removes the very name handler()
+    dispatches on and every action would fall through to a plain save. The
+    clicked button's name and value are copied into a hidden input BEFORE
+    anything is disabled, so what reaches the server is identical either way.
+
+    The deferred disable: disabling a submit button inside its own click
+    handler does not merely drop its name, it cancels the submission
+    outright. 0.0.0.5 shipped with a synchronous disable and the buttons
+    became dead again - they greyed out, they relabelled, and nothing was
+    ever sent. See the comment on the setTimeout below.
+%]
+<script type="text/javascript">
+(function () {
+	var form = document.getElementById('settingsForm');
+
+	if (!form || !form.querySelectorAll) { return; }
+
+	var buttons = form.querySelectorAll('input.swxAction');
+
+	if (!buttons.length) { return; }
+
+	var fired = false;
+
+	var onClick = function (clicked) {
+		return function () {
+			if (fired) { return; }
+
+			fired = true;
+
+			var hidden = document.createElement('input');
+
+			hidden.type  = 'hidden';
+			hidden.name  = clicked.name;
+			hidden.value = clicked.value || '1';
+
+			form.appendChild(hidden);
+
+			var running = clicked.getAttribute('data-swx-running');
+
+			if (running) { clicked.value = running; }
+
+			// DEFERRED, and this is not a style choice. Disabling a submit
+			// button inside its own click handler cancels the submission:
+			// the button is the form's submitter, and disabling it while the
+			// click's default action is still being processed aborts that
+			// action. Done synchronously here, the buttons greyed out, the
+			// labels changed, and the form never submitted at all - observed
+			// on the reference server, 0.0.0.5, where a Sync now press
+			// produced no server-side activity whatsoever.
+			//
+			// setTimeout(0) runs after the current task, by which point the
+			// form data set has been serialised and the request is away, so
+			// disabling can no longer affect it.
+			setTimeout(function () {
+				for (var j = 0; j < buttons.length; j++) {
+					buttons[j].disabled = true;
+				}
+			}, 0);
+		};
+	};
+
+	for (var i = 0; i < buttons.length; i++) {
+		buttons[i].onclick = onClick(buttons[i]);
+	}
+})();
+</script>
 
 [% PROCESS settings/footer.html %]

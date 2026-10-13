@@ -102,15 +102,25 @@ TAGS_STUB='BEGIN {
 	sub init { 1 }
 	sub get  { [] }
 	sub set  { 1 }
+	sub migrate { 1 }
+	sub setValidate { 1 }
+	sub setChange { 1 }
+	sub remove { 1 }
 }'
 
 # Settings.pm inherits Slim::Web::Settings, which reaches the same web stack
 # Plugin.pm's base class does. Slim::Utils::Scheduler and Slim::Music::Import are
 # only called at runtime, so a marker in %INC is enough for the compile.
+#
+# Slim::Utils::DateTime is stubbed for the same reason IMPORT_STUB stubs the
+# module that reaches it: it goes straight to Slim::Utils::Unicode, which needs
+# an initialised OSDetect to answer localeDetails. Settings.pm calls shortDateF
+# and timeF only at render time.
 SETTINGS_STUB='BEGIN {
 	$INC{q(Slim/Web/Settings.pm)}   = 1;
 	$INC{q(Slim/Utils/Scheduler.pm)} = 1;
 	$INC{q(Slim/Utils/Strings.pm)}  = 1;
+	$INC{q(Slim/Utils/DateTime.pm)} = 1;
 
 	@Slim::Web::Settings::ISA = ();
 	*Slim::Web::Settings::new     = sub { 1 };
@@ -141,7 +151,27 @@ PROGRESS_STUB='BEGIN {
 	$INC{q(Slim/Utils/Progress.pm)} = 1;
 }'
 
-MODULES="Schema Library Tags Match Importer Settings Plugin"
+# API.pm reaches the same JSON::XS/Unicode/OSDetect problem through
+# Slim::Utils::PluginManager -> Slim::Utils::Misc -> Slim::Music::Info ->
+# ... -> Slim::Utils::DateTime -> Slim::Utils::Unicode, the same chain
+# IMPORT_STUB stops one hop earlier for Slim::Music::Import. Only
+# dataForPlugin is called (by _pluginVersion, at runtime), so a bare stub
+# returning {} is enough for the compile check - as always, this cannot
+# prove the real dataForPlugin behaves as API.pm assumes, only that the
+# module loads.
+#
+# It used to reach it two more ways, via Slim::Networking::SimpleSyncHTTP ->
+# SimpleHTTP::Base -> Slim::Utils::Cache and Slim::Utils::Prefs, which is why
+# this stub also carried a Cache marker and reused TAGS_STUB's StubPrefs.
+# Build-order step 5 deleted API.pm's synchronous transport, and with it that
+# whole chain; both were verified unnecessary by removing them and re-running.
+API_STUB='
+BEGIN {
+	$INC{q(Slim/Utils/PluginManager.pm)} = 1;
+	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
+}'
+
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Details Importer ScanSync Settings Queue Menu View Plugin"
 STATUS=0
 
 for scanner in 0 1; do
@@ -150,19 +180,69 @@ for scanner in 0 1; do
 	for m in $MODULES; do
 		# Plugin.pm is the server's entry point and the scanner never loads it
 		# (Slim/Utils/PluginManager.pm:204). Settings.pm is required only from
-		# Plugin.pm under main::WEBUI, so it never reaches the scanner either.
-		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ]; }; then
+		# Plugin.pm under main::WEBUI, so it never reaches the scanner either,
+		# and Queue.pm only from Settings.pm, one hop further out.
+		# API/Async.pm is the server-side Discogs client - the scanner has no
+		# event loop to run SimpleAsyncHTTP on, which is the entire reason it
+		# exists separately from API.pm.
+		#
+		# Ownership.pm is checked in BOTH modes since step 8b. It used to be
+		# skipped here on the grounds that the pass ran only in the server; it
+		# now also runs inside the scan, from ScanSync (decisions §15.18), so the
+		# scanner loads it and its scanner-mode compile is the point.
+		if [ "$scanner" = 1 ] && { [ "$m" = "Plugin" ] || [ "$m" = "Settings" ] || [ "$m" = "Queue" ] || [ "$m" = "Menu" ] || [ "$m" = "View" ] || [ "$m" = "API::Async" ] || [ "$m" = "Derive" ] || [ "$m" = "Details" ]; }; then
+			continue
+		fi
+
+		# API/Sync.pm and ScanSync.pm are the mirror image: the scanner's
+		# Discogs client and the importer that calls it, which nothing in the
+		# server loads - Importer.pm registers ScanSync, and the server never
+		# loads Importer.pm (Slim/Utils/PluginManager.pm:204). SimpleSyncHTTP
+		# warns when it is used there (Slim/Networking/SimpleSyncHTTP.pm:11, :58).
+		if [ "$scanner" = 0 ] && { [ "$m" = "API::Sync" ] || [ "$m" = "ScanSync" ]; }; then
 			continue
 		fi
 
 		case "$m" in
 			Plugin)
-				prelude="$STUB"
-				note=" (Slim::Plugin::Base stubbed)"
+				# Plugin.pm calls preferences()->migrate, ->init and ->setValidate at
+				# file scope, so it needs TAGS_STUB's StubPrefs as well as the base
+				# class stub, and Slim::Music::Import->stillScanning at runtime, hence
+				# IMPORT_STUB.
+				#
+				# Its two sync triggers add two more: Slim::Control::Request, which
+				# reaches most of the server through the dispatch table, and
+				# Slim::Utils::Timers, which needs the same bare Slim::Utils::Misc
+				# marker API::Async's case documents. subscribe and setTimer/killTimers
+				# are both runtime calls, so markers are enough - which does mean, as
+				# with every stub here, that this proves the module loads and not that
+				# those names are spelled right. They were read from refs/ instead:
+				# Slim/Control/Request.pm:788 and Slim/Utils/Timers.pm:66-120.
+				prelude="$STUB$TAGS_STUB$IMPORT_STUB"'
+BEGIN {
+	$INC{q(Slim/Control/Request.pm)} = 1;
+	$INC{q(Slim/Utils/Timers.pm)}    = 1;
+	$INC{q(Slim/Utils/Misc.pm)}      = 1;
+}'
+				note=" (Slim::Plugin::Base, Slim::Utils::Prefs, Slim::Control::Request, Slim::Utils::Timers stubbed)"
 				;;
 			Library)
 				prelude="$SCHEMA_STUB"
 				note=" (Slim::Schema stubbed)"
+				;;
+			Ownership)
+				# Ownership.pm pulls in our own Library.pm and Match.pm, so it
+				# inherits their stubs. Its own LMS dependency is
+				# Slim::Music::Info, for variousArtistString - which reaches
+				# Slim::Utils::Unicode and needs an initialised OSDetect, the
+				# same chain IMPORT_STUB cuts one module earlier. The call is at
+				# runtime, so a bare %INC marker is enough; the name itself was
+				# read from refs (Slim/Music/Info.pm:1540) rather than assumed.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+}'
+				note=" (Slim::Schema, Slim::Music::Info stubbed)"
 				;;
 			Tags)
 				prelude="$TAGS_STUB"
@@ -172,13 +252,163 @@ for scanner in 0 1; do
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
+			API)
+				prelude="$API_STUB"
+				note=" (Slim::Utils::PluginManager stubbed)"
+				;;
+			API::Sync)
+				# Sync.pm pulls API.pm in, hence API.pm's stubs. Its one LMS
+				# dependency of its own, Slim::Networking::SimpleSyncHTTP, is
+				# required at runtime inside _request (the
+				# Slim/Music/Artwork.pm:771 shape), so compiling Sync.pm never
+				# reaches it. It is loaded here instead, for real, and asked for
+				# every method Sync.pm calls - which, unlike SimpleAsyncHTTP's
+				# stub in the case below, does prove those names are spelled
+				# right. Its chain needs three cuts: Slim::Utils::Prefs (TAGS_STUB
+				# supplies preferences()), and Slim::Utils::Cache and
+				# Slim::Utils::Misc, which SimpleHTTP::Base calls only at runtime
+				# and only for cache => 1 or a user-agent string, and which reach
+				# the JSON::XS/Unicode chain every stub here exists to cut.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Utils/Cache.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}  = 1;
+	require Slim::Networking::SimpleSyncHTTP;
+	for my $m (qw(new get code headers content)) {
+		die qq(Slim::Networking::SimpleSyncHTTP cannot $m\n)
+			unless Slim::Networking::SimpleSyncHTTP->can($m);
+	}
+}'
+				note=" (PluginManager, Prefs, Cache, Misc stubbed; SimpleSyncHTTP real)"
+				;;
+			API::Async)
+				# Async.pm pulls API.pm in, hence API_STUB. Its own two LMS
+				# dependencies are the transport and the timers, and both reach
+				# the JSON::XS/Unicode/OSDetect chain the other stubs here exist
+				# to cut - by different routes.
+				#
+				# Slim::Networking::SimpleAsyncHTTP is stubbed rather than loaded:
+				# it goes Slim::Networking::Async -> Async::DNS -> Slim::Utils::Misc
+				# -> Slim::Music::Info -> ... -> Slim::Utils::Unicode, which needs a
+				# real Slim::Utils::OSDetect and dies at Unicode.pm:100 without one.
+				# That is the same trade scripts/api-check.pl documents for the
+				# synchronous transport it used to stub: a compile check cannot
+				# exercise a transport anyway, and the cost is that this does not
+				# prove the class name is spelled right.
+				#
+				# Slim::Utils::Timers is loaded for real, so setTimer and killTimers
+				# are genuinely resolved against refs/ rather than assumed. It needs
+				# one cut of its own: `use Slim::Utils::Misc` at Timers.pm:42 reaches
+				# Slim::Utils::Prefs -> Prefs::Namespace -> the same Unicode. Timers
+				# calls nothing in Misc (grepped: no Slim::Utils::Misc:: references
+				# anywhere in the file), so a bare %INC marker is enough, and
+				# TAGS_STUB supplies the preferences() symbol Prefs would export.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Slim::Utils::Misc, Slim::Utils::Prefs stubbed; Timers real)"
+				;;
+			Derive)
+				# Derive.pm (step 8c) is the master arm's backfill, and like
+				# API/Async.pm it is server-only: the scanner has no event loop to
+				# run SimpleAsyncHTTP on, and the scan-time sync is bounded at
+				# 120 s against a job that is 11 minutes cold (§15.18 part 10).
+				#
+				# It pulls in API.pm and Match.pm, hence their stubs, and its own
+				# LMS dependencies are API/Async.pm's two - the transport and the
+				# timers - stubbed and loaded respectively for the reasons that
+				# case documents. Slim::Music::Import comes from Match.pm's chain
+				# (IMPORT_STUB) and is used here only through Match::_writeOk.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$API_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Misc, Prefs, Schema stubbed; Timers real)"
+				;;
+			Details)
+				# Details.pm (step 10) is the two submenus' fetch, and server-only
+				# for Derive's reason: the scanner has no menus and no event loop.
+				# It pulls in API.pm, hence API_STUB and TAGS_STUB; its transport is
+				# stubbed for the reason the API::Async case gives. Slim::Utils::Strings
+				# is loaded for real, as in the Menu case, with Slim::Utils::Misc cut
+				# for the reason given there.
+				prelude="$API_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Networking/SimpleAsyncHTTP.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)}                 = 1;
+}'
+				note=" (SimpleAsyncHTTP, Misc, Prefs, PluginManager stubbed; Strings real)"
+				;;
 			Importer)
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB"
 				note=" (Slim::Schema, Slim::Music::Import stubbed)"
 				;;
-			Settings)
+			ScanSync)
+				# The union of what it pulls in: Ownership.pm's stubs (and with
+				# them Library.pm's and Match.pm's), API/Sync.pm's, and
+				# Importer.pm's Slim::Utils::Progress. Importer.pm's
+				# _addScanSync requires this module at runtime, inside an eval, so
+				# compiling Importer.pm above does not reach it - hence its own
+				# entry here.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$PROGRESS_STUB$API_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+}'
+				note=" (Slim::Schema, Import, Info, Progress, Prefs, PluginManager stubbed)"
+				;;
+			Menu)
+				# Server only: the menus are a web/player-UI concern and the
+				# scanner never loads Plugin.pm, which is what registers them.
+				#
+				# Slim::Menu::AlbumInfo and Slim::Menu::TrackInfo are loaded FOR
+				# REAL, which is the point of checking this file at all: it is
+				# where registerInfoProvider and the callback signatures have to
+				# be right, and a stub would prove only that we can spell our own
+				# stub. It pulls in Library.pm's and Ownership.pm's chains, hence
+				# their stubs.
+				# Slim::Utils::Misc is cut for the reason the API::Async case
+				# gives: its chain reaches Slim::Utils::Unicode, which does not
+				# load offline. Strings.pm and Menu/Base.pm both `use` it and
+				# neither calls it at compile time.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)} = 1;
+
+	# AlbumInfo.pm ties a package variable to Tie::Cache::LRU at file scope
+	# without using it, relying on Slim::Schema to have loaded the class.
+	# Slim::Schema is stubbed here, so the load has to be made good.
+	require Tie::Cache::LRU;
+}'
+				note=" (Slim::Schema, Misc stubbed; Slim::Menu::AlbumInfo and TrackInfo real)"
+				;;
+			View)
+				# Server only, and for a reason of its own: a scan-time rebuild
+				# would run at importer weight 100, before our own pass at 130,
+				# and so describe the ownership of the scan before last.
+				#
+				# Slim::Music::VirtualLibraries and Slim::Menu::BrowseLibrary are
+				# loaded FOR REAL - registerLibrary, rebuild, getRealId,
+				# registerNode and _albums are exactly what this file has to have
+				# right. Misc and Tie::Cache::LRU are cut and made good as the
+				# Menu case does, for the same two reasons.
+				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB"'
+BEGIN {
+	$INC{q(Slim/Music/Info.pm)} = 1;
+	$INC{q(Slim/Utils/Misc.pm)} = 1;
+
+	require Tie::Cache::LRU;
+}'
+				note=" (Slim::Schema, Misc stubbed; VirtualLibraries and BrowseLibrary real)"
+				;;
+			Settings|Queue)
 				# Slim::Web::Settings is a web-UI class; stub the base the same
-				# way Plugin.pm's is stubbed, and reuse the other stubs.
+				# way Plugin.pm's is stubbed, and reuse the other stubs. Queue.pm
+				# is the same shape for the same reason: a Slim::Web::Settings
+				# subclass reaching the same web stack through its base class.
 				prelude="$SCHEMA_STUB$IMPORT_STUB$TAGS_STUB$SETTINGS_STUB"
 				note=" (Slim::Web::Settings and friends stubbed)"
 				;;

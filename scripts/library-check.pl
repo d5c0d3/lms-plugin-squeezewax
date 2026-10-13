@@ -79,18 +79,27 @@ BEGIN {
 	};
 
 	*{'main::SCANNER'}  = sub () { 0 };
-	*{'main::INFOLOG'}  = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}  = sub () { 1 };
 	*{'main::DEBUGLOG'} = sub () { 0 };
 }
+
+our @LOG;
 
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
 }
 
@@ -119,7 +128,12 @@ $dbh->do(q{
 		content_type TEXT
 	)
 });
-$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT)');
+$dbh->do('CREATE TABLE albums (id INTEGER PRIMARY KEY, title TEXT, contributor INT)');
+$dbh->do('CREATE TABLE contributors (id INTEGER PRIMARY KEY, name BLOB)');
+
+# ownershipArtists reads this one; eachAlbum does not. Columns and types from
+# refs/slimserver/SQL/SQLite/schema_1_up.sql:186-193.
+$dbh->do('CREATE TABLE contributor_album (role INT, contributor INT, album INT)');
 
 my $insert = $dbh->prepare('INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)');
 
@@ -143,7 +157,16 @@ $insert->execute( 7, 4, md5_hex('g'), 'file:///g', 10, 1, 1, 0, 1, 'cpl' );
 # album 5: a track with audio = 0
 $insert->execute( 8, 5, md5_hex('h'), 'file:///h', 10, 1, 1, 0, 0, 'flc' );
 
-$dbh->do("INSERT INTO albums VALUES (1, 'One'), (2, 'Two'), (3, 'Three'), (4, 'Four'), (5, 'Five')");
+$dbh->do("INSERT INTO albums (id, title) VALUES (1, 'One'), (2, 'Two'), (3, 'Three'), (4, 'Four'), (5, 'Five')");
+
+# Artists. Album 1 gets a plain name, album 2 a non-ASCII one stored as the UTF-8
+# bytes LMS would have written; album 3 has a NULL contributor (the default
+# above); a dangling id is set up on album 3 in the tests below, not here.
+my $utf8Name = "Bj\xc3\xb6rk";    # "Björk" as UTF-8 bytes
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (1, ?)', undef, 'Depeche Mode' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (2, ?)', undef, $utf8Name );
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 1');
+$dbh->do('UPDATE albums SET contributor = 2 WHERE id = 2');
 
 my @albums;
 my $seen = $L->eachAlbum( sub { push @albums, $_[0]; 1 } );
@@ -233,6 +256,104 @@ is( $L->albumLabel( { album_id => 7, title => undef } ), 'album 7',
 is( $L->albumLabel( { album_id => 8, title => '' } ), 'album 8',
 	'  ...and when it is empty' );
 
+# --- artist comes from albums.contributor, as bytes -----------------------
+is( $by{1}->{artist}, 'Depeche Mode', 'artist is the contributor\'s name' );
+
+# No decoding: DBD::SQLite returns the stored bytes, and the snapshot compares
+# them as bytes on both sides.
+is( $by{2}->{artist}, $utf8Name, 'a non-ASCII artist comes back byte-identical' );
+ok( !utf8::is_utf8( $by{2}->{artist} ), '  ...and is not a decoded character string' );
+
+# NULL albums.contributor: album 3 was seeded without one.
+ok( exists $by{3}->{artist} && !defined $by{3}->{artist},
+	'a NULL albums.contributor gives an undef artist, not a die' );
+
+# A contributor id with no contributors row. The LEFT JOIN must keep the album.
+$dbh->do('UPDATE albums SET contributor = 99 WHERE id = 3');
+my %dangling;
+my $danglingOk = eval {
+	$L->eachAlbum( sub { $dangling{ $_[0]->{album_id} } = $_[0]; 1 } );
+	1;
+};
+ok( $danglingOk, 'a dangling albums.contributor does not die' );
+ok( $dangling{3} && !defined $dangling{3}->{artist},
+	'  ...and the album is still emitted, with an undef artist' );
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+
+# --- ownershipArtists: the measured three-way choice (§15.13 part 2) -------
+#
+# Deliberately a different answer from eachAlbum's artist for the same album.
+# That separation IS the ruling: the snapshot compares LMS with LMS and keeps
+# albums.contributor (§15.12), while the ownership pass compares LMS with
+# Discogs and uses the rule §13.10's split was measured with.
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (3, ?)', undef, 'Alan Wilder' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (4, ?)', undef, 'Martin Gore' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (5, ?)', undef, '   ' );
+$dbh->do( 'INSERT INTO contributors (id, name) VALUES (6, ?)', undef, 'Recoil' );
+
+# album 1: ALBUMARTIST (role 5) present, and it is NOT albums.contributor.
+# Two of them, so ORDER BY c.id has something to decide.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 4, 1), (5, 3, 1)');
+
+# album 2: no ALBUMARTIST, one ARTIST (role 1), which must win over
+# albums.contributor (which is the Björk row).
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (1, 6, 2)');
+
+# album 3: an ALBUMARTIST whose name is whitespace only. A present-but-blank
+# name is not a name, so the choice must fall through rather than return it.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 5, 3)');
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 3');
+
+my $ownership = $L->ownershipArtists;
+
+is( $ownership->{1}, 'Alan Wilder',
+	'ALBUMARTIST (role 5) wins, and ORDER BY c.id picks the lowest id of two' );
+isnt( $ownership->{1}, $by{1}->{artist},
+	'  ...which is deliberately NOT eachAlbum\'s albums.contributor artist (§15.12)' );
+
+is( $ownership->{2}, 'Recoil',
+	'ARTIST (role 1) is used when there is no ALBUMARTIST' );
+isnt( $ownership->{2}, $by{2}->{artist},
+	'  ...in preference to albums.contributor' );
+
+is( $ownership->{3}, 'Depeche Mode',
+	'a whitespace-only ALBUMARTIST falls through to albums.contributor' );
+
+# No contributor of any kind: absent from the hash rather than present-undef,
+# so the caller's "is there a name" test is one lookup.
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+$dbh->do('DELETE FROM contributor_album WHERE album = 3');
+my $noneAt3 = $L->ownershipArtists;
+ok( !exists $noneAt3->{3}, 'an album with no usable artist is absent from the hash' );
+
+# Album 4 has no qualifying tracks, so eachAlbum never emits it - but
+# ownershipArtists is one query over albums, and the pass joins in memory.
+# A superset is correct here; a missing row would not be.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 1, 4)');
+my $superset = $L->ownershipArtists;
+is( $superset->{4}, 'Depeche Mode',
+	'ownershipArtists covers albums eachAlbum filters out; the join happens in memory' );
+$dbh->do('DELETE FROM contributor_album WHERE album = 4');
+
+# Bytes, not characters. Decoding belongs in Ownership::_decode so that an
+# undecodable name is counted rather than repaired.
+# Contributor 2 is a lower id than 3, so adding it as a third ALBUMARTIST must
+# displace the previous pick. That is ORDER BY c.id proved in both directions:
+# adding a higher id changes nothing, adding a lower one changes the answer.
+$dbh->do('INSERT INTO contributor_album (role, contributor, album) VALUES (5, 2, 1)');
+my $utf8Pick = $L->ownershipArtists;
+is( $utf8Pick->{1}, $utf8Name,
+	'a lower contributor id displaces the previous pick, and comes back byte-identical' );
+ok( !utf8::is_utf8( $utf8Pick->{1} ),
+	'  ...as bytes, not a decoded character string - decoding is Ownership::_decode\'s job' );
+
+# Leave the fixture as the rest of the file expects it.
+$dbh->do('DELETE FROM contributor_album');
+$dbh->do('UPDATE albums SET contributor = 1 WHERE id = 1');
+$dbh->do('UPDATE albums SET contributor = 2 WHERE id = 2');
+$dbh->do('UPDATE albums SET contributor = NULL WHERE id = 3');
+$dbh->do('DELETE FROM contributors WHERE id > 2');
+
 # --- albumCount matches what the iterator emits ---------------------------
 is( $L->albumCount, 3,
 	'albumCount agrees with eachAlbum, so the progress bar total is right' );
@@ -298,5 +419,36 @@ my %allFormats;
 $allFormats{ $_->{content_type} }++ for @$all;
 is( $allFormats{flc}, 42, 'a cap above the album count returns every FLAC album' );
 is( $allFormats{mp3}, 4,  '  ...and every MP3 album' );
+
+# --- albumKey: the single-album route agrees with the walk -----------------
+#
+# Asserted over EVERY album this fixture holds, not a sample. The menu and the
+# owned view reach our rows through albumKey; the importer and the ownership
+# pass wrote them through eachAlbum. If the two ever disagree on one album,
+# that album silently stops being owned, and nothing logs it (step 9 plan §1).
+my @walk;
+$L->eachAlbum( sub { push @walk, $_[0]; 1 } );
+
+cmp_ok( scalar @walk, '>', 40, 'the whole-set check runs over the full fixture library' );
+
+my $mismatch = 0;
+for my $album (@walk) {
+	my $key = $L->albumKey( $album->{album_id} );
+	$mismatch++ if !defined $key || $key ne $album->{album_key};
+}
+is( $mismatch, 0, 'albumKey agrees with eachAlbum for every album in the library' );
+
+# The albums eachAlbum refuses to emit have no key by either route.
+is( $L->albumKey(4), undef,
+	'albumKey is undef for an album whose only track is a non-audio content_type' );
+is( $L->albumKey(5), undef,
+	'albumKey is undef for an album whose only track has audio = 0' );
+is( $L->albumKey(999999), undef, 'albumKey is undef for an album id that does not exist' );
+is( $L->albumKey(undef),  undef, 'albumKey is undef for an undefined album id' );
+
+# md5_hex('') must never be returned as a key - it is the one value every
+# trackless album would share.
+ok( !grep( { defined $_ && $_ eq $emptyDigest } map { $L->albumKey($_) } ( 4, 5, 999999 ) ),
+	'albumKey never returns md5_hex("")' );
 
 done_testing();

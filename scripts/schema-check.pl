@@ -76,20 +76,29 @@ BEGIN {
 
 	# Schema.pm is compiled with main::SCANNER already defined by its callers.
 	*{'main::SCANNER'}   = sub () { 0 };
-	*{'main::INFOLOG'}   = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}   = sub () { 1 };
 	*{'main::DEBUGLOG'}  = sub () { 0 };
 	# _samePath case-folds under ISWINDOWS; these tests run the POSIX branch.
 	*{'main::ISWINDOWS'} = sub () { 0 };
 }
+
+our @LOG;
 
 {
 	package Test::StubLogger;
 	sub new     { bless {}, shift }
 	sub error   { }
 	sub warn    { }
-	sub info    { }
+	sub info    { shift; push @main::LOG, "@_"; return }
 	sub debug   { }
-	sub is_info { 0 }
+	sub is_info { 1 }
 	sub is_debug{ 0 }
 }
 
@@ -228,18 +237,50 @@ my %tables = map { $_->[0] => 1 } @{
 	$dbh->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
 };
 
-for my $t (qw(discogs_match discogs_release_cache discogs_collection discogs_price_snapshot
-              discogs_no_match)) {
+for my $t (qw(discogs_match discogs_release_cache discogs_price_snapshot
+              discogs_no_match discogs_sync_state discogs_meta)) {
 	ok( $tables{$t}, "table $t exists" );
 }
 
-# migration 2's column, added by ALTER TABLE rather than in the CREATE
+# (i) discogs_collection was never a v1 table. Migration 1 created it and
+# migration 3 drops it; decisions §15.10.
+ok( !$tables{discogs_collection}, 'discogs_collection is gone after migrating' );
+
+# (f) the exact column set of the rebuilt discogs_match, not just a spot check:
+# migration 3 drops snapshot_total_duration and adds ownership, and asserting
+# the whole set is what catches a column that survives the rebuild by accident.
 my %matchColumns = map { $_->{name} => 1 } @{
 	$dbh->selectall_arrayref(
 		'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
 	)
 };
+
+is_deeply(
+	[ sort keys %matchColumns ],
+	[ sort qw(album_key mb_album_id lms_album_id discogs_release_id discogs_master_id
+	          match_tier state ownership matched_at snapshot_artist snapshot_album_title
+	          snapshot_track_count source_timestamp review_reason
+	          derived_master_id derived_from_release_id derived_at) ],
+	'discogs_match carries exactly the v1 column set'
+);
 ok( $matchColumns{source_timestamp}, 'discogs_match has source_timestamp' );
+ok( !$matchColumns{snapshot_total_duration}, 'snapshot_total_duration is dropped (f)' );
+
+# (g) the orphan index follows §15.5's predicate, which keys on match_tier
+# rather than state.
+my %indexes = map { $_->[0] => $_->[1] } @{
+	$dbh->selectall_arrayref(
+		"SELECT name, sql FROM squeezewax.sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+	)
+};
+
+for my $i (qw(discogs_match_release discogs_match_lms_album discogs_match_mb_album
+              discogs_match_orphan)) {
+	ok( $indexes{$i}, "index $i survives the rebuild" );
+}
+ok( !$indexes{discogs_collection_release}, 'discogs_collection_release is gone (i)' );
+like( $indexes{discogs_match_orphan} || '', qr/\(\s*match_tier\s*,\s*snapshot_track_count\s*\)/,
+	'the orphan index is on (match_tier, snapshot_track_count) (g)' );
 
 # --- no foreign keys, anywhere -------------------------------------------
 for my $t ( sort keys %tables ) {
@@ -274,25 +315,88 @@ ok( !$insertMatch->( album_key => 'b' x 32, state => 'Confirmed' ),
 ok( !$insertMatch->( album_key => 'b' x 32, match_tier => 'Strict' ),
 	"match_tier CHECK rejects 'Strict'" );
 
-# 'manual' is the value the review queue will write in build-order step 5;
+# 'manual' is the value the review queue will write in build-order step 8;
 # if the CHECK rejected it we would only find out then.
 ok( $insertMatch->( album_key => 'c' x 32, match_tier => 'manual' ),
 	"match_tier CHECK accepts 'manual'" );
 
-for my $tier (qw(strict structural fuzzy)) {
-	ok( $insertMatch->( album_key => substr( $tier . ( 'x' x 32 ), 0, 32 ), match_tier => $tier ),
-		"match_tier CHECK accepts '$tier'" );
+# (b) The tiers v1 removed. Until migration 3 these were accepted; decisions
+# §14.3 deleted Fuzzy from the roadmap and §13.8 replaced Structural, so a row
+# arriving at either tier now is a bug and must not be storable.
+for my $tier (qw(structural fuzzy)) {
+	ok( !$insertMatch->( album_key => substr( $tier . ( 'x' x 32 ), 0, 32 ), match_tier => $tier ),
+		"match_tier CHECK rejects '$tier' (removed in v1)" );
 }
 
-ok( !eval {
-	$dbh->do( 'INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id, list_state)'
-		. " VALUES (1, 1, 'Owned')" ); 1
-}, "list_state CHECK rejects 'Owned'" );
+ok( $insertMatch->( album_key => 'd' x 32, match_tier => 'strict' ),
+	"match_tier CHECK accepts 'strict'" );
 
-ok( eval {
-	$dbh->do( 'INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id, list_state)'
-		. " VALUES (2, 1, 'wantlist')" ); 1
-}, "list_state CHECK accepts 'wantlist'" );
+# (b) NULL match_tier is the ownership pass's row: an ownership conclusion with
+# no identification behind it (§14.1, §14.8). Standard SQL treats a CHECK that
+# evaluates to NULL as not violated, so no explicit OR ... IS NULL is needed -
+# expected rather than verified when the obligation was written, asserted here.
+ok( $insertMatch->( album_key => 'e' x 32, match_tier => undef ),
+	'match_tier CHECK accepts NULL (an ownership-only row)' );
+ok( $insertMatch->( album_key => 'f' x 32, state => undef ),
+	'state CHECK accepts NULL' );
+
+# --- migration 4: review_reason's CHECK -----------------------------------
+#
+# All six values, one at a time, because the queue's whole selection is this
+# column: a value the CHECK silently refused would be a row that never reaches
+# the page, and the pass would log a write it did not make.
+for my $reason (qw(conflict ambiguous artist-disagree artist-absent various-gated orphan)) {
+	ok( $insertMatch->( album_key => substr( $reason . ( 'z' x 32 ), 0, 32 ),
+			review_reason => $reason ),
+		"review_reason CHECK accepts '$reason'" );
+}
+
+ok( !$insertMatch->( album_key => 'g' x 32, review_reason => 'bogus' ),
+	"review_reason CHECK rejects 'bogus'" );
+ok( !$insertMatch->( album_key => 'g' x 32, review_reason => 'Conflict' ),
+	"review_reason CHECK rejects 'Conflict' - the values are case-sensitive" );
+ok( $insertMatch->( album_key => 'h' x 32, review_reason => undef ),
+	'review_reason CHECK accepts NULL (not in the queue)' );
+
+# An INSERT that never names the column leaves it NULL. This is what every
+# existing writer does, and what keeps migration 4 a no-op for them: the
+# importer's and the pass's INSERTs are not rewritten except where §1.2 and
+# §2.1 say so.
+ok( $insertMatch->( album_key => 'i' x 32 ), 'a row that omits review_reason inserts' );
+my ($omitted) = $dbh->selectrow_array(
+	'SELECT review_reason FROM squeezewax.discogs_match WHERE album_key = ?',
+	undef, 'i' x 32
+);
+is( $omitted, undef, '  ...and review_reason is NULL on it' );
+
+# (c) and N1: what an insert that names neither column actually writes. state
+# must come out NULL - a DEFAULT 'candidate' here would drop an auto-badged
+# album into the review queue, silently wrong rather than loud (§14.8).
+# ownership must come out 'absent', because the importer's two INSERTs do not
+# name it and a bare NOT NULL column would fail both.
+$dbh->do( 'INSERT INTO squeezewax.discogs_match (album_key, lms_album_id) VALUES (?, ?)',
+	undef, 'g' x 32, 42 );
+
+my ( $bareState, $bareOwnership, $bareTier ) = $dbh->selectrow_array(
+	'SELECT state, ownership, match_tier FROM squeezewax.discogs_match WHERE album_key = ?',
+	undef, 'g' x 32
+);
+
+is( $bareState,     undef,    'an insert omitting state yields NULL (c)' );
+is( $bareTier,      undef,    'an insert omitting match_tier yields NULL' );
+is( $bareOwnership, 'absent', "an insert omitting ownership yields 'absent' (N1)" );
+
+# N1's enum. 'owned' is the word design §4 uses for the badge and is the likely
+# typo; 'Exact' is the casing one.
+for my $bad (qw(Exact owned)) {
+	ok( !$insertMatch->( album_key => substr( $bad . ( 'z' x 32 ), 0, 32 ), ownership => $bad ),
+		"ownership CHECK rejects '$bad'" );
+}
+
+for my $good (qw(exact version absent)) {
+	ok( $insertMatch->( album_key => substr( $good . ( 'y' x 32 ), 0, 32 ), ownership => $good ),
+		"ownership CHECK accepts '$good'" );
+}
 
 # --- discogs_no_match -----------------------------------------------------
 my $insertNoMatch = sub {
@@ -310,11 +414,21 @@ my $insertNoMatch = sub {
 
 ok( $insertNoMatch->(), 'a well-formed no-match row inserts' );
 
-# The composite PK is the point: strict-negative and structural-negative are
-# different facts and step 4 needs both true of one album at once.
-ok( $insertNoMatch->( tier => 'structural' ),
-	'the same album_key takes a second row under a different tier' );
-ok( !$insertNoMatch->(), 'but not a duplicate (album_key, tier)' );
+# (h) The composite PK still exists, but v1 has only one valid tier, so the
+# "same album_key under a second tier" case can no longer be written as a
+# second valid tier. What it asserts now is that the PK is composite and the
+# CHECK is what stops the second row, not the key.
+ok( !$insertNoMatch->( tier => 'structural' ),
+	"tier CHECK rejects 'structural' (removed in v1)" );
+ok( !$insertNoMatch->(), 'and a duplicate (album_key, tier) is still rejected' );
+
+my @noMatchPk = map { $_->{name} } grep { $_->{pk} } @{
+	$dbh->selectall_arrayref(
+		'SELECT name, pk FROM pragma_table_info(?)', { Slice => {} }, 'discogs_no_match'
+	)
+};
+is_deeply( [ sort @noMatchPk ], [ 'album_key', 'tier' ],
+	'discogs_no_match keeps its composite (album_key, tier) primary key' );
 
 # 'fuzzy' is v2 and deliberately outside the CHECK; a typo'd tier would
 # otherwise degrade to "not examined", which looks identical to correct
@@ -336,5 +450,558 @@ my ($skips) = $dbh->selectrow_array(
 	undef, 'p' x 32, 12345
 );
 is( $skips, 0, 'a NULL source_timestamp never matches a timestamp, so it never skips' );
+
+# --- migration 3: the upgrade path from a populated version-2 database -----
+#
+# Everything above runs against a database migrated straight to the current
+# version, where the rebuild had nothing to copy. The obligations that matter
+# most - (e), (a) and re-run safety - are about a file that already holds rows,
+# so build one the way a real upgrade meets it: migrations 1 and 2 only,
+# user_version pinned at 2, rows inserted under the OLD constraints.
+my $v2 = 0;
+
+sub version_2_dbh {
+	my (%opt) = @_;
+
+	$v2++;
+
+	my $h = DBI->connect( "dbi:SQLite:dbname=$dir/v2main$v2.db", '', '', {
+		RaiseError => 1, PrintError => 0, AutoCommit => 1,
+	} );
+	$h->do('PRAGMA foreign_keys = ON');
+	$h->do("ATTACH '$dir/v2-$v2.db' AS squeezewax");
+
+	# The plain-function halves of the migration list, called as plain
+	# functions (CLAUDE.md). Running _migrate would take the file to 3.
+	Plugins::SqueezeWax::Schema::_migration_1($h);
+	Plugins::SqueezeWax::Schema::_migration_2($h);
+	$h->do('PRAGMA squeezewax.user_version = 2');
+
+	# A confirmed strict row with a full snapshot, a conflict row (strict,
+	# candidate, NULL release id, no snapshot - §3a), and a manual row. These
+	# are the three shapes (e) has to carry forward untouched.
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, mb_album_id, lms_album_id, discogs_release_id, discogs_master_id,
+		 match_tier, state, matched_at, snapshot_artist, snapshot_album_title,
+		 snapshot_track_count, snapshot_total_duration, source_timestamp)
+		VALUES (?,?,?,?,?,'strict','confirmed',?,?,?,?,?,?)},
+		undef, 'a' x 32, 'mb-1', 11, 111, 999, 1000, 'Artist', 'Title', 12, 3600, 77 );
+
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, lms_album_id, match_tier, state, matched_at, source_timestamp)
+		VALUES (?,?,'strict','candidate',?,?)},
+		undef, 'b' x 32, 22, 1001, 88 );
+
+	$h->do( q{INSERT INTO squeezewax.discogs_match
+		(album_key, lms_album_id, discogs_release_id, match_tier, state, matched_at)
+		VALUES (?,?,?,'manual','confirmed',?)},
+		undef, 'c' x 32, 33, 222, 1002 );
+
+	if ( $opt{legacy_tier} ) {
+		$h->do( q{INSERT INTO squeezewax.discogs_match
+			(album_key, lms_album_id, discogs_release_id, match_tier, state)
+			VALUES (?,?,?,?,'candidate')},
+			undef, 'l' x 32, 44, 444, $opt{legacy_tier} );
+	}
+
+	# A structural no-match row and a collection row, both of which migration 3
+	# discards rather than carries.
+	$h->do( q{INSERT INTO squeezewax.discogs_no_match (album_key, tier, checked_at)
+		VALUES (?,'structural',?)}, undef, 'n' x 32, 5 );
+	$h->do( q{INSERT INTO squeezewax.discogs_collection (instance_id, discogs_release_id)
+		VALUES (1, 111)} );
+
+	return $h;
+}
+
+sub match_fingerprint {
+	my $h = shift;
+
+	return $h->selectall_arrayref(
+		q{SELECT album_key, mb_album_id, lms_album_id, discogs_release_id,
+		         discogs_master_id, match_tier, state, matched_at, snapshot_artist,
+		         snapshot_album_title, snapshot_track_count, source_timestamp
+		    FROM squeezewax.discogs_match ORDER BY album_key},
+		{ Slice => {} }
+	);
+}
+
+{
+	my $up = version_2_dbh();
+
+	my $beforeRows = $up->selectall_arrayref(
+		q{SELECT album_key, match_tier, state FROM squeezewax.discogs_match
+		  ORDER BY album_key}, { Slice => {} }
+	);
+	is( scalar @$beforeRows, 3, 'the version-2 fixture holds three rows' );
+
+	ok( eval { $S->_migrate($up); 1 },
+		"_migrate takes a populated version-2 file all the way to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	my $afterRows = $up->selectall_arrayref(
+		q{SELECT album_key, match_tier, state, ownership FROM squeezewax.discogs_match
+		  ORDER BY album_key}, { Slice => {} }
+	);
+
+	# (e) row for row, same count, same state, same tier. The ownership pass -
+	# not the migration - is what re-derives state.
+	is( scalar @$afterRows, scalar @$beforeRows, 'the rebuild copied every row (e)' );
+
+	for my $i ( 0 .. $#$beforeRows ) {
+		is( $afterRows->[$i]{album_key}, $beforeRows->[$i]{album_key},
+			"row $i keeps its album_key" );
+		is( $afterRows->[$i]{state}, $beforeRows->[$i]{state},
+			"row $i keeps state '" . ( $beforeRows->[$i]{state} // 'NULL' ) . "' (e)" );
+		is( $afterRows->[$i]{match_tier}, $beforeRows->[$i]{match_tier},
+			"row $i keeps match_tier '" . ( $beforeRows->[$i]{match_tier} // 'NULL' ) . "' (e)" );
+		is( $afterRows->[$i]{ownership}, 'absent', "row $i takes ownership 'absent' (e)" );
+	}
+
+	# The conflict row is the one whose NULL release id must survive a rebuild
+	# that also narrowed two enums.
+	my ($conflictRelease) = $up->selectrow_array(
+		'SELECT discogs_release_id FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'b' x 32
+	);
+	is( $conflictRelease, undef, 'the conflict row keeps its NULL discogs_release_id' );
+
+	# The columns nothing above names, carried through by the explicit copy.
+	my ($mb, $master, $dur) = $up->selectrow_array(
+		'SELECT mb_album_id, discogs_master_id, snapshot_artist FROM squeezewax.discogs_match
+		  WHERE album_key = ?', undef, 'a' x 32
+	);
+	is( $mb,     'mb-1',   'mb_album_id survives the rebuild' );
+	is( $master, 999,      'discogs_master_id survives the rebuild' );
+	is( $dur,    'Artist', 'snapshot_artist survives the rebuild' );
+
+	# (h) and (i): both regenerable tables were discarded, not copied.
+	my ($noMatchLeft) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_no_match');
+	is( $noMatchLeft, 0, "the 'structural' no-match row is discarded, not migrated (h)" );
+
+	my %upTables = map { $_->[0] => 1 } @{
+		$up->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
+	};
+	ok( !$upTables{discogs_collection}, 'discogs_collection is dropped on upgrade (i)' );
+	ok( !$upTables{discogs_match_new},  'the scratch table is renamed away, not left behind' );
+
+	# --- re-run safety ----------------------------------------------------
+	#
+	# _migrate bumps user_version only after the migration sub returns, so a
+	# rebuild that commits and then dies leaves a version-3 table behind a
+	# version-2 marker. Both forms of re-run must be no-ops.
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_3($up); 1 },
+		'migration 3 runs a second time without dying' ) or diag($@);
+	is_deeply( match_fingerprint($up), $fingerprint, '  ...and changes nothing' );
+
+	$up->do('PRAGMA squeezewax.user_version = 2');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed rebuild with user_version forced back to 2' )
+		or diag($@);
+	is( version_of($up), $target, '  ...and reaches the current version' );
+	is_deeply( match_fingerprint($up), $fingerprint, '  ...and still changes nothing' );
+}
+
+# --- (a) a legacy tier refuses loudly and changes nothing ------------------
+for my $tier (qw(structural fuzzy)) {
+	my $bad = version_2_dbh( legacy_tier => $tier );
+
+	my $before = $bad->selectall_arrayref(
+		'SELECT album_key, match_tier FROM squeezewax.discogs_match ORDER BY album_key',
+		{ Slice => {} }
+	);
+
+	ok( !eval { $S->_migrate($bad); 1 }, "_migrate refuses a file holding a '$tier' row (a)" );
+	like( $@, qr/refusing to rebuild/, '  ...and says it is refusing' );
+	like( $@, qr/\b1 row/, '  ...and says how many rows it found' );
+
+	is( version_of($bad), 2, '  ...and leaves user_version at 2' );
+	is_deeply(
+		$bad->selectall_arrayref(
+			'SELECT album_key, match_tier FROM squeezewax.discogs_match ORDER BY album_key',
+			{ Slice => {} }
+		),
+		$before,
+		'  ...and leaves discogs_match untouched'
+	);
+
+	my %badTables = map { $_->[0] => 1 } @{
+		$bad->selectall_arrayref("SELECT name FROM squeezewax.sqlite_master WHERE type = 'table'")
+	};
+	ok( $badTables{discogs_collection},
+		'  ...and has not begun the drops either (the refusal is first)' );
+	ok( !$badTables{discogs_match_new}, '  ...and left no scratch table behind' );
+}
+
+# --- migration 4: the upgrade path from a populated version-3 database -----
+#
+# The same shape as the migration-3 block above and for the same reason: the
+# only interesting case is a file that already holds rows. A real upgrade meets
+# version 3 with a full discogs_match, and the one thing migration 4 must do to
+# it is add a column that is NULL everywhere - R9's "no backfill", asserted
+# rather than assumed.
+sub version_3_dbh {
+	my $h = version_2_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_3($h);
+	$h->do('PRAGMA squeezewax.user_version = 3');
+
+	return $h;
+}
+
+{
+	my $up = version_3_dbh();
+
+	is( version_of($up), 3, 'the version-3 fixture reports user_version 3' );
+
+	my %before = map { $_->{name} => 1 } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+	ok( !$before{review_reason}, '  ...and has no review_reason column yet' );
+
+	my $fingerprint = match_fingerprint($up);
+	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $beforeCount, 3, '  ...and holds three rows' );
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-3 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
+
+	# Every other column, row for row. An ALTER should touch nothing else, and
+	# this is the cheapest way to say so.
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'  ...and every pre-existing column is byte-for-byte what it was' );
+
+	my ($nonNull) = $up->selectrow_array(
+		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE review_reason IS NOT NULL'
+	);
+	is( $nonNull, 0, 'review_reason is NULL on every existing row (R9: no backfill)' );
+
+	# The CHECK is carried into the stored DDL by the ALTER, not merely applied
+	# once. Before SQLite 3.37.0 an added CHECK is not tested against existing
+	# rows at all, so this - a write after the fact - is the assertion that
+	# holds on every bundled version.
+	ok( !eval { $up->do( 'UPDATE squeezewax.discogs_match SET review_reason = ?', undef, 'bogus' ); 1 },
+		"the CHECK rejects 'bogus' on a later UPDATE" );
+	ok( eval { $up->do( 'UPDATE squeezewax.discogs_match SET review_reason = ? WHERE album_key = ?',
+			undef, 'conflict', 'b' x 32 ); 1 },
+		"  ...and accepts 'conflict'" );
+
+	# --- re-run safety ----------------------------------------------------
+	#
+	# ADD COLUMN is the one statement in the whole schema that throws on a
+	# re-run, so the guard is the migration. Both forms: the sub called again
+	# directly, and _migrate over a completed migration with the marker forced
+	# back.
+	my $marked = match_fingerprint($up);
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_4($up); 1 },
+		'migration 4 runs a second time without dying' ) or diag($@);
+	is_deeply( match_fingerprint($up), $marked, '  ...and changes nothing' );
+
+	my ($stillConflict) = $up->selectrow_array(
+		'SELECT review_reason FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'b' x 32
+	);
+	is( $stillConflict, 'conflict', '  ...and does not blank a reason already written' );
+
+	$up->do('PRAGMA squeezewax.user_version = 3');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed ADD COLUMN with user_version forced back to 3' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
+}
+
+# --- migration 5: discogs_sync_state -----------------------------------------
+#
+# The marker of decisions §15.18 part 7. The interesting case is again a file
+# that holds rows: a real upgrade meets version 4 with a full discogs_match, and
+# migration 5 must create one table and touch nothing else.
+sub version_4_dbh {
+	my $h = version_3_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_4($h);
+	$h->do('PRAGMA squeezewax.user_version = 4');
+
+	return $h;
+}
+
+{
+	my $up = version_4_dbh();
+
+	is( version_of($up), 4, 'the version-4 fixture reports user_version 4' );
+
+	my ($absent) = $up->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.sqlite_master WHERE name = 'discogs_sync_state'}
+	);
+	is( $absent, 0, '  ...and has no discogs_sync_state yet' );
+
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-4 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'every discogs_match row is untouched by migration 5' );
+
+	my @columns = map { $_->{name} } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_sync_state'
+		)
+	};
+	is_deeply( \@columns, [qw(id last_synced items source)],
+		'discogs_sync_state has exactly id, last_synced, items, source' );
+
+	# No row is inserted: an absent row is "never synced" (§15.18 part 7).
+	my ($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 0, '  ...and holds no row - absent means never synced' );
+
+	my $put = sub {
+		my ( $id, $source ) = @_;
+		return eval {
+			$up->do( 'INSERT OR REPLACE INTO squeezewax.discogs_sync_state
+				(id, last_synced, items, source) VALUES (?, ?, ?, ?)',
+				undef, $id, 1_000_000, 203, $source );
+			1;
+		};
+	};
+
+	ok( $put->( 0, 'scan' ),   "the CHECKs accept id 0, source 'scan'" );
+	ok( $put->( 0, 'server' ), "  ...and source 'server', replacing the row" );
+	($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 1, '  ...leaving one row, not two' );
+	ok( !$put->( 1, 'scan' ),   'the CHECK rejects id 1 - one row, enforced by the database' );
+	ok( !$put->( 0, 'manual' ), "the CHECK rejects source 'manual'" );
+	ok( !$put->( 0, undef ),    'source is NOT NULL' );
+
+	# --- re-run safety ----------------------------------------------------
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_5($up); 1 },
+		'migration 5 runs a second time without dying' ) or diag($@);
+	my ($kept) = $up->selectrow_array('SELECT source FROM squeezewax.discogs_sync_state WHERE id = 0');
+	is( $kept, 'server', '  ...and keeps the row already written' );
+
+	$up->do('PRAGMA squeezewax.user_version = 4');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 5 with user_version forced back to 4' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
+
+	# A file from the NEXT schema version must refuse this plugin. _migrate's
+	# existing behaviour, re-asserted at whatever the current target is, because
+	# that is where the next upgrade will meet it.
+	$up->do( 'PRAGMA squeezewax.user_version = ' . ( $target + 1 ) );
+	ok( !eval { $S->_migrate($up); 1 },
+		'a file one version ahead refuses this plugin' );
+	like( $@, qr/newer than this plugin/, '  ...and says why' );
+}
+
+# --- migration 6: the three derived-master columns (§15.22) ------------------
+#
+# The same shape as the migration-4 block, and for the same reason: the only
+# interesting case is a file that already holds rows. A real upgrade meets
+# version 5 with a full discogs_match, and all migration 6 may do to it is add
+# three columns that are NULL everywhere.
+sub version_5_dbh {
+	my $h = version_4_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_5($h);
+	$h->do('PRAGMA squeezewax.user_version = 5');
+
+	return $h;
+}
+
+my @DERIVED = qw(derived_master_id derived_from_release_id derived_at);
+
+{
+	my $up = version_5_dbh();
+
+	is( version_of($up), 5, 'the version-5 fixture reports user_version 5' );
+
+	my %before = map { $_->{name} => 1 } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+	ok( !$before{$_}, "  ...and has no $_ column yet" ) for @DERIVED;
+
+	my $columnsBefore = scalar keys %before;
+	my $fingerprint   = match_fingerprint($up);
+	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-5 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	my %after = map { $_->{name} => $_ } @{
+		$up->selectall_arrayref(
+			'SELECT name, type FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		)
+	};
+
+	# EXACTLY three columns, and exactly these three. A migration that added a
+	# fourth - a verdict column, say, which §15.21 dropped - would pass every
+	# assertion below and fail this one.
+	is( scalar keys %after, $columnsBefore + 3,
+		'migration 6 adds exactly three columns' );
+	ok( $after{$_}, "  ...one of them is $_" ) for @DERIVED;
+
+	# INTEGER, all three. §9.5's line between a bare identifier and Content is
+	# enforced by the column type as well as by the writer: a TEXT column here
+	# would be somewhere a title could land.
+	is( $after{$_}->{type}, 'INTEGER', "  ...and $_ is INTEGER, so no title can land in it" )
+		for @DERIVED;
+
+	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'  ...and every pre-existing column is byte-for-byte what it was' );
+
+	for my $c (@DERIVED) {
+		my ($nonNull) = $up->selectrow_array(
+			"SELECT COUNT(*) FROM squeezewax.discogs_match WHERE $c IS NOT NULL" );
+		is( $nonNull, 0, "$c is NULL on every existing row - no backfill" );
+	}
+
+	# discogs_release_cache is still there and still empty. §9.5 forbids writing
+	# it and nothing in step 8c does; asserted here because "the table exists"
+	# and "the table is written" are different statements and only one of them
+	# is permitted.
+	my ($cached) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_release_cache');
+	is( $cached, 0, 'discogs_release_cache is still unwritten (§9.5)' );
+
+	# --- re-run safety ----------------------------------------------------
+	$up->do( 'UPDATE squeezewax.discogs_match SET derived_master_id = ?, '
+		. 'derived_from_release_id = ?, derived_at = ? WHERE album_key = ?',
+		undef, 1884, 111, 1_700_000_000, 'a' x 32 );
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_6($up); 1 },
+		'migration 6 runs a second time without dying' ) or diag($@);
+
+	my ($kept) = $up->selectrow_array(
+		'SELECT derived_master_id FROM squeezewax.discogs_match WHERE album_key = ?',
+		undef, 'a' x 32 );
+	is( $kept, 1884, '  ...and does not blank a master already derived' );
+
+	$up->do('PRAGMA squeezewax.user_version = 5');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 6 with user_version forced back to 5' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
+}
+
+# --- migration 7: discogs_meta, and the two accessors (§15.23, §15.24) ------
+#
+# The key/value store the logic version lives in. Same shape of block as
+# migration 5's, and for the same reason: a real upgrade meets a populated file,
+# and all migration 7 may do to it is add one empty table.
+sub version_6_dbh {
+	my $h = version_5_dbh();
+
+	Plugins::SqueezeWax::Schema::_migration_6($h);
+	$h->do('PRAGMA squeezewax.user_version = 6');
+
+	return $h;
+}
+
+# The accessors go through Slim::Schema->dbh, which no other assertion in this
+# file needs; stubbed here, pointed at whichever scratch handle is under test.
+our $STUB_DBH;
+
+BEGIN {
+	$INC{'Slim/Schema.pm'} = 1;
+	no strict 'refs';
+	*{'Slim::Schema::dbh'} = sub { $main::STUB_DBH };
+}
+
+{
+	my $up = version_6_dbh();
+
+	is( version_of($up), 6, 'the version-6 fixture reports user_version 6' );
+
+	my ($absent) = $up->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.sqlite_master WHERE name = 'discogs_meta'}
+	);
+	is( $absent, 0, '  ...and has no discogs_meta yet' );
+
+	my $fingerprint = match_fingerprint($up);
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-6 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+
+	is_deeply( match_fingerprint($up), $fingerprint,
+		'every discogs_match row is untouched by migration 7' );
+
+	my @columns = map { $_->{name} } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_meta'
+		)
+	};
+	is_deeply( \@columns, [qw(key value)], 'discogs_meta has exactly key and value' );
+
+	my ($rows) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_meta');
+	is( $rows, 0, '  ...and holds no row - every key is absent until something writes it' );
+
+	# --- the accessors ----------------------------------------------------
+	local $STUB_DBH = $up;
+
+	{
+		# Not ready is not "absent": both answer undef, and neither writes.
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 0 };
+
+		is( $S->meta('logic_version'), undef, 'meta() answers undef when the schema is not ready' );
+		is( $S->setMeta( 'logic_version', 2 ), undef, '  ...and setMeta() refuses, returning undef' );
+	}
+
+	{
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+
+		is( $S->meta('logic_version'), undef, 'an unwritten key reads back as undef' );
+
+		is( $S->setMeta( 'logic_version', 2 ), 1, 'setMeta() reports success' );
+		is( $S->meta('logic_version'), 2, '  ...and the value round-trips' );
+
+		is( $S->setMeta( 'logic_version', 3 ), 1, 'a second write of the same key succeeds' );
+		is( $S->meta('logic_version'), 3, '  ...and replaces the value' );
+
+		my ($one) = $up->selectrow_array(
+			q{SELECT COUNT(*) FROM squeezewax.discogs_meta WHERE key = 'logic_version'} );
+		is( $one, 1, '  ...leaving one row, not two - INSERT OR REPLACE on the primary key' );
+
+		is( $S->meta('no_such_key'), undef, 'another key is still absent - the store is per key' );
+	}
+
+	# --- re-run safety ----------------------------------------------------
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_7($up); 1 },
+		'migration 7 runs a second time without dying' ) or diag($@);
+
+	{
+		local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+		is( $S->meta('logic_version'), 3, '  ...and keeps the value already written' );
+	}
+
+	$up->do('PRAGMA squeezewax.user_version = 6');
+	ok( eval { $S->_migrate($up); 1 },
+		'_migrate re-runs over a completed migration 7 with user_version forced back to 6' )
+		or diag($@);
+	is( version_of($up), $target, "  ...and reaches version $target" );
+
+	# A file from the NEXT schema version - version 8, now that the target is 7 -
+	# must refuse this plugin rather than be guessed at.
+	$up->do( 'PRAGMA squeezewax.user_version = ' . ( $target + 1 ) );
+	ok( !eval { $S->_migrate($up); 1 },
+		'a file one version ahead of ' . $target . ' refuses this plugin' );
+	like( $@, qr/newer than this plugin/, '  ...and says why' );
+}
 
 done_testing();

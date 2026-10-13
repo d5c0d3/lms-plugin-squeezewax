@@ -51,18 +51,27 @@ BEGIN {
 	};
 
 	*{'main::SCANNER'}  = sub () { 0 };
-	*{'main::INFOLOG'}  = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}  = sub () { 1 };
 	*{'main::DEBUGLOG'} = sub () { 0 };
 }
+
+our @LOG;
 
 {
 	package Test::StubLogger;
 	sub new      { bless {}, shift }
 	sub error    { }
 	sub warn     { }
-	sub info     { }
+	sub info     { shift; push @main::LOG, "@_"; return }
 	sub debug    { }
-	sub is_info  { 0 }
+	sub is_info  { 1 }
 	sub is_debug { 0 }
 }
 
@@ -111,7 +120,7 @@ my @accept = (
 	# from a browser or copied out of an API uri field must parse. Failing it
 	# would be worse than a miss: decide() treats unparseable as a conflict, so
 	# the album would land in the review queue as a false conflict instead of
-	# falling through to Structural.
+	# being treated as no tag at all.
 	[ 'https://www.discogs.com/Various-Aldre-Svenska-Spelman-Volym-I/release/4198228',
 	  4198228, 'slug before /release/' ],
 	[ 'https://www.discogs.com/Miles-Davis-Kind-Of-Blue/releases/123456',
@@ -333,5 +342,18 @@ isnt( $hits[0]->[3], $hits[0]->[1], '  ...and differs from the parsed id' );
 # even demoted.
 @hits = $T->candidateKeys( { DISCOGS_MASTER_ID => 'https://www.discogs.com/master/999' } );
 is_deeply( \@hits, [], 'a master URL is not offered as a release candidate' );
+
+# A key naming a master is skipped entirely, whatever its value parses as: a
+# bare master id under a Discogs-named key would otherwise be corroborated as a
+# release id (decisions §15.12 part 4).
+@hits = $T->candidateKeys( { DISCOGS_MASTER_ID => '999' } );
+is_deeply( \@hits, [], 'a bare master id under DISCOGS_MASTER_ID is not offered' );
+
+@hits = $T->candidateKeys( { 'discogs master id' => '999' } );
+is_deeply( \@hits, [], 'a master key is matched case-insensitively, spaces included' );
+
+@hits = $T->candidateKeys( { DISCOGS_RELEASE_ID => '123456', DISCOGS_MASTER_ID => '999' } );
+is_deeply( \@hits, [ [ 'DISCOGS_RELEASE_ID', 123456, 1, '123456' ] ],
+	'with both keys present, only the release id is offered' );
 
 done_testing();

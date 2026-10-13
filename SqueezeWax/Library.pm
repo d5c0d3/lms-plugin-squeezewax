@@ -52,30 +52,66 @@ END {
 # (SQL/SQLite/schema_16_up.sql:42), so it sorts BINARY and LMS's ICU collation
 # machinery (Slim/Utils/SQLiteHelper.pm:165-207) never applies.
 #
-# remote is selected, not filtered on. v2's Fuzzy tier is precisely for
-# streaming albums with no local file (design §3, walkthrough 4); filtering here
-# would have to be undone then. The Strict caller decides, not the iterator.
-my $ALBUM_TRACKS_SQL = q{
+# remote is selected, not filtered on. An all-remote album has no local file to
+# read tags from, so the importer's local_tracks gate skips it, but the ownership
+# pass covers every album, all-remote ones included (decisions §11.3, §15.11);
+# filtering here would have to be undone then. The caller decides, not the
+# iterator.
+#
+# c.name is the album artist, from albums.contributor (decisions §11.4, as
+# corrected by §15.12: Album::artists does not read that column and can write to
+# the library). It is returned as DBD::SQLite hands it over - bytes, no decoding,
+# trimming or case folding. Nothing under Slim/ sets sqlite_unicode or
+# sqlite_string_mode (grep, slimserver a670a38), contributors.name is a blob
+# (SQL/SQLite/schema_1_up.sql:154), and LMS decodes by hand where it needs
+# characters (Slim/Schema/Album.pm:239). The snapshot stores and compares the
+# artist the same way, so decoding here would make every non-ASCII artist fail
+# to fit. LEFT JOINs: a NULL or dangling albums.contributor yields undef, never
+# a dropped row.
+#
+# The predicate and the digest order are named once here and interpolated
+# everywhere, rather than restated per statement. albumKey (below) has to
+# produce the byte-identical key for one album that this walk produces for the
+# whole library, and a drifted copy of either would yield a key matching no
+# discogs_match row - an owned album silently losing its menu entry, with
+# nothing to see in a log (step 9 plan §1).
+my $QUALIFYING_TRACKS = q{
+		   t.audio = 1
+	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
+};
+
+my $KEY_ORDER = q{t.urlmd5};
+
+my $ALBUM_TRACKS_SQL = qq{
 	SELECT t.album, t.urlmd5, t.url, t.timestamp, t.disc, t.tracknum, t.remote,
-	       t.content_type, a.title
+	       t.content_type, a.title, c.name
 	  FROM tracks t
 	  LEFT JOIN albums a ON a.id = t.album
+	  LEFT JOIN contributors c ON c.id = a.contributor
 	 WHERE t.album IS NOT NULL
-	   AND t.audio = 1
-	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
-	 ORDER BY t.album, t.urlmd5
+	   AND $QUALIFYING_TRACKS
+	 ORDER BY t.album, $KEY_ORDER
 };
 
 # One aggregate over the same predicate, for Progress->new's total. An
 # indeterminate progress bar would undercut finding 4's reasoning: the scan-UI
 # row is the healthy-run signal that justified dropping the log category to WARN,
 # and a bar with no total carries less of that.
-my $ALBUM_COUNT_SQL = q{
+my $ALBUM_COUNT_SQL = qq{
 	SELECT COUNT(DISTINCT t.album)
 	  FROM tracks t
 	 WHERE t.album IS NOT NULL
-	   AND t.audio = 1
-	   AND t.content_type NOT IN ('cpl','src','ssp','dir')
+	   AND $QUALIFYING_TRACKS
+};
+
+# One album's qualifying urlmd5s, in the same order. Indexed on tracks.album
+# (SQL/SQLite/schema_1_up.sql, trackAlbumIndex).
+my $ALBUM_KEY_SQL = qq{
+	SELECT t.urlmd5
+	  FROM tracks t
+	 WHERE t.album = ?
+	   AND $QUALIFYING_TRACKS
+	 ORDER BY $KEY_ORDER
 };
 
 =head2 eachAlbum( \&callback )
@@ -90,6 +126,8 @@ Call $callback once per album with a hashref:
   candidates        up to two local track urls, in (disc, tracknum, url) order
   content_type      the primary candidate's content type, or undef
   title             album title for display only - may be undef
+  artist            albums.contributor's name, bytes as stored; may be undef;
+                    last track written wins (decisions §15.12)
 
 Returns the number of albums seen. A callback returning false stops the walk.
 
@@ -111,10 +149,10 @@ sub eachAlbum {
 	$activeSth = $sth;
 
 	my ( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
-		$contentType, $title );
+		$contentType, $title, $artist );
 	$sth->bind_columns(
 		\( $albumId, $urlmd5, $url, $timestamp, $disc, $tracknum, $remote,
-			$contentType, $title )
+			$contentType, $title, $artist )
 	);
 
 	my $seen    = 0;
@@ -148,6 +186,7 @@ sub eachAlbum {
 				$current = {
 					album_id      => $albumId,
 					title         => $title,
+					artist        => $artist,
 					urlmd5        => [],
 					local         => [],
 					remote_tracks => 0,
@@ -236,7 +275,11 @@ sub _finish {
 		# May be NULL in the database, so callers degrade to the id.
 		title            => $acc->{title},
 
-		album_key        => md5_hex( join '', @{ $acc->{urlmd5} } ),
+		# The album artist, likewise a property of the album. Bytes, and undef
+		# when albums.contributor is NULL or has no contributors row.
+		artist           => $acc->{artist},
+
+		album_key        => _keyDigest( $acc->{urlmd5} ),
 		source_timestamp => $source,
 		local_tracks     => scalar @local,
 		remote_tracks    => $acc->{remote_tracks},
@@ -248,6 +291,93 @@ sub _finish {
 		# list. undef for an album with no local tracks.
 		content_type     => $sorted[0] ? $sorted[0]->{content_type} : undef,
 	};
+}
+
+# The key itself, from an album's qualifying urlmd5s in $KEY_ORDER. The one
+# definition: eachAlbum's per-album accumulator and albumKey both call it, so
+# the two routes cannot drift apart.
+#
+# An empty list yields undef, not md5_hex(''). That constant is what every
+# trackless album would collide on, and discogs_match's
+# CHECK(length(album_key) = 32) would accept it.
+sub _keyDigest {
+	my $urlmd5 = shift;
+
+	return undef unless $urlmd5 && @$urlmd5;
+
+	return md5_hex( join '', @$urlmd5 );
+}
+
+=head2 albumKey( $albumId )
+
+The C<album_key> of one LMS album, or C<undef> for an album with no qualifying
+tracks.
+
+The single-album counterpart to C<eachAlbum>, for the menu and the owned view,
+which are handed an C<albums.id> by LMS and have to reach our row. They cannot
+use C<discogs_match.lms_album_id>: nothing refreshes it for an album the
+importer skips or never examines, so it goes stale as soon as LMS reassigns
+C<albums.id>, and a lookup through it would show B<the wrong album as owned>
+(step 9 plan D1, decisions §15.25). Identity is the key; the id is a cache.
+
+One indexed query per call - once per menu open, never per grid tile (design
+§382).
+
+=cut
+
+sub albumKey {
+	my ( $class, $albumId ) = @_;
+
+	return undef unless defined $albumId;
+
+	my $urlmd5 = Slim::Schema->dbh->selectcol_arrayref( $ALBUM_KEY_SQL, undef, $albumId );
+
+	return _keyDigest($urlmd5);
+}
+
+=head2 trackIdsForAlbums( \@albumIds )
+
+The C<tracks.id>s of every qualifying track of the given albums, as an
+arrayref. Remote tracks included: a rip and a stream of one record are two
+albums and the user owns both (decisions §13.10.3).
+
+For the owned library view, which has to put tracks - not albums - into
+C<library_track>. Qualifying means the same thing here as everywhere else in
+this file, through the same interpolated predicate: the view must hold exactly
+the tracks the key was computed over, or an album could be owned and yet appear
+with some of its tracks missing.
+
+Chunked, because SQLite's variable limit is 999 by default and an owned library
+can be larger than that.
+
+=cut
+
+use constant ID_CHUNK => 500;
+
+sub trackIdsForAlbums {
+	my ( $class, $albumIds ) = @_;
+
+	return [] unless $albumIds && @$albumIds;
+
+	my $dbh = Slim::Schema->dbh;
+	my @ids;
+
+	my @pending = @$albumIds;
+
+	while ( my @chunk = splice( @pending, 0, ID_CHUNK ) ) {
+		my $marks = join ',', ('?') x @chunk;
+
+		my $rows = $dbh->selectcol_arrayref( qq{
+			SELECT t.id
+			  FROM tracks t
+			 WHERE t.album IN ($marks)
+			   AND $QUALIFYING_TRACKS
+		}, undef, @chunk );
+
+		push @ids, @{ $rows || [] };
+	}
+
+	return \@ids;
 }
 
 =head2 sample_albums( $perFormat )
@@ -357,6 +487,97 @@ sub albumCount {
 	my ($count) = Slim::Schema->dbh->selectrow_array($ALBUM_COUNT_SQL);
 
 	return $count || 0;
+}
+
+=head2 ownershipArtists()
+
+The album artist the B<ownership pass> compares with Discogs, as a hashref
+C<< { album_id => bytes } >>. Albums with no usable name are simply absent.
+
+Deliberately not C<eachAlbum>'s C<artist>, and deliberately not a change to
+C<$ALBUM_TRACKS_SQL>. Three reasons, in decreasing order of how much they
+matter:
+
+=over
+
+=item * B<It is the rule §13.10's split was measured with> (decisions §15.13
+part 2, resolving C<TODO.md> Q10): first ALBUMARTIST by contributor id, else
+first ARTIST by contributor id, else C<albums.contributor>. Changing the source
+would invalidate the measurement that chose the badge threshold.
+
+=item * B<The snapshot must keep C<albums.contributor>> (§15.12). Orphan
+recovery compares LMS with LMS, so its artist only has to be stable; the
+ownership pass compares LMS with Discogs, where the choice decides which albums
+badge. They are different questions and they get different queries.
+
+=item * A separate statement keeps the per-track walk free of correlated
+subqueries, which would run once per track rather than once per album.
+
+=back
+
+Roles are verified, not remembered: ARTIST is 1 and ALBUMARTIST is 5
+(C<refs/slimserver/Slim/Schema/Contributor.pm:78,82>). The tables are
+C<contributor_album(role, contributor, album)>
+(C<refs/slimserver/SQL/SQLite/schema_1_up.sql:186-193>) and
+C<contributors(id, name)> (C<:152-154>), and C<albums.contributor> is C<:127>.
+
+C<Slim::Schema::Album::artists> is never called, and neither is
+C<variousArtistsObject>: §15.12 found the former does not read
+C<albums.contributor> and can write to the library, and §11.3(d) rules out the
+latter as not side-effect-free.
+
+Names come back as bytes, exactly as C<DBD::SQLite> hands them over -
+C<contributors.name> is a blob and nothing under C<Slim/> sets
+C<sqlite_unicode>. Decoding belongs on the comparison side, in
+C<Ownership::_decode>, so that an undecodable name is counted rather than
+repaired.
+
+C<ORDER BY c.id> makes a multi-ALBUMARTIST album deterministic for a given
+library. Contributor ids do not survive a library wipe, so such an album's
+chosen name may change across one; the same library and the same collection
+still give the same answer, which is what §13.2 asks for.
+
+=cut
+
+my $OWNERSHIP_ARTISTS_SQL = q{
+	SELECT a.id,
+	       (SELECT c.name FROM contributor_album ca
+	          JOIN contributors c ON c.id = ca.contributor
+	         WHERE ca.album = a.id AND ca.role = 5
+	         ORDER BY c.id LIMIT 1) AS albumartist,
+	       (SELECT c.name FROM contributor_album ca
+	          JOIN contributors c ON c.id = ca.contributor
+	         WHERE ca.album = a.id AND ca.role = 1
+	         ORDER BY c.id LIMIT 1) AS artist,
+	       (SELECT c.name FROM contributors c WHERE c.id = a.contributor)
+	         AS singular
+	  FROM albums a
+};
+
+sub ownershipArtists {
+	my $class = shift;
+
+	my $rows = Slim::Schema->dbh->selectall_arrayref(
+		$OWNERSHIP_ARTISTS_SQL, { Slice => {} }
+	) || [];
+
+	my %artist;
+
+	for my $row (@$rows) {
+		# First that is defined and not blank. A present-but-empty name is not
+		# a name: it would compare equal to nothing and disagree with
+		# everything, which is worse than falling through to the next source.
+		for my $source (qw(albumartist artist singular)) {
+			my $name = $row->{$source};
+
+			next unless defined $name && $name =~ /\S/;
+
+			$artist{ $row->{id} } = $name;
+			last;
+		}
+	}
+
+	return \%artist;
 }
 
 =head2 albumLabel( $album )

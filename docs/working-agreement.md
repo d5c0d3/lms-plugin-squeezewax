@@ -30,7 +30,7 @@ it has drifted. If Claude Code starts renegotiating scope, so has it.
 
 - `docs/squeezewax-design.md` — scope and behaviour. Wins over everything.
 - `docs/implementation-plan.md` — how v1 gets built, with cited APIs.
-- `docs/v1-decisions.md` — dated decision records. Reasoning and evidence,
+- `docs/squeezewax-v1-decisions.md` — dated decision records. Reasoning and evidence,
   not live spec; anything still contradicting the design doc is a bug to
   reconcile, not a second opinion.
 - `CLAUDE.md` — rules for Claude Code.
@@ -39,6 +39,12 @@ it has drifted. If Claude Code starts renegotiating scope, so has it.
 
 One rule: when two documents disagree, that is a defect. Fix it in the same
 session it's noticed rather than picking one and moving on.
+
+Section references always name their document — `decisions §8`, `design §13`,
+`plan §4` — never a bare `§N`. Three documents number their own sections and
+two collisions already exist: design §12 versus decisions §12, and design §13
+versus decisions §13. A bare reference was unambiguous when only one document
+had that number, which is exactly why it stops being unambiguous later.
 
 ## 3. Model choice — by task shape, not by build step
 
@@ -71,6 +77,57 @@ badges rather than a crash.
   `git archive HEAD`, not the working tree, so an uncommitted edit is silently
   invisible to the dev build. Edit → commit → package → push.
 
+### 4.1 Hardware sessions
+
+```
+Six rules, all learned the hard way on the reference server.
+
+- **Confirm the music share is mounted before anything else.** On 2026-10-12
+  `/mnt/nas-music` was unmounted, and opening track menus made core delete those
+  tracks' rows: on Linux it cannot tell an unmounted share from deleted files
+  (decisions §15.28). While the share is offline, **open no track menu and run no
+  rescan**; album menus and the view are safe.
+- **Copy a WAL database with its `-wal` and `-shm` files**, all three, or the copy
+  is a torn snapshot. `library.db` copied alone showed tracks "vanishing" that had
+  not (2026-10-12).
+
+- **Check the running log level before reasoning from the log.** On 2026-09-30 a
+  hardware report concluded that a handler had stopped firing, because its log
+  lines were missing. The server's running level for every plugin category had
+  reverted to `ERROR` after startup, whatever `log.conf` said (decisions §15.26).
+  Read the level on the server's logging settings page first. And prefer
+  evidence that does not depend on our own logging: rendered pages, database
+  state, our own one-line-per-reply log for outbound requests (never
+  `network.asynchttp`; see the rule below).
+- **Never read the prefs file.** Pref **key names** come from the source
+  (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** comes from the
+  owner, if it is needed at all. A session looking up key names grepped
+  `squeezewax.prefs` on 2026-09-28 and printed the Discogs token into its own
+  transcript, which had to be rotated. A grep for a name does not need the file
+  that holds the values.
+- **Never raise `network.asynchttp`, `network.http`, or any other logger that
+  prints HTTP requests above ERROR while a Discogs request can happen.** At
+  DEBUG, LMS logs the whole request, the `Authorization: Discogs token=...`
+  header included (`Slim/Networking/Async.pm:227-229`,
+  `Async/HTTP.pm:278-300`). To count requests, use the kernel's socket table
+  (`ss`), which shows no secrets, together with our own one-line-per-reply log.
+  Step 9b check 8's recipe was safe only because it expected zero requests.
+  Found by hardware session 64, which refused the hand-off's instruction.
+- **A session may install a SqueezeWax package itself**, and should, rather than
+  stopping to ask. Decided 2026-09-29. The sanctioned method, recorded so it is
+  repeated rather than re-invented: drive the Plugins page over localhost HTTP
+  with a GET to read the form, then **one** POST carrying `saveSettings=1`, the
+  page's `rand` token, **every existing repository URL replayed verbatim**, and
+  `update:SqueezeWax=1` — and nothing else. No `auto`, no `useUnsupported`, no
+  `manual:` or `install:` pairs: `Slim/Web/Settings/Server/Plugins.pm:62-98` acts
+  only on parameters that are present, so anything omitted is anything left
+  alone. Restart with the `restartserver` CLI command. **SqueezeWax only** — no
+  other plugin, and the repository list is replayed, never rebuilt.
+
+Anything touching Discogs still ships as a script for the owner to run: a
+session's credential guard refuses the token, the username and the
+account-scoped URLs.
+
 ## 5. The sync loop
 
 `docs/` is mirrored into the claude.ai project via the GitHub connector, which
@@ -86,36 +143,52 @@ version and will not know.
 
 ### Which branch project knowledge follows
 
-Decided 2026-09-07: project knowledge is pointed at the **active feature
-branch**, not master, and re-pointed at each build-order step boundary —
-not per commit, which is churn nobody sustains. Docs and code for a step
-stay together on that branch until it merges. Master keeps its existing
-gate: only a build that's been through hardware verification lands there.
-Written down here for the first time, but not new — every build-order step
-through step 3 held to it, informally, before there was a branch to name it
-on.
+Corrected 2026-09-07 (replaces a same-day decision that didn't survive the
+day): **one branch carries the entire v1 build-out.** Project knowledge
+points at it and is not re-pointed between steps. Master is the last
+released state — until v1 ships, that means master is a rollback point, and
+it also carries the hardware-checked build testers install through its raw
+`repo.xml` URL (decisions §15.36 part 1; the merge gate is unchanged). After v1 ships, genuinely independent
+features get their own branches, and the re-pointing question returns in a
+form where it actually makes sense — a feature branch for a feature, not a
+slice of one for a step.
+
+**Why this replaced branch-per-build-order-step, recorded because it's the
+part worth keeping:** the original framing answered "should project
+knowledge follow master or the active branch" without first asking whether
+a branch per step made sense. It didn't. Feature branches suit independent,
+short-lived units of work; build-order steps are one feature (v1 matching)
+delivered in slices, and none of them is independently releasable — step 4
+without step 5's review queue isn't a thing a user could run. Master
+already held steps 1-3 under the per-step framing, which was not a product
+either, so every step's merge-to-master was ceremony: it looked like
+progress toward a release gate that doesn't exist yet, while actually just
+relocating code that could equally have stayed on one branch. The
+re-pointing burden the original policy needed guarding against — see the
+staleness note below — existed only because of that mistaken framing. Fix
+the framing and the guard mostly stops being needed.
 
 **Rejected: project knowledge on master, docs merged ahead of code.** That
 makes master internally inconsistent by construction — design docs
 describing code that isn't there yet — and a design session would see docs
 for code it cannot read. Worse than the staleness it was meant to solve.
+Still rejected under the one-branch policy, for the same reason.
 
 **Rejected: loosening the merge gate** to "offline suites green + review
 done," moving hardware verification to a release gate instead. The case for
 it: nothing on master reaches a user anyway, since publishing needs a
 release `repo.xml` with a GitHub Pages URL, and Pages is not enabled on
-this repo (confirmed: 404, no `_config.yml`). The case against: one simple
-rule beats two gates of different strength for different destinations.
-Simplicity won — the merge gate is therefore stricter than the actual risk
-requires, deliberately, not by oversight. Recorded so this isn't
-re-litigated from scratch the next time it's proposed.
+this repo. The case against: one simple rule beats two gates of different
+strength for different destinations. Simplicity won — the merge gate is
+therefore stricter than the actual risk requires, deliberately, not by
+oversight. Still rejected under the one-branch policy: master remains a
+hardware-verified-only rollback point, whether or not anything is currently
+merging into it.
 
-Re-pointing is manual and forgets silently: a design session searches
-project knowledge, gets a coherent but stale tree, and gives confident
-advice about code that's moved — no error, no warning. See
-`docs/dev-repo-workflow.md`'s "Starting a new build-order step" checklist
-for the re-pointing procedure, and `TODO.md`'s `Synced branch:` marker line
-for the check against forgetting it.
+Re-pointing not happening between steps removes most of the silent-staleness
+risk the original policy was written to guard against — see `TODO.md`'s
+`Synced branch:` line, now documentation rather than an active check, and
+`docs/dev-repo-workflow.md` for what's left of the re-pointing procedure.
 
 ## 6. Verifying claims across the two sides
 
@@ -126,3 +199,120 @@ So: citations that cross from the design chat into the repo must be
 re-verified by Claude Code, locating by **symbol or string, never by line
 number**, and correcting the reference to the checked-out branch. A citation
 that can't be found on `public/9.1` is reported, not quietly dropped.
+
+## 7. Rules for the design chat
+
+This section is the governing document for design sessions held in the
+claude.ai project. It is written to be pasted into the project instructions,
+**and it lives here so that it is versioned, diffable, visible to Claude Code,
+and survives the project being rebuilt.** A rule that exists only in a chat
+surface will be re-litigated.
+
+### 7.1 Never guess
+
+Refer to an actual source or say you don't know. This applies to LMS internals,
+the Discogs API, and anything about how a tool behaves. A plausible-sounding
+answer that turns out to be invented costs more than an admission of
+uncertainty.
+
+Cite what you checked, and how. File and symbol for source claims. When
+something is inferred from reading rather than observed running, say so. When
+evidence is old, thin, or from a forum post rather than documentation, say that
+too — **"where the evidence is thin" is a required part of any research answer,
+not an optional flourish.**
+
+### 7.2 Three states, kept distinct
+
+Distinguish **verified**, **inferred** and **unverified** explicitly. Never let
+an inference graduate into a fact through repetition.
+
+Two mechanisms have produced false claims in this project, both recorded in
+design §3's calibration note:
+
+- **Generalising from one path or one example.** A mechanism verified for one
+  code path, or a shape read from one documented response, stated as a general
+  property. This accounts for most of them.
+- **Repeating a rhetorical number until it sounds measured.** Harder to catch,
+  because nothing about it looks like a source claim.
+
+### 7.3 Read real source when it settles a question
+
+Cloning slimserver or a reference plugin and grepping it beats recalling how LMS
+works. Note the version or commit checked, because `refs/` is pinned elsewhere.
+
+Settle structural claims about source **by brace depth, not line number** —
+`refs/` is pinned to `public/9.1` and line numbers drift.
+
+Reading a documented response example is **not** verification. Neither is
+inferring one endpoint's behaviour from another endpoint's documentation.
+
+### 7.4 Design, decisions and research only
+
+No plugin code in the design chat. Outputs are:
+
+- a plan file in `plans/`;
+- decision records in `docs/squeezewax-v1-decisions.md`, appendix-verbatim
+  style;
+- prompts for Claude Code.
+
+Not `.pm` files.
+
+### 7.5 Flag scope creep
+
+If a discussion drifts into v2 or v3 territory, say so and **record the item
+rather than designing it.** The same applies to drifting into a later build-order
+step. Some ideas arrive disguised as compliance wins or as necessary
+completeness — "build the API client properly" is the canonical example.
+
+### 7.6 Push back
+
+When the spec and your judgement disagree, follow the spec and explain the
+disagreement.
+
+When a decision is about to be made that has a failure mode the other party
+cannot see, say so plainly rather than agreeing.
+
+If an invariant does not survive contact with a new tier or a new case, **that is
+a finding, not something to route around.**
+
+### 7.7 Keep decisions traceable
+
+Every resolved question ends up somewhere durable: the design doc, the
+implementation plan, or a dated decision record. If it only exists in a chat, it
+will be re-litigated.
+
+Anything blocked, deferred, or needing a real server goes to `TODO.md` — surface
+it so it can be added, rather than leaving it in chat history.
+
+Corrections are recorded in place using the inline
+strikethrough-and-correction convention, preserving **what was believed and why
+it was wrong**, not merely the corrected state. A corrected claim with its
+reasoning removed will be reasoned back into existence.
+
+### 7.8 Discogs terms
+
+All developed code and usage must follow the Discogs Terms of Service and API
+Usage Terms. API documentation: <https://www.discogs.com/developers/>.
+See decisions §9 for what has been established and where the terms are silent
+or ambiguous.
+
+### 7.9 Working with Claude Code
+
+Prompts for Claude Code follow a fixed shape, arrived at over steps 3 and 4:
+
+- **Quote the exact string to find**, or mark the item REPORT ONLY. If a quoted
+  string cannot be found, Claude Code stops that item, records it, and moves on
+  — it does not approximate a match.
+- **Phase the work, and commit each phase before beginning the next.**
+- **Report rather than decide.** Where an instruction would require judgement
+  Claude Code has not been given, it reports instead of guessing. Where content
+  is missing, it stops rather than fabricating.
+- **Transfer files on disk, not by paste.** Pasting long markdown has produced
+  encoding damage. Instruct Claude Code to read from a path, and to *stop and
+  report* on encoding damage rather than repairing it — a silent repair hides a
+  broken pipeline.
+- **End every prompt with a report phase**: files touched, anything not found,
+  and any further cross-document disagreement noticed.
+
+Model choice follows §3. Mechanical multi-file editing against a precise spec is
+Sonnet work; design prose is not delegated at all.

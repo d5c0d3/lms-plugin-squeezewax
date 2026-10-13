@@ -87,9 +87,65 @@ sub initPlugin {
 		# progress row on every scan forever. Same pattern as
 		# Slim/Music/ReleaseTypes.pm:32, which gates on its own pref.
 		#
-		# Step 4 must relax this: Structural needs no tag names, so the gate
-		# becomes "Strict configured OR Structural enabled".
+		# Step 4 does NOT relax this (decisions §15.8). Identification still
+		# reads tags and nothing else in THIS importer does, so "no tag names
+		# configured" still means "nothing for this importer to do". The
+		# ownership pass does run in the scanner since step 8b - but from the
+		# second importer below, with its own gate on the token. This gate stays
+		# tag-names-only (§15.8, reaffirmed by §15.18 part 9): widening it to the
+		# token would give a token-only user an identification importer with
+		# nothing to do, a dead progress row and an orphan log pair.
 		use    => scalar @{ $prefs->get('discogsTagNames') || [] },
+	} );
+
+	_addScanSync();
+
+	return 1;
+}
+
+# The second importer: the collection sync and the ownership pass, inside the
+# scan (decisions §15.18 part 14). A class of its own, so it has its own `use`
+# gate - the token - and its own "Starting/Completed ... Scan" pair. The cost,
+# stated: a user with both tag names and a token sees two such pairs per scan,
+# at error level (Slim/Music/Import.pm:578, :710-712).
+#
+# Registered here because the scanner loads only the <importmodule> class
+# (Slim/Utils/PluginManager.pm:204, :207), so install.xml does not change. Two
+# post importers from one initPlugin is in-tree precedent
+# (Slim/Plugin/OnlineLibrary/Importer.pm:30-35, :41-46), and %Importers is keyed
+# by class name (Slim/Music/Import.pm:551-556) with `use` read per entry (:573).
+#
+# Loaded with a require inside an eval, not a `use` at the top of this file: a
+# `use` that failed would fail this whole module, and tryModuleLoad would then
+# disable the plugin (Slim/Utils/PluginManager.pm:323-327) - taking
+# identification down over a problem in the sync. Slim/Music/Artwork.pm:771 is
+# the in-tree shape of a require at the point of use. If it fails, log and
+# register nothing; identification carries on and the server's fallback syncs.
+sub _addScanSync {
+	if ( !eval { require Plugins::SqueezeWax::ScanSync; 1 } ) {
+		$log->error( 'the scan-time collection sync could not be loaded; '
+			. 'the server will sync after each scan instead: ' . ( $@ || 'unknown error' ) );
+
+		return 0;
+	}
+
+	my $token = $prefs->get('discogsToken');
+
+	Slim::Music::Import->addImporter( 'Plugins::SqueezeWax::ScanSync', {
+		type   => 'post',
+
+		# After identification (120), so the pass sees this scan's
+		# identifications. In-tree post weights run 90-110 and nothing runs
+		# after optimizeDB (Slim/Music/Import.pm:462-484), so 130 is free; a
+		# third-party post importer with no weight sorts at 1000, after us.
+		# Other third-party weights are unverified.
+		weight => 130,
+
+		# The token alone. A token-only user - no tag names - still owns
+		# records, and title-route ownership needs no tags at all (§15.18
+		# part 14). Read once, here, like the tag names above: the scanner is a
+		# fresh process each scan and reads the prefs file when it starts.
+		'use'  => ( defined $token && $token ne '' ) ? 1 : 0,
 	} );
 
 	return 1;
@@ -162,9 +218,26 @@ sub startScan { if (main::SCANNER) {
 	# value governs durability rather than visibility.
 	Slim::Schema->forceCommit;
 
+	# The pre-pass, before the main loop and after the progress row exists.
+	#
+	# After Progress->new deliberately: the pre-pass is a second full walk that
+	# issues no update(), so if it ran first the scan UI would show nothing at
+	# all for its duration. After the visibility forceCommit above, the row is
+	# at least present at 0 while it runs.
+	#
+	# It cannot be aborted. update() is the entire abort mechanism in this
+	# process - it reaches SQLiteHelper::updateProgress, which exits outright
+	# when the server answers "abort" (:443-460) - and the pre-pass makes no
+	# such call. Adding update() calls to buy an abort point would mean
+	# reporting progress against a total we do not have, so this is recorded in
+	# TODO.md with its wall time to be measured rather than worked around.
+	my $pre = _prePass();
+
 	my %count = (
-		examined => 0, confirmed => 0, candidate => 0, none => 0,
-		manual   => 0, kept      => 0, skipped   => 0,
+		examined => 0, identified => 0, candidate => 0, none => 0,
+		manual   => 0, kept       => 0, skipped   => 0,
+		relinked => $pre->{relinked}, orphaned => $pre->{orphaned},
+		backfilled => $pre->{backfilled},
 	);
 	my $since = 0;
 
@@ -187,6 +260,11 @@ sub startScan { if (main::SCANNER) {
 		# timestamps instead: a third-party importer can populate those (Spotty
 		# does - see Library::_finish), so "remote rows have no timestamp" is not
 		# a property to rely on.
+		#
+		# Skipped here is not skipped by the plugin. An all-remote album still
+		# gets an ownership answer at step 7, which works from the collection
+		# rather than from tags and so needs no local files (decisions §15.11,
+		# §13.10.1). This gate is about THIS pass having nothing to read.
 		if ( !$album->{local_tracks} ) {
 			$count{skipped}++;
 			return 1;
@@ -206,7 +284,7 @@ sub startScan { if (main::SCANNER) {
 
 		$outcome ||= '';
 
-		$count{confirmed}++ if $outcome eq 'confirmed';
+		$count{identified}++ if $outcome eq 'identified';
 		$count{candidate}++ if $outcome eq 'candidate';
 		$count{none}++      if $outcome eq 'none';
 		$count{manual}++    if $outcome eq 'manual';
@@ -223,12 +301,13 @@ sub startScan { if (main::SCANNER) {
 	$progress->final;
 
 	my $summary = "Discogs matching finished: examined $count{examined}, "
-		. "confirmed $count{confirmed}, conflicts $count{candidate}, "
+		. "identified $count{identified}, conflicts $count{candidate}, "
 		. "no tag $count{none}, manual $count{manual}, kept $count{kept}, "
-		. "skipped $count{skipped}";
+		. "skipped $count{skipped}, relinked $count{relinked}, "
+		. "unrelinked orphans $count{orphaned}, backfilled $count{backfilled}";
 
 	# Escalated to warn in the one case LMS's own start/complete pair cannot
-	# report: a mistyped tag name produces "examined 4,800, confirmed 0" and
+	# report: a mistyped tag name produces "examined 4,800, identified 0" and
 	# nothing else, and at WARN our INFO summary would be invisible.
 	#
 	# 'decidable' excludes manual and kept, which are outcomes where a match was
@@ -240,7 +319,7 @@ sub startScan { if (main::SCANNER) {
 	#
 	# hasAnyStrictMatch is the second half of the same lesson, and the first fix
 	# was not enough on its own: a run that examines ONE untagged album in a
-	# library where hundreds are matched also reported "confirmed 0" and sent the
+	# library where hundreds are matched also reported "identified 0" and sent the
 	# user to check tag names that were demonstrably fine. Also observed. The
 	# warning is about the configuration producing nothing, not about this run
 	# producing nothing, so it asks whether anything has ever matched.
@@ -249,7 +328,7 @@ sub startScan { if (main::SCANNER) {
 	# and the question being asked is not "how many" but "has this ever worked".
 	my $decidable = $count{examined} - $count{manual} - $count{kept};
 
-	if ( $count{confirmed} == 0 && $decidable > 0
+	if ( $count{identified} == 0 && $decidable > 0
 		&& !Plugins::SqueezeWax::Match->hasAnyStrictMatch ) {
 		$log->warn("$summary - check the configured tag names");
 	}
@@ -263,8 +342,121 @@ sub startScan { if (main::SCANNER) {
 	# (Slim/Music/Import.pm:405-406, :580). The post pass discards it, so this is
 	# convention rather than correctness - but returning undef into a += is the
 	# kind of thing the XXX comment at :403 exists because of.
-	return $count{confirmed};
+	return $count{identified};
 } }
+
+# One walk over the library before the main loop, for the two things that cannot
+# be decided one album at a time. Returns the three counts for the summary.
+#
+# No file reads and no per-album query against LMS: our own two tables are
+# loaded whole first (they hold one row per matched album), and everything else
+# comes from the iterator's own record. The cost is a second streaming pass over
+# tracks, which is why TODO.md carries an item to time it.
+#
+# Sequential with the main walk, never nested - Library::eachAlbum holds one
+# statement handle from prepare_cached, and a second walk started inside the
+# first would take the handle out from under it (plan §0.11).
+sub _prePass {
+	my %count = ( relinked => 0, orphaned => 0, backfilled => 0 );
+
+	my $rows    = Plugins::SqueezeWax::Match->snapshotRows;
+	my $noMatch = Plugins::SqueezeWax::Match->noMatchKeys;
+
+	my %match = map { $_->{album_key} => $_ } @$rows;
+
+	my ( %current, @backfill, @misses );
+
+	Plugins::SqueezeWax::Library->eachAlbum( sub {
+		my $album = shift;
+		my $key   = $album->{album_key};
+
+		$current{$key} = 1;
+
+		my $row = $match{$key};
+
+		# A row with no match_tier is not an identification - it is the
+		# ownership pass's row, an ownership conclusion and/or a review reason
+		# and nothing else (§15.13 part 6). So it is not evidence that this album
+		# has been examined, and it must not disqualify the album as a relink
+		# target. snapshotRows is deliberately unfiltered (its own comment says
+		# so, and match-check asserts it), because the ORPHAN side of the test
+		# below already requires a tier; this is the MISS side, which did not.
+		#
+		# Without this, one completed sync writing an ownership-only row on a
+		# newly-appeared album would permanently stop an orphan relinking onto
+		# it - TODO 2026-09-19, the half that is reachable from the scanner.
+		# relinkOrphan's pre-delete is the other half, for the PK collision that
+		# follows.
+		undef $row if $row && !defined $row->{match_tier};
+
+		if ( !$row ) {
+			# A key miss is "no row in EITHER table" (plan §0.4). An album with
+			# a no-match row has been examined and produced nothing, so it is
+			# not a relink candidate - and relinking onto it would put a match
+			# row and a no-match row on one album_key, which is the invariant 1
+			# violation strictState exists to catch.
+			push @misses, {
+				album_key    => $key,
+				album_id     => $album->{album_id},
+				artist       => $album->{artist},
+				title        => $album->{title},
+				local_tracks => $album->{local_tracks},
+			} if !$noMatch->{$key};
+
+			return 1;
+		}
+
+		# Has a snapshot but no artist: written before step 4 (§15.12 part 1).
+		if ( defined $row->{snapshot_track_count} && !defined $row->{snapshot_artist} ) {
+			push @backfill, [ $key, $album->{artist} ];
+		}
+
+		return 1;
+	} );
+
+	# An orphan is a row whose album_key is no longer in the library, carrying
+	# an identification and a snapshot (§15.5 part 3). Keyed on the presence of
+	# an identification, NOT on state: a conflict-demoted row is exactly the
+	# kind whose tags can no longer reproduce it, so it is the kind recovery is
+	# for. match_tier is NOT NULL before migration 3, so that clause is
+	# currently redundant; it is written out because §15.5 states the predicate
+	# that way and migration 3 is what makes it bite.
+	my @orphans = grep {
+		!$current{ $_->{album_key} }
+			&& defined $_->{match_tier}
+			&& defined $_->{snapshot_track_count}
+	} @$rows;
+
+	$count{orphaned} = scalar @orphans;
+
+	# Resolve everything before writing anything. An abort mid-write commits
+	# what it has (see COMMIT_EVERY above), so deciding first means whatever
+	# landed is a set of individually correct pairs rather than a prefix of a
+	# decision that was still being made.
+	#
+	# A plain function, called as one: it takes no class name (CLAUDE.md's
+	# calling convention). It lives in Match.pm because the offline suite cannot
+	# reach anything inside startScan's main::SCANNER block.
+	my $pairs = Plugins::SqueezeWax::Match::_resolveRelinks( \@orphans, \@misses );
+
+	for my $entry (@backfill) {
+		$count{backfilled} += Plugins::SqueezeWax::Match->backfillArtist(@$entry);
+	}
+
+	for my $pair (@$pairs) {
+		next unless Plugins::SqueezeWax::Match->relinkOrphan(
+			$pair->{old_key}, $pair->{new_key}, $pair->{album_id} );
+
+		$count{relinked}++;
+		$count{orphaned}--;
+	}
+
+	# One commit for the pre-pass, outside COMMIT_EVERY, which governs the main
+	# loop's durability rather than this.
+	Slim::Schema->forceCommit;
+
+	return \%count;
+}
 
 # Skip when what we already recorded still describes the files on disk.
 #
@@ -281,24 +473,33 @@ sub _canSkip {
 	return $state->{source_timestamp} == $album->{source_timestamp};
 }
 
-# Read the primary local track, and fall back to one more - never all. A
-# compilation assembled from per-track tagging is not a maintained collection and
-# is not worth paying 12x the file reads to accommodate (decisions §3).
+# Read the primary local track and one more - never all. A compilation assembled
+# from per-track tagging is not a maintained collection and is not worth paying
+# 12x the file reads to accommodate (decisions §3); reading every track was
+# rejected again at step 8c on measured cost - 19-137 ms per file on a NAS, ~9,000
+# reads, ten to fifteen minutes added to every scan.
+#
+# Until step 8c this stopped at the FIRST candidate that answered, which made a
+# cross-track disagreement invisible: an album whose two files name different
+# releases was identified from whichever came first, and the `Cover Versions/`
+# folder acquired a full album's release id from one of its three files. Both are
+# now read and compared, at zero request cost and at identification time, so a
+# folder whose files disagree becomes a conflict rather than a wrong answer
+# (decisions §15.21, §15.22).
+#
+# The comparison itself is Tags::examineCandidates, not inlined here: the queue
+# page's "Show tags" action has to reach the same answer, and a second
+# implementation of it would drift and then show a user tags that do not explain
+# the conflict their scan recorded (§15.17 part 1).
+#
+# Kept as a sub of its own rather than called from the loop above, because it is
+# the seam the offline suite reaches: startScan's body is inside
+# `if (main::SCANNER)` and is constant-folded away in a test process, while this
+# is at file scope.
 sub _examine {
 	my ( $album, $names ) = @_;
 
-	my $decision = {};
-
-	for my $url ( @{ $album->{candidates} } ) {
-		my $tags = Plugins::SqueezeWax::Tags->readTrack($url);
-
-		$decision = Plugins::SqueezeWax::Tags->decide($tags);
-
-		# Anything but "no configured tag present" is an answer.
-		last if $decision->{id} || $decision->{conflict};
-	}
-
-	return $decision;
+	return Plugins::SqueezeWax::Tags->examineCandidates( $album->{candidates} );
 }
 
 1;

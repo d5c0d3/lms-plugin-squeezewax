@@ -1,0 +1,412 @@
+{
+   "pagination" : {
+      "items" : 7,
+      "page" : 1,
+      "pages" : 1,
+      "per_page" : 50,
+      "urls" : {}
+   },
+   "results" : [
+      {
+         "barcode" : [
+            "5 016025 310647",
+            "5016025310647",
+            "MPO STUMM 64 A' P3 PR-P",
+            "STUMM 64 B' P3 PR-P"
+         ],
+         "catno" : "Stumm 64",
+         "community" : {
+            "have" : 154959,
+            "want" : 209801
+         },
+         "country" : "UK",
+         "cover_image" : "",
+         "format" : [
+            "Vinyl",
+            "LP",
+            "Album"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 18080,
+         "label" : [
+            "Mute",
+            "Mute Records Ltd.",
+            "Mute Records Ltd.",
+            "Grabbing Hands",
+            "Sonet",
+            "Logic Studios",
+            "Logic Studios",
+            "Puk Recording Studios",
+            "Puk Recording Studios",
+            "The Church, London",
+            "The Church, London",
+            "Master Rock Studios",
+            "Master Rock Studios",
+            "Axis Studios",
+            "Axis Studios",
+            "P.R. Records Limited",
+            "MPO"
+         ],
+         "master_id" : 18080,
+         "master_url" : "https://api.discogs.com/masters/18080",
+         "resource_url" : "https://api.discogs.com/masters/18080",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator",
+         "type" : "master",
+         "uri" : "/master/18080-Depeche-Mode-Violator",
+         "year" : "1990"
+      },
+      {
+         "barcode" : [
+            "BONG - 1990 - A",
+            "BONG - 1990 - B",
+            "BONG - 1990 - C",
+            "BONG - 1990 - D",
+            "BONG - 1990 - E",
+            "BONG - 1990 - F"
+         ],
+         "catno" : "Bong-1990",
+         "community" : {
+            "have" : 1140,
+            "want" : 765
+         },
+         "country" : "UK",
+         "cover_image" : "",
+         "format" : [
+            "Vinyl",
+            "LP",
+            "Unofficial Release"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 1368868,
+         "label" : [
+            "Not On Label (Depeche Mode)"
+         ],
+         "master_id" : 1368868,
+         "master_url" : "https://api.discogs.com/masters/1368868",
+         "resource_url" : "https://api.discogs.com/masters/1368868",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator Live",
+         "type" : "master",
+         "uri" : "/master/1368868-Depeche-Mode-Violator-Live",
+         "year" : "2011"
+      },
+      {
+         "barcode" : [
+            "4 006714 620004"
+         ],
+         "catno" : "LP STUMM 1010",
+         "community" : {
+            "have" : 446,
+            "want" : 631
+         },
+         "country" : "Germany",
+         "cover_image" : "",
+         "format" : [
+            "Vinyl",
+            "LP",
+            "Limited Edition",
+            "Numbered",
+            "Unofficial Release"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 1912764,
+         "label" : [
+            "Mute",
+            "Intercord Tonträger GmbH"
+         ],
+         "master_id" : 1912764,
+         "master_url" : "https://api.discogs.com/masters/1912764",
+         "resource_url" : "https://api.discogs.com/masters/1912764",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator 2000",
+         "type" : "master",
+         "uri" : "/master/1912764-Depeche-Mode-Violator-2000",
+         "year" : "2000"
+      },
+      {
+         "barcode" : [
+            "VIOLATOR 2024 A",
+            "VIOLATOR 2024 B"
+         ],
+         "catno" : "XLStumm64R",
+         "community" : {
+            "have" : 100,
+            "want" : 83
+         },
+         "country" : "Europe",
+         "cover_image" : "",
+         "format" : [
+            "Vinyl",
+            "LP",
+            "Limited Edition",
+            "Unofficial Release"
+         ],
+         "genre" : [
+            "Electronic",
+            "Rock",
+            "Pop"
+         ],
+         "id" : 3556648,
+         "label" : [
+            "UMS"
+         ],
+         "master_id" : 3556648,
+         "master_url" : "https://api.discogs.com/masters/3556648",
+         "resource_url" : "https://api.discogs.com/masters/3556648",
+         "style" : [
+            "Synth-pop",
+            "Pop Rock",
+            "Alternative Rock",
+            "Abstract"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator Remixes 2024",
+         "type" : "master",
+         "uri" : "/master/3556648-Depeche-Mode-Violator-Remixes-2024",
+         "year" : "2024"
+      },
+      {
+         "barcode" : [
+            "8007020693368",
+            "air 69336",
+            "GEMA/BIEM",
+            "LC 7020",
+            "ADD"
+         ],
+         "catno" : "AIR 69336",
+         "community" : {
+            "have" : 19,
+            "want" : 8
+         },
+         "country" : "Italy",
+         "cover_image" : "",
+         "format" : [
+            "CD",
+            "Compilation",
+            "Unofficial Release"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 1029520,
+         "label" : [
+            "Angel International Records",
+            "AIR Ltd.",
+            "AIR Ltd.",
+            "ITS Publishing International",
+            "GTV Inc."
+         ],
+         "master_id" : 1029520,
+         "master_url" : "https://api.discogs.com/masters/1029520",
+         "resource_url" : "https://api.discogs.com/masters/1029520",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator / Black Celebration",
+         "type" : "master",
+         "uri" : "/master/1029520-Depeche-Mode-Violator-Black-Celebration",
+         "year" : "1996"
+      },
+      {
+         "barcode" : [
+            "190759416211",
+            "1 90759 41621 1",
+            "LC 05834",
+            "190654M1/A  19075941621 A Kr SST",
+            "190654M2/B  19075941621 B Kr SST",
+            "190654M3/A2  19075941621 C Kr SST",
+            "190654M4/A1  19075941621 D Kr SST",
+            "193977M1/A  ",
+            "193977M2/A  ",
+            "190654M7/A  19075941621 G² Kr SST",
+            "190654M8/A  19075941621 H³ Kr SST",
+            "190654E9/A  19075941621 I² Kr SST",
+            "190654M11/A  19075941621 K Kr SST",
+            "190654M12/A  19075941621 l² Kr SST",
+            "190654M13/A  19075941621 M Kr SST",
+            "190654M14/A  19075941621 N² Kr SST",
+            "193973M1/A ",
+            "193973M2/A",
+            "190654M17/A 19075941621 Q Kr SST",
+            "190654M16/A 19075941621 R Kr SST",
+            "190654M19/A  19075941621 S Kr SST",
+            "190654M20/A  19075941621 A Kr SST",
+            "12BONG 17 / 19075941621-01",
+            "L12BONG 17 / 19075941621-02",
+            "12BONG 18 / 19075941621-03",
+            "L12BONG 18 / 19075941621-04",
+            "XL12BONG 18 / 19075941621-05",
+            "12BONG 19 / 19075941621-06",
+            "L12BONG 19 / 19075941621-07",
+            "12BONG 20 / 19075941621-08",
+            "L12BONG 20 / 19075941621-09",
+            "P12BONG 20 / 19075941621-10"
+         ],
+         "catno" : "12DMBOX07",
+         "community" : {
+            "have" : 2458,
+            "want" : 1827
+         },
+         "country" : "Europe",
+         "cover_image" : "",
+         "format" : [
+            "Box Set",
+            "Compilation",
+            "Limited Edition",
+            "Numbered",
+            "Remastered",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "33 ⅓ RPM",
+            "Single Sided",
+            "Single",
+            "Etched",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue",
+            "Vinyl",
+            "12\"",
+            "45 RPM",
+            "Single",
+            "Reissue"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 1776605,
+         "label" : [
+            "Mute",
+            "Columbia",
+            "Sony Music",
+            "The 12\" Singles",
+            "Venusnote Limited",
+            "Mute Records",
+            "Venusnote Limited",
+            "Mute Music",
+            "Mute Records",
+            "Sony Music Entertainment International Ltd.",
+            "Sony Music Entertainment",
+            "SST GmbH",
+            "GZ Media",
+            "GZ Media",
+            "GZ Media"
+         ],
+         "master_id" : 1776605,
+         "master_url" : "https://api.discogs.com/masters/1776605",
+         "resource_url" : "https://api.discogs.com/masters/1776605",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Violator | The 12\" Singles",
+         "type" : "master",
+         "uri" : "/master/1776605-Depeche-Mode-Violator-The-12-Singles",
+         "year" : "2020"
+      },
+      {
+         "barcode" : [
+            "0 94633 64592 9",
+            "094633645929",
+            "5 016025 610648",
+            "5016025610648",
+            "5 016025 600472",
+            "5016025600472",
+            "LC 0542"
+         ],
+         "catno" : "0946 3 36459 2 9",
+         "community" : {
+            "have" : 100,
+            "want" : 87
+         },
+         "country" : "France",
+         "cover_image" : "",
+         "format" : [
+            "CD",
+            "Album",
+            "Reissue",
+            "CD",
+            "Album",
+            "Reissue",
+            "Box Set",
+            "Compilation",
+            "Limited Edition"
+         ],
+         "genre" : [
+            "Electronic"
+         ],
+         "id" : 382423,
+         "label" : [
+            "EMI",
+            "EMI",
+            "Mute",
+            "2CD Originals"
+         ],
+         "master_id" : 382423,
+         "master_url" : "https://api.discogs.com/masters/382423",
+         "resource_url" : "https://api.discogs.com/masters/382423",
+         "style" : [
+            "Synth-pop"
+         ],
+         "thumb" : "",
+         "title" : "Depeche Mode - Music For The Masses / Violator",
+         "type" : "master",
+         "uri" : "/master/382423-Depeche-Mode-Music-For-The-Masses-Violator",
+         "year" : "2005"
+      }
+   ]
+}

@@ -1,0 +1,1710 @@
+#!/usr/bin/env perl
+#
+# Offline exercise of Plugins::SqueezeWax::API::Async - the collection sync's
+# pagination, its discard behaviour, its retry boundary and its "never
+# partially advance the timestamp" rule.
+#
+# What this cannot prove, and the reason it is a separate file from a hardware
+# check: nothing here touches a real event loop, a real timer or a real socket.
+# Slim::Networking::SimpleAsyncHTTP and Slim::Utils::Timers are both stubbed,
+# and both stubs are SYNCHRONOUS - a stubbed request calls its own callback
+# before ->get returns, and a stubbed timer fires before setTimer returns. That
+# is what makes the state machine testable in one process, and it is also
+# exactly what production does not do. So this proves the sequence of requests,
+# the arithmetic and the state transitions; it proves nothing about whether the
+# real Timers/SimpleAsyncHTTP interaction behaves as read from refs/. Same
+# limitation scripts/api-check.pl states for the transport it used to carry,
+# and the same reason build-order step 5's §3 checks are on the hardware list.
+#
+# Usage: scripts/sync-check.pl
+
+use strict;
+use warnings;
+
+use constant PERFMON  => 0;
+use constant DEBUGLOG => 1;
+use constant INFOLOG  => 1;
+
+use Config;
+use FindBin qw($Bin);
+
+# Host Test::More, before refs goes on @INC - see library-check.pl.
+use Test::More;
+
+# Ordered pref writes, and the onchange callbacks registered against them.
+# Ordered because ORDER was the 0.0.0.7 defect.
+our @WRITES;
+our %CHANGES;
+
+# Every stubbed request that was issued, oldest first, as { url, headers }.
+our @REQUESTS;
+
+# Canned responses, consumed in order by the stub transport.
+our @RESPONSES;
+
+# Every stubbed timer, as { delay, fired }.
+our @TIMERS;
+
+# Every killTimers call.
+our @KILLS;
+
+# The stub preferences store, so a test can assert what a sync did and did not
+# write.
+our %PREFS;
+
+# The clock, pinnable, for the shared rate wait, which counts down from the last
+# counted reply (decisions §15.32). Installed before any module is compiled;
+# undef means the real clock.
+our $NOW;
+
+BEGIN {
+	*CORE::GLOBAL::time = sub () { defined $main::NOW ? $main::NOW : CORE::time() };
+}
+
+BEGIN {
+	my $libPath = "$Bin/../refs/slimserver";
+	die "refs/slimserver not found at $libPath\n" unless -d $libPath;
+
+	my $arch = $Config::Config{archname};
+	$arch =~ s/^i[3456]86-/i386-/;
+	$arch =~ s/gnu-//;
+
+	my $perlmajorversion = $Config{version};
+	$perlmajorversion =~ s/\.\d+$//;
+
+	unshift @INC, grep { -d } (
+		"$libPath/CPAN/arch/$perlmajorversion/$arch",
+		"$libPath/CPAN/arch/$perlmajorversion/$arch/auto",
+		"$libPath/CPAN/arch/$perlmajorversion",
+		"$libPath/lib",
+		"$libPath/CPAN",
+		$libPath,
+	);
+
+	# Async.pm's LMS dependencies, all four stubbed. Timers and the transport
+	# are stubbed because driving them is the point (see the header); Prefs and
+	# PluginManager because they are the same incidental file-scope
+	# dependencies every other suite here stubs.
+	$INC{'Slim/Networking/SimpleAsyncHTTP.pm'} = 1;
+	$INC{'Slim/Utils/Log.pm'}                  = 1;
+	$INC{'Slim/Utils/Prefs.pm'}                = 1;
+	$INC{'Slim/Utils/PluginManager.pm'}        = 1;
+	$INC{'Slim/Utils/Timers.pm'}               = 1;
+
+	no strict 'refs';
+
+	# The main:: constants below are declared at the top of this file so they
+	# exist during compilation, and re-globbed here so they are the same
+	# constants Async.pm sees. api-check.pl does the same and emits a pair of
+	# "Constant subroutine redefined" warnings for it; suppressed here rather
+	# than inherited.
+	no warnings 'redefine';
+
+	*{'Slim::Utils::Log::logger'}   = sub { Test::StubLogger->new };
+	*{'Slim::Utils::Log::logError'} = sub { };
+	*{'Slim::Utils::Log::import'}   = sub {
+		my $caller = caller;
+		no strict 'refs';
+		*{"${caller}::logger"}   = \&Slim::Utils::Log::logger;
+		*{"${caller}::logError"} = \&Slim::Utils::Log::logError;
+	};
+
+	*{'Slim::Utils::Prefs::preferences'} = sub { Test::StubPrefs->new };
+	*{'Slim::Utils::Prefs::import'}      = sub {
+		my $caller = caller;
+		no strict 'refs';
+		*{"${caller}::preferences"} = \&Slim::Utils::Prefs::preferences;
+	};
+
+	*{'Slim::Utils::PluginManager::dataForPlugin'} = sub { { version => '0.0.0.0' } };
+
+	# Fires immediately rather than at $when, and records what the delay would
+	# have been. Every assertion about backoff in this file is an assertion
+	# about that recorded number, never about elapsed time.
+	*{'Slim::Utils::Timers::setTimer'} = sub {
+		my ( $obj, $when, $code, @args ) = @_;
+
+		push @TIMERS, { delay => $when - time(), fired => 1 };
+
+		$code->( $obj, @args );
+
+		return;
+	};
+
+	*{'Slim::Utils::Timers::killTimers'} = sub {
+		push @KILLS, { coderef => $_[1] };
+		return 1;
+	};
+
+	*{'main::SCANNER'}   = sub () { 0 };
+	# INFOLOG is ON, and is_info below returns true with it, so every
+	# `main::INFOLOG && $log->is_info && $log->info(...)` expression is
+	# EVALUATED rather than short-circuited away (stub audit 2026-09-24, entry
+	# 5.3 / 4). Those expressions build strings from live counters; a summary
+	# that dies while being built is a defect no suite could see while this was
+	# 0, and the ownership pass's counts are what step 8 will size its queue
+	# from.
+	*{'main::INFOLOG'}   = sub () { 1 };
+	*{'main::DEBUGLOG'}  = sub () { 0 };
+	*{'main::ISWINDOWS'} = sub () { 0 };
+}
+
+our @LOG;
+
+{
+	package Test::StubLogger;
+	sub new      { bless {}, shift }
+	sub error    { shift; push @main::ERRORS, "@_"; return }
+	sub warn     { shift; push @main::WARNINGS, "@_"; return }
+	sub info     { shift; push @main::LOG, "@_"; return }
+	sub debug    { }
+	sub is_info  { 1 }
+	sub is_debug { 0 }
+}
+
+{
+	package Test::StubPrefs;
+	sub new { bless {}, shift }
+	sub get { return $PREFS{ $_[1] } }
+
+	# Models two behaviours of the real store that a plain hash write does not,
+	# and whose absence is exactly what hid the 0.0.0.7 regression one file
+	# over (stub audit 2026-09-24, entry 2.1):
+	#
+	#   1. refs/slimserver/Slim/Utils/Prefs/Base.pm:94-97 suppresses a scalar
+	#      set that does not change the value - onchange included. A write that
+	#      changes nothing is not an event.
+	#   2. Base.pm:91 dispatches the onchange list registered through
+	#      Prefs/Namespace.pm:148-164. Async.pm writes three prefs at its single
+	#      exit, and a hook on any of them would fire here unmodelled.
+	#
+	# @WRITES is ordered, because ORDER was the defect: a pref write landing
+	# after the thing it was meant to precede.
+	sub set {
+		my ( $self, $pref, $new ) = @_;
+
+		my $old = $PREFS{$pref};
+
+		return 1 if !ref $new
+			&& defined $new
+			&& defined $old
+			&& $new eq $old;
+
+		$PREFS{$pref} = $new;
+
+		push @main::WRITES, $pref;
+
+		if ( my $cb = $main::CHANGES{$pref} ) {
+			$cb->( $pref, $new );
+		}
+
+		return 1;
+	}
+
+	sub init { 1 }
+	sub migrate { 1 }
+	sub setValidate { 1 }
+	sub setChange { my ( $self, $cb, @prefs ) = @_; $main::CHANGES{$_} = $cb for @prefs; return 1 }
+}
+
+# Minimal stand-in for an HTTP::Headers object, as api-check.pl's own
+# Test::StubHeaders is - only ->header(name) is reached, by _parseRateHeaders.
+{
+	package Test::StubHeaders;
+	sub new { my $class = shift; bless { map { lc $_ } @_ }, $class }
+	sub header { return $_[0]->{ lc $_[1] } }
+}
+
+# The stub transport. Pops the next canned response, records the request, and
+# calls back synchronously - see the header for why that is both the point and
+# the limitation.
+{
+	package Slim::Networking::SimpleAsyncHTTP;
+
+	sub new {
+		my ( $class, $cb, $ecb, $args ) = @_;
+		return bless { cb => $cb, ecb => $ecb, args => $args }, $class;
+	}
+
+	# Which callback fires, and what is populated when it does, is modelled on
+	# the real thing rather than simplified - because the simplification hid a
+	# production defect for the whole of build-order step 5.
+	#
+	# refs/slimserver/Slim/Networking/Async/HTTP.pm:434-436 sends EVERY status
+	# that is not 2xx or 3xx to _http_error, which reaches SimpleAsyncHTTP's
+	# onError. onError (:76-101) sets neither code nor content nor headers on
+	# the SimpleAsyncHTTP object; it passes the HTTP::Response as the error
+	# callback's THIRD argument (:96). Only onBody sets them (:112-114), and it
+	# then calls the success callback.
+	#
+	# The old stub set code on every response and always called the success
+	# callback, so `unauthorized`, `rate_limited`, `not_found` and
+	# `server_error` all appeared reachable here while being unreachable in
+	# production (decisions §15.15 part 2).
+	sub get {
+		my ( $self, $url, @headers ) = @_;
+
+		push @REQUESTS, { url => $url, headers => \@headers };
+
+		my $canned = shift @RESPONSES
+			or die "stub transport: no canned response left for $url\n";
+
+		# A connection that never produced a status at all: no response object
+		# either. This is the only thing that should classify as no_response.
+		if ( !defined $canned->{code} ) {
+			$self->{ecb}->( $self, 'connection failed', undef );
+
+			return;
+		}
+
+		my $response = Test::StubResponse->new($canned);
+
+		if ( $canned->{code} !~ /^[23]\d\d$/ ) {
+			$self->{ecb}->( $self, "HTTP $canned->{code}", $response );
+
+			return;
+		}
+
+		$self->{code}    = $canned->{code};
+		$self->{content} = $canned->{content};
+		$self->{headers} = $response->headers;
+
+		$self->{cb}->($self);
+
+		return;
+	}
+
+	sub code    { $_[0]->{code} }
+	sub content { $_[0]->{content} }
+	sub headers { $_[0]->{headers} }
+}
+
+# What onError hands over as its third argument. Only code/content/headers are
+# reached.
+{
+	package Test::StubResponse;
+
+	sub new {
+		my ( $class, $canned ) = @_;
+
+		return bless {
+			code    => $canned->{code},
+			content => $canned->{content},
+			headers => Test::StubHeaders->new( %{ $canned->{headers} || {} } ),
+		}, $class;
+	}
+
+	sub code    { $_[0]->{code} }
+	sub content { $_[0]->{content} }
+	sub headers { $_[0]->{headers} }
+}
+
+use JSON::XS qw(encode_json);
+use DBI;
+use File::Temp qw(tempdir);
+
+# Loaded by file path, as api-check.pl loads API.pm: the repository directory
+# is SqueezeWax/ while the package namespace is Plugins::SqueezeWax:: (CLAUDE.md
+# - LMS requires the two to correspond at install time, not in a checkout).
+# Async.pm's own `use Plugins::SqueezeWax::API` then has to be satisfied by
+# hand, since that file has already been loaded under its other name.
+use lib "$Bin/..";
+
+require SqueezeWax::API;
+BEGIN { $INC{'Plugins/SqueezeWax/API.pm'} = 1 }
+
+# The marker (decisions §15.18 part 7) is a row in discogs_sync_state, so this
+# suite now has a database: a scratch file, attached as `squeezewax` and taken
+# through the real migrations, exactly as queue-check.pl does. The ~25
+# assertions that used to read discogsLastSynced / discogsLastSyncItems out of
+# the pref stub read the table instead - same expectations, new home.
+#
+# Schema.pm's file-scope dependencies: Log is already stubbed above; OSDetect is
+# reached only from init/dbFile, which nothing here calls.
+BEGIN {
+	$INC{'Slim/Utils/OSDetect.pm'} = 1;
+	$INC{'Slim/Schema.pm'}         = 1;
+}
+
+require SqueezeWax::Schema;
+BEGIN { $INC{'Plugins/SqueezeWax/Schema.pm'} = 1 }
+
+my $dir = tempdir( CLEANUP => 1 );
+
+my $dbh = DBI->connect( "dbi:SQLite:dbname=$dir/library.db", '', '', {
+	RaiseError => 1, PrintError => 0, AutoCommit => 1,
+} );
+$dbh->do("ATTACH '$dir/squeezewax.db' AS squeezewax");
+
+Plugins::SqueezeWax::Schema->_migrate($dbh);
+
+our $DB_READY = 1;
+
+{
+	no warnings 'once', 'redefine';
+
+	*Slim::Schema::dbh = sub { $dbh };
+
+	# The suite migrated directly rather than through postDBConnect, so the
+	# readiness flag was never set. Switchable, for status()'s not-ready case.
+	*Plugins::SqueezeWax::Schema::isReady = sub { $main::DB_READY };
+
+	# The marker write, recorded in the same ordered list as the pref writes and
+	# the pass, then performed for real - so "the pass first, then the marker" is
+	# assertable, and the row the assertions read is the one the code wrote.
+	my $real = \&Plugins::SqueezeWax::Schema::recordSync;
+	*Plugins::SqueezeWax::Schema::recordSync = sub {
+		push @main::WRITES, '<marker>';
+		return $real->(@_);
+	};
+}
+
+# The marker row as a hashref, or undef when there is none.
+sub marker {
+	return $dbh->selectrow_hashref(
+		'SELECT last_synced, items, source FROM squeezewax.discogs_sync_state WHERE id = 0'
+	);
+}
+
+# A marker left by an earlier good sync.
+sub set_marker {
+	my ( $when, $items, $source ) = @_;
+
+	$dbh->do( 'INSERT OR REPLACE INTO squeezewax.discogs_sync_state
+		(id, last_synced, items, source) VALUES (0, ?, ?, ?)',
+		undef, $when, $items, $source || 'server' );
+}
+
+# The ownership pass is exercised in full by scripts/ownership-check.pl. What
+# this suite is about is the WIRING: whether the pass is called at all, what it
+# is handed, and what its answer does to the prefs. So it is stubbed, and the
+# stub records every call.
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Ownership.pm'} = 1;
+
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Ownership::apply'} = sub {
+		my ( $class, $entries ) = @_;
+
+		push @main::APPLIED, $entries;
+
+		# Recorded in the same ordered list as the pref writes, so "the pass
+		# runs before any pref is set" (§15.13 part 1) is assertable rather
+		# than merely commented.
+		push @main::WRITES, '<pass>';
+
+		return $main::APPLY_RESULT;
+	};
+}
+
+our @APPLIED;
+our @WARNINGS;
+our @ERRORS;
+our $APPLY_RESULT = 'ok';
+
+require SqueezeWax::API::Async;
+
+my $A = 'Plugins::SqueezeWax::API::Async';
+
+# The rate state lives in API.pm since step 8c (§15.22), so this suite reaches
+# both: $A for the sync, $API for the budget the sync now shares.
+my $API = 'Plugins::SqueezeWax::API';
+
+# Rate headers that say "budget is fine", so the throttle stays out of the way
+# of every test that is not about the throttle.
+sub healthy_headers {
+	return {
+		'X-Discogs-Ratelimit'           => 60,
+		'X-Discogs-Ratelimit-Used'      => 1,
+		'X-Discogs-Ratelimit-Remaining' => 59,
+	};
+}
+
+# The identity reply AND the profile reply that follows it. Every sync asks for
+# the account's currency label between the identity and the first page since
+# step 10 (decisions §15.31 ruling 15), so every successful identity in this
+# suite is followed by one; a list, so the call sites stay one argument each.
+# The profile's own behaviour - stored, kept on failure, never fatal - is
+# asserted on its own further down, with explicit replies.
+sub identity_response {
+	my $username = shift // 'deschman';
+
+	return (
+		{
+			code    => 200,
+			headers => healthy_headers(),
+			content => encode_json( { username => $username } ),
+		},
+		profile_response(),
+	);
+}
+
+sub profile_response {
+	return {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( { username => 'deschman', curr_abbr => 'EUR' } ),
+	};
+}
+
+# One page of a collection: $n release rows, and a pagination block claiming
+# $items items over $pages pages.
+#
+# Ids are offset by page, so they are unique ACROSS pages. Until step 7 every
+# page returned ids 1001.. and it did not matter, because releases were counted
+# and discarded. They are now keyed by instance_id, so three identical pages
+# would de-duplicate to one page's worth and fail the completeness check - a
+# fixture that was quietly describing an impossible collection.
+sub page_response {
+	my ( $n, $page, $pages, $items, %opt ) = @_;
+
+	my $base = ( $page - 1 ) * 100;
+
+	return {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( {
+			$opt{no_pagination} ? () : ( pagination => {
+				page     => $page,
+				pages    => $pages,
+				items    => $items,
+				per_page => 100,
+			} ),
+			releases => [
+				map { {
+					id                => 1000 + $base + $_,
+					instance_id       => 2000 + $base + $_,
+					basic_information => {
+						id        => 1000 + $base + $_,
+						master_id => 9000 + $base + $_,
+						title     => 'Album ' . ( $base + $_ ),
+						artists   => [ { name => 'Artist ' . ( $base + $_ ) } ],
+
+						# The three the re-match list reads, in the shape the
+						# captured fixture carries them (collection-page1.json):
+						# formats and labels are lists of hashes, and both
+						# carry fields the page drops - `text` is free-form
+						# seller prose, `qty` is "1" on every single-disc
+						# record, and resource_url is an API address.
+						year    => 1990 + ( ( $base + $_ ) % 30 ),
+						formats => [ {
+							name         => 'Vinyl',
+							qty          => '1',
+							text         => 'Gatefold, Splatter',
+							descriptions => [ 'LP', 'Album' ],
+						} ],
+						labels => [
+							{ name => 'Label One', catno => 'CAT-' . ( $base + $_ ),
+							  id => 500, resource_url => 'https://api.discogs.com/labels/500' },
+							# A label with no catalogue number, which happens.
+							{ name => 'Label Two', catno => '' },
+						],
+					},
+				} } 1 .. $n
+			],
+		} ),
+	};
+}
+
+sub reset_state {
+	@REQUESTS     = ();
+	@RESPONSES    = ();
+	@TIMERS       = ();
+	@KILLS        = ();
+	%PREFS        = ();
+	$DB_READY     = 1;
+	$dbh->do('DELETE FROM squeezewax.discogs_sync_state');
+	@APPLIED      = ();
+	@WARNINGS     = ();
+	@ERRORS       = ();
+	@LOG          = ();
+	@WRITES       = ();
+	%CHANGES      = ();
+	$APPLY_RESULT = 'ok';
+
+	# The rate state is API.pm's since step 8c (§15.22) and outlives a run by
+	# design, so it is reset here explicitly rather than by accident of being
+	# somewhere else's `my`. Every block below starts with a full window.
+	$API->_resetRate;
+}
+
+# Run one sync to completion and return its result. Safe because every stub is
+# synchronous: by the time sync() returns, the callback has fired.
+#
+# @CB_ARGS captures the callback's FULL argument list, because step 8 added a
+# second one and "the other callers read only the first" is a claim about this
+# list, not about $result (§15.16 part 6, plan §2.2).
+our @CB_ARGS;
+
+sub run_sync {
+	my (@responses) = @_;
+
+	@RESPONSES = @responses;
+	@CB_ARGS   = ();
+
+	my $result;
+	$A->sync( 'token-abc', sub { @CB_ARGS = @_; $result = shift } );
+
+	return $result;
+}
+
+# ---------------------------------------------------------------------------
+# _pageCount - the figure step 5's hardware check measures (plan §3 check 1)
+# ---------------------------------------------------------------------------
+
+{
+	is( Plugins::SqueezeWax::API::_pageCount(203), 3,
+		'203 items costs 3 requests - the figure decisions §9.4 measured on real hardware' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(100), 1,
+		'an exactly-full single page costs 1, not 2' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(101), 2,
+		'one item past a full page costs 2' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(200), 2,
+		'an exact multiple of the page size does not round up' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(1), 1,
+		'a single item costs 1' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(0), 1,
+		'an empty collection still costs the request that discovered it was empty' );
+
+	is( Plugins::SqueezeWax::API::_pageCount(undef), 1,
+		'...as does a missing item count' );
+
+	is( Plugins::SqueezeWax::API::_pageCount('lots'), 1,
+		'...and a non-numeric one, rather than dying inside ceil' );
+
+	is( Plugins::SqueezeWax::API::_pageCount( 203, 50 ), 5,
+		'the page size is a parameter, so the docs\' 50-item default is expressible' );
+
+	is( Plugins::SqueezeWax::API::_pageCount( 203, 0 ), 3,
+		'a zero page size falls back to PER_PAGE rather than dividing by zero' );
+}
+
+# ---------------------------------------------------------------------------
+# _collectionParams - decisions §9.4's pinned sort
+# ---------------------------------------------------------------------------
+
+{
+	my $params = Plugins::SqueezeWax::API::_collectionParams(1);
+
+	is( $params->{per_page}, 100,
+		'per_page is the documented maximum, which the whole ceil(items/100) cost model rests on' );
+
+	is( $params->{sort}, 'added',
+		'the sort is pinned to added - the only key on the documented list that is not editable metadata' );
+
+	is( $params->{sort_order}, 'asc',
+		'...with an explicit order, so the endpoint default is never relied on' );
+
+	is( $params->{page}, 1, 'page 1 is page 1' );
+
+	is( Plugins::SqueezeWax::API::_collectionParams(7)->{page}, 7,
+		'a later page is passed through' );
+
+	is( Plugins::SqueezeWax::API::_collectionParams(0)->{page}, 1,
+		'page 0 is corrected to 1 - Discogs pages are 1-based' );
+
+	is( Plugins::SqueezeWax::API::_collectionParams(undef)->{page}, 1,
+		'...as is a missing page' );
+}
+
+# ---------------------------------------------------------------------------
+# _collectionPath
+# ---------------------------------------------------------------------------
+
+{
+	is( Plugins::SqueezeWax::API::_collectionPath('deschman'),
+		'/users/deschman/collection/folders/0/releases',
+		'folder 0 is the whole collection' );
+
+	is( Plugins::SqueezeWax::API::_collectionPath('a b'),
+		'/users/a%20b/collection/folders/0/releases',
+		'a username is escaped - it is interpolated into the path, not passed as a parameter' );
+
+	is( Plugins::SqueezeWax::API::_collectionPath('a/b'),
+		'/users/a%2Fb/collection/folders/0/releases',
+		'...including a slash, which would otherwise change which endpoint is called' );
+
+	# The profile path (step 10) shares the escape.
+	is( Plugins::SqueezeWax::API::_profilePath('deschman'), '/users/deschman',
+		'the profile path is /users/{username}' );
+	is( Plugins::SqueezeWax::API::_profilePath('a/b c'), '/users/a%2Fb%20c',
+		'  ...escaped the same way' );
+}
+
+# ---------------------------------------------------------------------------
+# _profileCurrency: what is stored from a profile reply, and when nothing is
+# ---------------------------------------------------------------------------
+
+{
+	my $C = \&Plugins::SqueezeWax::API::_profileCurrency;
+
+	is( $C->( { ok => 1, data => { curr_abbr => 'EUR' } } ), 'EUR', 'a curr_abbr is the label' );
+
+	is( $C->( { ok => 1, data => { curr_abbr => '' } } ), undef, 'an empty one is nothing to store' );
+	is( $C->( { ok => 1, data => {} } ),                  undef, '  ...so is a missing one' );
+	is( $C->( { ok => 1, data => { curr_abbr => {} } } ), undef, '  ...and one that is not a string' );
+	is( $C->( { ok => 1, data => [] } ),                  undef, '  ...and a reply that is not an object' );
+	is( $C->( { ok => 0, error => 'server_error' } ),     undef, '  ...and a failed reply' );
+	is( $C->(undef),                                      undef, '  ...and no reply at all' );
+}
+
+# ---------------------------------------------------------------------------
+# A whole sync: the request sequence, and what it does and does not keep
+# ---------------------------------------------------------------------------
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 3, 203 ),
+		page_response( 100, 2, 3, 203 ),
+		page_response( 3,   3, 3, 203 ),
+	);
+
+	ok( $result->{ok}, 'a three-page sync succeeds' );
+
+	is( scalar @REQUESTS, 5,
+		'203 items costs ceil(203/100) + 2 requests - the three pages, the identity lookup and the profile' );
+
+	is( $result->{requests}, 5, '...and the result says so' );
+
+	is( $result->{items}, 203, 'the reported count is the server\'s own pagination.items' );
+
+	is( $result->{counted}, 203,
+		'...and it agrees with the rows actually seen' );
+
+	like( $REQUESTS[0]->{url}, qr{/oauth/identity},
+		'the username is looked up first, every run, rather than read from a pref' );
+
+	ok( ( grep { /^collection sync starting$/ } @LOG ), 'the start is logged at info' );
+	ok( !( grep { /deschman/ } @LOG ), '  ...and no log line names the user (§15.33)' );
+
+	is( $REQUESTS[1]->{url}, 'https://api.discogs.com/users/deschman',
+		'...then the profile, for the currency label (§15.31 ruling 15)' );
+
+	like( $REQUESTS[2]->{url}, qr{/users/deschman/collection/folders/0/releases},
+		'...and the path is built from what it returned' );
+
+	like( $REQUESTS[2]->{url}, qr{sort=added},
+		'every page request pins the sort' );
+
+	like( $REQUESTS[4]->{url}, qr{page=3},
+		'the last request is for the last page' );
+
+	is( scalar( grep { $_->{url} =~ /page=4/ } @REQUESTS ), 0,
+		'and there is no page 4 - the loop stops on pagination.pages, not on an empty page' );
+}
+
+{
+	reset_state();
+
+	run_sync(
+		identity_response(),
+		page_response( 100, 1, 2, 150 ),
+		page_response( 50,  2, 2, 150 ),
+	);
+
+	# The discard rule, checked the only way an offline suite can check it:
+	# nothing a page carried is reachable afterwards. §13.2 - ownership is a
+	# column on discogs_match computed at step 7, not a mirrored collection,
+	# and discogs_collection is not a v1 table.
+	# discogsUsername and discogsCurrency are the two additions to this list,
+	# and neither is a release: the account name the identity call returned,
+	# kept for the settings page's attribution link (decisions §15.25 ruling 9),
+	# and the account's currency label from its profile, kept to label prices
+	# (§15.31 ruling 15). The rule this assertion guards is unchanged - nothing
+	# a collection PAGE carried is reachable afterwards - so the list is pinned
+	# rather than relaxed.
+	is_deeply( [ sort keys %PREFS ], [ qw(discogsCurrency discogsLastSyncError discogsUsername) ],
+		'a completed sync writes three prefs and nothing else - no release survives it' );
+
+	is( $PREFS{discogsUsername}, 'deschman',
+		'  ...and the one that is new is the account name, not anything from a page' );
+
+	my ($rows) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_sync_state');
+	is( $rows, 1, '  ...and exactly one marker row' );
+
+	is( marker()->{items}, 150,
+		'what it keeps is a count' );
+
+	ok( marker()->{last_synced} > 0, 'and a timestamp' );
+
+	is( marker()->{source}, 'server', "  ...marked as the server's sync (§15.18 part 8)" );
+
+	is( $PREFS{discogsLastSyncError}, '',
+		'and success clears any previous error' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 0, 1, 1, 0 ),
+	);
+
+	ok( $result->{ok}, 'an empty collection is a success, not a failure' );
+
+	is( $result->{items}, 0, '...reporting zero items' );
+
+	is( scalar @REQUESTS, 3, '...at the cost of one identity lookup, one profile and one page' );
+}
+
+# ---------------------------------------------------------------------------
+# One budget, two consumers (decisions §15.22)
+# ---------------------------------------------------------------------------
+#
+# The rate state moved from this file's module scope into API.pm at step 8c so
+# the derive job and the sync throttle against one budget. These assertions are
+# what makes that sharing observable in both directions: nothing else here would
+# notice if the two had a throttle each, and a 429 that arrives because they do
+# is one nobody can explain from a log.
+#
+# The derive job is not loaded - it is stood in for by a call to API->noteResponse
+# with the headers a spent window returns, which is exactly what Derive.pm does
+# with its own responses. Branching on data, not on which module made the call.
+
+{
+	reset_state();
+
+	local $NOW = CORE::time();
+
+	# A derive run just spent the window.
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW );
+
+	is( $API->rateWait, 60, 'a spent budget is visible before the sync starts' );
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'the sync still completes - it waits rather than failing' );
+
+	# The stub timer fires synchronously, so the wait shows up as a timer that
+	# was armed for the full window BEFORE the first request went out.
+	is( $TIMERS[0]->{delay}, 60,
+		'  ...after deferring its first request by the window the derive job spent' );
+
+	ok( ( grep { /rate budget spent, deferring/ } @LOG ),
+		'  ...and says so in the log, naming the deferral' );
+}
+
+# It defers by what is LEFT of the window, not by a fixed 60 (decisions §15.32).
+{
+	reset_state();
+
+	local $NOW = CORE::time();
+
+	# Spent twenty seconds ago.
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW - 20 );
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a window spent twenty seconds ago still ends in a good sync' );
+	is( $TIMERS[0]->{delay}, 40, '  ...deferred by the forty seconds left, not a full window' );
+
+	# And one spent more than a window ago is no wait at all.
+	reset_state();
+
+	$API->noteResponse( { limit => 60, used => 60, remaining => 0 }, $NOW - 61 );
+
+	run_sync( identity_response(), page_response( 5, 1, 1, 5 ) );
+
+	is( scalar @TIMERS, 0, 'a window that has already passed defers nothing' );
+}
+
+{
+	reset_state();
+
+	# And the other direction: a sync that spends the window leaves the wait
+	# standing for whoever asks next, which is the derive job's pre-request test.
+	my $lastPage = page_response( 5, 1, 1, 5 );
+	$lastPage->{headers} = {
+		'X-Discogs-Ratelimit'           => 60,
+		'X-Discogs-Ratelimit-Used'      => 60,
+		'X-Discogs-Ratelimit-Remaining' => 0,
+	};
+
+	local $NOW = CORE::time();
+
+	my $result = run_sync( identity_response(), $lastPage );
+
+	ok( $result->{ok}, 'a sync whose last page exhausted the budget still succeeds' );
+	is( $API->rateWait, 60,
+		'  ...and leaves the spent window where the derive job will see it' );
+}
+
+# ---------------------------------------------------------------------------
+# The retry boundary (§3.2, MAX_RETRIES)
+# ---------------------------------------------------------------------------
+
+{
+	reset_state();
+
+	my $rate_limited = {
+		code    => 429,
+		headers => healthy_headers(),
+		content => '',
+	};
+
+	my $result = run_sync(
+		identity_response(),
+		$rate_limited,
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a 429 that clears on retry does not fail the sync' );
+
+	is( scalar @REQUESTS, 4, '...and costs one extra request' );
+
+	is( $TIMERS[0]->{delay}, 60,
+		'the retry waits WINDOW_SECONDS, from backoffFor - and waits on a timer, not a sleep' );
+}
+
+{
+	reset_state();
+
+	my $rate_limited = {
+		code    => 429,
+		headers => healthy_headers(),
+		content => '',
+	};
+
+	# MAX_RETRIES is 3, so four attempts at the same request and then give up.
+	my $result = run_sync(
+		identity_response(),
+		($rate_limited) x 4,
+	);
+
+	ok( !$result->{ok}, 'a 429 that never clears fails the sync' );
+
+	is( $result->{error}, 'rate_limited', '...as rate_limited, not as something vaguer' );
+
+	is( scalar @REQUESTS, 6,
+		'...after MAX_RETRIES + 1 attempts at the page, plus the identity and the profile - it gives up rather than retrying forever' );
+
+	ok( !marker(),
+		'and the marker does not move for a sync that did not complete' );
+
+	is( $PREFS{discogsLastSyncError}, 'rate_limited',
+		'...while the failure itself is recorded, so the settings page has something to show' );
+}
+
+# ---------------------------------------------------------------------------
+# Failure handling (§13.7/§14.2): never partially advance
+# ---------------------------------------------------------------------------
+
+{
+	reset_state();
+	set_marker( 1_700_000_000, 203 );
+
+	my $result = run_sync( {
+		code    => 401,
+		headers => healthy_headers(),
+		content => '',
+	} );
+
+	ok( !$result->{ok}, 'a rejected token fails the sync' );
+
+	is( $result->{error}, 'unauthorized',
+		'...distinguishably, so the caller can log it at error level per §14.2' );
+
+	is( marker()->{last_synced}, 1_700_000_000,
+		'the previous timestamp is left exactly as it was' );
+
+	is( marker()->{items}, 203,
+		'...and so is the previous count - a transient failure must not make a working collection look like it vanished' );
+}
+
+{
+	reset_state();
+	set_marker( 1_700_000_000, undef );
+
+	# Page 1 arrives, page 2 does not. The half-finished sync must leave no
+	# trace at all - this is the "a partial scan must never corrupt confirmed
+	# state" rule applied to the sync.
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 2, 150 ),
+		{ code => undef, headers => {}, content => undef },
+	);
+
+	ok( !$result->{ok}, 'a sync that dies mid-pagination fails' );
+
+	is( $result->{error}, 'no_response',
+		'...as no_response, which is what an unanswered request classifies as' );
+
+	is( marker()->{last_synced}, 1_700_000_000,
+		'and it does not advance the timestamp for the pages it did get' );
+
+	ok( !defined marker()->{items},
+		'...nor record a count from a partial walk' );
+}
+
+{
+	reset_state();
+
+	my ( $result, @args );
+	$A->sync( '', sub { @args = @_; $result = shift } );
+
+	ok( !$result->{ok}, 'a missing token fails immediately' );
+	is( scalar @args, 1, '  ...handing the caller one argument - there is no list' );
+	is( $result->{error}, 'no_token', '...as no_token' );
+	is( scalar @REQUESTS, 0, '...without issuing a request' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 200,
+		headers => healthy_headers(),
+		content => '{}',
+	} );
+
+	ok( !$result->{ok}, 'an identity response with no username fails' );
+	is( $result->{error}, 'no_username', '...as no_username' );
+
+	is( scalar @REQUESTS, 1,
+		'...before asking for a collection it would not know the owner of' );
+}
+
+# ---------------------------------------------------------------------------
+# The guard (§13.7: three triggers, one sync)
+# ---------------------------------------------------------------------------
+
+{
+	reset_state();
+
+	ok( !$A->isRunning, 'nothing is running to start with' );
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 2, 150 ),
+		page_response( 50,  2, 2, 150 ),
+	);
+
+	ok( $result->{ok}, 'a sync completes' );
+
+	ok( !$A->isRunning,
+		'and the guard is clear afterwards, so the next trigger is not blocked' );
+}
+
+{
+	# A failed sync must clear the guard too, or one bad token would block
+	# every future trigger for the life of the server.
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 401,
+		headers => healthy_headers(),
+		content => '',
+	} );
+
+	ok( !$result->{ok}, 'a sync fails' );
+
+	ok( !$A->isRunning, 'and the guard is still clear afterwards' );
+}
+
+{
+	# already_running, tested the only way it can be without a real event loop:
+	# by calling sync() from inside a callback that runs while the guard is set.
+	reset_state();
+
+	my $second;
+
+	@RESPONSES = (
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	# The identity response's handler runs while %sync says running => 1.
+	# Hooking in there is equivalent to a second trigger arriving mid-sync.
+	my $firstResult;
+	my @secondArgs;
+	my $probe = sub {
+		$A->sync( 'token-abc', sub { @secondArgs = @_; $second = shift } );
+	};
+
+	# Drive it by wrapping the transport for one call.
+	{
+		no warnings 'redefine';
+		my $realGet = \&Slim::Networking::SimpleAsyncHTTP::get;
+		local *Slim::Networking::SimpleAsyncHTTP::get = sub {
+			my $self = shift;
+			$probe->() if @REQUESTS == 1 && !$second;
+			return $realGet->( $self, @_ );
+		};
+
+		$A->sync( 'token-abc', sub { $firstResult = shift } );
+	}
+
+	ok( $firstResult->{ok}, 'the first sync still completes' );
+
+	ok( !$second->{ok},
+		'a second trigger arriving mid-sync is refused - §13.7 wants three triggers and one sync' );
+
+	is( $second->{error}, 'already_running',
+		'...distinguishably from a failure, because it is not one' );
+
+	is( scalar @secondArgs, 1,
+		'...and the refused trigger gets one argument: it never issued a request' );
+}
+
+# ---------------------------------------------------------------------------
+# Step 7's wiring: the completed sync hands the ownership pass its list
+# ---------------------------------------------------------------------------
+#
+# Decisions §15.13 part 1. The pass is stubbed here; what is under test is that
+# it is called at the right moment, with the whole collection, and that
+# the marker advances only when it succeeded - because that timestamp
+# now means "ownership last derived", not "the collection was read".
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 3, 203 ),
+		page_response( 100, 2, 3, 203 ),
+		page_response( 3,   3, 3, 203 ),
+	);
+
+	ok( $result->{ok}, 'a complete sync succeeds' );
+
+	# Reachable only since INFOLOG was turned on. The line carries the two
+	# figures the settings page and the hardware checks are read against.
+	my ($done) = grep { /collection sync complete/ } @LOG;
+
+	ok( $done, 'a complete sync logs its summary at info' );
+	like( $done, qr/203 items over 5 requests/,
+		'  ...carrying the item count and the request count' );
+
+	is( scalar @APPLIED, 1, 'the ownership pass is called exactly once per sync' );
+
+	my $entries = $APPLIED[0];
+	is( scalar @$entries, 203, '  ...and is handed every collection entry' );
+
+	# The five fields the pass needs plus the three the re-match list needs, and
+	# no more. A ninth would be a mirrored collection by accretion, which is
+	# what §13.2 rules out - the bound is the point of asserting the whole key
+	# set rather than spot-checking.
+	my ($one) = grep { $_->{instance_id} == 2001 } @$entries;
+	is_deeply(
+		[ sort keys %$one ],
+		[ sort qw(instance_id id master_id title artists year formats labels) ],
+		'each entry carries exactly the five fields the pass reads, plus the page\'s three'
+	);
+	is( $one->{id},        1001,       '  ...the release id' );
+	is( $one->{master_id}, 9001,       '  ...the master id, from basic_information' );
+	is( $one->{title},     'Album 1',  '  ...the title' );
+	is_deeply( $one->{artists}, ['Artist 1'], '  ...and the artist names, flattened' );
+
+	# The page's three (§15.16 part 6). Flattened to plain strings here, so the
+	# template has no structure to walk and this list stays something is_deeply
+	# can compare.
+	is( $one->{year}, 1991, '  ...the year, for telling two pressings apart' );
+	is_deeply( $one->{formats}, ['Vinyl, LP, Album'],
+		'  ...the format as medium then descriptions' );
+	is_deeply( $one->{labels}, [ 'Label One (CAT-1)', 'Label Two' ],
+		'  ...and each label with its catalogue number, or bare when it has none' );
+
+	# What the flattening DROPS, asserted rather than assumed: `text` is
+	# free-form seller prose long enough to push the release id off a narrow
+	# row, `qty` is "1" on every single-disc record, and a resource_url is an
+	# API address that no user would follow.
+	unlike( $one->{formats}[0], qr/Gatefold|Splatter/, "  ...and drops the format's free text" );
+	unlike( $one->{formats}[0], qr/\b1\b/,             '  ...and its quantity' );
+	unlike( $one->{labels}[0],  qr/api\.discogs/,      '  ...and the label resource_url' );
+
+	# No image fields. Whether Discogs' terms permit showing thumb or
+	# cover_image is unverified (§9.9), so the sync does not carry them and the
+	# page cannot accidentally grow one.
+	ok( !exists $one->{thumb},       'no thumb is carried - the terms are unverified (§9.9)' );
+	ok( !exists $one->{cover_image}, '  ...nor cover_image' );
+
+	# Entries from the LAST page are there too: the list is the whole
+	# collection, not the page the walk happened to end on.
+	ok( ( grep { $_->{instance_id} == 2201 } @$entries ),
+		'entries from the final page are in the list' );
+
+	ok( marker() && marker()->{last_synced}, 'the marker advances when the pass succeeded' );
+	is( marker()->{items}, 203, '  ...along with the item count' );
+
+	# --- the list reaches the caller (plan §2.2) --------------------------
+	#
+	# The queue page's re-match list has no other source: the collection is
+	# discarded when the sync ends (§13.2), and a second fetch would be a second
+	# set of requests against a rate-limited API for data we just had.
+	is( scalar @CB_ARGS, 2, 'a successful sync hands its callback two arguments' );
+
+	# The SAME list the pass got, not a copy and not a rebuild. A re-match list
+	# built separately could offer a release the pass could not see, and the
+	# album would then refuse to badge with nothing to say why.
+	is( $CB_ARGS[1], $APPLIED[0],
+		'  ...and the second is the very list the pass was handed, by reference' );
+	is( scalar @{ $CB_ARGS[1] }, 203, '  ...holding every entry' );
+}
+
+# --- the pass declines: the timestamp must not move ------------------------
+for my $outcome (qw(refused failed)) {
+	reset_state();
+
+	$APPLY_RESULT = $outcome;
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 2, 1, 1, 2 ),
+	);
+
+	ok( !$result->{ok}, "a sync whose pass returned '$outcome' is not a success" );
+	is( $result->{error}, $outcome, '  ...and reports why' );
+	is( scalar @APPLIED, 1, '  ...having actually called the pass' );
+	ok( !marker(),
+		'  ...but the marker does NOT advance - it means "ownership last derived"' );
+	is( $PREFS{discogsLastSyncError}, $outcome, '  ...and the error is recorded' );
+
+	# No list to the caller. The fetch worked, so there IS one in hand - but a
+	# page rendering a re-match list from a sync whose conclusions were never
+	# written would offer choices against a badge state that does not exist yet.
+	# The page gets the error instead, which the settings page already has a
+	# string for.
+	is( scalar @CB_ARGS, 1,
+		"  ...and a '$outcome' pass hands the caller no list, though the fetch succeeded" );
+}
+
+# --- completeness: the pass is never called on a list that cannot be shown
+#     complete ------------------------------------------------------------
+{
+	reset_state();
+
+	# Two pages promised, 203 items claimed, 102 delivered. §9.4's pagination
+	# hazard: rows moved under us, and a dropped row silently removes a badge.
+	my $result = run_sync(
+		identity_response(),
+		page_response( 100, 1, 2, 203 ),
+		page_response( 2,   2, 2, 203 ),
+	);
+
+	ok( !$result->{ok}, 'a count mismatch fails the sync rather than warning' );
+	is( $result->{error}, 'count_mismatch', '  ...as count_mismatch' );
+	is( scalar @APPLIED, 0, '  ...and the pass is never called' );
+	ok( !marker(), '  ...so the marker does not advance' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 2, 1, 1, 2, no_pagination => 1 ),
+	);
+
+	ok( !$result->{ok}, 'a response with no pagination block fails the sync' );
+	is( $result->{error}, 'count_unknown',
+		'  ...as count_unknown - completeness that cannot be shown is not shown' );
+	is( scalar @APPLIED, 0, '  ...and the pass is never called' );
+}
+
+# --- the same release owned twice ------------------------------------------
+#
+# Two instances of one release are two collection entries and must both reach
+# the pass: counted is instances, and pagination.items counts instances too.
+# Whether they are one candidate or two is the pass's question (§0.2).
+{
+	reset_state();
+
+	my $page = {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( {
+			pagination => { page => 1, pages => 1, items => 2, per_page => 100 },
+			releases   => [
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Twice Owned' } },
+				{ id => 777, instance_id => 222,
+				  basic_information => { id => 777, title => 'Twice Owned' } },
+			],
+		} ),
+	};
+
+	my $result = run_sync( identity_response(), $page );
+
+	ok( $result->{ok}, 'one release owned twice is a complete collection, not a mismatch' );
+	is( $result->{counted}, 2, '  ...counted as two entries, because items counts two' );
+	is( scalar @{ $APPLIED[0] }, 2, '  ...and both are handed to the pass' );
+}
+
+# --- a duplicated instance_id -----------------------------------------------
+#
+# The same instance twice is the server repeating itself, not two records. It
+# de-duplicates, which then fails the completeness check - which is the right
+# answer, because a repeat means something else was dropped.
+{
+	reset_state();
+
+	my $page = {
+		code    => 200,
+		headers => healthy_headers(),
+		content => encode_json( {
+			pagination => { page => 1, pages => 1, items => 2, per_page => 100 },
+			releases   => [
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Once' } },
+				{ id => 777, instance_id => 111,
+				  basic_information => { id => 777, title => 'Once' } },
+			],
+		} ),
+	};
+
+	my $result = run_sync( identity_response(), $page );
+
+	ok( !$result->{ok}, 'a repeated instance_id de-duplicates and fails the count' );
+	is( $result->{error}, 'count_mismatch', '  ...as count_mismatch' );
+	is( scalar @APPLIED, 0, '  ...with the pass never called' );
+}
+
+# --- a superseded run never reaches the pass (W3) --------------------------
+#
+# _finish's first act is the superseded check, and the pass sits after it: a
+# newer sync owns the prefs and the guard, and it owns the badges too. Driven
+# directly, because this suite's transport is synchronous and a real overlap
+# cannot be staged through it.
+{
+	reset_state();
+
+	my $result;
+
+	Plugins::SqueezeWax::API::Async::_finish(
+		{
+			id      => -1,
+			cb      => sub { $result = shift },
+			entries => { 1 => { instance_id => 1, id => 7, title => 'X', artists => [] } },
+		},
+		{ ok => 1, items => 1, counted => 1, pages => 1, requests => 2 },
+	);
+
+	is( $result->{error}, 'superseded', 'a superseded run reports superseded' );
+	is( scalar @APPLIED, 0, '  ...and never reaches the ownership pass' );
+	# Was `!$PREFS{discogsLastSynced}` - absence of a VALUE, which would also
+	# pass if the pref had been written with a falsy one, and which said
+	# nothing about the other two. Now absence of a WRITE, for all of them -
+	# the marker included, since its writes are recorded in the same list.
+	is( scalar @WRITES, 0, '  ...and touches no pref and no marker at all' );
+}
+
+# ---------------------------------------------------------------------------
+# The error path carries the status (decisions §15.15 part 2)
+# ---------------------------------------------------------------------------
+#
+# Every status that is not 2xx or 3xx reaches the ERROR callback with nothing
+# populated on the SimpleAsyncHTTP object. Until 2026-09-22 _handle read only
+# $http->code, so all of these classified as no_response and the whole lower
+# half of classifyResponse was unreachable in production. The stub transport
+# above now models that routing, so these assertions mean what they say.
+
+diag('§15.15 part 2: every non-2xx status survives the error path');
+
+{
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 500,
+		headers => healthy_headers(),
+		content => 'upstream exploded',
+	} );
+
+	ok( !$result->{ok}, 'a 5xx fails the sync' );
+	is( $result->{error}, 'server_error',
+		'  ...as server_error - transient, so the caller logs at warn' );
+}
+
+{
+	reset_state();
+
+	my $result = run_sync( {
+		code    => 404,
+		headers => healthy_headers(),
+		content => '',
+	} );
+
+	is( $result->{error}, 'not_found', 'a 404 survives the error path as not_found' );
+}
+
+# The one thing that must STILL be no_response: a connection that produced no
+# status at all. If this ever starts classifying as something else, the fix
+# above has over-reached.
+{
+	reset_state();
+
+	my $result = run_sync( { code => undef } );
+
+	ok( !$result->{ok}, 'a connection that never answered fails the sync' );
+	is( $result->{error}, 'no_response',
+		'  ...as no_response, which now means only that' );
+}
+
+# The headers come across too, not just the status. A 429 whose headers say the
+# budget is spent must be accounted for, or the back-off throttles on stale
+# state - and a 429 is exactly when the headers matter most.
+{
+	reset_state();
+
+	my $spent = {
+		code    => 429,
+		headers => {
+			'X-Discogs-Ratelimit'           => 60,
+			'X-Discogs-Ratelimit-Used'      => 60,
+			'X-Discogs-Ratelimit-Remaining' => 0,
+		},
+		content => '',
+	};
+
+	my $result = run_sync(
+		identity_response(),
+		$spent,
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a 429 with spent-budget headers still recovers' );
+	ok( scalar @TIMERS >= 1, '  ...having waited rather than hammered' );
+	ok( ( grep { $_->{delay} && $_->{delay} > 0 } @TIMERS ),
+		'  ...on a real delay taken from the error response, not a zero wait' );
+}
+
+# ---------------------------------------------------------------------------
+# The rejection pause
+# ---------------------------------------------------------------------------
+
+diag('a rejected token pauses scan-triggered syncs until something changes');
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'nothing is paused to begin with' );
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	ok( Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a rejected token sets the pause' );
+
+	ok( Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...and the first skip reports itself as the first' );
+	ok( !Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...while later ones do not, so it is logged once' );
+}
+
+{
+	reset_state();
+
+	# A sync that completes proves the token works, whatever triggered it.
+	run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a successful sync clears the pause' );
+	ok( Plugins::SqueezeWax::API::Async->noteSkipped,
+		'  ...and resets the log-once marker with it' );
+}
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+	ok( Plugins::SqueezeWax::API::Async->tokenRejected, 'paused again' );
+
+	# What Settings.pm calls when the token pref changes (§15.15 part 3).
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'  ...and a token change clears it' );
+}
+
+# A transient failure must NOT pause: the whole point of the distinction is
+# that one of these is worth retrying and the other is not.
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => undef } );
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'a dropped connection does NOT pause scan-triggered syncs' );
+}
+
+{
+	reset_state();
+	Plugins::SqueezeWax::API::Async->clearTokenRejected;
+
+	run_sync( { code => 500, headers => healthy_headers(), content => '' } );
+
+	ok( !Plugins::SqueezeWax::API::Async->tokenRejected,
+		'nor does a server error' );
+}
+
+# ---------------------------------------------------------------------------
+# Pref writes: what, in what order (stub audit 2026-09-24, entry 2.1)
+# ---------------------------------------------------------------------------
+#
+# The store now suppresses a no-op scalar write and dispatches setChange, as
+# Slim/Utils/Prefs/Base.pm:91,94-97 do. Until 2026-09-24 it was a plain hash
+# write, which is the gap that let the 0.0.0.7 regression through one file
+# over: a pref write landing AFTER the thing it was meant to precede, and an
+# onchange hook firing unmodelled.
+
+diag('the single exit: which prefs are written, and when');
+
+{
+	reset_state();
+
+	run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	# §15.13 part 1: the pass runs before the marker is written, so a
+	# timestamp can never claim ownership was derived when it was not.
+	my ($passAt)  = grep { $WRITES[$_] eq '<pass>' }   0 .. $#WRITES;
+	my ($syncAt)  = grep { $WRITES[$_] eq '<marker>' } 0 .. $#WRITES;
+
+	ok( defined $passAt, 'a successful sync runs the ownership pass' );
+	ok( defined $syncAt, '  ...and writes the marker' );
+	ok( defined $passAt && defined $syncAt && $passAt < $syncAt,
+		'  ...the pass FIRST, then the marker (§15.13 part 1, §15.18 part 7)' );
+
+	# The username is written at the identity step, which is the FIRST request
+	# of the sync - long before the pass and the marker. Its position in this
+	# list is the evidence that it costs no request of its own. The currency
+	# follows from the second request, the profile, before any page.
+	is_deeply(
+		[ grep { $_ ne '<pass>' } @WRITES ],
+		[qw(discogsUsername discogsCurrency <marker> discogsLastSyncError)],
+		'  ...and writes exactly the username, the currency, the marker and the error pref, in that order'
+	);
+}
+
+{
+	reset_state();
+	set_marker( 1_700_000_000, 203 );
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is_deeply( [ grep { $_ ne '<pass>' } @WRITES ], ['discogsLastSyncError'],
+		'a failed sync writes ONLY the error' );
+	ok( !( grep { $_ eq '<pass>' } @WRITES ),
+		'  ...and never reaches the pass' );
+	is_deeply( marker(), { last_synced => 1_700_000_000, items => 203, source => 'server' },
+		'  ...leaving the previous figures exactly as they were' );
+}
+
+# A second identical failure must not re-write the error: Base.pm:94-97
+# suppresses a scalar set that changes nothing, so an unchanged error is not an
+# event and cannot re-trigger anything hung off it.
+{
+	reset_state();
+	$PREFS{discogsLastSyncError} = 'unauthorized';
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is( scalar @WRITES, 0,
+		'the same error twice is suppressed, not written again' );
+}
+
+# And an onchange hook on one of Async's own prefs fires when it writes - the
+# mechanism that, hung off discogsToken, caused the 0.0.0.7 regression.
+{
+	reset_state();
+
+	my @fired;
+	$CHANGES{discogsLastSyncError} = sub { push @fired, $_[1] };
+
+	run_sync( { code => 401, headers => healthy_headers(), content => '' } );
+
+	is_deeply( \@fired, ['unauthorized'],
+		'a setChange hook on a pref Async writes does fire, with the new value' );
+}
+
+# ---------------------------------------------------------------------------
+# status(): the page reads the marker (decisions §15.18 part 7)
+# ---------------------------------------------------------------------------
+
+diag('status() reads the marker, whichever path wrote it');
+
+{
+	reset_state();
+
+	my $s = $A->status;
+
+	is( $s->{lastSynced}, 0, 'no marker row reads as lastSynced 0 - "never synced"' );
+	ok( !defined $s->{lastItems}, '  ...with no item count' );
+	ok( !defined $s->{lastSource}, '  ...and no source' );
+
+	set_marker( 1_700_000_123, 203, 'scan' );
+	$PREFS{discogsLastSyncError} = 'no_response';
+
+	$s = $A->status;
+
+	is( $s->{lastSynced}, 1_700_000_123, 'a scan-written marker is what the page shows' );
+	is( $s->{lastItems},  203,           '  ...with its item count' );
+	is( $s->{lastSource}, 'scan',        '  ...and its source, returned though not displayed' );
+	is( $s->{lastError},  'no_response', '  ...while the error is still the pref' );
+
+	# The settings page renders on a server whose database may not be ready.
+	local $DB_READY = 0;
+
+	$s = eval { $A->status };
+	ok( $s, 'status does not die when the schema is not ready' );
+	is( $s->{lastSynced}, 0, '  ...and reads as never synced' );
+}
+
+# A lost marker write: the pass has committed, so the sync is still a success,
+# and the loss is logged at error rather than swallowed.
+{
+	reset_state();
+
+	no warnings 'redefine';
+	local *Plugins::SqueezeWax::Schema::recordSync = sub { die "disk full\n" };
+
+	my $result = run_sync(
+		identity_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a marker write that dies does not fail a sync whose pass committed' );
+	ok( !marker(), '  ...no marker is left' );
+	ok( ( grep { /marker was not written.*disk full/ } @ERRORS ),
+		'  ...and the loss is logged at error' );
+	is( $PREFS{discogsLastSyncError}, '', '  ...while the error pref is still cleared' );
+}
+
+# ---------------------------------------------------------------------------
+# The currency label (decisions §15.31 ruling 15, plan step 10 §6 part 8)
+# ---------------------------------------------------------------------------
+#
+# One /users/{username} request between the identity and the first page. Its
+# curr_abbr is stored; a failed or empty reply keeps the stored value and NEVER
+# changes the sync's outcome.
+
+sub profile_fixture {
+	my $path = "$Bin/fixtures/profile-example.json";
+
+	open my $fh, '<:raw', $path or die "could not read $path: $!\n";
+	local $/;
+
+	return scalar <$fh>;
+}
+
+{
+	my $NOTED = 0;
+
+	no warnings 'redefine';
+
+	my $real = \&Plugins::SqueezeWax::API::noteResponse;
+
+	local *Plugins::SqueezeWax::API::noteResponse = sub { $NOTED++; goto &$real };
+
+	reset_state();
+
+	my ($identity) = identity_response('example');
+
+	my $result = run_sync(
+		$identity,
+		{ code => 200, headers => healthy_headers(), content => profile_fixture() },
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a sync with a profile reply succeeds' );
+	is( $PREFS{discogsCurrency}, 'EUR', '  ...and stores the profile\'s curr_abbr (the real reply\'s shape)' );
+	is( $REQUESTS[1]{url}, 'https://api.discogs.com/users/example',
+		'  ...asked for once, at /users/{username}, second' );
+	is( scalar( grep { $_->{url} =~ m{/users/example$} } @REQUESTS ), 1, '  ...exactly once' );
+	is( $NOTED, 3, '  ...every reply noted once: identity, profile, page' );
+
+	my %h = @{ $REQUESTS[1]{headers} };
+	is( $h{Authorization}, 'Discogs token=token-abc', '  ...with the token' );
+}
+
+# A failed profile never changes the sync. The reference run is the one above
+# minus the label: same result, same requests, same marker, same error pref.
+{
+	my @FAILURES = (
+		[ 'a 500',                    { code => 500, content => '' } ],
+		[ 'a 401',                    { code => 401, content => '{"message":"Invalid consumer token."}' } ],
+		[ 'a 429',                    { code => 429, content => '' } ],
+		[ 'a 404',                    { code => 404, content => '' } ],
+		[ 'a dropped connection',     { code => undef } ],
+		[ 'a 200 that will not parse', { code => 200, content => 'nope' } ],
+		[ 'a 200 with no curr_abbr',  { code => 200, content => encode_json( { username => 'deschman' } ) } ],
+		[ 'a 200 with an empty one',  { code => 200, content => encode_json( { curr_abbr => '' } ) } ],
+	);
+
+	for my $f (@FAILURES) {
+		my ( $what, $profile ) = @$f;
+
+		reset_state();
+		$PREFS{discogsCurrency} = 'GBP';
+
+		my ($identity) = identity_response();
+
+		my $result = run_sync( $identity, { headers => healthy_headers(), %$profile },
+			page_response( 5, 1, 1, 5 ) );
+
+		is_deeply( $result, { ok => 1, items => 5, counted => 5, pages => 1, requests => 3 },
+			"profile $what: the sync's result is unchanged" );
+		is( $PREFS{discogsCurrency}, 'GBP', '  ...the stored currency is kept' );
+		is( $PREFS{discogsLastSyncError}, '', '  ...no error is recorded' );
+		ok( marker(), '  ...the marker is written' );
+		is( scalar( grep { $_->{url} =~ m{/users/deschman$} } @REQUESTS ), 1,
+			'  ...and the profile was asked once, never retried' );
+	}
+}
+
+# The shared budget: a spent window defers the profile on a timer, as it would
+# a page, rather than skipping it or spending a request into a 429.
+{
+	reset_state();
+
+	local $NOW = CORE::time();
+
+	my $result = run_sync(
+		{
+			code    => 200,
+			headers => { 'X-Discogs-Ratelimit' => 60, 'X-Discogs-Ratelimit-Used' => 60,
+			             'X-Discogs-Ratelimit-Remaining' => 0 },
+			content => encode_json( { username => 'deschman' } ),
+		},
+		profile_response(),
+		page_response( 5, 1, 1, 5 ),
+	);
+
+	ok( $result->{ok}, 'a spent budget after the identity still ends in a good sync' );
+	is( $TIMERS[0]{delay}, 60, '  ...the profile waited out the window on a timer' );
+	is( $PREFS{discogsCurrency}, 'EUR', '  ...and was then asked, and stored' );
+}
+
+# An aborted sync cancels a deferred profile request too.
+{
+	reset_state();
+
+	$A->abort;
+
+	ok( ( grep { $_->{coderef} == \&Plugins::SqueezeWax::API::Async::_fireProfile } @KILLS ),
+		'abort cancels a pending profile request as well as a pending page' );
+}
+
+done_testing();

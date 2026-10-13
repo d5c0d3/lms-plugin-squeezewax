@@ -76,12 +76,13 @@ manifest, `repo.xml`, always at the repo root:
 
 - **A feature branch's `repo.xml`** has a `<url>` on
   `raw.githubusercontent.com` pointing at that branch's own `dist/*.zip`.
-- **Master's `repo.xml`** (once SqueezeWax has actually released) has a
-  `<url>` on GitHub Pages pointing at the released zip.
+- **Master's `repo.xml`** names the hardware-checked build testers install,
+  with a `<url>` on `raw.githubusercontent.com` under `/master/` (§5b). A
+  GitHub Pages `<url>` is an open question, not a plan (below).
 
-Switching between "testing a branch" and "running the release" is one edit
-to LMS's **Settings → Plugins → Additional Repositories** entry — never both
-at once, per §1's finding.
+Switching between "testing a branch" and "running the tester build" is one
+edit to LMS's **Settings → Plugins → Additional Repositories** entry — never
+both at once, per §1's finding.
 
 ```
 lms-plugin-squeezewax/
@@ -105,11 +106,12 @@ built it and (later) whether that build is a release, and that is exactly
 the kind of thing that goes stale silently if a person is expected to
 remember to edit it.
 
-### The Pages/release variant doesn't exist yet
+### The Pages/release variant is open, not planned
 
-SqueezeWax has never been released, so there is no master release manifest
-to write today — inventing one would document a release that hasn't
-happened. Two things confirmed directly, not assumed:
+Superseded in part by decisions §15.36 part 1: `master` now serves testers
+through a raw URL (§5b), so nothing about the beta needs Pages. Whether v1
+itself moves to GitHub Pages is **open**; doing so would make testers change
+their repository URL once. Two things confirmed directly, not assumed:
 
 - **GitHub Pages is not enabled for this repository.**
   `https://d5c0d3.github.io/lms-plugin-squeezewax/` returns 404, and there
@@ -121,10 +123,27 @@ happened. Two things confirmed directly, not assumed:
   `raw.githubusercontent.com/.../<branch>/repo.xml` instead of the Pages
   URL, "since GitHub Pages only serves from the default branch."
 
-So: the branch-build flow (§4) is what exists now. The release variant —
-enabling Pages, and a script step that regenerates `repo.xml` with a Pages
-`<url>` instead of a raw one — comes into existence at SqueezeWax's first
-real release, not before. Tracked in `TODO.md`.
+Unverified: whether LMS's official plugin list needs Pages. Tracked in
+`TODO.md` ("At SqueezeWax's first real release").
+
+### What actually merges at promotion — decided 2026-10-13 (§15.36 part 1)
+
+`v1-buildout` accumulates a `repo.xml` and a `dist/*.zip` for every build
+pushed while v1 is in progress, because both have to be committed to be
+raw-fetchable (§3). None of that belongs on master — same reasoning that
+already kept an equivalent build artifact off master once (the
+`packaging-rewrite` branch's test build wasn't merged forward; see
+`docs/squeezewax-v1-decisions.md` §6a). So promoting a build is **not** a
+merge of `v1-buildout` as it stands. The merge recipe now runs at **every
+promotion**, not once at release, and `scripts/promote-master.sh` does it:
+
+- Master takes the plugin source (`SqueezeWax/`), `LICENSE` and docs, by
+  merging the **package commit** (`--no-ff`).
+- Master's `repo.xml` is the package commit's with **only** the `<url>`'s
+  branch changed from `/v1-buildout/` to `/master/`. Version, `<sha>` and zip
+  name are untouched, because they describe the zip's bytes.
+- Master's `dist/` holds the zips already on master plus the promoted one.
+  Every other zip the merge brings in is removed.
 
 ### Versioning, before and after release
 
@@ -136,7 +155,7 @@ time, there is nothing for the two numbers to out-rank each other on, so
 there's no reason to keep them in sync yet.
 
 That changes at the first real release: from then on, a branch build must
-be numbered **above** the currently-released version, or LMS's
+be numbered **above** the version testers or users currently have, or LMS's
 `findUpdates` (§1) will not offer it — silently, not with an error. And a
 release's `install.xml` should carry its real, meaningful version rather
 than a leftover `0.1.0`.
@@ -255,43 +274,73 @@ itself, not left to memory.
    the code *onto* the server, it doesn't confirm it's correct.
 6. Repeat.
 
+**Pushes do not work from the Claude Code environment.** The remote is HTTPS
+with no stored credential, no SSH identity and no `gh`, so `--publish` builds
+the zip, writes `repo.xml`, commits both, and then fails at `git push` — and
+says so rather than failing silently. The consequence to plan around: the
+version is bumped and committed *before* anyone can see it served, so a build
+that is never pushed still consumes its number. The user pushes by hand; until
+they do, the `<url>` in `repo.xml` points at a zip GitHub does not yet have.
+
 **Never leave a production repository and a branch repository configured
 at the same time** — §1's `findUpdates` finding is the reason, and it fails
 silently (a higher-versioned branch build gets offered to a production
 install, or a production release is never offered because a branch's
 number is still ahead) rather than with an error.
 
-### Starting a new build-order step
+## 5b. Tester channel
 
-Project knowledge in the claude.ai design chat follows the active feature
-branch, re-pointed at step boundaries (`docs/working-agreement.md`,
-"Which branch project knowledge follows"). One action, not three
-separately-remembered ones:
+Decided 2026-10-13, decisions §15.36 part 1. Testers add
+`https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/repo.xml`
+(the README names only this URL; the dev URL in §5 stays here, so a tester
+cannot pick the one-way dev channel by mistake).
 
-1. Cut the branch for the step.
-2. Update `TODO.md`'s first line — `Synced branch: <branch> @ <sha>,
-   <date>` — to the new branch's current commit.
-3. Re-point the claude.ai project's GitHub connector at that branch.
-4. Hit **Sync now**.
+- **Promotion merges a checked package commit and copies its zip. It never
+  rebuilds.** `package-build.sh` bumps the version on every run, so a rebuild
+  would ship a version nobody hardware-checked. The zip is carried byte for
+  byte; version and `<sha>` survive because both describe those bytes.
+- **Run `scripts/promote-master.sh <version> <report-no>`** on `v1-buildout`,
+  after the hardware report for that build passes. `--dry-run` shows the diff
+  and the new `repo.xml` and changes nothing. `--merge-head` merges
+  `v1-buildout`'s HEAD instead of the package commit, and is allowed only when
+  `SqueezeWax/` and `LICENSE` are identical to the package commit (a docs-only
+  fix after the check needs no rebuild). The owner pushes `master`.
+- **Forward only.** The script refuses a version not above the one already on
+  `master`. Migrations are one-way (`Schema::_migrate` refuses a newer file)
+  and LMS offers only a higher version (§1), so a bad build is fixed by
+  promoting a newer checked one. Rollback of `master` itself is its previous
+  promoted commit; testers who already updated cannot step back.
+- **`package-build.sh` refuses to run on `master`.** A build there would
+  publish an unchecked zip to testers.
+- **Never configure the tester and dev repositories at once** (§1): LMS keeps
+  the higher version whichever repository it came from.
+- **Unverified:** how long GitHub's raw cache and LMS's repository cache delay
+  a tester seeing a promotion (§5 step 3's `?v=` gotcha).
 
-Two things about step 3 aren't established yet, and belong here once they
-are rather than being rediscovered each time:
+### `TODO.md`'s `Synced branch:` line
+
+Documentation now, not a guard. It used to gate a re-pointing step that ran
+at every build-order step boundary; now there is one branch
+(`v1-buildout`) for the whole v1 build-out, project knowledge is pointed at
+it once, and isn't re-pointed again until v1 ships. With one branch for
+months, the silent-staleness risk the line was written to catch is close to
+zero — a "guard" nobody needs is one nobody reads, so it's kept as a plain
+record of what's current rather than dressed up as a check.
+
+Two things about the claude.ai GitHub connector came up while that re-
+pointing procedure still existed, and are recorded here though neither is
+on the critical path anymore:
 
 - **Does the per-file/folder selection survive re-pointing to a different
   branch, or must it be redone?** Not documented (checked the official
   GitHub-integration support article; it doesn't address branch changes at
-  all). If it must be redone every time, that friction is exactly what
-  eventually gets this checklist skipped under deadline — worth confirming
-  and, if true, worth designing around rather than just noting.
+  all).
 - **Can the same repository be added twice to one project, on two
-  different branches?** Also not documented — the support article confirms
-  multiple *different* repositories are supported but doesn't address the
-  same repository twice. If this works, master and the active branch are
-  both visible at once and the whole re-pointing problem largely
-  evaporates — worth trying before assuming it doesn't work.
+  different branches?** Also not documented.
 
-Test both directly in the claude.ai project next time it's open, and
-replace this paragraph with the answer.
+Worth answering eventually — the second one in particular would make
+master and the active branch visible at once — but nothing about v1 is
+blocked on either.
 
 ---
 
@@ -318,6 +367,23 @@ assumed — see §7.
 
 ---
 
+## 6a. Testing ownership without changing the collection
+
+The ownership pass's most awkward behaviour to exercise is "a record left the
+Discogs collection": its ownership-only row should be deleted, and a tagged
+row should fall back to `absent` / `candidate` while keeping its release id.
+Testing that for real means editing a collection the project does not own and
+cannot restore if a step fails, so it is done offline, without touching one.
+
+**Offline, on copies** — `scripts/ownership-offline-check.pl`. It takes a
+`library.db` and a `squeezewax.db`, copies both through SQLite's online backup
+from a read-only handle (safe against a running LMS), and runs the real pass
+three times against the committed page-1 fixture: as given, minus some release
+ids, then as given again. It needs no token and no network. It proves what the
+pass does with a changed list; it cannot prove a real fetch produces one.
+
+---
+
 ## 7. What's confirmed, and what this doesn't solve
 
 - `sha1sum`'s digest is what LMS's Extension Downloader verifies before
@@ -337,6 +403,10 @@ assumed — see §7.
 ---
 
 ## 8. The transition off SqueezeWaxDev
+
+**Archived record of a completed migration.** Written while the transition
+was still pending; TODO.md records it done 2026-09-07. Kept in present
+tense below as the plan-as-written, not as current state.
 
 The dev server currently runs `SqueezeWaxDev`: prefs under
 `plugin.squeezewaxdev`, database `squeezewax.db` (never renamed — §1).

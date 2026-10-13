@@ -22,6 +22,9 @@ PLUGIN_SQUEEZEWAX_DETECT_DESC
 PLUGIN_SQUEEZEWAX_DETECT_BUTTON
 	EN	Detect
 
+PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING
+	EN	Reading files...
+
 PLUGIN_SQUEEZEWAX_DETECT_RUNNING
 	EN	Reading files...
 
@@ -58,5 +61,375 @@ PLUGIN_SQUEEZEWAX_DB_UNUSABLE
 PLUGIN_SQUEEZEWAX_MATCH_PROGRESS
 	EN	Discogs matching
 
+PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS
+	EN	Discogs collection sync
+
 PLUGIN_SQUEEZEWAX_DETECT_UNREADABLE
 	EN	could not be read
+
+PLUGIN_SQUEEZEWAX_TOKEN
+	EN	Discogs personal access token
+
+PLUGIN_SQUEEZEWAX_TOKEN_DESC
+	EN	Required for collection sync, which decides the ownership shown in album menus and the "Records I own" view. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
+
+PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS
+	EN	https://www.discogs.com/settings/developers
+
+PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
+	EN	Discogs Developer Settings (generate or revoke a token here)
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
+	EN	Test token
+
+PLUGIN_SQUEEZEWAX_CURRENCY
+	EN	Prices
+
+PLUGIN_SQUEEZEWAX_CURRENCY_DESC
+	EN	Prices in the album menus are in your Discogs account's currency. SqueezeWax learns which currency that is when a collection sync runs, so press Sync collection now after entering your token.
+
+PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN
+	EN	Currency: %s
+
+PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN
+	EN	Not known yet. Press Sync collection now.
+
+PLUGIN_SQUEEZEWAX_ACTIONS_HINT
+	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING
+	EN	Testing...
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_MISSING
+	EN	Enter a token before testing it.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK
+	EN	Token is valid, authenticated as Discogs user "%s".
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER
+	EN	Token is valid.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED
+	EN	Discogs rejected this token. Check that it was copied correctly and has not been revoked.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND
+	EN	Discogs returned "not found" for the identity check, which is unexpected. Try again, or check for a SqueezeWax update.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED
+	EN	Discogs is rate-limiting this connection right now. Wait a minute and try again.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR
+	EN	Discogs returned a server error. Try again later.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE
+	EN	Got no response from Discogs. Check this server's network connection.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY
+	EN	Discogs returned an empty response.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
+	EN	Discogs returned a response SqueezeWax could not understand.
+
+PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
+	EN	Token test failed (HTTP %s).
+
+
+PLUGIN_SQUEEZEWAX_SYNC
+	EN	Discogs collection
+
+PLUGIN_SQUEEZEWAX_SYNC_DESC
+	EN	SqueezeWax reads your Discogs collection to work out which albums in this library you own on record. It only counts what is there, and your library is not changed. Your collection itself is not stored: SqueezeWax keeps only its own conclusions about your albums, the time of the last sync and how many items it found. This happens automatically during each library rescan, and you can run it now with the button.
+
+PLUGIN_SQUEEZEWAX_SYNC_BUTTON
+	EN	Sync collection now
+
+PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING
+	EN	Syncing...
+
+PLUGIN_SQUEEZEWAX_SYNC_LAST
+	EN	Last synced
+
+PLUGIN_SQUEEZEWAX_SYNC_NEVER
+	EN	Never
+
+PLUGIN_SQUEEZEWAX_SYNC_ITEMS
+	EN	items
+
+PLUGIN_SQUEEZEWAX_SYNC_RUNNING
+	EN	A collection sync is running.
+
+PLUGIN_SQUEEZEWAX_SYNC_OK
+	EN	Synced %s items in %s requests.
+
+PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN
+	EN	Add a Discogs personal access token above, and save it, before syncing.
+
+PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING
+	EN	A collection sync is already running. Its result will appear here when it finishes.
+
+PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED
+	EN	Discogs rejected the token, so the collection could not be read. Generate a new one and paste it in above.
+
+PLUGIN_SQUEEZEWAX_SYNC_FAIL
+	EN	Collection sync failed (%s) - see the server log. Previous results are unchanged.
+
+PLUGIN_SQUEEZEWAX_SYNC_REFUSED
+	EN	The collection was read, but ownership could not be updated while a library scan is running. It will be updated automatically when the scan finishes.
+
+PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH
+	EN	The collection changed while it was being read, so ownership was not updated. Nothing was changed. Try again in a moment.
+
+PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN
+	EN	Discogs did not report how many items your collection holds, so it could not be shown to be complete. Ownership was not updated and nothing was changed.
+
+PLUGIN_SQUEEZEWAX_QUEUE
+	EN	Review queue
+
+PLUGIN_SQUEEZEWAX_QUEUE_DESC
+	EN	Albums SqueezeWax could not decide about on its own.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TOKEN_PAUSED
+	EN	Discogs rejected the access token, so automatic collection syncs are paused. Ownership of new albums will not be shown until you fix the token in Settings or press "Sync collection now".
+
+PLUGIN_SQUEEZEWAX_QUEUE_OPEN
+	EN	Open the review queue
+
+PLUGIN_SQUEEZEWAX_QUEUE_OPEN_ITEMS
+	EN	%s waiting
+
+PLUGIN_SQUEEZEWAX_QUEUE_EMPTY
+	EN	Nothing to review. Every album is either matched, owned, or neither.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ALBUM
+	EN	Album
+
+PLUGIN_SQUEEZEWAX_QUEUE_ARTIST
+	EN	Artist
+
+PLUGIN_SQUEEZEWAX_QUEUE_REASON
+	EN	Why
+
+PLUGIN_SQUEEZEWAX_REASON_CONFLICT
+	EN	The Discogs tags on this album's files disagree.
+
+PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS
+	EN	You own more than one record with this title, and nothing here can choose between them.
+
+PLUGIN_SQUEEZEWAX_REASON_ARTIST_DISAGREE
+	EN	You own a record with this title, but by a different artist.
+
+PLUGIN_SQUEEZEWAX_REASON_ARTIST_ABSENT
+	EN	You own a record with this title, but one side has no artist to compare.
+
+PLUGIN_SQUEEZEWAX_REASON_VARIOUS_GATED
+	EN	Both sides say various artists, which is not evidence that this is the record you own.
+
+PLUGIN_SQUEEZEWAX_REASON_ORPHAN
+	EN	This match belongs to an album that is no longer in your library.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE
+	EN	One file carries two tags naming different releases
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS
+	EN	These files name different releases
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL
+	EN	Only some of these files carry a Discogs tag
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NO_TAG_ON
+	EN	No Discogs tag on
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
+	EN	Conflict recorded, tags no longer readable.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED
+	EN	The tags agree again. The next scan will clear this.
+
+PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON
+	EN	Show tags
+
+PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON_RUNNING
+	EN	Reading tags...
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON
+	EN	Choose from my collection
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON_RUNNING
+	EN	Fetching your collection...
+
+PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST
+	EN	Choosing fetches your collection from Discogs first; this takes a few seconds.
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE
+	EN	Choose the record you own
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_MATCHING
+	EN	In your collection under this title
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_ALL
+	EN	Everything else in your collection
+
+PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_NONE
+	EN	Your collection is empty, so there is nothing to choose from.
+
+PLUGIN_SQUEEZEWAX_QUEUE_FILTER
+	EN	Filter
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON
+	EN	This one
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON_RUNNING
+	EN	Linking...
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELEASE_ID
+	EN	Release ID
+
+PLUGIN_SQUEEZEWAX_QUEUE_TRACKS
+	EN	Tracks
+
+PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION
+	EN	Data provided by Discogs
+
+PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS
+	EN	View on Discogs
+
+PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER
+	EN	Ownership changes at the next collection sync, not now.
+
+PLUGIN_SQUEEZEWAX_QUEUE_LINKED
+	EN	Linked.
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECTED
+	EN	Removed.
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINKED
+	EN	Moved onto that album.
+
+PLUGIN_SQUEEZEWAX_QUEUE_FAILED
+	EN	That did not work. Check the server log.
+
+PLUGIN_SQUEEZEWAX_QUEUE_NOT_FOUND
+	EN	That album is no longer there. The page may be out of date; reload it.
+
+PLUGIN_SQUEEZEWAX_QUEUE_CONFIRM_REQUIRED
+	EN	Nothing was removed, because the confirmation was missing.
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON
+	EN	Remove this match
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON_RUNNING
+	EN	Removing...
+
+PLUGIN_SQUEEZEWAX_QUEUE_REJECT_CONFIRM
+	EN	Remove this match? It cannot be undone, and the album will be matched from scratch at the next scan.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS
+	EN	Matches with no album
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_DESC
+	EN	These matches belong to albums that are no longer in your library, usually because files moved. Nothing removes them on its own.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_EMPTY
+	EN	No matches are orphaned.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_MOVE_TO
+	EN	Move it onto
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT
+	EN	No album in your library has the same artist, title and track count, so this can only be removed.
+
+PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED
+	EN	These albums have the same artist, title and track count, but their own tags already identify them, so this match is not needed there. Remove it:
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON
+	EN	Move it here
+
+PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON_RUNNING
+	EN	Moving...
+
+PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING
+	EN	You own a pressing
+
+PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION
+	EN	You own a version
+
+PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED
+	EN	Discogs: Browse your pressing
+
+PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER
+	EN	Discogs: Browse all versions
+
+PLUGIN_SQUEEZEWAX_MENU_DETAILS_RELEASE
+	EN	Discogs: Show your pressing's details
+
+PLUGIN_SQUEEZEWAX_MENU_DETAILS_MASTER
+	EN	Discogs: Show master details
+
+PLUGIN_SQUEEZEWAX_DETAILS_YEAR
+	EN	Year %s
+
+PLUGIN_SQUEEZEWAX_DETAILS_HAVE
+	EN	Have %s
+
+PLUGIN_SQUEEZEWAX_DETAILS_WANT
+	EN	Want %s
+
+PLUGIN_SQUEEZEWAX_DETAILS_RATING
+	EN	Rating %s / 5 (%s ratings)
+
+PLUGIN_SQUEEZEWAX_DETAILS_FOR_SALE
+	EN	For sale: %s
+
+PLUGIN_SQUEEZEWAX_DETAILS_FOR_SALE_FROM
+	EN	For sale: %s, from %s %s
+
+PLUGIN_SQUEEZEWAX_DETAILS_NONE_FOR_SALE
+	EN	None for sale
+
+PLUGIN_SQUEEZEWAX_DETAILS_NOTICE
+	EN	Data provided by Discogs
+
+PLUGIN_SQUEEZEWAX_DETAILS_BUSY
+	EN	Discogs is busy, try again in %s s
+
+PLUGIN_SQUEEZEWAX_DETAILS_UNAUTHORIZED
+	EN	Discogs rejected the token – check Settings
+
+PLUGIN_SQUEEZEWAX_DETAILS_NOT_FOUND
+	EN	Not found on Discogs
+
+PLUGIN_SQUEEZEWAX_DETAILS_NO_ANSWER
+	EN	Discogs did not answer – try again
+
+PLUGIN_SQUEEZEWAX_DETAILS_NO_TOKEN
+	EN	Add your Discogs token in Settings
+
+PLUGIN_SQUEEZEWAX_LIBRARY_OWNED
+	EN	Records I own
+
+PLUGIN_SQUEEZEWAX_DERIVE
+	EN	Master releases
+
+PLUGIN_SQUEEZEWAX_DERIVE_DESC
+	EN	Some albums are identified by a pressing that SqueezeWax has not yet linked to the record it is a pressing of. It asks Discogs about them a few at a time, in the background, so ownership can keep changing for a while after a scan.
+
+PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS
+	EN	Deriving masters: %s of %s releases
+
+PLUGIN_SQUEEZEWAX_DERIVE_RUNNING
+	EN	running
+
+PLUGIN_SQUEEZEWAX_DERIVE_WAITING
+	EN	waiting
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION
+	EN	Discogs
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA
+	EN	Data provided by Discogs.
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
+	EN	This application uses Discogs' API but is not affiliated with, sponsored or endorsed by Discogs. 'Discogs' is a trademark of Zink Media, LLC.
+
+PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE
+	EN	discogs.com

@@ -32,6 +32,11 @@ use constant DB_SCHEMA => 'squeezewax';
 my @MIGRATIONS = (
 	\&_migration_1,
 	\&_migration_2,
+	\&_migration_3,
+	\&_migration_4,
+	\&_migration_5,
+	\&_migration_6,
+	\&_migration_7,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -284,7 +289,8 @@ sub _ensureWalMode {
 	my ( $class, $dbh ) = @_;
 
 	if (main::SCANNER) {
-		# The scanner never mutates the file - see decisions §2. Read only.
+		# The scanner never changes the file's journal mode - see decisions §2.
+		# Read only. (It does write rows, and since step 8b the pass's too.)
 		my ($mode) = $dbh->selectrow_array( 'PRAGMA ' . DB_SCHEMA . '.journal_mode' );
 
 		if ( !$mode || lc($mode) ne 'wal' ) {
@@ -384,7 +390,7 @@ sub _checkVersion {
 # them, and a separate attached file makes such a reference impossible to
 # declare in the first place, since SQLite resolves FK targets within one
 # database. And none between our own tables either: LMS sets
-# PRAGMA foreign_keys = ON connection-wide (Slim/Utils/SQLiteHelper.pm:99), so
+# PRAGMA foreign_keys = ON connection-wide (Slim/Utils/SQLiteHelper.pm:102), so
 # an ON DELETE CASCADE here would be live, and nothing is worth a cascade that
 # could remove a confirmed match.
 sub _migration_1 {
@@ -417,9 +423,10 @@ sub _migration_1 {
 			                                CHECK (state IN ('candidate','confirmed')),
 			matched_at              INTEGER,
 
-			-- Orphan-recovery snapshot, captured at confirm time. Lives here
-			-- rather than in discogs_collection so that recovery survives a
-			-- collection wipe.
+			-- Orphan-recovery snapshot. Lives here rather than in
+			-- discogs_collection so that recovery survives a collection wipe.
+			-- "Captured at confirm time" until decisions §15.4 moved it to
+			-- identification; migration 3 carries the corrected wording.
 			snapshot_artist         TEXT,
 			snapshot_album_title    TEXT,
 			snapshot_track_count    INTEGER,
@@ -434,14 +441,16 @@ sub _migration_1 {
 	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_mb_album
 		ON discogs_match (mb_album_id)');
 
-	# The orphan lookup: confirmed rows whose snapshot might fit a new album.
+	# The orphan lookup. Keyed on state because §14.8 was still current when
+	# this was written; §15.5 moved recovery's predicate onto match_tier, and
+	# migration 3 rebuilds the index as (match_tier, snapshot_track_count).
 	$dbh->do('CREATE INDEX IF NOT EXISTS squeezewax.discogs_match_orphan
 		ON discogs_match (state, snapshot_track_count)');
 
 	# discogs_release_cache. Untouched by anything LMS does to its own
-	# database, so relinks and the v2 completeness check cost no API calls once
-	# a release has been fetched once. GET /releases/{id} is the only endpoint
-	# that returns a tracklist, which makes this worth keeping indefinitely.
+	# database. Not written in v1 - retention here is constrained by the
+	# Discogs API Terms of Use, not "worth keeping indefinitely"; see
+	# squeezewax-v1-decisions.md §9.5 for the retention policy.
 	$dbh->do(q{
 		CREATE TABLE IF NOT EXISTS squeezewax.discogs_release_cache (
 			discogs_release_id INTEGER NOT NULL PRIMARY KEY,
@@ -557,6 +566,577 @@ sub _migration_2 {
 			PRIMARY KEY (album_key, tier)
 		)
 	});
+
+	return 1;
+}
+
+# Migration 3: rebuild discogs_match, and drop the two tables that ride with
+# it. Plan: plans/build-order-step-6-7-ownership.md §1.2; obligations (a)-(i)
+# are TODO.md's 2026-09-13 item.
+#
+# A 12-step table rebuild, not an ALTER. SQLite cannot modify an existing CHECK
+# constraint, and this changes three of them at once: match_tier narrows to
+# ('strict','manual') (§14.1), state becomes nullable and loses its default
+# (§14.8), and ownership arrives (§13.3, §15.3). ALTER COLUMN ... DROP NOT NULL
+# would cover the nullability half only, and it landed in SQLite 3.53.0 while
+# LMS bundles 3.46.1 - DBD::SQLite 1.76, refs/slimserver/CPAN/arch/5.32..5.42,
+# verified 2026-09-20. So the rebuild is required rather than chosen.
+sub _migration_3 {
+	my $dbh = shift;
+
+	# Shape check first, before anything reads or writes a row.
+	#
+	# _migrate bumps user_version only after this sub returns (:339-348), so a
+	# rebuild that commits and then dies before the bump would re-run against
+	# the new shape on the next connect, and the copy would fail on the column
+	# it just dropped - leaving the plugin dead on every start. The same
+	# reasoning as _migration_2's column check, one table wider.
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	if ( $columns{ownership} && !$columns{snapshot_total_duration} ) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('discogs_match is already rebuilt; skipping to the drops');
+	}
+	else {
+		_rebuildMatchTable($dbh);
+	}
+
+	# (h) discogs_no_match narrows to CHECK (tier IN ('strict')) (§15.6). DROP
+	# and recreate rather than copy: the table is regenerable in full, so a
+	# surviving 'structural' row should be discarded, not fail the copy. The
+	# cost is one rescan's worth of re-reads for untagged albums.
+	$dbh->do('DROP TABLE IF EXISTS squeezewax.discogs_no_match');
+	$dbh->do(q{
+		CREATE TABLE squeezewax.discogs_no_match (
+			album_key        TEXT    NOT NULL
+			                         CHECK (length(album_key) = 32),
+			tier             TEXT    NOT NULL
+			                         CHECK (tier IN ('strict')),
+			source_timestamp INTEGER,
+			checked_at       INTEGER NOT NULL,
+			PRIMARY KEY (album_key, tier)
+		)
+	});
+
+	# (i) discogs_collection is not a v1 table (§13.2, §15.10). Migration 1
+	# created it and nothing ever read or wrote it - confirmed by grep over
+	# SqueezeWax/ and scripts/, and by finding it empty on the reference server
+	# (2026-09-20). The index goes with the table, but drop it by name first so
+	# the intent is on the record.
+	$dbh->do('DROP INDEX IF EXISTS squeezewax.discogs_collection_release');
+	$dbh->do('DROP TABLE IF EXISTS squeezewax.discogs_collection');
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('dropped discogs_collection; recreated discogs_no_match at tier strict');
+
+	return 1;
+}
+
+# Migration 4: the review queue's one column (§15.16 part 2, step 8 plan §1.1).
+#
+# review_reason answers "why is this album in the queue", which nothing else in
+# the schema can answer. state cannot: since §13.4 an identified row is
+# 'candidate' whether it is contested or not, and on the reference server 305 of
+# 329 candidates are simply albums the user does not own. Nor can the pass
+# recompute it - four of the six values are conclusions about a collection that
+# §13.2 requires be discarded at the end of every sync.
+#
+# Six values under one column rather than two, because they are one fact with
+# one consumer. Their writers differ and do not overlap: 'conflict' is the
+# importer's alone and is sticky (§15.16 part 3); the other five are the
+# ownership pass's and are re-derived every sync. NULL means "not in the queue".
+#
+# No backfill (R9). A pass reason is re-derived at the next sync, so backfilling
+# one would be writing what the pass is about to write anyway; 'conflict' cannot
+# be backfilled at all, because nothing before this recorded which rows were
+# contested (§15.16, "where the evidence is thin").
+#
+# No index: the queue reads ~500 rows once per page render, and an index on a
+# column that is NULL in almost every row would earn nothing.
+#
+# ALTER TABLE ADD COLUMN is not idempotent - it throws "duplicate column name"
+# on a re-run - so the column list is checked first, exactly as _migration_2 and
+# _migration_3 do. The guard is `SELECT name FROM pragma_table_info(?)` rather
+# than `PRAGMA squeezewax.table_info(...)` so the table name stays a bind
+# parameter, which is the form both existing guards use.
+#
+# A CHECK on an added column is permitted (sqlite.org/lang_altertable.html: the
+# restrictions are PRIMARY KEY/UNIQUE, a non-constant default, NOT NULL without
+# a default, REFERENCES under enforced foreign keys, and GENERATED ... STORED -
+# a CHECK is none of them). Testing it against pre-existing rows arrived in
+# SQLite 3.37.0, and LMS bundles 3.22.0 for perl 5.20-5.30 - which changes
+# nothing here, since every existing row takes NULL and `NULL IN (...)` is NULL,
+# which a CHECK treats as satisfied. OBSERVED on 3.50.6, schema-qualified, on an
+# attached database; INFERRED for 3.22.0 from the documentation.
+sub _migration_4 {
+	my $dbh = shift;
+
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	return 1 if $columns{review_reason};
+
+	$dbh->do(q{
+		ALTER TABLE squeezewax.discogs_match ADD COLUMN review_reason TEXT
+			CHECK (review_reason IN ('conflict','ambiguous','artist-disagree',
+			                         'artist-absent','various-gated','orphan'))
+	});
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('added discogs_match.review_reason (NULL on every existing row)');
+
+	return 1;
+}
+
+# Migration 5: discogs_sync_state, the one "last synced" marker. Decisions
+# §15.18 part 7.
+#
+# One row or none. Both sync paths write it - the server's after its pass
+# commits, the scanner's inside the pass's own transaction - and
+# API::Async->status reads it for the settings page. It replaces the prefs
+# discogsLastSynced and discogsLastSyncItems, because the scanner cannot persist
+# a pref at all (Slim/Utils/Prefs/Namespace.pm:303): a page reading prefs would
+# show "last synced" going stale on a server where the scan-time sync works.
+#
+# No row is inserted. An absent row means "never synced", which is what the
+# retired discogsLastSynced => 0 default expressed. The single-row shape is the
+# database's to enforce, not the writers': CHECK (id = 0), and both writers use
+# INSERT OR REPLACE with id 0.
+#
+# source is load-bearing, not decoration: Plugin::_syncTick skips the fallback
+# only for a 'scan' marker written during the scan that just finished, and a
+# manual sync in the same window must not suppress it (§15.18 part 8). It is
+# recorded and not displayed.
+#
+# CREATE TABLE IF NOT EXISTS is re-runnable as it stands, which is migration
+# 1's form. _migration_4's pragma_table_info guard exists for ADD COLUMN and is
+# not needed here.
+sub _migration_5 {
+	my $dbh = shift;
+
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_sync_state (
+			id          INTEGER PRIMARY KEY CHECK (id = 0),
+			last_synced INTEGER NOT NULL,
+			items       INTEGER,
+			source      TEXT    NOT NULL CHECK (source IN ('server','scan'))
+		)
+	});
+
+	return 1;
+}
+
+# Migration 6: the derived master arm. Decisions §15.22, build-order step 8c.
+#
+# Node F (Ownership.pm) compares discogs_master_id, which is written only from a
+# DISCOGS_MASTER_ID-family TAG (Match.pm's _recordMatch and recordManual, from
+# Tags.pm's _masterId). Nothing resolved a release id to its master, so on the
+# reference library the column was NULL on all but 2 of 506 rows and node F had
+# never once fired - §15.19. Derive.pm fills these three, and node F reads them.
+#
+# THREE columns, not one, because the pair of the first two has to express four
+# states and the middle one carries most of the weight (§15.22):
+#
+#   all NULL                                 never looked
+#   both ids set                             looked, found a master
+#   derived_from_release_id set, master NULL  LOOKED, AND THERE IS NO MASTER -
+#                                            a 404, or a release Discogs reports
+#                                            with master_id absent or 0. Without
+#                                            this state the 29 masterless
+#                                            releases on the reference library,
+#                                            and the 3 whose releases Discogs
+#                                            has deleted, would be re-fetched on
+#                                            every run forever.
+#   derived_from_release_id <> the row's
+#     current discogs_release_id             stale: the tags now name a
+#                                            different release. Re-derive, and
+#                                            until then node F ignores it.
+#
+# Kept SEPARATE from discogs_master_id, which stays tag-only: a tag is the
+# user's assertion and ours never silently overwrites it, and when tags change we
+# need to know which of the two to re-derive. Both are regenerable, so §2a's
+# "never delete a row carrying a decision or a recovery snapshot" is unaffected -
+# these three constrain nothing.
+#
+# INTEGER, all three. §9.5 permits a bare identifier ("not Content in any
+# meaningful sense. Unconstrained; kept indefinitely") and forbids everything
+# else the release payload carries - no title, no artist, no tracklist, and
+# discogs_release_cache stays unwritten. scripts/derive-check.pl asserts that
+# rather than trusting it.
+#
+# derived_at is for the log and for a human reading the table. Nothing branches
+# on it, deliberately: an age-based re-fetch is exactly the "repeated to keep it
+# fresh" that §15.22 rules out.
+#
+# No CHECK and no index. A master id is an opaque integer with no enumerable
+# domain, and the selection query below is a full scan of ~500 rows once per run.
+#
+# ALTER TABLE ADD COLUMN throws "duplicate column name" on a re-run, so the
+# column list is checked first - _migration_4's pragma_table_info guard, which
+# exists for exactly this and is re-used here rather than re-invented. One guard
+# for all three: they are added together and there is no path that could leave
+# one behind, since SQLite makes DDL on an attached schema transactional and
+# _migrate wraps the sub in an eval that refuses to bump user_version on failure.
+sub _migration_6 {
+	my $dbh = shift;
+
+	my %columns = map { $_->{name} => 1 } @{
+		$dbh->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match'
+		) || []
+	};
+
+	return 1 if $columns{derived_master_id};
+
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_master_id INTEGER');
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_from_release_id INTEGER');
+	$dbh->do('ALTER TABLE squeezewax.discogs_match ADD COLUMN derived_at INTEGER');
+
+	main::INFOLOG && $log->is_info
+		&& $log->info('added discogs_match.derived_master_id, derived_from_release_id '
+			. 'and derived_at (NULL on every existing row)');
+
+	return 1;
+}
+
+# Migration 7: discogs_meta, our own key/value store. Decisions §15.23 and
+# §15.24, step 8c's follow-up.
+#
+# It exists for one caller so far: the logic version (Tags.pm's LOGIC_VERSION),
+# compared at server start against the value stored here, so that a change to how
+# identification DECIDES can say "re-decide". §15.23 measured the failure it
+# prevents - _canSkip skips every album whose files have not changed, so step 8c's
+# cross-track rule reached none of the identifications it was written to reject,
+# and one album stayed badged as owned on tags the same build called contested.
+#
+# IN THE DATABASE, NOT IN A PREF, and the reason is a specific failure: a pref
+# would say "already done" beside a squeezewax.db restored from before the logic
+# change, leaving stale identifications that nothing would ever re-examine. The
+# marker has to travel with the rows it describes.
+#
+# §9.5 is not engaged. Nothing Discogs sent is stored here - a key we chose and a
+# number we wrote are our own conclusions, which §9.5 stores without limit.
+#
+# TEXT value for both, with no enum and no CHECK: the store is general, and the
+# one key it holds today happens to be a number. Callers convert.
+#
+# CREATE TABLE IF NOT EXISTS is re-runnable as it stands, which is migration 1's
+# form. _migration_4's pragma_table_info guard exists for ADD COLUMN and is not
+# needed here.
+sub _migration_7 {
+	my $dbh = shift;
+
+	$dbh->do(q{
+		CREATE TABLE IF NOT EXISTS squeezewax.discogs_meta (
+			key   TEXT NOT NULL PRIMARY KEY,
+			value TEXT NOT NULL
+		)
+	});
+
+	return 1;
+}
+
+# The 12 columns migration 3 carries forward, named explicitly in both halves
+# of the copy so a column-order slip cannot pass. snapshot_total_duration is
+# deliberately absent: that is obligation (f).
+my @MATCH_COLUMNS = qw(
+	album_key
+	mb_album_id
+	lms_album_id
+	discogs_release_id
+	discogs_master_id
+	match_tier
+	state
+	matched_at
+	snapshot_artist
+	snapshot_album_title
+	snapshot_track_count
+	source_timestamp
+);
+
+# Steps 2-7 of the plan's §1.2. A plain function, called as one (CLAUDE.md).
+sub _rebuildMatchTable {
+	my $dbh = shift;
+
+	# (a) Refuse loudly, before the transaction opens and before anything has
+	# been changed. The narrowed CHECK would otherwise fail part-way through
+	# the copy, on the one table that is not disposable. That no such row
+	# exists was inferred when the obligation was written; it was verified on
+	# the reference server 2026-09-20, and this still runs, because the
+	# reference server is not the only database this will meet.
+	my ($legacy) = $dbh->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.discogs_match
+		   WHERE match_tier IN ('structural','fuzzy')}
+	);
+
+	if ($legacy) {
+		die "discogs_match holds $legacy row(s) at a tier v1 removed "
+			. "('structural' or 'fuzzy'); refusing to rebuild the table\n";
+	}
+
+	my ($before) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
+
+	my $columns = join ', ', @MATCH_COLUMNS;
+
+	# One transaction for the whole rebuild. The server handle is
+	# AutoCommit => 1 (Slim/Schema.pm:274), and SQLite makes DDL on an attached
+	# schema transactional, so a failure anywhere below leaves the old table
+	# exactly as it was.
+	$dbh->begin_work;
+
+	eval {
+		# NULL match_tier and NULL state both mean "no identification": the row
+		# exists for its ownership conclusion alone (§14.1, §14.8, §15.3). A
+		# CHECK that evaluates to NULL is not a violation, so neither enum needs
+		# an explicit OR ... IS NULL.
+		#
+		# state carries no DEFAULT (obligation (c)): with one, an insert that
+		# omitted it would write 'candidate' and drop an auto-badged album into
+		# the review queue - wrong rather than loud.
+		#
+		# ownership DOES carry one, and 'absent' is the only safe value for it:
+		# the importer's two INSERTs do not name the column (Match.pm:546-569,
+		# :616-630), so without a default a NOT NULL column would fail both and
+		# stop identification altogether. 'absent' is §15.3's own value for a
+		# row no sync has concluded on, and it only withholds a badge until the
+		# next sync - not §14.8's hazard, which put albums into the queue.
+		$dbh->do(q{
+			CREATE TABLE squeezewax.discogs_match_new (
+				album_key            TEXT    NOT NULL PRIMARY KEY
+				                             CHECK (length(album_key) = 32),
+				mb_album_id          TEXT,
+				lms_album_id         INTEGER,
+				discogs_release_id   INTEGER,
+				discogs_master_id    INTEGER,
+				match_tier           TEXT    CHECK (match_tier IN ('strict','manual')),
+				state                TEXT    CHECK (state IN ('candidate','confirmed')),
+				ownership            TEXT    NOT NULL DEFAULT 'absent'
+				                             CHECK (ownership IN ('exact','version','absent')),
+				matched_at           INTEGER,
+
+				-- Orphan-recovery snapshot, captured at identification (§15.4).
+				snapshot_artist      TEXT,
+				snapshot_album_title TEXT,
+				snapshot_track_count INTEGER,
+				source_timestamp     INTEGER
+			)
+		});
+
+		# (e) state and match_tier copy forward unchanged; ownership takes its
+		# default on every row. The ownership pass, not the migration,
+		# re-derives state.
+		$dbh->do("INSERT INTO squeezewax.discogs_match_new ($columns)
+			SELECT $columns FROM squeezewax.discogs_match");
+
+		my ($after) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match_new');
+
+		if ( $after != $before ) {
+			die "copied $after rows into discogs_match_new, expected $before\n";
+		}
+
+		# Wider than obligation (e) asks for - it names state, match_tier and
+		# the row count - because a column-order slip in the copy would satisfy
+		# the narrow version and silently transpose two columns. EXCEPT treats
+		# NULLs as equal, which is what is wanted here.
+		for my $pair ( [ 'discogs_match_new', 'discogs_match' ],
+		               [ 'discogs_match', 'discogs_match_new' ] ) {
+			my ($differing) = $dbh->selectrow_array(
+				"SELECT COUNT(*) FROM (
+					SELECT $columns FROM squeezewax.$pair->[0]
+					EXCEPT
+					SELECT $columns FROM squeezewax.$pair->[1]
+				)"
+			);
+
+			if ($differing) {
+				die "$differing row(s) in $pair->[0] have no identical row in "
+					. "$pair->[1] across the copied columns\n";
+			}
+		}
+
+		$dbh->do('DROP TABLE squeezewax.discogs_match');
+		$dbh->do('ALTER TABLE squeezewax.discogs_match_new RENAME TO discogs_match');
+
+		# The three lookup indexes, recreated as migration 1 had them. Dropping
+		# the table took them with it.
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_release
+			ON discogs_match (discogs_release_id)');
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_lms_album
+			ON discogs_match (lms_album_id)');
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_mb_album
+			ON discogs_match (mb_album_id)');
+
+		# (g) The orphan index moves from (state, snapshot_track_count) to
+		# (match_tier, snapshot_track_count), because §15.5 moved recovery's
+		# predicate off state: an orphan is a row carrying an identification and
+		# a snapshot, whatever its state (Importer.pm:355-359).
+		#
+		# The obligation also asks for an EXPLAIN QUERY PLAN showing the
+		# recovery lookup using it. There is no such lookup to plan: snapshotRows
+		# selects the whole table and _prePass matches in Perl, and the two
+		# statements that name snapshot_track_count (Match.pm:412-416, :662-672)
+		# are keyed on album_key. The index is rebuilt as (g) requires and the
+		# query-plan check is recorded in TODO.md as having nothing to check.
+		$dbh->do('CREATE INDEX squeezewax.discogs_match_orphan
+			ON discogs_match (match_tier, snapshot_track_count)');
+
+		$dbh->commit;
+
+		1;
+	} or do {
+		my $err = $@ || 'unknown error';
+
+		eval { $dbh->rollback; 1 } or $log->error("rollback after a failed rebuild also failed: $@");
+
+		die "rebuilding discogs_match failed: $err";
+	};
+
+	if ( main::INFOLOG && $log->is_info ) {
+		my $states = $dbh->selectall_arrayref(
+			q{SELECT COALESCE(state,'(null)') AS state, COUNT(*) AS n
+			    FROM squeezewax.discogs_match GROUP BY 1 ORDER BY 1},
+			{ Slice => {} }
+		) || [];
+
+		$log->info( "rebuilt discogs_match: $before rows copied, ownership defaulted to "
+			. "'absent'; by state: "
+			. ( join ', ', map { "$_->{state}=$_->{n}" } @$states ) );
+	}
+
+	return 1;
+}
+
+=head2 syncState()
+
+The "last synced" marker of decisions §15.18 part 7, as a hashref with
+C<last_synced>, C<items> and C<source>; or undef when there is none, which means
+never synced, or when the database is not ready.
+
+=cut
+
+# Both processes read and write discogs_sync_state through these two, so the
+# table's shape is named in one file - this one, which created it.
+#
+# Slim::Schema is called, not `use`d: this file is loaded by suites that have no
+# LMS schema at all, and both processes that load it for real have the database
+# up before any plugin loads (slimserver.pl:437; scanner.pl:230 against :275).
+sub syncState {
+	my $class = shift;
+
+	return undef unless $class->isReady;
+
+	my $row = eval {
+		Slim::Schema->dbh->selectrow_hashref(
+			'SELECT last_synced, items, source FROM ' . DB_SCHEMA
+			. '.discogs_sync_state WHERE id = 0'
+		);
+	};
+
+	if ($@) {
+		$log->error("could not read the sync marker: $@");
+
+		return undef;
+	}
+
+	return $row;
+}
+
+=head2 recordSync( $items, $source [, $when ] )
+
+Write the marker. C<$source> is C<'server'> or C<'scan'>. Dies on failure, so
+the caller decides what a lost marker means for it.
+
+=cut
+
+# INSERT OR REPLACE with id 0: CHECK (id = 0) makes the one-row shape the
+# database's to enforce, and a writer cannot add a second row by mistake.
+#
+# Whether this commits is the handle's business, not this sub's. In the server
+# (AutoCommit on) it is its own statement. In the scanner it rides the pass's
+# open transaction, which is the point: the marker and the pass share one fate
+# (§15.18 part 13).
+sub recordSync {
+	my ( $class, $items, $source, $when ) = @_;
+
+	Slim::Schema->dbh->do(
+		'INSERT OR REPLACE INTO ' . DB_SCHEMA . '.discogs_sync_state
+			(id, last_synced, items, source) VALUES (0, ?, ?, ?)',
+		undef, ( defined $when ? $when : time() ), $items, $source
+	);
+
+	return 1;
+}
+
+=head2 meta( $key )
+
+Read one C<discogs_meta> value. Returns undef when the key is absent, and also
+when the database is not ready - the two are the same to every caller, which
+should do nothing rather than guess.
+
+=cut
+
+# The store migration 7 created, read and written by these two and nothing else.
+# Both are deliberately minimal: a key in, a string out. The one caller that
+# exists (Plugin::_checkLogicVersion, decisions §15.24) needs no more, and a
+# general-purpose settings API on top of a two-column table would be invention.
+#
+# Neither dies. This is read and written at server start, where a failure must
+# leave the plugin running and the marker unchanged so the next start can retry -
+# §15.24's "record only on success" rule depends on setMeta reporting failure
+# rather than raising it.
+sub meta {
+	my ( $class, $key ) = @_;
+
+	return undef unless $class->isReady;
+
+	my $value = eval {
+		my ($v) = Slim::Schema->dbh->selectrow_array(
+			'SELECT value FROM ' . DB_SCHEMA . '.discogs_meta WHERE key = ?', undef, $key
+		);
+		$v;
+	};
+
+	if ($@) {
+		$log->error("could not read the $key marker: $@");
+
+		return undef;
+	}
+
+	return $value;
+}
+
+=head2 setMeta( $key, $value )
+
+Write one C<discogs_meta> value, replacing any previous one. Returns 1 on
+success and undef on failure, including when the database is not ready.
+
+=cut
+
+sub setMeta {
+	my ( $class, $key, $value ) = @_;
+
+	return undef unless $class->isReady;
+
+	my $ok = eval {
+		Slim::Schema->dbh->do(
+			'INSERT OR REPLACE INTO ' . DB_SCHEMA . '.discogs_meta (key, value) VALUES (?, ?)',
+			undef, $key, $value
+		);
+		1;
+	};
+
+	if ( !$ok ) {
+		$log->error("could not write the $key marker: $@");
+
+		return undef;
+	}
 
 	return 1;
 }
