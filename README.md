@@ -22,9 +22,9 @@ never plays audio and never changes your Discogs collection.
   fallback sync after the scan is then the one that works, and only if the
   server has HTTPS too).
 
-### For good results
+### Needed for exact pressings
 
-- **Tags (needed for the exact-pressing result).** SqueezeWax reads no tag by
+- **Tags.** SqueezeWax reads no tag by
   default: the list of tag names starts empty, and you fill it in under
   Settings (or let "Detect" find them). Your files need a tag holding the
   Discogs release ID. A tag value can be:
@@ -42,6 +42,13 @@ never plays audio and never changes your Discogs collection.
   `DISCOGS MASTER ID` or `DISCOGS_MASTER_RELEASE_ID`. These names are fixed
   and cannot be changed. If there is no master tag, SqueezeWax asks Discogs for
   the master of each identified release.
+
+  Without tag names SqueezeWax still works, by title and artist only (see
+  "Albums with no Discogs tag" below), but it cannot find the exact pressing
+  you own. The settings page says so while the list is empty.
+
+### For good results
+
 - **Collection.** Ownership is decided from your Discogs collection, so the
   records must be in it (the main collection listing is read, not the
   wantlist):
@@ -89,6 +96,23 @@ cannot go back to an older version: an update may change the SqueezeWax
 database, and an older version refuses a newer database. If you need a clean
 start, see [Starting over](#starting-over).
 
+## First-time setup
+
+1. Install SqueezeWax (above).
+2. Paste your Discogs token and press "Test token" (see
+   [Discogs setup](#discogs-setup)).
+3. Enter your release-ID tag name, or press "Detect" and copy what it finds.
+   Save.
+4. Run a library rescan: Basic Settings → Rescan Media Library → "Look for new
+   and changed media files".
+5. Wait until the settings page no longer shows "Master releases". If it says
+   "paused", press "Sync collection now".
+6. Press "Sync collection now" once. "You own a version" results appear after
+   this sync.
+
+Until the first collection sync has finished, the settings page shows a short
+version of these steps at the top.
+
 ## Discogs setup
 
 1. On the SqueezeWax settings page, follow the "Discogs Developer Settings"
@@ -115,16 +139,20 @@ other than empty.
 |---|---|---|
 | Discogs personal access token | Lets SqueezeWax read your collection. Required for ownership. | empty |
 | Test token (button) | Checks the token in the box, and saves the page. | |
-| Discogs collection → Sync collection now (button) | Reads your collection now and updates ownership. Also shows when it last synced and how many items it found. | |
+| Discogs collection → Sync collection now (button) | Reads your collection now and updates ownership. Also shows when it last synced and how many items it found. When the sync succeeds, it also starts the "Master releases" work if any is left. | |
 | Discogs release ID tags | Names of tags in your files that hold a Discogs release ID. Several may be listed, since different formats use different names. Leave blank to turn tag matching off. | empty |
 | Detect tag names (button "Detect") | Reads a sample of your albums and lists tags that look like a Discogs release ID, to copy into the box above. | |
 | Review queue | Link to the page listing albums SqueezeWax could not decide. | |
-| Master releases | Shown only while there is background work: progress of asking Discogs for master releases. | |
+| Master releases | Shown only while there is background work: progress of asking Discogs for master releases, and whether that work is "running", "waiting" (it resumes by itself within a minute) or "paused" (it resumes after the next library scan or "Sync collection now"). | |
 
 While a library scan is running, the page shows a "scan is running" notice in
 place of the Test token, Sync collection now and Detect buttons, and a save does
 not change the tag names (the token field still saves). The same notice appears
 if one of those actions is submitted anyway.
+
+While a scan is running or "Master releases" is shown, the page updates those
+lines by itself every 10 seconds, without reloading and without touching
+anything you have typed.
 
 ## Using it
 
@@ -242,7 +270,8 @@ the background — one Discogs request per album with a release ID).
    `squeezewax.db-shm` if they are there. Delete nothing else. (To keep a
    backup, copy all three somewhere first; restore all three together, with
    LMS stopped.)
-4. Start LMS, then run a library rescan ("look for new and changed music").
+4. Start LMS, then run a library rescan (Basic Settings → Rescan Media
+   Library → "Look for new and changed media files").
    This identifies your albums again and reads your collection.
 5. When the settings page no longer shows "Master releases" progress, press
    "Sync collection now" once.
