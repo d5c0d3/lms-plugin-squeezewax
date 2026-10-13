@@ -6557,3 +6557,97 @@ The verified order was re-run with `Slim::Utils::Versions->compareVersions` from
 2.0.0b1 < 2.0.0` compares -1, and `1.0.0-beta1` vs `1.0.0` compares 0. No pair
 differs from the text above.
 
+### 15.38 First-run help, live progress, scan labels, master-job recovery — before announcing
+
+**Decided 2026-10-13** (owner). Ships as 1.0.0b2; the announcement waits for it.
+
+1. **Empty tag names are shown.** While `discogsTagNames` is empty the settings
+   page says so, at the top: only title-and-artist matching runs, so no exact
+   pressing can be found; enter the tag name or press Detect. Why: production
+   (a fresh install) ran with no tag names, nothing said so, and the importer was
+   silently off (`Importer.pm` `use`, `Tags.pm` default list; report 74).
+2. **A first-time hint.** Until the first collection sync has ever completed, the
+   page shows the order of first steps: token, tag names, save, then a library
+   rescan — LMS **Basic Settings → "Rescan Media Library" → "Look for new and
+   changed media files"** (labels verified, slimserver `public/9.2` `strings.txt`
+   `SETUP_RESCAN`, `SETUP_STANDARDRESCAN`; page `HTML/EN/settings/server/basic.html`).
+3. **Status lines update without reloading.** While the "Master releases" line
+   or the "scan is running" notice is shown, the page refreshes those lines (and
+   the last-sync line) every 10 s by fetching the page itself in the background
+   and replacing only those elements. It never reloads the page, never submits
+   the form, and never touches what the user typed. It stops when neither line
+   is shown. Owner: "progress is there but changed only when refreshing the page."
+   No Discogs request: the page render issues none (Settings.pm comment at the
+   derive block: "no request: it is one count"; Claude Code re-verifies the whole
+   GET path).
+4. **Scan labels carry the plugin name:** "SqueezeWax: Discogs matching",
+   "SqueezeWax: Discogs collection sync".
+5. **README "First-time setup"**: a numbered list (install, token, tag names or
+   Detect, save, rescan, wait for "Master releases" to finish, press Sync
+   collection now once — the last step because a version badge waits for a sync
+   after Derive, verified report 71 C5). Tags move out of "For good results":
+   they are needed for exact pressings. All "new and changed music" wording →
+   LMS's own "Look for new and changed media files".
+
+6. **"Sync collection now" also starts the master job** when its sync succeeds.
+   **Reverses** the step 8c rule (comment above `Plugin.pm` `_deriveMasters`:
+   "The manual button is deliberately NOT a trigger"). Why: on production
+   (Docker, 2026-10-13) the job sat at "0 of 471 — waiting"; the button did not
+   restart it (verified: code, and the owner's log shows a button sync at
+   17:02:01 with no derive line); only a rescan did (observed by the owner).
+   The reason for the old rule — a user waiting on the page — does not apply:
+   the job starts after the button's sync has finished, and it already yields to
+   syncs and scans (`Derive::_yieldReason`). §15.15 part 1 still holds: it runs
+   only after a completed sync, never on a timer of its own.
+7. **The "Master releases" line tells the truth.** "waiting" only while a
+   re-arm timer is actually set (`Derive::_stop` with a `%REARM_ON` reason);
+   otherwise "paused — resumes after the next library scan or Sync collection
+   now". `Derive` exposes whether a resume is scheduled.
+8. **Why the first run never started on production is unverified.** The owner's
+   server log shows no SqueezeWax line after 17:02:26 although the job later ran
+   at Info — the same symptom as report 71 and the open `TODO.md` item on missing
+   info lines (decisions §15.26). Candidates, not established: the start-up tick
+   met a running scan (three `_rescanDone` lines in 1.3 s, "library scan in
+   progress"), or the first request failed. Items 6–7 make either recoverable
+   and visible.
+
+**Not done (recorded):** a settings-page button that starts a scan — a new
+feature, v2 (`TODO.md`).
+
+#### Re-verification (Claude Code, 2026-10-13)
+
+- **The two LMS labels** were re-read in `refs/slimserver/` at `public/9.1` @
+  `a670a38` (`slimserver.pl` `$VERSION = '9.1.2'`), not `public/9.2` as cited
+  above: `strings.txt:6797`/`:6801` `SETUP_RESCAN` EN "Rescan Media Library",
+  `:6872`/`:6876` `SETUP_STANDARDRESCAN` EN "Look for new and changed media
+  files", `:14986`/`:14990` `BASIC_SERVER_SETTINGS` EN "Basic Settings". Same
+  words as cited. `SETUP_STANDARDRESCAN` reaches the page through
+  `Slim/Music/Import.pm:88` (`%scanTypes`) and `Slim/Web/Settings/Server/
+  Basic.pm:150-151`; the select is `HTML/EN/settings/server/basic.html:84-92`.
+- **Where a scan label is shown.** A progress row's label is never named in our
+  code: `Importer.pm` and `ScanSync.pm` create rows named
+  `plugin_squeezewax_match` / `plugin_squeezewax_ownership`, and LMS builds the
+  label as `string( name . '_PROGRESS' )` (`Slim::Utils::Strings::string`
+  upper-cases the token, `Strings.pm:526`). Two readers: the scan progress page
+  (`Slim/Web/Pages/Progress.pm:37`, `HTML/EN/progress.html:3`,
+  `HTML/EN/ajaxProgress.txt:4`) and `serverstatus`'s `progressname`
+  (`Slim/Control/Queries.pm:3727`), which the web UI's scan status shows
+  (`HTML/EN/html/SqueezeJS/UI.js:2127`); other skins were not read. Changing the two `_PROGRESS` strings changes both.
+- **Item 3, the GET path.** A GET of the page with no parameters reaches
+  `Settings::handler`, which tests `detectTagNames`, `syncNow`, `testToken` and
+  `saveSettings` in turn; none is present, so it goes straight to
+  `SUPER::handler`. There (`Slim/Web/Settings.pm:135-285`) the only branches
+  that act are `doRescanNow` (`:139`), and `saveSettings` for each pref
+  (`:156-171`, and the message at `:198`); neither parameter is sent. The
+  rest builds page values and calls `beforeRender`, which reads prefs,
+  `Tags->tagNames`, one `COUNT(*)` for the queue, `Async->status` (one marker read), `Derive->progress` (one count),
+  `Derive->isRunning` and `->isResumeScheduled` - none issues a request or
+  writes. One caveat, not new: `handler` calls (and the base class may call,
+  `:189`) `Slim::Music::Import->stillScanning`, which, only if the external scanner
+  process has died, cleans up and notifies `['rescan','done']`
+  (`Slim/Music/Import.pm:736-743`), and that notification can lead to a
+  fallback sync a minute later. Every load of this page already does the same,
+  and so does LMS's own `serverstatus` (`Queries.pm:3719`), which the web UI
+  polls, so the refresh adds no path that was not there.
+  The refresh drops the page's own query string on purpose: a `doRescanNow=1`
+  there would start a scan.

@@ -1360,13 +1360,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-10-13: scan progress labels should carry the plugin name.** The
+- [x] **2026-10-13: scan progress labels should carry the plugin name.** The
       scan screen lines read "Discogs matching" and "Discogs collection sync"
       (`PLUGIN_SQUEEZEWAX_MATCH_PROGRESS`, `PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS`
       in `strings.txt`); the owner wants "SqueezeWax: Discogs matching" and
       "SqueezeWax: Discogs collection sync", so a user can tell whose lines they
       are. Strings only; a new build.
-- [ ] **2026-10-13: empty tag names are silent — a new user is not told
+      **Decided §15.38 item 4; built for 1.0.0b2.**
+- [x] **2026-10-13: empty tag names are silent — a new user is not told
       identification is off.** Found on the production server (report 74):
       fresh install, no tag names entered, so the identification importer is
       gated off (`Importer.pm` `use`, `Tags.pm` default `[]`) and the scan screen
@@ -1376,6 +1377,7 @@ Each names its sites so the work is mechanical rather than a search.
       notice on the settings page when no tag names are set (code + strings, new
       build); (2) a "First-time setup" list in the README next to the token (docs
       only). For the design chat.
+      **Decided §15.38 items 1, 2 and 5: both. Built for 1.0.0b2.**
 - [x] **2026-10-13: does a version badge wait for the next sync after Derive?**
       **Yes — measured, hand-off 71 (0.0.0.24, reset test C5/C6).** After a
       fresh scan and a finished Derive (474 releases, 22.6 min) ownership was
@@ -2234,6 +2236,24 @@ Each names its sites so the work is mechanical rather than a search.
       not yet seen on hardware.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-10-13: 1.0.0b2's hardware checks (decisions §15.38).** Offline
+      suites cover the server side; these need a browser and a server.
+      1. **Empty tag names:** the notice is at the top; it goes after a save
+         with a name. **First steps:** shown on a server with no sync marker,
+         gone after the first sync.
+      2. **Live refresh:** during a scan the three "scan is running" notices
+         turn back into buttons within ~10 s of the scan ending, with no reload,
+         and the buttons work. The "Master releases" line counts up on its own
+         and disappears when done; text typed into the token and tag fields
+         survives. Browser dev tools: one GET every 10 s with no query string,
+         and none once neither line is shown. No Discogs request in the log
+         from those GETs.
+      3. **Scan labels** read "SqueezeWax: Discogs matching" and "SqueezeWax:
+         Discogs collection sync" on the scan progress page.
+      4. **Master job:** with the job paused, the line reads "paused — …";
+         "Sync collection now" restarts it (log: a derive run starts after the
+         sync line). During a pacing stop it reads "waiting".
 
 - [x] **2026-10-13: Test token does not store the currency** (decisions §15.34
       item 3). → 2026-10-13: cause found by reading, and the profile request
@@ -3378,6 +3398,8 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **Settings-page button that starts a scan — v2 (§15.38).**
 
 - [ ] **Website design (beyond the README): later.**
 
