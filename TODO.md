@@ -1360,6 +1360,16 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-13: empty tag names are silent — a new user is not told
+      identification is off.** Found on the production server (report 74):
+      fresh install, no tag names entered, so the identification importer is
+      gated off (`Importer.pm` `use`, `Tags.pm` default `[]`) and the scan screen
+      shows only "Discogs collection sync"; the queue held 26 title-route items.
+      Nothing in the UI says why. The README lists tag names under "For good
+      results" (optional tier), not as first-time setup. Options: (1) a one-line
+      notice on the settings page when no tag names are set (code + strings, new
+      build); (2) a "First-time setup" list in the README next to the token (docs
+      only). For the design chat.
 - [x] **2026-10-13: does a version badge wait for the next sync after Derive?**
       **Yes — measured, hand-off 71 (0.0.0.24, reset test C5/C6).** After a
       fresh scan and a finished Derive (474 releases, 22.6 min) ownership was
