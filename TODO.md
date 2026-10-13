@@ -19,7 +19,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 Things that must happen before v1 ships, and that nothing else will force.
 Each names its sites so the work is mechanical rather than a search.
 
-- [ ] **Remove `discogsTestExcludeReleases`.** A development aid that hides
+- [x] **Remove `discogsTestExcludeReleases`.** Done, SHA_PLACEHOLDER (migrate(4) in `Plugin.pm`, asserted in `plugin-check.pl`). A development aid that hides
       release ids from the ownership pass, so "a record left the collection"
       can be exercised without altering a real one. It **keeps its place
       through the build-out** — it proved steps 6-7's check 6 on hardware
@@ -421,7 +421,7 @@ Each names its sites so the work is mechanical rather than a search.
       this). Both were browser-side facts, and neither offline suite could
       have found them without being told what to look for. **A browser-level
       check of this page is the only thing that would catch the third.**
-- [ ] **2026-09-22: `discogsTestExcludeReleases` is a development aid and must
+- [x] **2026-09-22: `discogsTestExcludeReleases` is a development aid and must
       not outlive v1's testing.** A hidden pref, empty by default, no settings
       field: `API/Async.pm`'s `_testFilter` hides the listed release ids from
       the ownership pass, after the completeness gate and before

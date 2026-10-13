@@ -53,6 +53,15 @@ $prefs->migrate(3, sub {
 	1;
 });
 
+# discogsTestExcludeReleases is gone before the public beta (decisions §15.36,
+# TODO.md release checklist): a development aid that hid releases from the
+# ownership pass must not ship as a back door into the badging rules. It had no
+# settings-page field, but the key can exist on a real server all the same -
+# LMS's own `pref` command writes any plugin pref (Slim/Control/Request.pm:604) -
+# so a server that used it would carry the key forever. Same pattern, place and
+# reasoning as migrate(1).
+$prefs->migrate(4, sub { $_[0]->remove('discogsTestExcludeReleases'); 1 });
+
 # A new token is a new chance (§15.15 parts 2 and 3). The last error and the
 # rejection pause both describe the OLD token's last conversation with Discogs,
 # and leaving either in place after the user has fixed the thing they describe
@@ -137,14 +146,6 @@ $prefs->init({
 	# does not write the username: whether a pref set in the scanner reaches the
 	# server is unverified.
 	discogsCurrency => '',
-
-	# A development aid, not a feature: a comma-separated list of Discogs
-	# release ids that API.pm's _testFilter hides from the ownership
-	# pass, so "a record left the collection" can be exercised without
-	# altering anyone's collection. Empty on every normal install, no field on
-	# the settings page, and every sync warns while it is set. Documented in
-	# docs/dev-repo-workflow.md.
-	discogsTestExcludeReleases => '',
 });
 
 # Long enough to absorb a duplicate ['rescan','done'] and let LMS settle after a

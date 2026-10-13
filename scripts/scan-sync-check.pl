@@ -772,23 +772,6 @@ diag('API/Sync.pm: the whole-fetch budget (§15.18 part 10)');
 	ok( $result->{ok}, 'a fetch 119 s in still issues its next request' );
 }
 
-# --- _testFilter applies on this path -----------------------------------------
-
-diag('API/Sync.pm: the test filter, after the gate');
-
-{
-	reset_state();
-	$PREFS{discogsTestExcludeReleases} = '1001';
-
-	my ($result) = run_fetch( identity_response(), page_response( 3, 1, 1, 3 ) );
-
-	ok( $result->{ok}, 'a filtered fetch still passes the completeness gate' );
-	is( $result->{counted}, 3, '  ...which counted the unfiltered list' );
-	is_deeply( [ sort map { $_->{id} } @{ $result->{entries} } ], [ 1002, 1003 ],
-		'  ...and the filter hides the named release from the list the pass gets' );
-	ok( !( grep { $_->{url} =~ /1001/ } @REQUESTS ), '  ...without it reaching Discogs' );
-}
-
 # --- nothing escapes -----------------------------------------------------------
 {
 	reset_state();
@@ -1244,26 +1227,6 @@ for my $case (
 	ok( ( grep { /scan-time collection sync failed: $error / } @ERRORS ),
 		"a $response->{code}" . ( $error eq 'no_response' ? ' from LWP itself' : '' )
 		. " is logged as $error" );
-}
-
-diag('seam 4: the test filter, with the list the pass sees');
-
-{
-	reset_state();
-	reset_db();
-	$PREFS{discogsToken}               = 'token-abc';
-	$PREFS{discogsTestExcludeReleases} = '1001';
-
-	my ($rc) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
-
-	is( $rc, 1, 'a filtered scan-time sync succeeds' );
-	is_deeply( [ sort map { $_->{id} } @{ $APPLIED[0] } ], [ 1002, 1003 ],
-		'  ...and the pass is handed the filtered list' );
-	is_deeply( [ map { $_->{album_key} } grep { ( $_->{ownership} || '' ) eq 'version' } @{ committed_rows() } ],
-		[ $ALBUM_KEY{2} ],
-		'  ...so the hidden release does not badge, here as in the server' );
-	is( committed_marker()->{items}, 3, '  ...while the marker counts the unfiltered collection' );
-	ok( ( grep { /test filter active: hiding 1 releases/ } @WARNINGS ), '  ...and the filter warns' );
 }
 
 diag('seam 5: nothing escapes, and endImporter once, on every path');

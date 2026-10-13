@@ -672,9 +672,7 @@ sub _finish {
 	# derived", so it may not move for a sync whose conclusions were never
 	# written.
 	# Hoisted out of the ->apply call it used to be built inside, because the
-	# page gets this same list and it must be the SAME one: _testFilter's whole
-	# safety argument is that a release hidden from the pass is hidden
-	# everywhere the pass's conclusions are visible, and a re-match list that
+	# page gets this same list and it must be the SAME one: a re-match list that
 	# offered a release the pass could not see would let the user link an album
 	# to a record that then refuses to badge, with nothing to say why.
 	my $entries;
@@ -682,7 +680,7 @@ sub _finish {
 	if ( $result->{ok} ) {
 		require Plugins::SqueezeWax::Ownership;
 
-		$entries = Plugins::SqueezeWax::API::_testFilter( [ values %{ $run->{entries} || {} } ] );
+		$entries = [ values %{ $run->{entries} || {} } ];
 
 		my $applied = Plugins::SqueezeWax::Ownership->apply($entries);
 

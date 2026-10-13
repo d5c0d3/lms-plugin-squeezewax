@@ -446,6 +446,29 @@ diag('§15.18 part 7: last synced is the marker row, not a pref');
 	is( $PREFS{discogsToken}, 'keep-me', '  ...and touches nothing else' );
 }
 
+# ---------------------------------------------------------------------------
+# The migration off the test-exclude pref (decisions §15.36)
+# ---------------------------------------------------------------------------
+
+diag('§15.36: discogsTestExcludeReleases is removed from existing prefs files');
+
+{
+	ok( $MIGRATIONS{4}, 'a migrate(4) is registered' );
+
+	local %PREFS = (
+		discogsTestExcludeReleases     => '9701013,443973',
+		_ts_discogsTestExcludeReleases => 1790085746,
+		discogsToken                   => 'keep-me',
+	);
+
+	$MIGRATIONS{4}->( Test::StubPrefs->new );
+
+	ok( !exists $PREFS{discogsTestExcludeReleases},
+		'  ...and it removes discogsTestExcludeReleases from an existing prefs file' );
+	ok( !exists $PREFS{_ts_discogsTestExcludeReleases}, '  ...along with its _ts_ twin' );
+	is( $PREFS{discogsToken}, 'keep-me', '  ...and touches nothing else' );
+}
+
 {
 	ok( !exists $PREFS{discogsLastSynced},
 		'discogsLastSynced is not initialised as a default any more' );

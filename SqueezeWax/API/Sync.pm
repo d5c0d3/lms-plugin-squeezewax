@@ -16,7 +16,7 @@ package Plugins::SqueezeWax::API::Sync;
 # API.pm owns every decision this file makes, exactly as it does for Async.pm:
 # the request (buildRequest), the response (classifyResponse), the budget
 # (accountRequest), the pages (_pageCount, _collectionPath, _collectionParams),
-# the entries (entryFromRelease) and the test filter (_testFilter). This file
+# the entries (entryFromRelease). This file
 # owns only the wiring and the two rules that exist because a scan is waiting:
 #
 #   - no retries. backoffFor is never called; a 429 fails the fetch once, and
@@ -60,9 +60,8 @@ Fetch the whole collection, synchronously. Returns
   { ok => 1, entries => [...], items => N, counted => N, pages => N, requests => N }
   { ok => 0, error => '...', code => N, requests => N }
 
-C<entries> is the filtered list the ownership pass takes (C<_testFilter> applied,
-after the completeness gate). The error names are the async path's -
-C<classifyResponse>'s vocabulary plus C<no_token>, C<no_username>,
+C<entries> is the list the ownership pass takes (after the completeness gate). The error
+names are the async path's - C<classifyResponse>'s vocabulary plus C<no_token>, C<no_username>,
 C<too_many_pages>, C<count_unknown>, C<count_mismatch> - and this path's own two,
 C<rate_wait> and C<timeout_budget>.
 
@@ -192,9 +191,7 @@ sub _fetch {
 		return { ok => 0, error => 'count_mismatch' };
 	}
 
-	# After the gate, which counted the unfiltered list - the placement that is
-	# the whole of _testFilter's safety (API.pm), on this path as on the other.
-	my $entries = Plugins::SqueezeWax::API::_testFilter( [ values %entries ] );
+	my $entries = [ values %entries ];
 
 	return {
 		ok       => 1,

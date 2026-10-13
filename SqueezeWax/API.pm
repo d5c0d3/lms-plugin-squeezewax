@@ -48,10 +48,8 @@ use POSIX qw(ceil);
 
 use Slim::Utils::Log;
 use Slim::Utils::PluginManager;
-use Slim::Utils::Prefs;
 
-my $log   = logger('plugin.squeezewax');
-my $prefs = preferences('plugin.squeezewax');
+my $log = logger('plugin.squeezewax');
 
 use constant BASE_URL => 'https://api.discogs.com';
 use constant REPO_URL => 'https://github.com/d5c0d3/lms-plugin-squeezewax';
@@ -341,8 +339,7 @@ sub _looksNumeric {
 # that both transports - Async.pm in the server, Sync.pm in the scanner - build
 # the same request and the same entry list: two copies of the entry builder is
 # the drift decisions §15.2 reason 1 warned about, and a seam test could only
-# ever cover one of them (§15.18 part 15). Pure, except _testFilter, which reads
-# a pref and logs.
+# ever cover one of them (§15.18 part 15). Pure.
 # ---------------------------------------------------------------------------
 
 # decisions §9.4, quoting the API docs: "By default, 50 items per page ... To
@@ -551,8 +548,8 @@ sub entryFromRelease {
 		# a future feature rather than built.
 		#
 		# Flattened to plain strings here rather than stored raw, so the
-		# template has no structure to walk and _testFilter's list stays
-		# something a suite can compare with is_deeply.
+		# template has no structure to walk and the entry list stays something a
+		# suite can compare with is_deeply.
 		#
 		# thumb and cover_image are deliberately NOT kept: whether Discogs'
 		# terms permit showing them is unverified (§9.9 already records that
@@ -561,58 +558,6 @@ sub entryFromRelease {
 		formats => [ map { _formatLabel($_) } @{ $basic->{formats} || [] } ],
 		labels  => [ map { _labelLabel($_) }  @{ $basic->{labels}  || [] } ],
 	};
-}
-
-=head2 _testFilter( \@entries )
-
-The entry list with any release id named by C<discogsTestExcludeReleases>
-removed. A development aid, not a feature.
-
-=cut
-
-# Build-order steps 6-7's hardware check (6) is "remove a record from the
-# Discogs collection and watch the pass react". Doing that for real mutates
-# data this project does not own and cannot restore if a step fails. This
-# makes a release invisible TO THE PASS instead, which is the only place the
-# pass ever sees one.
-#
-# Where it sits is the whole of its safety. Both transports call it AFTER their
-# completeness gate, which compares the distinct entries counted against
-# pagination.items - both computed from the unfiltered list, before this is
-# reached - so hiding a release can never make a sync look incomplete, and can
-# never mask a real short page. It lives here, beside the entry builder, so
-# that the scan-time sync and the server's sync hide the same releases: its
-# safety argument is that a release hidden from the pass is hidden everywhere
-# the pass's conclusions show (decisions §15.18 part 15).
-# Nothing is sent to Discogs and the fetch is untouched: the collection on
-# discogs.com is not altered, read-only or otherwise.
-#
-# There is no settings-page field for the pref on purpose. It is set by hand
-# for a test and cleared afterwards, and a control on the page would invite it
-# being left on.
-#
-# It cannot sit on silently. While the pref is non-empty EVERY sync logs at
-# warn, not info, so a forgotten filter shows up in the log of a server whose
-# owner is wondering why a record stopped badging.
-sub _testFilter {
-	my ($entries) = @_;
-
-	my $raw = $prefs->get('discogsTestExcludeReleases');
-
-	return $entries unless defined $raw && $raw =~ /\S/;
-
-	my %drop = map { $_ => 1 } grep { /^\d+$/ } split /\s*,\s*/, $raw;
-
-	my @kept = grep { !defined $_->{id} || !$drop{ $_->{id} } } @$entries;
-
-	# Logged even when nothing matched: a filter naming ids this collection
-	# does not contain is still a filter that is on, and the count is how its
-	# owner notices it was the wrong id rather than the wrong conclusion.
-	$log->warn( 'test filter active: hiding '
-		. ( scalar(@$entries) - scalar(@kept) )
-		. ' releases from the ownership pass' );
-
-	return \@kept;
 }
 
 # Not pure - reads LMS's own plugin registry - but deterministic given the

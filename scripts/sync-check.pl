@@ -1148,11 +1148,9 @@ sub run_sync {
 	# set of requests against a rate-limited API for data we just had.
 	is( scalar @CB_ARGS, 2, 'a successful sync hands its callback two arguments' );
 
-	# The SAME list the pass got, not a copy and not a rebuild. _testFilter's
-	# safety argument is that a release hidden from the pass is hidden wherever
-	# the pass's conclusions are visible; a re-match list built separately could
-	# offer a release the pass could not see, and the album would then refuse to
-	# badge with nothing to say why.
+	# The SAME list the pass got, not a copy and not a rebuild. A re-match list
+	# built separately could offer a release the pass could not see, and the
+	# album would then refuse to badge with nothing to say why.
 	is( $CB_ARGS[1], $APPLIED[0],
 		'  ...and the second is the very list the pass was handed, by reference' );
 	is( scalar @{ $CB_ARGS[1] }, 203, '  ...holding every entry' );
@@ -1303,114 +1301,6 @@ for my $outcome (qw(refused failed)) {
 	# nothing about the other two. Now absence of a WRITE, for all of them -
 	# the marker included, since its writes are recorded in the same list.
 	is( scalar @WRITES, 0, '  ...and touches no pref and no marker at all' );
-}
-
-# ---------------------------------------------------------------------------
-# The test-only collection filter (2026-09-22)
-# ---------------------------------------------------------------------------
-#
-# A development aid that hides release ids from the ownership pass so that "a
-# record left the collection" can be exercised without altering a real
-# collection. What these assert is where it sits: after the completeness gate,
-# before the pass, and never on the fetch.
-
-diag('the test-only collection filter');
-
-{
-	reset_state();
-
-	my $result = run_sync(
-		identity_response(),
-		page_response( 100, 1, 3, 203 ),
-		page_response( 100, 2, 3, 203 ),
-		page_response( 3,   3, 3, 203 ),
-	);
-
-	ok( $result->{ok}, 'with the pref unset the sync succeeds as before' );
-	is( scalar @{ $APPLIED[0] }, 203, '  ...and the pass gets every entry' );
-	ok( !( grep { /test filter active/ } @WARNINGS ),
-		'  ...and nothing warns about a filter' );
-}
-
-{
-	reset_state();
-	$PREFS{discogsTestExcludeReleases} = '1001';
-
-	my $result = run_sync(
-		identity_response(),
-		page_response( 100, 1, 3, 203 ),
-		page_response( 100, 2, 3, 203 ),
-		page_response( 3,   3, 3, 203 ),
-	);
-
-	ok( $result->{ok}, 'a filtered sync still succeeds' );
-
-	my $entries = $APPLIED[0];
-
-	is( scalar @$entries, 202, 'the pass receives one entry fewer' );
-	ok( !( grep { ( $_->{id} || 0 ) == 1001 } @$entries ),
-		'  ...and the listed release id is not among them' );
-
-	# The gate ran on the unfiltered list, which is the whole reason the
-	# filter sits where it does: hiding a release must never be able to make
-	# a sync look incomplete, or mask a genuinely short page.
-	is( $result->{items},   203, 'the completeness check still sees the unfiltered count' );
-	is( $result->{counted}, 203, '  ...on both sides of its comparison' );
-
-	ok( ( grep { /^test filter active: hiding 1 releases from the ownership pass$/ } @WARNINGS ),
-		'and every filtered sync warns, at warn level, naming the count' );
-}
-
-{
-	reset_state();
-	$PREFS{discogsTestExcludeReleases} = '1001, 1002';
-
-	run_sync(
-		identity_response(),
-		page_response( 100, 1, 3, 203 ),
-		page_response( 100, 2, 3, 203 ),
-		page_response( 3,   3, 3, 203 ),
-	);
-
-	is( scalar @{ $APPLIED[0] }, 201, 'a comma-separated list hides each id' );
-	ok( ( grep { /hiding 2 releases/ } @WARNINGS ), '  ...and the count says two' );
-}
-
-{
-	reset_state();
-	# An id this collection does not contain. The filter is still ON, so it
-	# must still warn - otherwise a wrong id looks exactly like a wrong
-	# conclusion.
-	$PREFS{discogsTestExcludeReleases} = '999999999';
-
-	run_sync(
-		identity_response(),
-		page_response( 100, 1, 3, 203 ),
-		page_response( 100, 2, 3, 203 ),
-		page_response( 3,   3, 3, 203 ),
-	);
-
-	is( scalar @{ $APPLIED[0] }, 203, 'an id that matches nothing hides nothing' );
-	ok( ( grep { /hiding 0 releases/ } @WARNINGS ),
-		'  ...and still warns, so a wrong id cannot look like a wrong conclusion' );
-}
-
-{
-	reset_state();
-	$PREFS{discogsTestExcludeReleases} = '1001';
-
-	run_sync(
-		identity_response(),
-		page_response( 100, 1, 3, 203 ),
-		page_response( 100, 2, 3, 203 ),
-		page_response( 3,   3, 3, 203 ),
-	);
-
-	# Nothing about the filter reaches Discogs: the requests are identical to
-	# an unfiltered run, and the collection itself is never written to.
-	is( scalar @REQUESTS, 5, 'the filter does not change the fetch' );
-	ok( !( grep { $_->{url} =~ /999|exclude|1001/ } @REQUESTS ),
-		'  ...and no request mentions a filtered id' );
 }
 
 # ---------------------------------------------------------------------------
