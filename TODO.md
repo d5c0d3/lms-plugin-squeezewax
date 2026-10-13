@@ -16,6 +16,13 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **`master` = 0.0.0.24** (2026-10-13, hardware report 71), promoted at
+      `151186f`. Open until pushed and the network check passes (raw `repo.xml`
+      names 0.0.0.24 and a `/master/` URL; zip sha1 = `a8386a71dc4b4ee3e215ee24c7f418500c21d944`;
+      README on the front page). Recommended, owner's call: one install from the
+      `master` URL on a clean LMS; if skipped, list it as untested in the
+      announcement.
+
 Things that must happen before v1 ships, and that nothing else will force.
 Each names its sites so the work is mechanical rather than a search.
 
