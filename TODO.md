@@ -3537,3 +3537,10 @@ Each names its sites so the work is mechanical rather than a search.
   ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
   promoted bytes are the ones hardware-checked. Consider for the next build.
   Report 78 A: the no-tag-names and first-steps notices were not provoked.
+- **2026-10-13: report 78 recorded — `master` = 1.0.0b3 (`91300ec`).** A pass
+  (reference server, Material and Default); B pass (website `repo.xml` and zip
+  sha1 `58c22a97…3183` verified); C: Docker install and load pass, log clean,
+  205 items synced. Not observed on Docker, because nothing was pending: the
+  "Master releases" paused→running check, and the master job itself. Scan-time
+  sync on Docker not distinguishable from the manual button. Re-check when a
+  library change leaves derive work pending.
