@@ -895,12 +895,9 @@ sub token_test {
 # here. The username itself is sprintf'd INTO the string, and string() returns
 # the bare token, so the substitution is invisible to this suite - see the stub
 # audit's entry 6 / 5.1.
-# A username brings the profile request for the currency label (step 10), so
-# a second reply is queued for it; the page is rendered only once that is back.
 Plugins::SqueezeWax::API->_resetRate;
 
-is( token_test( { code => 200, content => '{"username":"deschman"}' },
-		{ code => 200, content => '{"curr_abbr":"EUR"}' } ),
+is( token_test( { code => 200, content => '{"username":"deschman"}' } ),
 	'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK',
 	'a 200 with a username takes the OK branch' );
 is( $CALLS{callback}, 1, '  ...and the page is rendered, once' );
@@ -952,8 +949,7 @@ is( token_test( { code => 200, content => 'not json at all' } ),
 {
 	Plugins::SqueezeWax::API->_resetRate;
 
-	@RESPONSES = ( { code => 200, content => '{"username":"x"}' },
-		{ code => 200, content => '{"curr_abbr":"EUR"}' } );
+	@RESPONSES = ( { code => 200, content => '{"username":"x"}' } );
 	$PREFS{discogsToken} = 'stored';
 
 	%CALLS = (); @EVENTS = (); @REQUESTS = ();
@@ -961,15 +957,11 @@ is( token_test( { code => 200, content => 'not json at all' } ),
 		{ saveSettings => 1, testToken => 1, pref_discogsToken => 'typed' },
 		sub { 1 }, 'ARG1' );
 
-	is( scalar @REQUESTS, 2, 'the test issues two requests: the identity, then the profile' );
+	is( scalar @REQUESTS, 1, 'the test issues one request: the identity' );
 	ok( ( grep { /typed/ } @{ $REQUESTS[0]{headers} } ),
 		'  ...carrying the token from the FIELD in its headers' );
 	like( $REQUESTS[0]{url}, qr{/oauth/identity},
 		'  ...to the identity endpoint (decisions §9.7)' );
-	is( $REQUESTS[1]{url}, 'https://api.discogs.com/users/x',
-		'  ...then to the profile of the account it named (decisions §15.31 ruling 15)' );
-	ok( ( grep { /typed/ } @{ $REQUESTS[1]{headers} } ),
-		'  ...with the same token' );
 }
 
 # Every string the failure map can produce must exist, or the page renders a
@@ -1270,102 +1262,36 @@ diag('the token test keeps the username it was told');
 }
 
 # ---------------------------------------------------------------------------
-# The currency label (decisions §15.31 ruling 15, plan step 10 §6 part 8)
+# Test token does not learn the currency (decisions §15.35)
 # ---------------------------------------------------------------------------
 #
-# One /users/{username} request after a successful identity, its curr_abbr
-# stored. A failed or empty profile keeps the stored value and never changes
-# what the page says.
+# Only a collection sync does. The token test is the identity request alone and
+# never writes discogsCurrency.
 
-diag('the token test learns the currency label');
+diag('the token test asks for no profile and leaves the currency alone');
 
 {
-	my $profile = do {
-		my $path = "$Bin/fixtures/profile-example.json";
-		open my $fh, '<:raw', $path or die "could not read $path: $!\n";
-		local $/;
-		<$fh>;
-	};
-
-	my $NOTED = 0;
-
-	no warnings 'redefine';
-
-	my $real = \&Plugins::SqueezeWax::API::noteResponse;
-
-	local *Plugins::SqueezeWax::API::noteResponse = sub { $NOTED++; goto &$real };
-
 	Plugins::SqueezeWax::API->_resetRate;
+	$PREFS{discogsCurrency} = 'GBP';
+
+	my $message = token_test( { code => 200, content => '{"username":"deschman"}' } );
+
+	is( $message, 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK', 'a good token test says what it said before' );
+	is( scalar @REQUESTS, 1, '  ...after exactly one request (the identity)' );
+	like( $REQUESTS[0]{url}, qr{/oauth/identity}, '  ...to the identity endpoint' );
+	is( $PREFS{discogsCurrency}, 'GBP', '  ...and the stored currency is untouched' );
+	is( $PREFS{discogsUsername}, 'deschman', '  ...while the username is still learned' );
+	is( $CALLS{callback}, 1, '  ...and the page is rendered, once' );
+
 	$PREFS{discogsCurrency} = '';
+	token_test( { code => 200, content => '{"username":"deschman"}' } );
+	is( $PREFS{discogsCurrency}, '', 'an empty currency stays empty' );
+	is( scalar @REQUESTS, 1, '  ...with one request again' );
 
-	my $message = token_test( { code => 200, content => '{"username":"example"}' },
-		{ code => 200, content => $profile } );
-
-	is( $PREFS{discogsCurrency}, 'EUR', 'a token test stores the profile\'s curr_abbr (the real reply\'s shape)' );
-	is( $message, 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK', '  ...and says what it said before' );
-	is( $REQUESTS[1]{url}, 'https://api.discogs.com/users/example', '  ...from /users/{username}' );
-	is( scalar @REQUESTS, 2, '  ...one request after the identity' );
-	is( $NOTED, 1, '  ...its reply noted once in the shared budget' );
-	is( $CALLS{callback}, 1, '  ...and the page rendered once' );
-
-	my @FAILURES = (
-		[ 'a 500',                     { code => 500, content => '' } ],
-		[ 'a 401',                     { code => 401, content => '{"message":"Invalid consumer token."}' } ],
-		[ 'a 429',                     { code => 429, content => '' } ],
-		[ 'a dropped connection',      { code => undef } ],
-		[ 'a 200 that will not parse', { code => 200, content => 'nope' } ],
-		[ 'a 200 with no curr_abbr',   { code => 200, content => '{"username":"deschman"}' } ],
-		[ 'a 200 with an empty one',   { code => 200, content => '{"curr_abbr":""}' } ],
-	);
-
-	for my $f (@FAILURES) {
-		my ( $what, $reply ) = @$f;
-
-		Plugins::SqueezeWax::API->_resetRate;
-		$PREFS{discogsCurrency} = 'GBP';
-
-		my $message = token_test( { code => 200, content => '{"username":"deschman"}' }, $reply );
-
-		is( $message, 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK', "profile $what: the token test's message is unchanged" );
-		is( $PREFS{discogsCurrency}, 'GBP', '  ...the stored currency is kept' );
-		is( $PREFS{discogsUsername}, 'deschman', '  ...the username is still learned' );
-		is( $CALLS{callback}, 1, '  ...and the page is rendered, once' );
-		is( scalar @REQUESTS, 2, '  ...after one profile request, never retried' );
-	}
-
-	# A spent budget: the page does not wait out a window, so it skips the
-	# profile rather than deferring it.
-	Plugins::SqueezeWax::API->_resetRate;
-	Plugins::SqueezeWax::API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() );
 	$PREFS{discogsCurrency} = 'GBP';
-	$NOTED = 0;
-
-	$message = token_test( { code => 200, content => '{"username":"deschman"}' } );
-
-	is( scalar @REQUESTS, 1, 'with the budget spent, no profile request is made' );
-	is( $message, 'PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK', '  ...the message is unchanged' );
-	is( $PREFS{discogsCurrency}, 'GBP', '  ...the stored currency is kept' );
-	is( $CALLS{callback}, 1, '  ...and the page is rendered' );
-
-	# Only while time is actually left (decisions §15.32): a window spent more
-	# than a minute ago has passed by itself, with no reply in between.
-	Plugins::SqueezeWax::API->_resetRate;
-	Plugins::SqueezeWax::API->noteResponse( { limit => 60, used => 60, remaining => 0 }, time() - 61 );
-
-	$message = token_test( { code => 200, content => '{"username":"deschman"}' },
-		{ code => 200, content => '{"curr_abbr":"SEK"}' } );
-
-	is( scalar @REQUESTS, 2, 'a window that has passed no longer skips the profile' );
-	is( $PREFS{discogsCurrency}, 'SEK', '  ...which is asked, and stored' );
-
-	# A failed identity asks for no profile at all.
-	Plugins::SqueezeWax::API->_resetRate;
-	$PREFS{discogsCurrency} = 'GBP';
-
-	$message = token_test( { code => 401, content => '' } );
-
-	is( scalar @REQUESTS, 1, 'a rejected token asks for no profile' );
-	is( $PREFS{discogsCurrency}, 'GBP', '  ...and leaves the stored currency alone' );
+	token_test( { code => 401, content => '' } );
+	is( scalar @REQUESTS, 1, 'a rejected token makes one request too' );
+	is( $PREFS{discogsCurrency}, 'GBP', '  ...and leaves the currency alone' );
 
 	Plugins::SqueezeWax::API->_resetRate;
 }
