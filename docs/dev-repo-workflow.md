@@ -76,9 +76,11 @@ manifest, `repo.xml`, always at the repo root:
 
 - **A feature branch's `repo.xml`** has a `<url>` on
   `raw.githubusercontent.com` pointing at that branch's own `dist/*.zip`.
-- **Master's `repo.xml`** names the hardware-checked build testers install,
-  with a `<url>` on `raw.githubusercontent.com` under `/master/` (§5b). A
-  GitHub Pages `<url>` is an open question, not a plan (below).
+- **Master's `repo.xml`** names the hardware-checked build users install. It
+  is served by the website (GitHub Pages from `master`) at
+  `https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml`; its zip `<url>`
+  stays on `raw.githubusercontent.com` under `/master/dist/` (§5b, decisions
+  §15.37 part 3).
 
 Switching between "testing a branch" and "running the tester build" is one
 edit to LMS's **Settings → Plugins → Additional Repositories** entry — never
@@ -93,6 +95,7 @@ lms-plugin-squeezewax/
 ├── refs/                             (read-only, gitignored)
 ├── SqueezeWax/                       ← plugin source, only source of truth
 ├── repo.xml                          ← current branch's manifest
+├── _config.yml                       ← website: excludes internal files
 ├── dist/                             ← built zips
 └── scripts/
     └── package-build.sh              ← §4 below
@@ -106,25 +109,54 @@ built it and (later) whether that build is a release, and that is exactly
 the kind of thing that goes stale silently if a person is expected to
 remember to edit it.
 
-### The Pages/release variant is open, not planned
+### Branches and the website — decided 2026-10-13 (§15.37)
 
-Superseded in part by decisions §15.36 part 1: `master` now serves testers
-through a raw URL (§5b), so nothing about the beta needs Pages. Whether v1
-itself moves to GitHub Pages is **open**; doing so would make testers change
-their repository URL once. Two things confirmed directly, not assumed:
+| Branch | Holds | Written by | Versions |
+|---|---|---|---|
+| `master` | what users install; the website | `scripts/promote-master.sh` only | copies of checked builds |
+| `v1-buildout` | v1: betas, 1.0.0, then fixes | `package-build.sh` | `1.0.0bN` → `1.0.0` → `1.0.1` … |
+| `v2-buildout` | v2; branched from `v1-buildout` when v2 work starts | `package-build.sh` | `2.0.0aN` (dev only) → `2.0.0bN` → `2.0.0` → fixes |
+| `vN-buildout` | same pattern | | `N.…` |
 
-- **GitHub Pages is not enabled for this repository.**
-  `https://d5c0d3.github.io/lms-plugin-squeezewax/` returns 404, and there
-  is no `_config.yml` at the repo root (the reference project,
-  `filtermusic_sb`, has one — `theme: jekyll-theme-time-machine` — and its
-  Pages site serves).
-- **Pages only serves the default branch.** Confirmed from
-  `filtermusic_sb`'s own README: branch testing there deliberately uses
-  `raw.githubusercontent.com/.../<branch>/repo.xml` instead of the Pages
-  URL, "since GitHub Pages only serves from the default branch."
+The website is GitHub Pages from `master`, root folder (enabled 2026-10-13).
+Pages serves only the default branch, so a build line's `repo.xml` is reached
+through `raw.githubusercontent.com/.../<branch>/repo.xml` and `master`'s through
+the website. `_config.yml` is only an `exclude:` list, keeping internal files
+(`CLAUDE.md`, `TODO.md`, `plans/`, `scripts/`, `SqueezeWax/`, and `docs/` except
+`user-guide.md`) out of the site build, so a Liquid-like `{{` or `{%` in them
+cannot break it. The README is the home page and links to `docs/user-guide.md`.
 
-Unverified: whether LMS's official plugin list needs Pages. Tracked in
-`TODO.md` ("At SqueezeWax's first real release").
+**Merges (§15.37 part 4).** Only promotion writes `master`. A fix lands on the
+**oldest line still receiving fixes**, then is merged forward into every newer
+line the same day. Never backward; `master` is never merged into a build line.
+
+**Migrations (§15.37 part 5).** Only the **newest** line adds a database or
+prefs migration (`Schema` `@MIGRATIONS`, `$prefs->migrate`). Once
+`v2-buildout` exists, a v1 fix needing one ships in v2: one migration number
+must not mean two different changes on different servers.
+
+**Retirement (§15.37 part 6).** When `N+1.0.0` is promoted, line N gets no more
+fixes.
+
+### Version numbers (§15.37 part 2)
+
+`repo.xml`'s `<plugin version="...">` **is the user-visible version**, and the
+packaged `install.xml` carries the same string. There is no `0.0.0.N` build
+series any more.
+
+- `aN` = dev build, never promoted. `bN` = beta. Plain = release; the last
+  digit counts fixes. A milestone vN is `N.0.0`; there is no minor series.
+- **Never a hyphen:** `1.0.0-beta1` compares equal to `1.0.0` in LMS, so an
+  update would silently not be offered.
+- Order, verified with `Slim::Utils::Versions->compareVersions`:
+  `0.0.0.24 < 1.0.0b1 < 1.0.0b9 < 1.0.0b10 < 1.0.0 < 1.0.9 < 2.0.0a1 <
+  2.0.0a12 < 2.0.0b1 < 2.0.0`.
+- Every build takes the next number, dev builds included, so gaps between
+  promoted versions are normal.
+- The first number must match the branch (`v1-buildout` → `1.…`);
+  `package-build.sh` enforces it.
+- A branch build must be numbered **above** the version a server has, or LMS's
+  `findUpdates` (§1) will not offer it, silently.
 
 ### What actually merges at promotion — decided 2026-10-13 (§15.36 part 1)
 
@@ -145,21 +177,6 @@ promotion**, not once at release, and `scripts/promote-master.sh` does it:
 - Master's `dist/` holds the zips already on master plus the promoted one.
   Every other zip the merge brings in is removed.
 
-### Versioning, before and after release
-
-`repo.xml`'s `<plugin version="...">` stays a `0.0.0.N` series for now,
-bumped by the script on every build. This is disconnected from
-`SqueezeWax/install.xml`'s own `<version>` (currently `0.1.0`, committed,
-untouched by packaging) — with exactly one repository ever configured at a
-time, there is nothing for the two numbers to out-rank each other on, so
-there's no reason to keep them in sync yet.
-
-That changes at the first real release: from then on, a branch build must
-be numbered **above** the version testers or users currently have, or LMS's
-`findUpdates` (§1) will not offer it — silently, not with an error. And a
-release's `install.xml` should carry its real, meaningful version rather
-than a leftover `0.1.0`.
-
 ---
 
 ## 3. `repo.xml`
@@ -175,12 +192,12 @@ directly):
 		<title lang="EN">d5c0d3 plug-in repository</title>
 	</details>
 	<plugins>
-		<plugin name="SqueezeWax" version="0.0.0.1" minTarget="8.4" maxTarget="*">
+		<plugin name="SqueezeWax" version="1.0.0b1" minTarget="8.4" maxTarget="*">
 			<title lang="EN">SqueezeWax</title>
 			<desc lang="EN">Links your physical record collection to your LMS library.</desc>
 			<creator>d5c0d3</creator>
 			<category>musicservices</category>
-			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/<branch>/dist/SqueezeWax_0_0_0_1.zip</url>
+			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/<branch>/dist/SqueezeWax_1_0_0b1.zip</url>
 			<link>https://github.com/d5c0d3/lms-plugin-squeezewax/issues</link>
 			<sha>&lt;sha1 of that exact zip&gt;</sha>
 		</plugin>
@@ -195,8 +212,8 @@ directly):
 - `title`, `desc` — read out of the packaged commit's own `strings.txt`
   (`PLUGIN_SQUEEZEWAX_NAME`/`_DESC`, `EN` line) — display text, not the
   string token.
-- `url` — `raw.githubusercontent.com/.../<current-branch>/dist/<zip>`,
-  always, until the release step in §2 exists.
+- `url` — `raw.githubusercontent.com/.../<current-branch>/dist/<zip>`, always.
+  On `master` it names `/master/dist/` (§5b); it is not moved to Pages.
 - `link` — matches the reference project's field, points at this repo's
   issues.
 - `sha` — sha1 of the zip. This is what LMS's Extension Downloader verifies
@@ -215,10 +232,12 @@ What it does, in order:
    commit, never the working tree, means an uncommitted edit is invisible
    to the package — silently, not with an error. **Commit before
    packaging.**
-2. Bump the version: read `repo.xml`'s current `<plugin version="...">`
-   (or bootstrap at `0.0.0.0` if `repo.xml` doesn't exist yet), increment
-   the last segment, write it into the *packaged copy's* `install.xml`
-   only — the committed `SqueezeWax/install.xml` is untouched, per §2.
+2. Version: read `repo.xml`'s current `<plugin version="...">` (or bootstrap
+   at `0.0.0.0` if `repo.xml` doesn't exist yet). Add 1 to the trailing number
+   of the last part (`1.0.0b7`→`1.0.0b8`, `1.0.0`→`1.0.1`, `2.0.0a3`→`2.0.0a4`,
+   `0.0.0.24`→`0.0.0.25`), or take `--version X`. Write it into the *packaged
+   copy's* `install.xml` only — the committed `SqueezeWax/install.xml` is
+   untouched. The branch's line guard applies (§2, "Version numbers").
 3. Read `minVersion`/`maxVersion`/`category` back out of that same packaged
    copy, and `title`/`desc` out of its `strings.txt`, so `repo.xml` can't
    drift from what's actually in the zip.
@@ -240,6 +259,12 @@ Flags:
 
 - `--dry-run` — build and print the verification output only; never writes
   `repo.xml` or `dist/*.zip` to disk. Mutually exclusive with `--publish`.
+- `--version X` — use X instead of bumping. X must match
+  `^\d+\.\d+\.\d+([ab]\d+)?$` (no hyphen) and be higher than `repo.xml`'s
+  version by `Slim::Utils::Versions->compareVersions`, loaded from
+  `refs/slimserver/` (the script stops if that is missing).
+- On a branch named `vN-buildout` the new version's first number must be N;
+  other branch names warn and continue; `master` is refused.
 - `--publish` — after building, `git add`/`commit`/`push` `repo.xml` and the
   new zip. **Without this flag the script never calls git.** The old
   script committed and pushed by default, which committed unasked at least
@@ -288,19 +313,23 @@ silently (a higher-versioned branch build gets offered to a production
 install, or a production release is never offered because a branch's
 number is still ahead) rather than with an error.
 
-## 5b. Tester channel
+## 5b. User channel
 
-Decided 2026-10-13, decisions §15.36 part 1. Testers add
-`https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/repo.xml`
-(the README names only this URL; the dev URL in §5 stays here, so a tester
-cannot pick the one-way dev channel by mistake).
+Decided 2026-10-13, decisions §15.36 part 1, with the URL replaced by §15.37
+part 3. Users and testers add
+`https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml` (the website; the
+README names only this URL; the dev URL in §5 stays here, so a user cannot pick
+the one-way dev channel by mistake). Anyone who added the older
+`raw.githubusercontent.com/.../master/repo.xml` address replaces it, never
+keeps both. During the v1 beta this `repo.xml` carries the beta, so testers move
+to 1.0.0 with no URL change; `beta.xml` is built at the first beta after 1.0.0.
 
 - **Promotion merges a checked package commit and copies its zip. It never
   rebuilds.** `package-build.sh` bumps the version on every run, so a rebuild
   would ship a version nobody hardware-checked. The zip is carried byte for
   byte; version and `<sha>` survive because both describe those bytes.
-- **Run `scripts/promote-master.sh <version> <report-no>`** on `v1-buildout`,
-  after the hardware report for that build passes. `--dry-run` shows the diff
+- **Run `scripts/promote-master.sh <version> <report-no>`** on `v1-buildout`
+  (never for an `a` build: dev builds are not promoted), after the hardware report for that build passes. `--dry-run` shows the diff
   and the new `repo.xml` and changes nothing. `--merge-head` merges
   `v1-buildout`'s HEAD instead of the package commit, and is allowed only when
   `SqueezeWax/` and `LICENSE` are identical to the package commit (a docs-only
@@ -391,8 +420,8 @@ pass does with a changed list; it cannot prove a real fetch produces one.
 - The top-level `<PluginName>/` zip structure is confirmed against
   `FilterMusic_2_1_2.zip`.
 - The Pages-only-serves-default-branch behaviour is confirmed from
-  `filtermusic_sb`'s own README and from this repository's own Pages URL
-  currently 404ing (§2).
+  `filtermusic_sb`'s own README; this repository's Pages site, enabled
+  2026-10-13, serves `master` (§2, decisions §15.37 part 3).
 - This workflow doesn't remove the need for `refs/slimserver/`,
   `refs/lms-plugin-tidal/`, and `refs/Spotty-Plugin/` to write correct
   `Slim::*` calls — `CLAUDE.md`'s hard rule against invented APIs applies

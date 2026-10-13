@@ -1371,11 +1371,12 @@ Each names its sites so the work is mechanical rather than a search.
       count were inferred from `derived_at` only (one request per release
       assumed). A hand-off needing them must first have the owner raise the
       plugin's own category (never `network.*`).
-- [ ] **2026-10-13: rules before a v2 branch is created (not designed).** Its
+- [x] **2026-10-13: rules before a v2 branch is created (not designed).** Its
       own build version series (whether LMS ranks e.g. `0.0.1.N` above
       `0.0.0.N` is unverified); database and prefs migration numbers cannot be
       used on both lines; where project knowledge points; beta fixes land on the
       v1 line and merge forward only.
+      **Decided §15.37** (branches, version numbers, channels, merges, migrations).
 
 - [x] **2026-09-29, NEXT: a logic change to identification has no way to say
       "re-decide".** Decisions §15.23. `_canSkip` skips unchanged albums, so step
@@ -3338,21 +3339,25 @@ Each names its sites so the work is mechanical rather than a search.
       self-heal, not a bug, then reconfigured back to
       `DISCOGS_RELEASE_ID`/`foobar2000/DISCOGS_RELEASE_ID` to actually
       exercise the importer live.
-- [ ] **At SqueezeWax's first real release:** enable GitHub Pages for
-      `lms-plugin-squeezewax` (currently off — confirmed 404, no
-      `_config.yml`), add the release-mode step to
-      `scripts/package-build.sh` that regenerates `repo.xml` with a
-      `d5c0d3.github.io/...` `<url>` instead of a raw one, and give
-      `SqueezeWax/install.xml`'s `<version>` its first real value instead of
-      the placeholder `0.1.0`. See `docs/dev-repo-workflow.md` §2.
-      **Open since §15.36 part 1:** testers use the raw `master` URL; moving to
-      Pages makes them change URL once. Decide at release.
-      Also bump the extension repo URL's `?v=` cache-buster, which still reads
-      `?v=0.0.0.8` on the reference server. GitHub happened to serve 0.0.0.11
-      through it anyway, so it did not bite — but it is now stale and will not
-      bust anything next time. Cheapest at the next package build.
+- [x] **At SqueezeWax's first real release:** GitHub Pages — enabled
+      2026-10-13 (§15.37 part 3); `repo.xml` is served at
+      `https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml`. The zip `<url>`
+      stays on raw (§15.37 part 3), so no release-mode `<url>` step is needed.
+      The version scheme (`1.0.0bN`, `1.0.0`) replaces `0.0.0.N`.
+      Still to do: bump the extension repo URL's `?v=` cache-buster, which reads
+      `?v=0.0.0.8` on the reference server (stale; cheapest at the next build).
+- [ ] **Submit SqueezeWax to the official plugin list at v1:** an entry in
+      `LMS-Community/lms-plugin-repository` `include.json`, using the website
+      `repo.xml` URL (§15.37 part 3; raw and Pages URLs are both accepted there).
+- [ ] **§15.37 part 8: once the reference server runs a v2 dev build, v1 fixes
+      need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **Website design (beyond the README): later.**
+
+- [ ] **`beta.xml` and `promote-master.sh --channel beta`:** build at the first
+  beta after 1.0.0 (§15.37 part 3).
 
 - [ ] **Clear & rebuild matches (decisions §10): v2** (§15.36 part 6). The
   manual reset in the README ("Starting over") covers a bad state; the cost
