@@ -3533,3 +3533,7 @@ Each names its sites so the work is mechanical rather than a search.
   shows a fixed set.
 - Future: orphan relink for users with manual links and no tag names
   (decisions §15.16 part 11).
+- **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
+  ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
+  promoted bytes are the ones hardware-checked. Consider for the next build.
+  Report 78 A: the no-tag-names and first-steps notices were not provoked.
