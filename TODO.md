@@ -23,10 +23,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       `master` URL on a clean LMS; if skipped, list it as untested in the
       announcement.
       2026-10-13: owner installed 0.0.0.24 from the `master` URL on the
-      production server and the plugin loads. Not a clean install (production
-      is a different LMS from the throwaway the hand-off meant, and whether it
-      had SqueezeWax before is not recorded here), so the first-install path
-      (missing `squeezewax.db`, every migration) stays untested.
+      production server, which had no SqueezeWax before, and the plugin loads.
+      That is the clean-install check. Not looked at: `squeezewax.db` on disk
+      and the migration log lines (a load implies the migrations ran, since
+      `postDBConnect` runs them, but no one read the file).
 
 Things that must happen before v1 ships, and that nothing else will force.
 Each names its sites so the work is mechanical rather than a search.
