@@ -1345,15 +1345,14 @@ Each names its sites so the work is mechanical rather than a search.
       unchanged at exact 150 / version 50 / absent 307; only "Sync collection
       now" moved it to version 54 / absent 303. README "Starting over" step 5 is
       right as written.
-- [ ] **2026-10-13: five `conflict` albums keep a release id and derived master
-      across an upgrade but not across a reset.** Hand-off 71 C7: in the old
-      database the five conflict albums (Baseballs/Strike, Tuxedomoon, Odetta,
-      Sparks, Police) were `strict` with a release id and a derived master and
-      also in the queue as `conflict`; after a reset the same albums have no
-      release id and no master. Derived 443 -> 437 is that plus the one manual
-      row. Unexplained why a re-decide at `logic_version` 2 left the old ids.
-      Needs the design chat; the old rows probably predate §15.22's
-      both-candidates rule and were never re-decided.
+- [x] **2026-10-13: five `conflict` albums keep a release id and derived master
+      across an upgrade but not across a reset.** Explained by design, inferred
+      from reading `Match.pm` `_recordConflict`: a conflict on an existing row
+      keeps its release id; on a new row it writes none (§3a). After a reset
+      every row is new, so these five lose the id and with it the derived
+      master (443 -> 437 = these 5 + the manual row). Ownership is unaffected: a
+      conflict row counts as untagged (§15.16 part 4), which matches the counts.
+      Recorded in §15.36 part 3's "Lost" list.
 - [ ] **2026-10-13: hardware sessions cannot read our `info` log lines.** Hand-off
       71 C5: `Derive`'s `info` lines were absent from `server.log` (running level
       for the category back at ERROR, §4.1 rule 3), so Derive runs and request
@@ -1972,28 +1971,14 @@ Each names its sites so the work is mechanical rather than a search.
       `in_wantlist` per token holder, undocumented.** Recorded in
       `squeezewax-v1-decisions.md` §9.9.
 
-- [ ] **Scanner→server handover — re-scoped, not closed.** 2026-10-13:
-      §15.36 part 7 accepted "not matched, documented" and was to be ticked
-      here, but hand-off 70 found its premise wrong: a single-folder rescan
-      DOES reach our importer — **observed 2026-10-13, hand-off 71 E**: `rescan
-      full <folder file URL>` over JSON-RPC ran the importer across all 765
-      albums (`examined 0 ... skipped 765`, nothing changed) and the scan-time
-      sync (205 items, 4 requests), with the database identical afterwards
-      (`launchScan` hands `scanner.pl` the folder as a
-      trailing argument; `scanner.pl:348` runs every post importer regardless;
-      `OnlineLibraryBase` opts out explicitly, ours does not). Inferred from
-      reading, not observed. The README and user guide therefore do **not** carry
-      the "rescanning a single folder does not match albums" sentence. Back to
-      the design chat: either document the real behaviour (a single-folder
-      rescan re-examines every album and, if the sync is due, syncs) after a
-      hardware check, or gate the importer on the folder argument. The importer needs
-      no handover: step-3 finding 3 shows `album_key` covers structural
-      change and `MAX(tracks.timestamp)` covers in-place tag edits, both
-      readable in either process. Still open: immediate re-match on a
-      single-directory rescan, which never reaches `runScanPostProcessing`
-      (`scanner.pl:348` is its only live caller). Decide before v1 whether
-      the `Slim::Utils::Scanner::API` track hooks are needed for that, or
-      whether "the next full rescan picks it up" is enough.
+- [x] **Scanner→server handover — closed 2026-10-13.** A single-folder rescan
+      runs our importer and the scan-time sync when tag names are set
+      (`rescanCommand` → `scanner.pl` with `singledir` → `runScanPostProcessing`).
+      Observed, report 71 E: `examined 0 ... skipped 765`, sync 205 items in 4
+      requests, database unchanged. Inferred, not observed: a new album there
+      would be examined. No README line needed; the in-process `rescan
+      album|track` path does not run it and is not a user action
+      (records-step-8b). Decisions §15.36 part 7.
 - [ ] **Structural no-match staleness policy (step 4).** `discogs_no_match`
       carries `checked_at` so step 4 can add a policy without a migration;
       the policy itself is undecided. A Discogs search that found nothing

@@ -6394,11 +6394,12 @@ reset. What it rests on:
 | The file sits in LMS's "Preferences Folder" | verified by reading | `Slim/Utils/SQLiteHelper.pm` `dbFile`; `Slim/Menu/SystemInfo.pm` `INFORMATION_PREFSDIR` |
 | The prefs file (token etc.) is elsewhere: `plugin/squeezewax.prefs` | verified by reading | `Slim/Utils/Prefs/Namespace.pm` (`catdir($path, "$two.prefs")`) |
 | `-wal` and `-shm` must go too | inferred (WAL mode; a stale `-wal` beside a new file is untested) | `Schema::_ensureWalMode`; working agreement §4.1 |
-| Version badges return only after the next sync after Derive | **inferred** from hand-off 9b B0's prediction, not confirmed | hand-off 71 measures it |
-| Whole reset is safe | **unverified** until hand-off 71 | — |
+| Version badges return only after the next sync after Derive | **verified**, report 71 C5 (version stayed 50 until Sync collection now moved it to 54) | hand-off 71 |
+| Whole reset is safe | **verified**, report 71 C–D | hand-off 71 |
 
 **Lost:** manual links, review-queue decisions, "checked, no tag" records,
-derived masters, last-sync marker. **Kept:** token, username, currency, tag
+derived masters, last-sync marker, release ids kept on albums whose tags
+conflict. **Kept:** token, username, currency, tag
 names (prefs). Re-deriving masters costs one Discogs request per identified
 release, rate-limited (measured 25 min 18 s for ~475, records-step-8c-hardware).
 
@@ -6429,14 +6430,16 @@ covers a bad state. Cost accepted: the reset loses hand-made matches, which
 Clear & rebuild would have kept. **Unverified:** whether old "no match"
 records still need clearing in today's code (`TODO.md` 2026-09-24 item).
 
-#### Part 7 — single-folder rescans are not matched; documented
+#### Part 7 — single-folder rescans
 
-Decided 2026-10-13 (owner). Closes `TODO.md` "Scanner→server handover —
-re-scoped": matching runs only in a normal scan's post-processing
-(`scanner.pl:348` per that item; not re-checked here). No scanner track hooks
-in v1. README and user guide say: after adding albums, run a normal rescan
-("look for new and changed music"). **Unverified:** which LMS menus start a
-single-folder rescan.
+Revised 2026-10-13: a single-folder rescan runs our importer and the scan-time
+sync when tag names are set (`Slim/Control/Commands.pm` `rescanCommand` →
+external `scanner.pl` run with `singledir` → `runScanPostProcessing`).
+Observed, report 71 part E: `examined 0 … skipped 765`, sync 205 items in 4
+requests, database unchanged. Inferred, not observed: a new album there would
+be examined (nothing had changed, so nothing was). No README line needed. The
+in-process `rescan album|track` path does not run it; not a user action
+(records-step-8b).
 
 #### Re-verification (Claude Code, 2026-10-13)
 
