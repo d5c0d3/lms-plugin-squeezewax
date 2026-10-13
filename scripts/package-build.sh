@@ -26,13 +26,26 @@
 # doesn't avoid a collision under that mechanism; it just hides one, and only
 # once did anyone run both at once. See docs/dev-repo-workflow.md §1-2.
 #
+# Version rules (decisions §15.37 part 2):
+#   - Bump: add 1 to the trailing number of the last part.
+#       1.0.0b7 -> 1.0.0b8   1.0.0 -> 1.0.1   2.0.0a3 -> 2.0.0a4
+#       0.0.0.24 -> 0.0.0.25
+#   - --version X uses X instead. X must match ^\d+\.\d+\.\d+([ab]\d+)?$ (never a
+#     hyphen: 1.0.0-beta1 compares EQUAL to 1.0.0 in LMS, so an update would
+#     silently not be offered) and must be higher than repo.xml's version by
+#     Slim::Utils::Versions->compareVersions, loaded from refs/slimserver/.
+#   - Line guard: on a branch named vN-buildout the new version's first number
+#     must be N. Other branch names warn and continue; master is refused.
+#   - aN is a dev build and is never promoted; bN is a beta; plain is a release.
+#
 # Usage:
-#   scripts/package-build.sh [--dry-run] [--publish]
+#   scripts/package-build.sh [--dry-run] [--publish] [--version X]
 #
 # --dry-run   Build in a temp dir only. Never writes repo.xml or dist/*.zip to
 #             disk — prints the file tree, a leftover-naming grep, and
 #             `unzip -l` so the artifact can be inspected before it exists
 #             anywhere.
+# --version X Use version X instead of bumping (rules above).
 # --publish   After building, `git add`/`commit`/`push` repo.xml and the new
 #             zip. Without this flag the script never calls git — the files
 #             land on disk uncommitted for review. Mutually exclusive with
@@ -40,23 +53,33 @@
 #
 # The <url> this script writes is always the raw.githubusercontent.com URL
 # for the *current* branch — GitHub Pages only serves the default branch, so
-# a feature branch's zip is unreachable there. A release repo.xml pointing at
-# Pages is a separate, later, explicitly-scripted step that doesn't exist yet
-# because SqueezeWax has not shipped (docs/dev-repo-workflow.md §5).
+# a build line's zip is unreachable there. The zip <url> stays on raw even on
+# master (decisions §15.37 part 3); scripts/promote-master.sh rewrites the
+# branch segment.
 
 set -euo pipefail
 
 DRY_RUN=0
 PUBLISH=0
-for arg in "$@"; do
-	case "$arg" in
+WANT_VERSION=""
+while [ $# -gt 0 ]; do
+	case "$1" in
 		--dry-run) DRY_RUN=1 ;;
 		--publish) PUBLISH=1 ;;
+		--version)
+			if [ $# -lt 2 ]; then
+				echo "error: --version needs a value" >&2
+				exit 1
+			fi
+			WANT_VERSION="$2"
+			shift
+			;;
 		*)
-			echo "error: unknown argument: $arg" >&2
+			echo "error: unknown argument: $1" >&2
 			exit 1
 			;;
 	esac
+	shift
 done
 
 if [ "$DRY_RUN" -eq 1 ] && [ "$PUBLISH" -eq 1 ]; then
@@ -120,19 +143,55 @@ else
 	CUR_VERSION="0.0.0.0"
 fi
 
-NEW_VERSION="$(perl -e '
-	my @p = split /\./, $ARGV[0];
-	$p[-1]++;
-	print join(".", @p);
-' "$CUR_VERSION")"
+# compareVersions: prints -1, 0 or 1 for $1 <=> $2, using LMS's own rule.
+compare_versions() {
+	perl -I"$REPO_ROOT/refs/slimserver" -MSlim::Utils::Versions \
+		-e 'print Slim::Utils::Versions->compareVersions($ARGV[0], $ARGV[1])' "$1" "$2"
+}
+
+if [ -n "$WANT_VERSION" ]; then
+	if ! printf '%s' "$WANT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([ab][0-9]+)?$'; then
+		echo "error: --version ${WANT_VERSION}: must look like 1.0.0, 1.0.0b1 or 2.0.0a1 (no hyphen:" >&2
+		echo "       1.0.0-beta1 compares equal to 1.0.0 in LMS, decisions §15.37 part 2)" >&2
+		exit 1
+	fi
+	if [ ! -f "$REPO_ROOT/refs/slimserver/Slim/Utils/Versions.pm" ]; then
+		echo "error: --version compares with Slim::Utils::Versions, but refs/slimserver/ is missing" >&2
+		exit 1
+	fi
+	if [ "$(compare_versions "$CUR_VERSION" "$WANT_VERSION")" != "-1" ]; then
+		echo "error: --version ${WANT_VERSION} is not higher than the current ${CUR_VERSION}" >&2
+		exit 1
+	fi
+	NEW_VERSION="$WANT_VERSION"
+else
+	NEW_VERSION="$(perl -e '
+		my $v = $ARGV[0];
+		$v =~ s/(\d+)$/$1 + 1/e or die "version has no trailing number: $v\n";
+		print $v;
+	' "$CUR_VERSION")"
+fi
+
+# Line guard: vN-buildout builds N.x.x only.
+case "$GH_BRANCH" in
+	v[0-9]*-buildout)
+		LINE="${GH_BRANCH#v}"
+		LINE="${LINE%%-*}"
+		if [ "${NEW_VERSION%%.*}" != "$LINE" ]; then
+			echo "error: ${GH_BRANCH} builds ${LINE}.x.x versions, not ${NEW_VERSION} (decisions §15.37 part 2)" >&2
+			exit 1
+		fi
+		;;
+	*)
+		echo "warning: branch ${GH_BRANCH} is not vN-buildout; the version line was not checked" >&2
+		;;
+esac
 
 echo "==> Version: ${CUR_VERSION} -> ${NEW_VERSION}"
 
-# Only the packaged (temp, git-archived) copy's <version> is bumped — the
-# committed SqueezeWax/install.xml is left at its own value. The 0.0.0.N
-# series tracked here is a build/test artifact, disconnected from
-# install.xml's own version until SqueezeWax's first real release, per
-# docs/dev-repo-workflow.md §5.
+# Only the packaged (temp, git-archived) copy's <version> is set — the
+# committed SqueezeWax/install.xml is left at its own value. repo.xml's
+# version is the user-visible one (decisions §15.37; docs/dev-repo-workflow.md §2).
 BUILD_INSTALL_XML="$BUILD_DIR/install.xml"
 perl -pi -e "s#(<version>)[^<]*(</version>)#\${1}${NEW_VERSION}\${2}#" "$BUILD_INSTALL_XML"
 
