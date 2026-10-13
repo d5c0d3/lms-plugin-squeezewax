@@ -16,6 +16,21 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **Live status on an idle settings page, and Material behaviour during a
+      scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
+      Owner decided to ship b2 as designed. Findings: (1) the poll starts only
+      if the page loads with the Master line or a scan notice
+      (`settings.html:396`), so an idle page never notices a scan starting —
+      by design, but the hand-off's "open page, then start scan" cannot pass.
+      Candidate fix: poll while idle too (own page only, local GET, no
+      Discogs). (2) Page opened *during* a scan in Material: the buttons
+      vanish and **no notice text was seen**. (3) ~~buttons did not return~~ — owner error: they do return without a
+      reload, polling works; console shows repeated "Refused to set unsafe
+      header Referer", not from our code (grep), probably Material. (4) Owner prefers greyed-out/disabled buttons to
+      removed ones. 2 needs devtools evidence (is `.swxScanNotice` in the DOM and visible).
+- [x] A7 evidence: the "nothing to derive: …" info line **does** appear, after
+      the manual sync (17:52:21) and from the scan-skip path (17:59:09, 18:11:14).
+
 - [x] **`master` = 1.0.0b1** (2026-10-13, hardware report 74), promoted at
       `e151111`. Reference server: LMS offered 1.0.0b1 over 0.0.0.24, loads
       cleanly, `user_version=7`, "You own a version" renders, owned view 205
