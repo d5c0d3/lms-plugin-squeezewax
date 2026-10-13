@@ -1,0 +1,11 @@
+exclude:
+  - CLAUDE.md
+  - TODO.md
+  - plans/
+  - scripts/
+  - SqueezeWax/
+  - docs/dev-repo-workflow.md
+  - docs/implementation-plan.md
+  - docs/squeezewax-design.md
+  - docs/squeezewax-v1-decisions.md
+  - docs/working-agreement.md
