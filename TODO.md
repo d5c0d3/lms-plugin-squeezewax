@@ -23,7 +23,8 @@ Shared reminder list. Both I and Claude Code read and update this.
       `cef515a5137bf96624a5992123cfb2724aecfa16`, home page shows the install URL,
       `TODO.html` 404. Website updated about 2 min after the push (16:31:46
       polling start to 16:33:17; push time not recorded, so an upper bound).
-      Production switch to the website URL (part C): owner, pending.
+      Part C (2026-10-13, owner): production repository entry switched to the
+      website URL; LMS offered 1.0.0b1 over 0.0.0.24, installed, works.
 - [x] **`master` = 0.0.0.24** (2026-10-13, hardware report 71), promoted at
       `151186f`. Network check passed 2026-10-13 (raw `repo.xml`
       names 0.0.0.24 and a `/master/` URL; zip sha1 = `a8386a71dc4b4ee3e215ee24c7f418500c21d944`;
