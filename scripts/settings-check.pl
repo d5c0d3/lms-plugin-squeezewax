@@ -371,7 +371,7 @@ BEGIN {
 		$CALLS{async_sync}++;
 		$CALLS{async_sync_token} = $token;
 		push @EVENTS, 'sync';
-		$cb->( { ok => 1, items => 203, requests => 4 } );
+		$cb->( $main::SYNC_RESULT || { ok => 1, items => 203, requests => 4 } );
 		return 1;
 	};
 	*{'Plugins::SqueezeWax::API::Async::status'} = sub {
@@ -384,6 +384,31 @@ BEGIN {
 		return;
 	};
 	*{'Plugins::SqueezeWax::API::Async::tokenRejected'} = sub { 0 };
+}
+
+# The master job (decisions §15.38 items 6 and 7). Derive.pm is required lazily
+# by beforeRender and is stubbed for the reason Async is: the real module pulls
+# in the transport and the timers, and its own behaviour is derive-check.pl's.
+# What is under test here is what the PAGE says about its three states.
+our %DERIVE = ( progress => undef, running => 0, scheduled => 0 );
+
+BEGIN {
+	$INC{'Plugins/SqueezeWax/Derive.pm'} = 1;
+
+	no strict 'refs';
+	*{'Plugins::SqueezeWax::Derive::progress'}          = sub { $main::DERIVE{progress} };
+	*{'Plugins::SqueezeWax::Derive::isRunning'}         = sub { $main::DERIVE{running} };
+	*{'Plugins::SqueezeWax::Derive::isResumeScheduled'} = sub { $main::DERIVE{scheduled} };
+
+	# The button's trigger (§15.38 item 6). Plugin.pm is not loaded here - it is
+	# loaded first in the real server, and Settings.pm only exists under it - so
+	# the entry it calls is recorded rather than run. That it arms Derive is
+	# plugin-check.pl's.
+	*{'Plugins::SqueezeWax::Plugin::_deriveMasters'} = sub {
+		$CALLS{derive}++;
+		push @EVENTS, 'derive';
+		return;
+	};
 }
 
 require Plugins::SqueezeWax::Settings;
@@ -409,6 +434,7 @@ require Plugins::SqueezeWax::Settings;
 
 our $DB_READY = 1;
 our $STATUS;
+our $SYNC_RESULT;
 
 # ---------------------------------------------------------------------------
 # Driving handler()
@@ -426,7 +452,7 @@ sub submit {
 	my $params = { saveSettings => 1, %extra };
 	my @cbArgs;
 
-	my $callback = sub { $CALLS{callback}++; @cbArgs = @_; return 1 };
+	my $callback = sub { $CALLS{callback}++; push @EVENTS, 'callback'; @cbArgs = @_; return 1 };
 
 	my $rc = Plugins::SqueezeWax::Settings->handler(
 		undef, $params, $callback, 'ARG1' );
@@ -1294,6 +1320,226 @@ diag('the token test asks for no profile and leaves the currency alone');
 	is( $PREFS{discogsCurrency}, 'GBP', '  ...and leaves the currency alone' );
 
 	Plugins::SqueezeWax::API->_resetRate;
+}
+
+# ---------------------------------------------------------------------------
+# Decisions §15.38: first-run help, live status, the master job
+# ---------------------------------------------------------------------------
+
+# beforeRender's queue count is the one database read the page makes with the
+# database ready. A handle that answers it, and records that it was asked, so a
+# render with dbReady on can be driven without opening a database.
+{
+	package Test::StubDbh;
+	sub new { bless {}, shift }
+	sub selectrow_array { $main::CALLS{db_reads}++; return (0) }
+}
+
+sub render {
+	my (%args) = @_;
+
+	no warnings 'once', 'redefine';
+	local *Slim::Schema::dbh = sub { Test::StubDbh->new };
+
+	my $params = {};
+	Plugins::SqueezeWax::Settings->beforeRender($params);
+
+	return $params;
+}
+
+diag('§15.38 item 1: the page says when no tag names are set');
+
+{
+	no warnings 'redefine';
+
+	local *Plugins::SqueezeWax::Tags::tagNames = sub { [] };
+	is( render()->{noTagNames}, 1, 'an empty tag-name list sets the notice' );
+
+	local *Plugins::SqueezeWax::Tags::tagNames = sub { ['DISCOGS_RELEASE_ID'] };
+	is( render()->{noTagNames}, 0, '  ...and a list with a name clears it' );
+
+	like( $tpl, qr/IF noTagNames %\]\s*\[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_NO_TAG_NAMES"/,
+		'  ...the template renders it only then' );
+
+	# At the top: before the first section that is not a notice.
+	ok( index( $tpl, 'PLUGIN_SQUEEZEWAX_NO_TAG_NAMES' ) < index( $tpl, 'title="PLUGIN_SQUEEZEWAX_TOKEN"' ),
+		'  ...at the top of the page, above the token' );
+
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_NO_TAG_NAMES
+	EN	No tag names are set, so SqueezeWax matches albums only by title and artist and cannot find the exact pressing you own\. Enter the name of the tag that holds the Discogs release ID below, or press Detect\.$/m,
+		'  ...in the decided words' );
+}
+
+diag('§15.38 item 2: the first-steps hint until a sync has ever completed');
+
+{
+	local $STATUS = { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
+	is( render()->{firstSteps}, 1, 'no last-synced marker shows the hint' );
+
+	{
+		no warnings 'redefine';
+		local *Plugins::SqueezeWax::Tags::tagNames = sub { ['DISCOGS_RELEASE_ID'] };
+		is( render()->{firstSteps}, 1, '  ...whatever the tag list holds' );
+	}
+
+	$STATUS = { running => 0, lastSynced => 1_790_085_746, lastItems => 203, lastError => '' };
+	is( render()->{firstSteps}, 0, '  ...and a marker hides it' );
+
+	local $DB_READY = 0;
+	$STATUS = { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
+	is( render()->{firstSteps}, 0,
+		'  ...not shown with a broken database, which cannot say and has its own notice' );
+
+	like( $tpl, qr/IF firstSteps %\]\s*\[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_FIRST_STEPS"/,
+		'the template renders the hint only then' );
+
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_FIRST_STEPS
+	EN	To start: enter your token and tag names and save\. Then run a library rescan once: Basic Settings \x{e2}\x{86}\x{92} Rescan Media Library \x{e2}\x{86}\x{92} "Look for new and changed media files"\. SqueezeWax reads your collection during the scan\.$/m,
+		'  ...in the decided words, naming LMS\'s own labels' );
+}
+
+diag('§15.38 item 7: the derive line says running, waiting or paused');
+
+{
+	local %DERIVE = ( progress => { done => 3, total => 471, pending => 468 },
+		running => 1, scheduled => 0 );
+
+	is( render()->{derive}{state}, 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING', 'a run in flight reads "running"' );
+
+	$DERIVE{running} = 0; $DERIVE{scheduled} = 1;
+	is( render()->{derive}{state}, 'PLUGIN_SQUEEZEWAX_DERIVE_WAITING',
+		'no run, a resume scheduled: "waiting"' );
+
+	$DERIVE{scheduled} = 0;
+	is( render()->{derive}{state}, 'PLUGIN_SQUEEZEWAX_DERIVE_PAUSED',
+		'no run and nothing scheduled: "paused", which says what restarts it' );
+
+	$DERIVE{running} = 1; $DERIVE{scheduled} = 1;
+	is( render()->{derive}{state}, 'PLUGIN_SQUEEZEWAX_DERIVE_RUNNING',
+		'  ...running wins over a stale schedule' );
+
+	$DERIVE{progress} = undef;
+	ok( !exists render()->{derive}, 'nothing pending: no line at all, as before' );
+
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
+	EN	paused \x{e2}\x{80}\x{94} resumes after the next library scan or Sync collection now$/m,
+		'the paused label is in the decided words' );
+}
+
+diag('§15.38 item 3: the status regions carry stable ids');
+
+{
+	for my $id (qw(swxSyncLast swxDerive swxDeriveLine swxScanToken swxScanSync swxScanDetect)) {
+		my $count = () = $tpl =~ /\bid="\Q$id\E"/g;
+		is( $count, 1, "the template carries id=\"$id\" exactly once" );
+	}
+
+	# Every scan notice is marked, and sits inside a region the refresh replaces.
+	my $notices = () = $tpl =~ /PLUGIN_SQUEEZEWAX_BUSY_SCANNING/g;
+	my $marked  = () = $tpl =~ /<div class="swxScanNotice">\[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING"/g;
+	is( $marked, $notices, 'every "scan is running" notice carries the swxScanNotice class' );
+
+	for my $pair ( [ swxScanToken => 'testToken' ], [ swxScanSync => 'syncNow' ],
+		[ swxScanDetect => 'detectTagNames' ] )
+	{
+		my ( $id, $button ) = @$pair;
+		like( $tpl, qr/id="$id">\s*\[% IF scanning %\]\s*<div class="swxScanNotice">.*?name="$button".*?<\/div>/s,
+			"  ...$id holds the notice or, after the scan, the $button button" );
+	}
+
+	# The derive block sits inside its region, so it can appear and disappear.
+	like( $tpl, qr/<div id="swxDerive">\s*\[% IF derive %\].*?id="swxDeriveLine".*?\[% END %\]\s*<\/div>/s,
+		'the derive block is inside an always-rendered region' );
+
+	# No form field the user types into is inside a region.
+	for my $id (qw(swxSyncLast swxDerive swxScanToken swxScanSync swxScanDetect)) {
+		my ($region) = $tpl =~ /(<div id="\Q$id\E">.*?)(?:<div id="swx|\[% END %\]\s*\n\s*\[%# |$)/s;
+		ok( length( $region || '' ), "  ...$id is found" );
+		unlike( $region || '', qr/type="(?:text|password)"|pref_discogs/,
+			"  ...$id contains no editable field" );
+	}
+
+	my ($script) = $tpl =~ /<script type="text\/javascript">(.*?)<\/script>/s;
+
+	like( $script, qr/fetch\(window\.location\.pathname,/,
+		'the refresh fetches the page\'s own path, with no query string' );
+	like( $script, qr/method:\s*'GET'/, '  ...with GET' );
+	like( $script, qr/setTimeout\(tick, 10000\)/, '  ...every 10 s' );
+	unlike( $script, qr/location\.reload|\.submit\(|location\.href\s*=/,
+		'  ...and never reloads or submits' );
+	like( $script, qr/var regions = \['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect'\]/,
+		'  ...replacing only the named regions' );
+	like( $script, qr/getElementById\('swxDeriveLine'\)\s*\|\|\s*document\.querySelector\('\.swxScanNotice'\)/,
+		'  ...and only while the derive line or a scan notice is present' );
+	like( $script, qr/wire\(mine\)/,
+		'  ...re-wiring any button a refresh brings in, so the buttons keep working' );
+}
+
+diag('§15.38 item 3: a GET with no parameters does nothing but render');
+
+{
+	$PREFS{discogsToken} = 'a-token';
+	local $DB_READY = 1;
+	local %DERIVE = ( progress => { done => 1, total => 2, pending => 1 }, running => 0, scheduled => 0 );
+
+	%CALLS = (); @EVENTS = (); @REQUESTS = ();
+
+	my $params = {};
+	Plugins::SqueezeWax::Settings->handler( undef, $params, sub { $CALLS{callback}++ }, 'ARG1' );
+
+	is( $CALLS{super_handler}, 1, 'the page renders through the base handler' );
+	ok( !$CALLS{callback}, '  ...synchronously, with no deferred action' );
+	is( scalar @REQUESTS, 0, '  ...and the transport sees no request' );
+	ok( !$CALLS{http_get},     '  ...no token test' );
+	ok( !$CALLS{async_sync},   '  ...no collection sync' );
+	ok( !$CALLS{derive},       '  ...no master job' );
+	ok( !$CALLS{add_task} && !$CALLS{sample_albums}, '  ...no detection' );
+	ok( !$CALLS{invalidate},   '  ...no invalidation' );
+	ok( !( grep { /^set:/ } @EVENTS ), '  ...and no pref written' );
+
+	# The base handler is stubbed above, so its call to beforeRender is driven
+	# here: the render itself, with the database up, must not ask Discogs either.
+	%CALLS = (); @REQUESTS = ();
+	render();
+
+	is( scalar @REQUESTS, 0, 'the render with the database ready issues no request' );
+	ok( !$CALLS{async_sync} && !$CALLS{derive}, '  ...and starts nothing' );
+}
+
+diag('§15.38 item 6: a successful button sync starts the master job');
+
+{
+	$PREFS{discogsToken} = 'a-token';
+	local $SCANNING = 0;
+
+	local $SYNC_RESULT = { ok => 1, items => 203, requests => 4 };
+	submit( syncNow => 1 );
+
+	is( $CALLS{derive}, 1, 'a successful sync arms the job, once' );
+
+	my ($cbAt)     = grep { $EVENTS[$_] eq 'callback' } 0 .. $#EVENTS;
+	my ($deriveAt) = grep { $EVENTS[$_] eq 'derive' }   0 .. $#EVENTS;
+	ok( defined $cbAt && defined $deriveAt && $cbAt < $deriveAt,
+		'  ...after the button\'s own result has been handed to the page' );
+
+	for my $error (qw(unauthorized refused count_mismatch already_running no_response)) {
+		local $SYNC_RESULT = { ok => 0, error => $error };
+		submit( syncNow => 1 );
+
+		ok( !$CALLS{derive}, "a sync that failed ($error) does not" );
+	}
+
+	{
+		local $SCANNING = 1;
+		submit( syncNow => 1 );
+		ok( !$CALLS{derive}, 'a sync refused during a scan does not' );
+	}
+
+	{
+		local $PREFS{discogsToken} = '';
+		submit( syncNow => 1 );
+		ok( !$CALLS{derive}, 'a press with no token does not' );
+	}
 }
 
 done_testing();

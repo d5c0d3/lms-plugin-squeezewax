@@ -58,11 +58,17 @@ PLUGIN_SQUEEZEWAX_BUSY_SCANNING
 PLUGIN_SQUEEZEWAX_DB_UNUSABLE
 	EN	The SqueezeWax database is not usable, so matching is inactive.
 
+PLUGIN_SQUEEZEWAX_NO_TAG_NAMES
+	EN	No tag names are set, so SqueezeWax matches albums only by title and artist and cannot find the exact pressing you own. Enter the name of the tag that holds the Discogs release ID below, or press Detect.
+
+PLUGIN_SQUEEZEWAX_FIRST_STEPS
+	EN	To start: enter your token and tag names and save. Then run a library rescan once: Basic Settings → Rescan Media Library → "Look for new and changed media files". SqueezeWax reads your collection during the scan.
+
 PLUGIN_SQUEEZEWAX_MATCH_PROGRESS
-	EN	Discogs matching
+	EN	SqueezeWax: Discogs matching
 
 PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS
-	EN	Discogs collection sync
+	EN	SqueezeWax: Discogs collection sync
 
 PLUGIN_SQUEEZEWAX_DETECT_UNREADABLE
 	EN	could not be read
@@ -421,6 +427,9 @@ PLUGIN_SQUEEZEWAX_DERIVE_RUNNING
 
 PLUGIN_SQUEEZEWAX_DERIVE_WAITING
 	EN	waiting
+
+PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
+	EN	paused — resumes after the next library scan or Sync collection now
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION
 	EN	Discogs

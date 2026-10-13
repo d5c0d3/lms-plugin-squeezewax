@@ -7,20 +7,33 @@
 	[% END %]
 [% END %]
 
+[%# Decisions §15.38 items 1 and 2, in the DB notice's style. The first says why
+    identification is off; the second gives the order of first steps until a
+    collection sync has ever completed. %]
+[% IF noTagNames %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_NO_TAG_NAMES" desc="" %][% END %]
+[% END %]
+
+[% IF firstSteps %]
+	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_FIRST_STEPS" desc="" %][% END %]
+[% END %]
+
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_TOKEN" desc="PLUGIN_SQUEEZEWAX_TOKEN_DESC" %]
 	<input type="password" class="stdedit" size="40"
 		name="pref_discogsToken" value="[% prefs.pref_discogsToken | html %]" />
 	<div><a href="[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS" | string %]" target="_blank"
 		rel="noopener">[% "PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL" | string %]</a></div>
 
+	<div id="swxScanToken">
 	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSE %]
 		<input name="testToken" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON" | string %]"
 			data-swx-running="[% "PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING" | string | html %]" />
 		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
+	</div>
 
 	[% IF tokenTestResult %]
 		<div>[% tokenTestResult | html %]</div>
@@ -28,6 +41,7 @@
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_SYNC" desc="PLUGIN_SQUEEZEWAX_SYNC_DESC" %]
+	<div id="swxSyncLast">
 	<div>[% "PLUGIN_SQUEEZEWAX_SYNC_LAST" | string %][% "COLON" | string %]
 		[% IF sync.lastSyncedF %]
 			[% sync.lastSyncedF | html %]
@@ -45,9 +59,11 @@
 	[% IF sync.lastError %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_FAIL" | string | replace('%s', sync.lastError) | html %]</div>
 	[% END %]
+	</div>
 
+	<div id="swxScanSync">
 	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSIF sync.running %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_RUNNING" | string %]</div>
 	[% ELSE %]
@@ -56,6 +72,7 @@
 			data-swx-running="[% "PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING" | string | html %]" />
 		<div>[% "PLUGIN_SQUEEZEWAX_ACTIONS_HINT" | string %]</div>
 	[% END %]
+	</div>
 
 	[% IF syncResult %]
 		<div>[% syncResult | html %]</div>
@@ -76,12 +93,18 @@
 [%# The master-derive job (build-order step 9). Nothing is rendered when
     nothing is pending: `derive` is set only then, so a settled library shows no
     block at all rather than a permanent "0 of 0". No request is made to build
-    it - it is one count over rows we already hold. %]
+    it - it is one count over rows we already hold.
+
+    The outer div is always rendered, empty when there is nothing pending, so
+    the live refresh below has a place to put the block when it appears and to
+    take it away when the job is done. %]
+<div id="swxDerive">
 [% IF derive %]
 	[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DERIVE" desc="PLUGIN_SQUEEZEWAX_DERIVE_DESC" %]
-		<div>[% derive.label | html %] &mdash; [% derive.state | html %]</div>
+		<div id="swxDeriveLine">[% derive.label | html %] &mdash; [% derive.state | html %]</div>
 	[% END %]
 [% END %]
+</div>
 
 [%# The two mandatory Discogs notices (decisions §9.6, §15.25 ruling 4). They
     are on THIS page and not in the album menu because the menu carries no
@@ -149,13 +172,15 @@
 [% END %]
 
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_DETECT" desc="PLUGIN_SQUEEZEWAX_DETECT_DESC" %]
+	<div id="swxScanDetect">
 	[% IF scanning %]
-		<div>[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
+		<div class="swxScanNotice">[% "PLUGIN_SQUEEZEWAX_BUSY_SCANNING" | string %]</div>
 	[% ELSE %]
 		<input name="detectTagNames" type="submit" class="stdclick swxAction"
 			value="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON" | string %]"
 			data-swx-running="[% "PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING" | string | html %]" />
 	[% END %]
+	</div>
 
 	[% IF detection %]
 		[% IF detection.running %]
@@ -245,16 +270,16 @@
     outright. 0.0.0.5 shipped with a synchronous disable and the buttons
     became dead again - they greyed out, they relabelled, and nothing was
     ever sent. See the comment on the setTimeout below.
+
+    The "no polling" above is about the buttons, and still holds for them.
+    Decisions §15.38 item 3 added a separate refresh of the status lines; it
+    is the second half of the script, and is commented there.
 %]
 <script type="text/javascript">
 (function () {
 	var form = document.getElementById('settingsForm');
 
 	if (!form || !form.querySelectorAll) { return; }
-
-	var buttons = form.querySelectorAll('input.swxAction');
-
-	if (!buttons.length) { return; }
 
 	var fired = false;
 
@@ -289,6 +314,8 @@
 			// form data set has been serialised and the request is away, so
 			// disabling can no longer affect it.
 			setTimeout(function () {
+				var buttons = form.querySelectorAll('input.swxAction');
+
 				for (var j = 0; j < buttons.length; j++) {
 					buttons[j].disabled = true;
 				}
@@ -296,9 +323,77 @@
 		};
 	};
 
-	for (var i = 0; i < buttons.length; i++) {
-		buttons[i].onclick = onClick(buttons[i]);
-	}
+	// Looked up afresh rather than captured once: the live refresh below can
+	// bring a button in (a scan ends) that was not on the page when it loaded.
+	var wire = function (root) {
+		var buttons = root.querySelectorAll('input.swxAction');
+
+		for (var i = 0; i < buttons.length; i++) {
+			buttons[i].onclick = onClick(buttons[i]);
+		}
+	};
+
+	wire(form);
+
+	// Live status (decisions §15.38 item 3). While the "Master releases" line
+	// or a "scan is running" notice is on the page, fetch the page itself every
+	// 10 s and replace the contents of these regions, and nothing else. The
+	// form fields the user types into are outside all of them.
+	//
+	// A plain GET of the page's own path, no query string: Settings.pm's
+	// handler dispatches only on the action parameters a submit carries, so a
+	// GET without them saves nothing, runs no action and sends nothing to
+	// Discogs. The page's own query is dropped on purpose - a doRescanNow=1
+	// there would start a scan (Slim/Web/Settings.pm:139). X-Requested-With is
+	// what LMS's CSRF check accepts for script requests
+	// (Slim/Web/HTTP/CSRF.pm:111-114).
+	//
+	// Never a reload and never a submit. A failed fetch is retried on the next
+	// tick, silently. Stops for good once a button has been pressed, since the
+	// page is then on its way out.
+	var regions = ['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect'];
+
+	var active = function () {
+		return document.getElementById('swxDeriveLine')
+			|| document.querySelector('.swxScanNotice');
+	};
+
+	if (!window.fetch || !window.DOMParser) { return; }
+
+	var tick = function () {
+		if (fired || !active()) { return; }
+
+		window.fetch(window.location.pathname, {
+			method:      'GET',
+			credentials: 'same-origin',
+			headers:     { 'X-Requested-With': 'XMLHttpRequest' }
+		}).then(function (response) {
+			if (!response.ok) { throw new Error(response.status); }
+
+			return response.text();
+		}).then(function (text) {
+			if (fired) { return; }
+
+			var fresh = new DOMParser().parseFromString(text, 'text/html');
+
+			for (var i = 0; i < regions.length; i++) {
+				var mine  = document.getElementById(regions[i]);
+				var theirs = fresh.getElementById(regions[i]);
+
+				if (!mine || !theirs || mine.innerHTML === theirs.innerHTML) { continue; }
+
+				mine.innerHTML = theirs.innerHTML;
+
+				wire(mine);
+			}
+
+			if (active()) { setTimeout(tick, 10000); }
+		})['catch'](function () {
+			setTimeout(tick, 10000);
+		});
+	};
+
+	if (active()) { setTimeout(tick, 10000); }
 })();
 </script>
 

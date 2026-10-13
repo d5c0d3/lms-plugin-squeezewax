@@ -94,6 +94,13 @@ use constant RUN_TIMEOUT => 3600;
 my %run;
 my $runId = 0;
 
+# Whether a resume is scheduled: set when _stop arms the re-arm timer, cleared
+# when that timer fires, when any trigger arms, and on abort. The settings page
+# reads it so that "waiting" is said only while something will in fact resume
+# the job; otherwise the job is paused until the next completed sync (decisions
+# §15.38 item 7). Production sat at "0 of 471 - waiting" with nothing scheduled.
+my $resumeScheduled = 0;
+
 # ---------------------------------------------------------------------------
 # The one public entry point.
 # ---------------------------------------------------------------------------
@@ -105,13 +112,17 @@ anything to derive and this is a good moment to do it. Returns 1 if a run
 started, 0 otherwise.
 
 Called from C<Plugins::SqueezeWax::Plugin> when a collection sync has completed -
-see that file for the two places, and why there are two. Never from a timer of
+see that file's C<_deriveMasters> for the three triggers. Never from a timer of
 its own making except to continue or resume a run this one started.
 
 =cut
 
 sub arm {
 	my ($class) = @_;
+
+	# Whatever happens below, the pending resume is no longer what decides: either
+	# this call starts a run, or one is in flight, or there is nothing to do.
+	$resumeScheduled = 0;
 
 	# Whatever the caller thought, only one run at a time. A second trigger while
 	# a run is in flight is not an error - it means the trigger did its job and
@@ -189,6 +200,21 @@ sub isRunning {
 	return 1;
 }
 
+=head2 isResumeScheduled( )
+
+Is a re-arm timer set, so that a run will start by itself about a minute from
+now? True only after a pacing stop (C<%REARM_ON>). False after a scan stop, an
+error stop, a finished run, or before any run at all - the job then waits for
+the next completed sync (decisions §15.38 item 7).
+
+=cut
+
+sub isResumeScheduled {
+	my ($class) = @_;
+
+	return $resumeScheduled ? 1 : 0;
+}
+
 =head2 abort( )
 
 Cancel a pending scheduled request and forget the run. Only the waiting is
@@ -202,6 +228,8 @@ sub abort {
 
 	Slim::Utils::Timers::killTimers( undef, \&_fire );
 	Slim::Utils::Timers::killTimers( undef, \&_rearm );
+
+	$resumeScheduled = 0;
 
 	%run = ( running => 0, finished => time(), id => $run{id} );
 
@@ -597,12 +625,16 @@ sub _stop {
 		# Plugin::_scheduleSync's, for the same reason.
 		Slim::Utils::Timers::killTimers( undef, \&_rearm );
 		Slim::Utils::Timers::setTimer( undef, time() + REARM, \&_rearm );
+
+		$resumeScheduled = 1;
 	}
 
 	return;
 }
 
 sub _rearm {
+	$resumeScheduled = 0;
+
 	__PACKAGE__->arm;
 
 	return;
