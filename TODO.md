@@ -51,6 +51,9 @@ Each names its sites so the work is mechanical rather than a search.
       `$prefs->migrate(N, sub { $_[0]->remove('discogsTestExcludeReleases'); 1 })`
       beside the existing `migrate(1)` to `migrate(3)` in `Plugin.pm`, at
       N = 4 (3 is step 8b's, which retired the last-synced prefs).
+      Two sites the list above missed, both handled in `048014c`: `API.pm`'s
+      `$prefs` (removed with its `use Slim::Utils::Prefs`), and
+      `scripts/syntax-check.sh`'s API comment.
 
 - [ ] **2026-10-12: a public beta (forum announcement) waits for step 10**
       (owner, design chat). Before announcing, in this order:
@@ -59,15 +62,24 @@ Each names its sites so the work is mechanical rather than a search.
          decisions §6a), so a tester could not step back. A `beta` branch whose
          `repo.xml` names one hardware-checked zip, moved only on purpose.
          Master stays the rollback point (working agreement §5).
+         **[x] decided §15.36 part 1: `master` carries it, not a `beta`
+         branch; `scripts/promote-master.sh`.**
       2. **A way out of a bad state.** Clear & rebuild (decisions §10) is still
          unbuilt (item 2026-09-24). At minimum, the README documents a manual
          reset (stop server, delete `squeezewax.db`, restart; manual links are
          lost). That this is safe is inferred from `Schema.pm`, not tested.
+         **[x] decided §15.36 part 3; README "Starting over". Whole-reset
+         safety stays unverified until hand-off 71.**
       3. **The build being announced is hardware-checked**, including its
-         wording (the 0.0.0.17 strings item is still open).
+         wording. Passed, report 64 check 11.
       4. **How testers report**: where (GitHub issues: whether they are enabled is
          not checked), what to send (LMS version, OS, SqueezeWax log at INFO,
-         queue counts), and **never the token**.
+         queue counts), and **never the token**. **[x] decided §15.36 part 4;
+         README "Reporting problems".**
+      Remaining: hand-off 71 passes, then promote (hand-off 72), then announce.
+      Also remaining for v1: the user guide; hand-offs 69-72; then the release
+      step (`TODO.md` "At SqueezeWax's first real release": Pages, release
+      `repo.xml`, real `install.xml` version).
       State plainly in the announcement: no marketplace lookup or pressing
       details before step 10 (if the beta follows it, drop this), the open
       Discogs Help Center question (Request #1281019), and untested platforms
@@ -1327,6 +1339,15 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-13: does a version badge wait for the next sync after Derive?**
+      Inferred from hand-off 9b B0's prediction, not confirmed; hand-off 71
+      measures it. Matters for the README's "Starting over" step 5.
+- [ ] **2026-10-13: rules before a v2 branch is created (not designed).** Its
+      own build version series (whether LMS ranks e.g. `0.0.1.N` above
+      `0.0.0.N` is unverified); database and prefs migration numbers cannot be
+      used on both lines; where project knowledge points; beta fixes land on the
+      v1 line and merge forward only.
+
 - [x] **2026-09-29, NEXT: a logic change to identification has no way to say
       "re-decide".** Decisions §15.23. `_canSkip` skips unchanged albums, so step
       8c's group B never reached any album identified before it shipped — and
@@ -1722,6 +1743,7 @@ Each names its sites so the work is mechanical rather than a search.
       on it as the escape hatch, and design §9 names it as the only thing that
       clears orphaned `discogs_no_match` rows. DEFAULT (decisions §15.16 part
       12): a later step of its own, after step 8. Not decided which.
+      → 2026-10-13: moved to **Deferred by decision**, v2 (§15.36 part 6).
 - [ ] **2026-09-24: the discogs.com link format.** The re-match list links
       each release as `https://www.discogs.com/release/{id}`. OBSERVED by the
       user to redirect to the canonical page
@@ -1932,7 +1954,17 @@ Each names its sites so the work is mechanical rather than a search.
       `in_wantlist` per token holder, undocumented.** Recorded in
       `squeezewax-v1-decisions.md` §9.9.
 
-- [ ] **Scanner→server handover — re-scoped, not closed.** The importer needs
+- [ ] **Scanner→server handover — re-scoped, not closed.** 2026-10-13:
+      §15.36 part 7 accepted "not matched, documented" and was to be ticked
+      here, but hand-off 70 found its premise wrong: a single-folder rescan
+      DOES reach our importer (`launchScan` hands `scanner.pl` the folder as a
+      trailing argument; `scanner.pl:348` runs every post importer regardless;
+      `OnlineLibraryBase` opts out explicitly, ours does not). Inferred from
+      reading, not observed. The README and user guide therefore do **not** carry
+      the "rescanning a single folder does not match albums" sentence. Back to
+      the design chat: either document the real behaviour (a single-folder
+      rescan re-examines every album and, if the sync is due, syncs) after a
+      hardware check, or gate the importer on the folder argument. The importer needs
       no handover: step-3 finding 3 shows `album_key` covers structural
       change and `MAX(tracks.timestamp)` covers in-place tag edits, both
       readable in either process. Still open: immediate re-match on a
@@ -2957,6 +2989,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-13: two more questions for Help Center Request #1281019 (or a
+      follow-up)** (§15.36). (a) Plain-text attribution on players (§15.31
+      ruling 10): is "Data provided by Discogs" plus the address as text
+      enough where a link cannot be offered? (b) `curr_abbr` is ignored on
+      `/releases` and `/masters`: intended? The owner sends.
+
 - [ ] **2026-10-12: add the players' notice question to Help Center Request
       #1281019** (decisions §15.31 ruling 10). On a player the step 10 submenus
       show "Data provided by Discogs" and the page address as plain text, because
@@ -3288,12 +3326,19 @@ Each names its sites so the work is mechanical rather than a search.
       `d5c0d3.github.io/...` `<url>` instead of a raw one, and give
       `SqueezeWax/install.xml`'s `<version>` its first real value instead of
       the placeholder `0.1.0`. See `docs/dev-repo-workflow.md` §2.
+      **Open since §15.36 part 1:** testers use the raw `master` URL; moving to
+      Pages makes them change URL once. Decide at release.
       Also bump the extension repo URL's `?v=` cache-buster, which still reads
       `?v=0.0.0.8` on the reference server. GitHub happened to serve 0.0.0.11
       through it anyway, so it did not bite — but it is now stale and will not
       bust anything next time. Cheapest at the next package build.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **Clear & rebuild matches (decisions §10): v2** (§15.36 part 6). The
+  manual reset in the README ("Starting over") covers a bad state; the cost
+  accepted is that it loses hand-made matches. Unverified: whether old "no
+  match" records still need clearing in today's code (item 2026-09-24).
 
 - [x] ~~**Remove plugin data on uninstall.**~~ Won't do, 2026-10-12: LMS gives
   plugins no uninstall hook (decisions §15.30 part 2).

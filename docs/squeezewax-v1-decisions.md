@@ -6329,3 +6329,142 @@ choice.
    same save then clears it, so the "Data provided by Discogs" collection link
    falls back to discogs.com until the next sync. The fix would be to save the
    token first, as `_syncNow` does. Recorded, not built.
+
+
+### 15.36 Public beta: channel, reset, reporting
+
+**Decided 2026-10-13** (owner, design chat). Closes `TODO.md` "2026-10-12: a
+public beta waits for step 10", items 1, 2 and 4.
+
+#### Part 1 — testers use `master`; promotion merges a checked build
+
+**Revised the same day** (owner): `master`, not a separate `beta` branch.
+
+- **Testers' URL:**
+  `https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/repo.xml`
+  One URL through the beta, and through v1 too if v1 is served from `master`
+  (see "Pages" below).
+- **Why not a `beta` branch:** testers would have to change their repository
+  entry at v1; and `master` is the default branch (verified: `origin/HEAD` →
+  `master`), so its README is the repo's front page, which today has none.
+- **`master`'s role:** still hardware-checked only (working agreement §5's
+  merge gate is unchanged); it now also carries the build testers install.
+  Rollback = the previous promoted build's commit on `master`.
+- **Promotion merges; it never rebuilds.** `package-build.sh` bumps the
+  version on every run (`:101-115`, verified), so a rebuild ships an unchecked
+  version. The zip is copied byte for byte: version and sha survive because both
+  describe the zip's bytes (verified on 0.0.0.23: `sha1sum` = `repo.xml` `<sha>`).
+- **Scripted:** `scripts/promote-master.sh <version> <report-no>`, run on
+  `v1-buildout`. It merges the package commit for `<version>` (message
+  `Package build SqueezeWax <version>`, `package-build.sh:220`) into `master`
+  with `--no-ff`, then fixes the two paths that must differ (dev-repo-workflow
+  §2 "What actually merges at release"): `dist/` keeps only promoted zips;
+  `repo.xml` is the package commit's with only the `<url>` branch changed to
+  `master`. `master` is an ancestor of `v1-buildout` (verified, 298 commits
+  behind at `8acbbb6`), so the first merge has no conflicts. It refuses a
+  version not above `master`'s current one. The owner pushes.
+- **Guard:** `package-build.sh` refuses to run on `master`. Without it, a build
+  on `master` would publish an unchecked zip to testers.
+- **Forward only.** Migrations are one-way (`Schema::_migrate` refuses a newer
+  file) and LMS offers only a higher version (dev-repo-workflow §1). A bad
+  build is fixed by promoting a newer checked one.
+- **Pages:** not needed now; raw URLs serve any branch. Whether v1 still moves to
+  GitHub Pages (dev-repo-workflow §2) is **open**: doing so makes testers change
+  URL once. Unverified whether LMS's official plugin list needs Pages.
+- **Unverified:** how long GitHub's raw cache and LMS's repository cache delay a
+  tester seeing a promotion (dev-repo-workflow §5 step 3).
+
+#### Part 2 — the zip carries `LICENSE`
+
+The zip had none (verified: `unzip -l` of 0.0.0.23). GPL-2 asks that recipients
+get a copy with the program. `package-build.sh` adds the root `LICENSE` into the
+packaged `SqueezeWax/`. Owner's choice; not legal advice. **Inferred** harmless
+to LMS's loader; the next install on hardware confirms it.
+
+#### Part 3 — manual reset, not Clear & rebuild
+
+Clear & rebuild (§10) stays unbuilt for the beta. The README documents a manual
+reset. What it rests on:
+
+| Claim | State | Source |
+|---|---|---|
+| A missing `squeezewax.db` is created, then every migration runs | verified by reading | `Schema::postDBConnect` (ATTACH comment), `_migrate` |
+| Fresh database records the logic version silently | verified by reading | logic-version table, "absent / empty" row |
+| An album with no row is always examined, so one ordinary rescan re-reads all | verified by reading | `Importer::_canSkip` |
+| The file sits in LMS's "Preferences Folder" | verified by reading | `Slim/Utils/SQLiteHelper.pm` `dbFile`; `Slim/Menu/SystemInfo.pm` `INFORMATION_PREFSDIR` |
+| The prefs file (token etc.) is elsewhere: `plugin/squeezewax.prefs` | verified by reading | `Slim/Utils/Prefs/Namespace.pm` (`catdir($path, "$two.prefs")`) |
+| `-wal` and `-shm` must go too | inferred (WAL mode; a stale `-wal` beside a new file is untested) | `Schema::_ensureWalMode`; working agreement §4.1 |
+| Version badges return only after the next sync after Derive | **inferred** from hand-off 9b B0's prediction, not confirmed | hand-off 71 measures it |
+| Whole reset is safe | **unverified** until hand-off 71 | — |
+
+**Lost:** manual links, review-queue decisions, "checked, no tag" records,
+derived masters, last-sync marker. **Kept:** token, username, currency, tag
+names (prefs). Re-deriving masters costs one Discogs request per identified
+release, rate-limited (measured 25 min 18 s for ~475, records-step-8c-hardware).
+
+The reset is also the only way back after a downgrade (`_migrate` refuses a
+newer file).
+
+#### Part 4 — how testers report
+
+GitHub Issues (enabled; verified by the owner 2026-10-13). Send: LMS version,
+OS, SqueezeWax version, owned and queue counts, and only log lines from
+`Plugins::SqueezeWax` (LMS prints the method name on each line,
+`Slim/Utils/Log.pm` pattern `%M (%L)`), category `plugin.squeezewax`
+(`Plugin.pm`) at INFO. Never the token. Never raise network logging (it prints
+the token: working agreement §4.1). Other plugins' lines may hold secrets.
+
+#### Part 5 — README names only the tester URL
+
+The README names only the `master` URL; the dev URL stays in dev-repo-workflow
+§5. A tester cannot pick the one-way dev channel by mistake.
+
+#### Part 6 — Clear & rebuild moves to v2
+
+Decided 2026-10-13 (owner). Of §10.1's three reasons, two are gone: the
+duration margin and the 30-day expiry were never built (§10.2's 2026-09-18
+correction). What remains — a tag-name change made outside the settings page
+(§3b) not triggering a re-match — is rare, and the manual reset (part 3)
+covers a bad state. Cost accepted: the reset loses hand-made matches, which
+Clear & rebuild would have kept. **Unverified:** whether old "no match"
+records still need clearing in today's code (`TODO.md` 2026-09-24 item).
+
+#### Part 7 — single-folder rescans are not matched; documented
+
+Decided 2026-10-13 (owner). Closes `TODO.md` "Scanner→server handover —
+re-scoped": matching runs only in a normal scan's post-processing
+(`scanner.pl:348` per that item; not re-checked here). No scanner track hooks
+in v1. README and user guide say: after adding albums, run a normal rescan
+("look for new and changed music"). **Unverified:** which LMS menus start a
+single-folder rescan.
+
+#### Re-verification (Claude Code, 2026-10-13)
+
+Each citation was located by symbol in `v1-buildout` and `refs/slimserver/`
+(`public/9.1`). All hold except two, and one is a correction to part 7.
+
+- **Held:** `package-build.sh` version bump (`NEW_VERSION`) and the commit
+  message `Package build ${NAME} ${NEW_VERSION}`; `Schema::postDBConnect`,
+  `_migrate` (the downgrade guard), `_ensureWalMode`; `Importer::_canSkip`;
+  `SQLiteHelper` `dbFile`; `SystemInfo` `INFORMATION_PREFSDIR`;
+  `Prefs/Namespace.pm` (`"$namespace.prefs"` under the prefs path); `Log.pm`
+  pattern `%M (%L) %m%n`; `Plugin.pm` `category => 'plugin.squeezewax'`;
+  `master` is an ancestor of `v1-buildout` (298 commits behind).
+- **Default branch:** `origin/HEAD` is not set in this clone, so "`origin/HEAD`
+  → `master`" does not resolve here. `git ls-remote --symref origin HEAD`
+  reports `ref: refs/heads/master`, which is what the claim needed.
+- **Part 7 does not hold as written.** The scanner does not skip post
+  importers for a single-folder rescan. `Slim::Music::Import::launchScan` only
+  appends the folder to the scanner's arguments (`$singledir`);
+  `scanner.pl` then calls `runScan` and `runScanPostProcessing` unconditionally,
+  and `runScanPostProcessing` runs every `post` importer. Our
+  `Importer::startScan` reads neither `@ARGV` nor the folder, and its `use` gate
+  is the token alone. So a single-folder rescan **reaches** our importer and
+  examines every album, not only the folder's (inferred from reading, not
+  observed on a server). In-tree support: `Slim::Plugin::OnlineLibraryBase`
+  `initPlugin` returns early on a single-directory scan ("don't run importer if
+  we're doing a singledir scan"), which it would not need to do if importers
+  were skipped; `Slim::Control::Commands` `rescan` passes `singledir` to
+  `launchScan`. The sentence "rescanning a single folder does not match
+  albums" was therefore **not** added to the README or user guide; the decision
+  needs revisiting in the design chat (`TODO.md`).

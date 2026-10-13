@@ -146,10 +146,9 @@ version and will not know.
 Corrected 2026-09-07 (replaces a same-day decision that didn't survive the
 day): **one branch carries the entire v1 build-out.** Project knowledge
 points at it and is not re-pointed between steps. Master is the last
-released state — until v1 ships, that means master is a rollback point and
-nothing else. Nothing publishes from it: GitHub Pages is not enabled on
-this repo (confirmed: 404, no `_config.yml`), so master reaching a user
-isn't even mechanically possible yet. After v1 ships, genuinely independent
+released state — until v1 ships, that means master is a rollback point, and
+it also carries the hardware-checked build testers install through its raw
+`repo.xml` URL (decisions §15.36 part 1; the merge gate is unchanged). After v1 ships, genuinely independent
 features get their own branches, and the re-pointing question returns in a
 form where it actually makes sense — a feature branch for a feature, not a
 slice of one for a step.
