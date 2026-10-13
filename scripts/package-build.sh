@@ -4,7 +4,17 @@
 #
 # Implements docs/dev-repo-workflow.md. Builds SqueezeWax/ at the current git
 # commit (via `git archive HEAD`, so an uncommitted edit is never silently
-# packaged), zips it, hashes it, and writes repo.xml pointing at that zip.
+# packaged), adds the repo root's LICENSE to it, zips it, hashes it, and writes
+# repo.xml pointing at that zip.
+#
+# Refuses to run on `master`: testers install from master's repo.xml, and a
+# build there would publish an unchecked zip to them (decisions §15.36 part 1).
+# Builds reach master only through scripts/promote-master.sh, which merges a
+# hardware-checked package commit and never rebuilds.
+#
+# LICENSE: GPL-2 asks that recipients get a copy with the program, so the
+# root LICENSE is copied into the packaged SqueezeWax/ (decisions §15.36
+# part 2). The build fails if LICENSE is not committed at HEAD.
 #
 # This never renames anything. SqueezeWax ships as itself on every branch:
 # Slim::Utils::ExtensionsManager::findUpdates keys candidates by plugin name
@@ -66,6 +76,13 @@ GH_USER="d5c0d3"
 GH_REPO="lms-plugin-squeezewax"
 GH_BRANCH="$(git branch --show-current)"
 
+if [ "$GH_BRANCH" = "master" ]; then
+	echo "error: refusing to build on master: testers install from master's repo.xml," >&2
+	echo "       so a build here would publish an unchecked zip. Builds reach master" >&2
+	echo "       only through scripts/promote-master.sh (decisions §15.36 part 1)." >&2
+	exit 1
+fi
+
 if [ ! -f "$REAL_INSTALL_XML" ]; then
 	echo "error: $REAL_INSTALL_XML not found" >&2
 	exit 1
@@ -78,13 +95,18 @@ trap cleanup EXIT
 
 COMMIT="$(git rev-parse --short HEAD)"
 echo "==> Extracting ${NAME}/ from commit ${COMMIT} into ${TMP_DIR}"
-git archive HEAD -- "${NAME}" | tar -x -C "$TMP_DIR"
+if ! git cat-file -e "HEAD:LICENSE" 2>/dev/null; then
+	echo "error: LICENSE is not committed at HEAD — the zip must carry it" >&2
+	exit 1
+fi
+git archive HEAD -- "${NAME}" LICENSE | tar -x -C "$TMP_DIR"
 
 BUILD_DIR="$TMP_DIR/$NAME"
 if [ ! -d "$BUILD_DIR" ]; then
 	echo "error: git archive produced no ${NAME}/ at HEAD — is it committed?" >&2
 	exit 1
 fi
+mv "$TMP_DIR/LICENSE" "$BUILD_DIR/LICENSE"
 
 # --- 2. Bump the version -----------------------------------------------------
 if [ -f "$REPO_XML" ]; then
