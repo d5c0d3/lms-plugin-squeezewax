@@ -6471,3 +6471,89 @@ Each citation was located by symbol in `v1-buildout` and `refs/slimserver/`
   `launchScan`. The sentence "rescanning a single folder does not match
   albums" was therefore **not** added to the README or user guide; the decision
   needs revisiting in the design chat (`TODO.md`).
+
+### 15.37 Branches, version numbers and channels — for all lines
+
+**Decided 2026-10-13** (owner). Replaces the open "v2 branch rules" question
+(§15.36 TODO edit 6). Refines §15.36 part 1 (the tester URL is now the website).
+
+#### Part 1 — branches
+
+| Branch | Holds | Written by | Versions |
+|---|---|---|---|
+| `master` | what users install; the website | `scripts/promote-master.sh` only | copies of checked builds |
+| `v1-buildout` | v1: betas, 1.0.0, then fixes | `package-build.sh` | `1.0.0bN` → `1.0.0` → `1.0.1`, `1.0.2` … |
+| `v2-buildout` | v2; branched from `v1-buildout` when v2 work starts | `package-build.sh` | `2.0.0aN` (dev only) → `2.0.0bN` → `2.0.0` → fixes |
+| `vN-buildout` | same pattern | | `N.…` |
+
+#### Part 2 — version numbers
+
+- `aN` = dev build, never promoted. `bN` = beta. Plain = release; the last
+  digit counts fixes. No minor-version series: a milestone vN is `N.0.0`.
+- **Never a hyphen.** `1.0.0-beta1` compares **equal** to `1.0.0` in LMS
+  (verified), so an update would silently not be offered.
+- Verified order: `0.0.0.24 < 1.0.0b1 < 1.0.0b9 < 1.0.0b10 < 1.0.0 < 1.0.9 <
+  2.0.0a1 < 2.0.0a12 < 2.0.0b1 < 2.0.0`.
+- Every build takes the next number (dev builds included), so gaps between
+  promoted versions are normal.
+- The version's first number must match the branch's line (`v1-buildout` →
+  `1.…`), enforced by `package-build.sh`.
+
+#### Part 3 — channels: files on `master`, served by the website
+
+- **Website:** GitHub Pages from `master`, root folder. Enabled by the owner
+  2026-10-13. **Verified (WebFetch 2026-10-13):** the README is the home page
+  (`jekyll-readme-index`), its link to `docs/user-guide.md` resolves to
+  `docs/user-guide.html` (`jekyll-relative-links`), `repo.xml` is served, and the
+  owner installed from it. Plain on purpose; a designed page is later work.
+- **`repo.xml`** = normal users. URL:
+  `https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml`. During the v1 beta
+  it carries the beta, so testers move to 1.0.0 with no URL change. This is the
+  URL for the official plugin list at v1 (raw and Pages URLs are both accepted
+  there: 32 raw and 16 Pages of 75 in `LMS-Community/lms-plugin-repository`
+  `include.json` @ `91b3ffd`).
+- **`beta.xml`** = beta testers, from the first beta after 1.0.0. When no beta
+  is running it names the same release as `repo.xml`. Built when first needed,
+  not now.
+- A user configures **one** URL, never both.
+- The zip `<url>` stays on `raw.githubusercontent.com/…/master/dist/` (works:
+  0.0.0.24 installed from the website on 2026-10-13). Not moved to Pages.
+- `_config.yml` excludes internal files from the website, so a Liquid-like `{{`
+  or `{%` in them cannot break the site build. Inferred risk; `TODO.html` was
+  being published on 2026-10-13.
+
+#### Part 4 — merges
+
+Only promotion writes `master`. A fix lands on the **oldest line still receiving
+fixes**, then is merged forward into every newer line the same day. Never
+backward. `master` is never merged into a build line.
+
+#### Part 5 — database and prefs migrations
+
+Only the **newest** line adds a migration (`Schema` `@MIGRATIONS`, `$prefs->migrate`).
+Once `v2-buildout` exists, a v1 fix that needs one ships in v2 instead.
+Why: one number would mean two different changes on different servers — one-way
+and silent (`Schema::_migrate` refuses a newer file).
+
+#### Part 6 — retirement
+
+When `N+1.0.0` is promoted, line N gets no more fixes: `repo.xml` offers one version.
+
+#### Part 7 — project knowledge
+
+Follows `master` plus the newest active line.
+
+#### Part 8 — test servers (recorded, not needed now)
+
+A server that installed a newer line's build cannot run an older line again
+(migrations are one-way). Once the reference server runs v2 dev builds, v1 fixes
+need a reset ("Starting over") or a second LMS. `TODO.md` item.
+
+#### Re-verification (Claude Code, 2026-10-13)
+
+The verified order was re-run with `Slim::Utils::Versions->compareVersions` from
+`refs/slimserver/` (`public/9.1` @ `a670a38`): every adjacent pair in
+`0.0.0.24 < 1.0.0b1 < 1.0.0b9 < 1.0.0b10 < 1.0.0 < 1.0.9 < 2.0.0a1 < 2.0.0a12 <
+2.0.0b1 < 2.0.0` compares -1, and `1.0.0-beta1` vs `1.0.0` compares 0. No pair
+differs from the text above.
+

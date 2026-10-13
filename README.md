@@ -77,7 +77,10 @@ never plays audio and never changes your Discogs collection.
 SqueezeWax is not on the main LMS plugin list. In LMS, under Settings →
 Plugins → Additional Repositories, add:
 
-    https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/repo.xml
+    https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml
+
+If you added the older `raw.githubusercontent.com/…/master/repo.xml` address,
+replace it with this one; don't keep both.
 
 Then install and enable SqueezeWax from the plugin list.
 

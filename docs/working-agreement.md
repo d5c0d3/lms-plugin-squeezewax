@@ -143,15 +143,19 @@ version and will not know.
 
 ### Which branch project knowledge follows
 
-Corrected 2026-09-07 (replaces a same-day decision that didn't survive the
-day): **one branch carries the entire v1 build-out.** Project knowledge
-points at it and is not re-pointed between steps. Master is the last
-released state — until v1 ships, that means master is a rollback point, and
-it also carries the hardware-checked build testers install through its raw
-`repo.xml` URL (decisions §15.36 part 1; the merge gate is unchanged). After v1 ships, genuinely independent
-features get their own branches, and the re-pointing question returns in a
-form where it actually makes sense — a feature branch for a feature, not a
-slice of one for a step.
+**Current rule (decisions §15.37 part 7): project knowledge follows `master`
+plus the newest active line** (`v1-buildout` now; `v2-buildout` once it exists
+and is the newest). `master` is what users install and is served as the website
+(`repo.xml` at `https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml`); it
+changes only through `scripts/promote-master.sh`. A fix lands on the oldest line
+still receiving fixes and is merged forward the same day, so the newest line
+always contains it.
+
+History, kept for the reasoning below: corrected 2026-09-07 (replaces a
+same-day decision that didn't survive the day): **one branch carries the entire
+v1 build-out.** Project knowledge points at it and is not re-pointed between
+steps. The branch-per-feature question returns after v1 ships, in a form where
+it makes sense — a feature branch for a feature, not a slice of one for a step.
 
 **Why this replaced branch-per-build-order-step, recorded because it's the
 part worth keeping:** the original framing answered "should project

@@ -5,8 +5,10 @@
 # Usage (run on v1-buildout):
 #   scripts/promote-master.sh <version> <report-no> [--dry-run] [--merge-head]
 #
-# Testers install from master's repo.xml (decisions §15.36 part 1,
-# docs/dev-repo-workflow.md §5b). This merges the PACKAGE COMMIT for <version>
+# Users install from master's repo.xml, served by the website (decisions
+# §15.36 part 1, §15.37 part 3; docs/dev-repo-workflow.md §5b). A dev build (a
+# version containing "a", e.g. 2.0.0a1) is never promoted. The zip <url> stays
+# on raw.githubusercontent.com/.../master/dist/, not on Pages. This merges the PACKAGE COMMIT for <version>
 # into master and never rebuilds: package-build.sh bumps the version on every
 # run, so a rebuild would ship a version nobody hardware-checked. The zip is
 # carried byte for byte; version and <sha> survive because both describe its
@@ -17,8 +19,9 @@
 #   2. At that commit: repo.xml's version is <version>; the zip's sha1sum is
 #      repo.xml's <sha>; docs/user-guide.md exists (the README links it).
 #   3. Works in a temporary git worktree of master, removed on exit.
-#   4. If master has a repo.xml, <version> must be greater (forward only:
-#      migrations are one-way and LMS offers only a higher version).
+#   4. If master has a repo.xml, <version> must be greater by
+#      Slim::Utils::Versions->compareVersions from refs/slimserver/ (forward
+#      only: migrations are one-way and LMS offers only a higher version).
 #   5. `git merge --no-ff --no-commit` of the package commit. --merge-head
 #      merges v1-buildout's HEAD instead, allowed only when SqueezeWax/ and
 #      LICENSE are identical to the package commit's. Conflicts are allowed
@@ -60,8 +63,10 @@ done
 [ -n "$VERSION" ] && [ -n "$REPORT" ] \
 	|| die "usage: $0 <version> <report-no> [--dry-run] [--merge-head]"
 case "$VERSION" in
-	*[!0-9.]* | .* | *. | *..*) die "version must look like 0.0.0.24, got: $VERSION" ;;
+	*a*) die "$VERSION is a dev build (contains \"a\"); dev builds are never promoted (decisions §15.37 part 2)" ;;
 esac
+printf '%s' "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+)*([ab][0-9]+)?$' \
+	|| die "version must look like 0.0.0.24, 1.0.0b1 or 1.0.0, got: $VERSION"
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
@@ -137,16 +142,11 @@ fi
 if W cat-file -e HEAD:repo.xml 2>/dev/null; then
 	M_VERSION="$(W show HEAD:repo.xml | xml_version)"
 	[ -n "$M_VERSION" ] || die "could not read the version out of master's repo.xml"
-	if ! perl -e '
-		my @a = split /\./, $ARGV[0];
-		my @b = split /\./, $ARGV[1];
-		for my $i (0 .. ($#a > $#b ? $#a : $#b)) {
-			my ($x, $y) = ($a[$i] // 0, $b[$i] // 0);
-			exit 0 if $x > $y;
-			exit 1 if $x < $y;
-		}
-		exit 1;
-	' "$VERSION" "$M_VERSION"; then
+	[ -f "$REPO_ROOT/refs/slimserver/Slim/Utils/Versions.pm" ] \
+		|| die "refs/slimserver/ is missing: needed for Slim::Utils::Versions->compareVersions"
+	if [ "$(perl -I"$REPO_ROOT/refs/slimserver" -MSlim::Utils::Versions \
+		-e 'print Slim::Utils::Versions->compareVersions($ARGV[0], $ARGV[1])' \
+		"$M_VERSION" "$VERSION")" != "-1" ]; then
 		die "forward only: $VERSION is not greater than master's $M_VERSION"
 	fi
 	echo "==> Forward: master is at $M_VERSION, promoting $VERSION"
