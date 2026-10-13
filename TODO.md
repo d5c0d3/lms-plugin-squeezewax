@@ -1360,6 +1360,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-13: scan progress labels should carry the plugin name.** The
+      scan screen lines read "Discogs matching" and "Discogs collection sync"
+      (`PLUGIN_SQUEEZEWAX_MATCH_PROGRESS`, `PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS`
+      in `strings.txt`); the owner wants "SqueezeWax: Discogs matching" and
+      "SqueezeWax: Discogs collection sync", so a user can tell whose lines they
+      are. Strings only; a new build.
 - [ ] **2026-10-13: empty tag names are silent — a new user is not told
       identification is off.** Found on the production server (report 74):
       fresh install, no tag names entered, so the identification importer is
