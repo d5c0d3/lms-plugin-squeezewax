@@ -6651,3 +6651,84 @@ feature, v2 (`TODO.md`).
   polls, so the refresh adds no path that was not there.
   The refresh drops the page's own query string on purpose: a `doRescanNow=1`
   there would start a scan.
+
+### 15.39 Settings page: always-live status, disabled buttons — 1.0.0b3
+
+**Decided 2026-10-13** (owner). 1.0.0b2 is **not promoted**; 1.0.0b3 replaces it.
+Why hold: nobody but the owner runs a beta yet, and b2's notice was not visible
+in Material (report 76 A4 point 2), so b2 would be promoted with a known gap.
+
+1. **The page polls whenever it is open and visible**, not only while something
+   is pending. b2 polled only if the page loaded with the Master line or a scan
+   notice (`settings.html` `if (active())`), so an idle page never noticed a scan
+   starting (report 76 A4 point 1). Pause while `document.hidden`; resume on
+   `visibilitychange`. Same request as b2: one GET of the page itself, every 10 s.
+   - **Safe to poll while idle — verified by reading**: the GET path writes
+     nothing and sends nothing to Discogs (report 75's reading, §15.38). The one
+     side effect, `Slim::Music::Import->stillScanning` notifying `['rescan','done']`
+     for a dead external scanner, fires **once**: it calls
+     `scanningProcess(undef)` before notifying (slimserver `public/9.2` @
+     `eb59bbf`, `stillScanning`). So polling cannot cause repeated syncs.
+2. **During a scan, buttons are shown disabled (greyed), with the notice beside
+   them**, instead of being removed. Owner preference (report 76 A4 point 4).
+   The server-side refusal when an action is submitted during a scan stays.
+3. **Detect's result appears without a reload**: its status/result area joins the
+   refreshed regions, provided it holds no field the user types into.
+4. **Notices must be visible in Material and in the Default skin.** b2's scan notice
+   was in the template but not seen in Material; cause unknown. The no-tag-names
+   and first-steps notices are rendered as a setting's *title* with an empty
+   description (`settings.html` b2, `WRAPPER setting title=… desc=""`) — a long
+   sentence in a title slot may also render badly. Render all notices as body
+   text in a visible block; confirm in both skins on hardware.
+5. **The "Refused to set unsafe header Referer" console lines are not ours**
+   (report 76: SqueezeWax sets no Referer; probably Material's own script).
+   Inferred, not confirmed; recorded, not acted on.
+
+#### Re-verification and what was built (Claude Code, 2026-10-13)
+
+- **`stillScanning` clears before it notifies — confirmed**, in `refs/slimserver/`
+  at `public/9.1` @ `a670a38` (`slimserver.pl` `$VERSION = '9.1.2'`), not
+  `public/9.2` @ `eb59bbf` as cited in item 1: `Slim/Music/Import.pm:736-741`.
+  If the scanning process is blessed and not alive, it calls
+  `scanningProcess(undef)` (`:737`) and `setIsScanning(0)` (`:738`), cleans up
+  the progress rows (`:740`), and only then notifies `['rescan','done']`
+  (`:741`). The next call finds no process object and skips the block, so the
+  notification fires once per dead scanner whatever the number of GETs.
+- **How Material shows this page** (read in CDrummond's `lms-material`,
+  `master` @ `5ff153b3632a4766ef4f77f3193fe884f1696fef`, 2026-10-12):
+  - In an **iframe** (`html/js/iframe-dialog.js`, `<iframe id="embeddedIframe">`),
+    served under `/material/…`. Material's `skinconfig.yml` names **Classic** as
+    its skin parent, so the page goes through the EN templates and the
+    `setting` / `settingGroup` / `settingSection` blocks of
+    `HTML/EN/cmdwrappers:383-405` — there is no Material or Classic override of
+    them.
+  - Inside the iframe it loads `html/css/classic-skin/mods.css` (via
+    `skin.css`). Its rules that bear on this page: `#statusarea {display:none}`;
+    `.msk-is-non-touch .hiddenDesc` hidden, with `addHelp()` turning each
+    `setting` description into a help button; `input:disabled { opacity:0.7 }`
+    (so a disabled button is greyed in Material by Material's own rule); and,
+    from 1000 px up, `.settingGroup { padding-left:278px }` with
+    `.settingGroup .prefHead { position:absolute; width:250px; text-align:right }`
+    (wider breakpoints widen it to 350 px).
+  - **What that explains:** b2's no-tag-names and first-steps notices sat in
+    the `prefHead` title slot with an empty description, so on a desktop-width
+    Material window each long sentence was laid out in a 250 px right-aligned
+    column that takes no room in the flow. Fixed: both are now body text in a
+    bare `settingSection` (core does the same, `settings/server/basic.html:46`).
+  - **What it does not explain:** b2's invisible scan notice. It was a plain
+    `<div>` inside `.prefs`, and no Material rule hides such a div — its colour
+    and background rules (`mods.css` `.settingSection div` → `var(--text-color)`)
+    keep it readable, and `hideSections()` removes only sections the user lists
+    in Material's own `LMS_SETTINGS_HIDE` setting. **Unknown**; b3's hardware
+    check decides (`TODO.md`).
+- **What b3 builds** (`settings.html`; `Settings.pm` unchanged): the loop is
+  armed on every load and re-arms after every fetch, failed ones included; a
+  tick while `document.hidden` fetches nothing and stops the loop, and
+  `visibilitychange` to visible fetches at once and restarts it (not while a
+  fetch is in flight, which re-arms itself). The request and the region swap
+  are b2's. The three buttons are always rendered, with
+  `[% IF scanning %]disabled[% END %]` — core's form for its rescan button
+  (`settings/server/basic.html:92`) — and the notice after them; Sync now is
+  also disabled while a sync runs, beside the existing "sync is running" line.
+  Detect's progress and result are a sixth region, `swxDetectResult`, which
+  holds text and tables only.

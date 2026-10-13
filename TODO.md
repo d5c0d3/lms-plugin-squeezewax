@@ -16,7 +16,7 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
-- [ ] **Live status on an idle settings page, and Material behaviour during a
+- [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only
       if the page loads with the Master line or a scan notice
@@ -28,6 +28,11 @@ Shared reminder list. Both I and Claude Code read and update this.
       reload, polling works; console shows repeated "Refused to set unsafe
       header Referer", not from our code (grep), probably Material. (4) Owner prefers greyed-out/disabled buttons to
       removed ones. 2 needs devtools evidence (is `.swxScanNotice` in the DOM and visible).
+      → **§15.39** (2026-10-13): b2 not promoted; 1.0.0b3 polls whenever the
+      page is visible, keeps the buttons (disabled) during a scan, refreshes
+      Detect's result, and renders the notices as body text. Point 2 is still
+      unexplained by reading (§15.39 re-verification); b3's hardware checks
+      under **Waiting** decide it.
 - [x] A7 evidence: the "nothing to derive: …" info line **does** appear, after
       the manual sync (17:52:21) and from the scan-skip path (17:59:09, 18:11:14).
 
@@ -2251,6 +2256,28 @@ Each names its sites so the work is mechanical rather than a search.
       not yet seen on hardware.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
+      skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
+      and 4 there are run on b3 too. Promote only after these pass.
+      1. **Idle page notices a scan:** open the settings page with nothing
+         pending, then start a scan from another tab. Within ~10 s, all three
+         buttons are greyed (disabled) and the "scan is running" notice is
+         beside each; text typed into the token and tag fields beforehand
+         survives. When the scan ends, the buttons are enabled again within
+         ~10 s, without a reload, and a press works.
+      2. **Page opened during a scan:** the same disabled buttons and notices.
+         In Material, **is the notice visible?** If not: devtools, is
+         `.swxScanNotice` in the iframe's DOM, and what is its computed style.
+      3. **Polling:** devtools shows one GET of `settings.html` (no query
+         string) every 10 s while the tab is visible, none while it is in the
+         background, and one at once on returning. No Discogs request in the
+         log from those GETs (`ss`/log check, b2's A6, not yet run).
+      4. **Detect:** press Detect; the progress "(n/total)" counts up and the
+         result appears without a reload.
+      5. **Notices:** with no tag names, and on a server with no sync marker,
+         both notices read as normal paragraphs at the top of the page in both
+         skins, Material at a window wider than 1000 px included.
 
 - [ ] **2026-10-13: 1.0.0b2's hardware checks (decisions §15.38).** Offline
       suites cover the server side; these need a browser and a server.
