@@ -16,6 +16,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [x] **`master` = 1.0.0b1** (2026-10-13, hardware report 74), promoted at
+      `e151111`. Reference server: LMS offered 1.0.0b1 over 0.0.0.24, loads
+      cleanly, `user_version=7`, "You own a version" renders, owned view 205
+      albums. Network check passed: website `repo.xml` names 1.0.0b1, zip sha1 =
+      `cef515a5137bf96624a5992123cfb2724aecfa16`, home page shows the install URL,
+      `TODO.html` 404. Website updated about 2 min after the push (16:31:46
+      polling start to 16:33:17; push time not recorded, so an upper bound).
+      Production switch to the website URL (part C): owner, pending.
 - [x] **`master` = 0.0.0.24** (2026-10-13, hardware report 71), promoted at
       `151186f`. Network check passed 2026-10-13 (raw `repo.xml`
       names 0.0.0.24 and a `/master/` URL; zip sha1 = `a8386a71dc4b4ee3e215ee24c7f418500c21d944`;
