@@ -63,8 +63,8 @@
 [% END %]
 
 [%# The Prices section: the stored currency label, rendered only; nothing is
-    fetched for it. It sits after Sync because Test token and a sync are the two
-    things that learn the currency (decisions §15.34). %]
+    fetched for it. It sits after Sync because only a collection sync learns the
+    currency (decisions §15.35). %]
 [% WRAPPER setting title="PLUGIN_SQUEEZEWAX_CURRENCY" desc="PLUGIN_SQUEEZEWAX_CURRENCY_DESC" %]
 	[% IF currencyCode %]
 		<div>[% "PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN" | string | replace('%s', currencyCode) | html %]</div>

@@ -2158,17 +2158,13 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-10-13: Test token does not store the currency** (decisions §15.34
-      item 3). On 0.0.0.21 with a correct token the label stayed empty after
-      "Test token"; a fake token clears it as designed. Wording now requires a
-      sync. Find out whether `_testCurrency` is reached (INFO line "no currency
-      from the Discogs profile") and what the reply held.
-
-- [x] **2026-10-13: hold and hint checks** (decisions §15.33), on 0.0.0.20.
-      → 2026-10-13, report 66 (decisions §15.34): the hold was verified by CLI
-      and the hint reads correctly (now the Prices section). The Material scroll
-      check (item 2) was not run; the owner accepted the CLI evidence. Item 1,
-      the countdown, stays open under its own entry below.
+- [x] **2026-10-13: Test token does not store the currency** (decisions §15.34
+      item 3). → 2026-10-13: cause found by reading, and the profile request
+      dropped from Test token (decisions §15.35). Only a sync learns it.
+- [ ] **2026-10-13, low priority: Test token's username is cleared by its own
+      save** (decisions §15.35 item 3). With a token that differs from the
+      stored one, the "Data provided by Discogs" link falls back to discogs.com
+      until the next sync. Fix: save the token first, as `_syncNow` does.
 
 - [ ] **2026-10-13: the busy line counts down and clears** (decisions §15.32).
       **Observe when the internet happens to drop; do not schedule a test or ask

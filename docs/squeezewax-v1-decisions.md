@@ -6303,3 +6303,29 @@ committed; §9.1 needs them for nothing except Discogs' breaking-change emails.
    collection sync: the unknown line reads "Not known yet. Press Sync collection
    now." and the description names the sync alone. The Test token request is
    unchanged; why it does not store the label is open (`TODO.md`).
+
+
+### 15.35 Test token no longer learns the currency
+
+**Decided 2026-10-13**, design chat (inferred from reading, not run), owner's
+choice.
+
+1. **Cause** of §15.34 item 3. Test token stored the currency, and the page's
+   own save then cleared it:
+   - `_tokenTested` / `_testCurrency` set `discogsUsername` and
+     `discogsCurrency`;
+   - `_finishTestToken` calls `SUPER::handler`, and every submit carries the
+     hidden `saveSettings=1`, so core saves `pref_discogsToken`
+     (`Slim/Web/Settings.pm:156-162`);
+   - a token that differs from the stored one fires the `discogsToken` change
+     handler (`Plugin.pm:67-90`), which clears the username and currency just
+     written. `_syncNow` avoids this because it saves the token first.
+2. **Only the server sync learns the currency.** `_testCurrency` and its call
+   are removed, so Test token is back to one request (the identity). This
+   amends §15.31 ruling 15, which named both, and closes §15.34's open item.
+   `API.pm`'s `_profilePath` and `_profileCurrency` stay: the sync uses them.
+3. **Known and accepted** (the owner chose this knowing it): with a token that
+   differs from the stored one, Test token still sets `discogsUsername` and the
+   same save then clears it, so the "Data provided by Discogs" collection link
+   falls back to discogs.com until the next sync. The fix would be to save the
+   token first, as `_syncNow` does. Recorded, not built.

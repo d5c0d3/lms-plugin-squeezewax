@@ -147,6 +147,8 @@ source field is missing or empty is left out, never shown blank.
 
 ## §4b. The currency label (`Settings.pm`, `API/Async.pm`, `Plugin.pm`)
 
+> Amended: Test token no longer asks for the currency; only the sync does (decisions §15.35).
+
 Decision 61, ruling 15.
 
 - **New pref `discogsCurrency`** (string, default `''`). It is written only
