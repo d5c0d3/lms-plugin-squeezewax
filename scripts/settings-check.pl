@@ -1358,8 +1358,8 @@ diag('§15.38 item 1: the page says when no tag names are set');
 	local *Plugins::SqueezeWax::Tags::tagNames = sub { ['DISCOGS_RELEASE_ID'] };
 	is( render()->{noTagNames}, 0, '  ...and a list with a name clears it' );
 
-	like( $tpl, qr/IF noTagNames %\]\s*\[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_NO_TAG_NAMES"/,
-		'  ...the template renders it only then' );
+	like( $tpl, qr/IF noTagNames %\]\s*\[% WRAPPER settingSection %\]\s*<div class="swxNotice">\[% "PLUGIN_SQUEEZEWAX_NO_TAG_NAMES" \| string %\]<\/div>/,
+		'  ...the template renders it only then, as body text (§15.39 item 4)' );
 
 	# At the top: before the first section that is not a notice.
 	ok( index( $tpl, 'PLUGIN_SQUEEZEWAX_NO_TAG_NAMES' ) < index( $tpl, 'title="PLUGIN_SQUEEZEWAX_TOKEN"' ),
@@ -1390,8 +1390,8 @@ diag('§15.38 item 2: the first-steps hint until a sync has ever completed');
 	is( render()->{firstSteps}, 0,
 		'  ...not shown with a broken database, which cannot say and has its own notice' );
 
-	like( $tpl, qr/IF firstSteps %\]\s*\[% WRAPPER setting title="PLUGIN_SQUEEZEWAX_FIRST_STEPS"/,
-		'the template renders the hint only then' );
+	like( $tpl, qr/IF firstSteps %\]\s*\[% WRAPPER settingSection %\]\s*<div class="swxNotice">\[% "PLUGIN_SQUEEZEWAX_FIRST_STEPS" \| string %\]<\/div>/,
+		'the template renders the hint only then, as body text (§15.39 item 4)' );
 
 	like( $strings, qr/^PLUGIN_SQUEEZEWAX_FIRST_STEPS
 	EN	To start: enter your token and tag names and save\. Then run a library rescan once: Basic Settings \x{e2}\x{86}\x{92} Rescan Media Library \x{e2}\x{86}\x{92} "Look for new and changed media files"\. SqueezeWax reads your collection during the scan\.$/m,
@@ -1429,7 +1429,7 @@ diag('§15.38 item 7: the derive line says running, waiting or paused');
 diag('§15.38 item 3: the status regions carry stable ids');
 
 {
-	for my $id (qw(swxSyncLast swxDerive swxDeriveLine swxScanToken swxScanSync swxScanDetect)) {
+	for my $id (qw(swxSyncLast swxDerive swxDeriveLine swxScanToken swxScanSync swxScanDetect swxDetectResult)) {
 		my $count = () = $tpl =~ /\bid="\Q$id\E"/g;
 		is( $count, 1, "the template carries id=\"$id\" exactly once" );
 	}
@@ -1443,8 +1443,8 @@ diag('§15.38 item 3: the status regions carry stable ids');
 		[ swxScanDetect => 'detectTagNames' ] )
 	{
 		my ( $id, $button ) = @$pair;
-		like( $tpl, qr/id="$id">\s*\[% IF scanning %\]\s*<div class="swxScanNotice">.*?name="$button".*?<\/div>/s,
-			"  ...$id holds the notice or, after the scan, the $button button" );
+		like( $tpl, qr/id="$id">\s*<input name="$button".*?\[% IF scanning %\]\s*<div class="swxScanNotice">.*?<\/div>/s,
+			"  ...$id holds the $button button, and the notice after it while scanning" );
 	}
 
 	# The derive block sits inside its region, so it can appear and disappear.
@@ -1452,11 +1452,22 @@ diag('§15.38 item 3: the status regions carry stable ids');
 		'the derive block is inside an always-rendered region' );
 
 	# No form field the user types into is inside a region.
-	for my $id (qw(swxSyncLast swxDerive swxScanToken swxScanSync swxScanDetect)) {
+	for my $id (qw(swxSyncLast swxDerive swxScanToken swxScanSync swxScanDetect swxDetectResult)) {
 		my ($region) = $tpl =~ /(<div id="\Q$id\E">.*?)(?:<div id="swx|\[% END %\]\s*\n\s*\[%# |$)/s;
 		ok( length( $region || '' ), "  ...$id is found" );
-		unlike( $region || '', qr/type="(?:text|password)"|pref_discogs/,
+		unlike( $region || '', qr/type="(?:text|password)"|pref_discogs|<textarea/,
 			"  ...$id contains no editable field" );
+	}
+
+	# §15.39 item 3: Detect's result joins the refresh only because it holds
+	# no control at all - not even a button.
+	{
+		my ($region) = $tpl =~ /(<div id="swxDetectResult">.*?)\[% END %\]\s*\n\s*\[%# /s;
+		ok( length( $region || '' ), "  ...swxDetectResult is found" );
+		unlike( $region || '', qr/<input|<textarea|<select/i,
+			'  ...and holds no input, textarea or select' );
+		like( $region || '', qr/IF detection %\].*?detection\.running.*?DETECT_RUNNING/s,
+			'  ...but does hold the run\'s progress line' );
 	}
 
 	my ($script) = $tpl =~ /<script type="text\/javascript">(.*?)<\/script>/s;
@@ -1467,12 +1478,43 @@ diag('§15.38 item 3: the status regions carry stable ids');
 	like( $script, qr/setTimeout\(tick, 10000\)/, '  ...every 10 s' );
 	unlike( $script, qr/location\.reload|\.submit\(|location\.href\s*=/,
 		'  ...and never reloads or submits' );
-	like( $script, qr/var regions = \['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect'\]/,
+	like( $script, qr/var regions = \['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect', 'swxDetectResult'\]/,
 		'  ...replacing only the named regions' );
-	like( $script, qr/getElementById\('swxDeriveLine'\)\s*\|\|\s*document\.querySelector\('\.swxScanNotice'\)/,
-		'  ...and only while the derive line or a scan notice is present' );
+	unlike( $script, qr/swxDeriveLine|querySelector\('\.swxScanNotice'\)|active\(\)/,
+		'  ...whatever the page shows: nothing gates the loop on what is pending (§15.39 item 1)' );
+	like( $script, qr/\n\ttimer = setTimeout\(tick, 10000\);\n\}\)\(\);\s*$/,
+		'  ...armed unconditionally on load' );
+	like( $script, qr/if \(fired \|\| document\.hidden\) \{ return; \}/,
+		'  ...no fetch while the page is hidden' );
+	like( $script, qr/addEventListener\('visibilitychange'.*?clearTimeout\(timer\);\s*tick\(\);/s,
+		'  ...and an immediate fetch when it becomes visible again' );
 	like( $script, qr/wire\(mine\)/,
 		'  ...re-wiring any button a refresh brings in, so the buttons keep working' );
+}
+
+diag('§15.39 item 2: the buttons stay on the page, disabled while scanning');
+
+{
+	for my $button (qw(testToken syncNow detectTagNames)) {
+		my ($tag) = $tpl =~ /(<input name="$button"[^>]*\/>)/s;
+		ok( $tag, "the $button button is in the template" );
+
+		# The disable is in the tag itself, and nothing outside it removes the
+		# button: it is the first thing in its region, never inside an IF.
+		like( $tag || '', qr/\[% IF scanning(?: \|\| sync\.running)? %\]disabled\[% END %\]/,
+			'  ...carrying `disabled` while scanning, and only then' );
+	}
+
+	for my $id (qw(swxScanToken swxScanSync swxScanDetect)) {
+		like( $tpl, qr/<div id="$id">\s*<input name="/,
+			"  ...$id opens with its button, outside any condition" );
+	}
+
+	unlike( $tpl, qr/\[% IF scanning %\]\s*<div class="swxScanNotice">[^\n]*\n\s*\[% ELSE %\]\s*<input/,
+		'no scan branch replaces a button with the notice any more' );
+
+	like( $tpl, qr/<input name="syncNow"[^>]*\[% IF scanning \|\| sync\.running %\]disabled/s,
+		'Sync now is disabled while a sync runs too' );
 }
 
 diag('§15.38 item 3: a GET with no parameters does nothing but render');
