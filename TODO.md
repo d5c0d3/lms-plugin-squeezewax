@@ -1339,9 +1339,27 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-10-13: does a version badge wait for the next sync after Derive?**
-      Inferred from hand-off 9b B0's prediction, not confirmed; hand-off 71
-      measures it. Matters for the README's "Starting over" step 5.
+- [x] **2026-10-13: does a version badge wait for the next sync after Derive?**
+      **Yes — measured, hand-off 71 (0.0.0.24, reset test C5/C6).** After a
+      fresh scan and a finished Derive (474 releases, 22.6 min) ownership was
+      unchanged at exact 150 / version 50 / absent 307; only "Sync collection
+      now" moved it to version 54 / absent 303. README "Starting over" step 5 is
+      right as written.
+- [ ] **2026-10-13: five `conflict` albums keep a release id and derived master
+      across an upgrade but not across a reset.** Hand-off 71 C7: in the old
+      database the five conflict albums (Baseballs/Strike, Tuxedomoon, Odetta,
+      Sparks, Police) were `strict` with a release id and a derived master and
+      also in the queue as `conflict`; after a reset the same albums have no
+      release id and no master. Derived 443 -> 437 is that plus the one manual
+      row. Unexplained why a re-decide at `logic_version` 2 left the old ids.
+      Needs the design chat; the old rows probably predate §15.22's
+      both-candidates rule and were never re-decided.
+- [ ] **2026-10-13: hardware sessions cannot read our `info` log lines.** Hand-off
+      71 C5: `Derive`'s `info` lines were absent from `server.log` (running level
+      for the category back at ERROR, §4.1 rule 3), so Derive runs and request
+      count were inferred from `derived_at` only (one request per release
+      assumed). A hand-off needing them must first have the owner raise the
+      plugin's own category (never `network.*`).
 - [ ] **2026-10-13: rules before a v2 branch is created (not designed).** Its
       own build version series (whether LMS ranks e.g. `0.0.1.N` above
       `0.0.0.N` is unverified); database and prefs migration numbers cannot be
@@ -1957,7 +1975,11 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **Scanner→server handover — re-scoped, not closed.** 2026-10-13:
       §15.36 part 7 accepted "not matched, documented" and was to be ticked
       here, but hand-off 70 found its premise wrong: a single-folder rescan
-      DOES reach our importer (`launchScan` hands `scanner.pl` the folder as a
+      DOES reach our importer — **observed 2026-10-13, hand-off 71 E**: `rescan
+      full <folder file URL>` over JSON-RPC ran the importer across all 765
+      albums (`examined 0 ... skipped 765`, nothing changed) and the scan-time
+      sync (205 items, 4 requests), with the database identical afterwards
+      (`launchScan` hands `scanner.pl` the folder as a
       trailing argument; `scanner.pl:348` runs every post importer regardless;
       `OnlineLibraryBase` opts out explicitly, ours does not). Inferred from
       reading, not observed. The README and user guide therefore do **not** carry
