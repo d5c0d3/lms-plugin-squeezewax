@@ -74,13 +74,17 @@ never plays audio and never changes your Discogs collection.
 
 ## Install
 
-SqueezeWax is not on the main LMS plugin list. Add its repository in LMS under
-Settings → Plugins → Additional Repositories:
+SqueezeWax is not on the main LMS plugin list. In LMS, under Settings →
+Plugins → Additional Repositories, add:
 
-    https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/v1-buildout/repo.xml
+    https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/master/repo.xml
 
-Then install and enable SqueezeWax from the plugin list. This repository is
-a development branch; its version series is `0.0.0.N`.
+Then install and enable SqueezeWax from the plugin list.
+
+**This is a beta.** Newer builds appear in the plugin list as updates. You
+cannot go back to an older version: an update may change the SqueezeWax
+database, and an older version refuses a newer database. If you need a clean
+start, see [Starting over](#starting-over).
 
 ## Discogs setup
 
@@ -194,8 +198,8 @@ if one of those actions is submitted anyway.
   match row is removed only by "Remove this match" in the review queue, or when
   a scan finds that its tags no longer name a release and the row carries no
   decision. Removing or changing the token, or uninstalling the plugin, deletes
-  nothing: `squeezewax.db` stays in LMS's preferences directory until you delete
-  it.
+  nothing: `squeezewax.db` stays in LMS's preferences directory until you
+  [delete it](#starting-over).
 - Requests are limited to stay within Discogs' limit of 60 requests a minute.
   A collection of N items costs about N/100 requests per sync.
 
@@ -213,8 +217,48 @@ if one of those actions is submitted anyway.
   same title and artist, or for compilations ("Various Artists"); those albums
   go to the review queue.
 - The review queue's "Choose from my collection" lists a fixed set of fields.
-- This is a development build; several hardware checks are still open in
-  `TODO.md`.
+- This is a beta. Untested: Windows, Docker, piCorePlayer; the scan-time sync's
+  HTTPS outside macOS.
+- Whether ownership results need a freshness limit is an open question with
+  Discogs (Help Center request #1281019); the plugin may change with the
+  answer.
+
+## Starting over
+
+If SqueezeWax gets into a state its pages can't fix, delete its database.
+
+**You keep:** your token, Discogs username, currency and tag names.
+**You lose:** matches you chose by hand, choices made in the review queue, and
+the master releases fetched from Discogs (they are fetched again, slowly, in
+the background — one Discogs request per album with a release ID).
+
+1. Find LMS's preferences folder: LMS's Information page lists it as
+   "Preferences Folder".
+2. Stop LMS.
+3. In that folder, delete `squeezewax.db`, and `squeezewax.db-wal` and
+   `squeezewax.db-shm` if they are there. Delete nothing else. (To keep a
+   backup, copy all three somewhere first; restore all three together, with
+   LMS stopped.)
+4. Start LMS, then run a library rescan ("look for new and changed music").
+   This identifies your albums again and reads your collection.
+5. When the settings page no longer shows "Master releases" progress, press
+   "Sync collection now" once.
+
+## Reporting problems
+
+Open an issue at <https://github.com/d5c0d3/lms-plugin-squeezewax/issues>.
+Include:
+
+- LMS version, operating system (and Docker or piCorePlayer if used), and the
+  SqueezeWax version from the plugin list;
+- how many albums "Records I own" shows and how many the review queue lists;
+- log lines: set `plugin.squeezewax` to INFO in LMS's logging settings,
+  reproduce the problem, then copy only lines that contain
+  `Plugins::SqueezeWax` (and any lines that continue them).
+
+**Never include your Discogs token.** Do not raise network logging
+(`network.asynchttp`, `network.http`): at debug level it prints your token.
+Lines from other plugins may contain their own secrets — leave them out.
 
 ## Discogs notice
 

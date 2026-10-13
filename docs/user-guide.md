@@ -65,8 +65,9 @@ first, and only looks at artist names if that fails.
   the first run of digits, so vinyl positions like A1 and B1 both become 1. If
   you want the Discogs position, keep it in a separate tag.
 - **Compilations.** Set `COMPILATION` to 1 on various-artist releases and DJ
-  mixes, so LMS lists them under Compilations. Having "Various" as the album
-  artist does not do that on its own.
+  mixes, so LMS lists them under Compilations. `COMPILATION` = 1 makes it
+  certain. Without it, LMS guesses from the album artist and the track artists,
+  and Discogs' "Various" is not LMS's "Various Artists".
 - **ReplayGain.** Add ReplayGain tags for level matching. LMS can apply track or
   album gain, chosen per player.
 
