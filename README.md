@@ -152,7 +152,7 @@ not change the tag names (the token field still saves). The same notice appears
 if one of those actions is submitted anyway.
 
 While a scan is running or "Master releases" is shown, the page updates those
-lines by itself every 10 seconds, without reloading and without touching
+lines by itself every 5 seconds, without reloading and without touching
 anything you have typed.
 
 ## Using it

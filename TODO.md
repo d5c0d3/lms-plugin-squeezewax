@@ -3630,10 +3630,13 @@ Each names its sites so the work is mechanical rather than a search.
   shows a fixed set.
 - Future: orphan relink for users with manual links and no tag names
   (decisions §15.16 part 11).
-- **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
+- [x] **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
   ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
   promoted bytes are the ones hardware-checked. Consider for the next build.
   Report 78 A: the no-tag-names and first-steps notices were not provoked.
+  → Done 2026-10-14, decisions §15.40: 5 s.
+- [ ] Hardware check for 1.0.0b4: settings status refreshes in ~5 s (reference
+      server).
 - **2026-10-13: report 78 recorded — `master` = 1.0.0b3 (`91300ec`).** A pass
   (reference server, Material and Default); B pass (website `repo.xml` and zip
   sha1 `58c22a97…3183` verified); C: Docker install and load pass, log clean,

@@ -4836,6 +4836,12 @@ Not a defect of this step — it is LMS's behaviour — but it is the one condit
 under which 8b does nothing and says almost nothing. Recorded in `TODO.md` as an
 open question: whether `ScanSync` should check `hasSSL` itself and log at error.
 
+> Correction 2026-10-14: 'merely warns' understates it. The warning is logged
+> under network.http (slimserver eb59bbf,
+> `Slim/Networking/SimpleSyncHTTP.pm:79`), default level ERROR
+> (`Slim/Utils/Log.pm:897`), so by default nothing is logged at all. README fixed
+> in fde4605.
+
 ### 15.19 Two findings from the title-route checks: rule 3 works, and node F cannot fire
 
 **Found 2026-09-28** on the reference server (0.0.0.11), from two checks aimed at
@@ -6732,3 +6738,13 @@ in Material (report 76 A4 point 2), so b2 would be promoted with a known gap.
   also disabled while a sync runs, beside the existing "sync is running" line.
   Detect's progress and result are a sixth region, `swxDetectResult`, which
   holds text and tables only.
+
+### 15.40 Settings page poll interval 5 s — 1.0.0b4 (2026-10-14)
+
+- **Owner suggestion, report 78:** 10 s felt slow.
+- **Verified by reading (fde4605):** the poll fetches the page path only, so the
+  `Settings.pm` handler falls through to a plain render; Discogs is called only on
+  `syncNow` / `testToken`. Each render runs one `COUNT(*)` (`beforeRender`). The
+  poll runs only while the page is visible (§15.39).
+- **Inferred:** load doubles on a negligible base; no Discogs impact.
+- **Unverified:** cost on slow hardware (piCorePlayer); not measured.
