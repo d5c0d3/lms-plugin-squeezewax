@@ -2190,7 +2190,7 @@ Each names its sites so the work is mechanical rather than a search.
       (emblems are a fixed list keyed on `extid`) and LMS core (one icon slot in
       the Default UI's `xmlbrowser.html`). Needed for design §4's artwork badge.
       Not decided whether or when to ask. Decisions §15.25.
-      2026-10-14: Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: <ISSUE URL>. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
+      2026-10-14: Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: https://github.com/CDrummond/lms-material/issues/1288. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
 - [ ] **2026-09-29, future feature: a SqueezeWax app** (Listen Later's `is_app`
       pattern) as a low-level Discogs browse. Design §11 v3, beside Flow 2.
 - [ ] **2026-09-29, v2: master search for version albums**, so a version album
