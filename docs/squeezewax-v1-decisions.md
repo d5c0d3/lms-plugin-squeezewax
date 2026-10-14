@@ -5697,6 +5697,8 @@ Recorded so they are not re-proposed as new:
   inferred URL forms, hardware checks.
 - One library, one collection.
 
+**2026-10-14:** Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: <ISSUE URL>. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
+
 ### 15.26 Step 9 on hardware, and step 9b: links for apps, a line for players
 
 **Observed 2026-09-30** on the reference server (0.0.0.14, hand-offs 41 and 44);
