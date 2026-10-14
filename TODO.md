@@ -3644,5 +3644,8 @@ Each names its sites so the work is mechanical rather than a search.
   "Master releases" paused→running check, and the master job itself. Scan-time
   sync on Docker not distinguishable from the manual button. Re-check when a
   library change leaves derive work pending.
-  Likely the same unsaved-level cause (inferred, 2026-10-14). Re-run with the
-  level saved before closing.
+  Correction 2026-10-14: the cause is nothing pending (above), not the log
+  level. Saving plugin.squeezewax at Info may help only with telling scan-time
+  sync from the manual button (inferred). Opportunistic check on production
+  after 1.0.0b4 is promoted: next time albums are added, with the level set to
+  Info AND saved. Not a gate for b4.

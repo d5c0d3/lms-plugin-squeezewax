@@ -190,6 +190,8 @@ Never run `git push` and never try to work around it. Commit locally, then end y
 
 The owner pushes.
 
+`package-build.sh --publish` pushes; never use it. Build without it and commit as in hand-off 82.
+
 ## Sync reminder
 
 `docs/squeezewax-design.md` is mirrored into a claude.ai project via
