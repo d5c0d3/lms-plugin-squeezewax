@@ -3682,3 +3682,13 @@ Each names its sites so the work is mechanical rather than a search.
   sync from the manual button (inferred). Opportunistic check on production
   after 1.0.0b4 is promoted: next time albums are added, with the level set to
   Info AND saved. Not a gate for b4.
+- [ ] Next build: installed entry on the LMS plugins page has no "More info"
+      link — install.xml had no homepageURL (slimserver eb59bbf
+      ExtensionsManager.pm:340; repo.xml link is not merged into installed
+      entries, Settings/Server/Plugins.pm prepareDetails). Fixed on branch
+      (hand-off 86); live after the next promotion. Check: plugins page shows
+      the link for the installed plugin.
+- [ ] promote-master.sh: the TODO.md line-check's abort path (a missing master
+      line) is untested (report 83/84).
+- [x] Report 83/84 recorded: 1.0.0b4 promoted (abe3323), website and zip sha
+      verified, production Docker updated, log level Info saved.

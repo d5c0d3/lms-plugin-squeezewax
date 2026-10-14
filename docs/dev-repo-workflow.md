@@ -201,7 +201,7 @@ directly):
 			<creator>d5c0d3</creator>
 			<category>musicservices</category>
 			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/<branch>/dist/SqueezeWax_1_0_0b1.zip</url>
-			<link>https://github.com/d5c0d3/lms-plugin-squeezewax/issues</link>
+			<link>https://d5c0d3.github.io/lms-plugin-squeezewax/</link>
 			<sha>&lt;sha1 of that exact zip&gt;</sha>
 		</plugin>
 	</plugins>

@@ -261,7 +261,8 @@ fi
 
 # --- 6. Write repo.xml --------------------------------------------------------
 ZIP_URL="https://raw.githubusercontent.com/${GH_USER}/${GH_REPO}/${GH_BRANCH}/dist/${ZIP_NAME}"
-ISSUES_URL="https://github.com/${GH_USER}/${GH_REPO}/issues"
+# <link> is the project website; the website links to the issues page.
+SITE_URL="https://${GH_USER}.github.io/${GH_REPO}/"
 
 cat > "$REPO_XML" <<XML
 <?xml version="1.0"?>
@@ -276,7 +277,7 @@ cat > "$REPO_XML" <<XML
 			<creator>${GH_USER}</creator>
 			<category>${CATEGORY}</category>
 			<url>${ZIP_URL}</url>
-			<link>${ISSUES_URL}</link>
+			<link>${SITE_URL}</link>
 			<sha>${SHA1}</sha>
 		</plugin>
 	</plugins>
