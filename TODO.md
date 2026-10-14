@@ -3183,6 +3183,10 @@ Each names its sites so the work is mechanical rather than a search.
       build line", so the TODO item was copied by hand, not merged. The site files
       are not on `v1-buildout`. **Expect a `TODO.md` conflict at the next
       promotion**, since both sides added to Housekeeping: keep both items.
+      **Inferred, not tested:** promotion merges the package commit into master,
+      and the site files (`index.html`, `worked-example.html`, `assets/`) survive
+      it because `v1-buildout` never had them and so never deletes them. Check
+      the `promote-master.sh --dry-run` diff for b4 shows no deletion of them.
 
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README
