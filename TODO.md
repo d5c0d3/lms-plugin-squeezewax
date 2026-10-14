@@ -36,6 +36,16 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [x] A7 evidence: the "nothing to derive: …" info line **does** appear, after
       the manual sync (17:52:21) and from the scan-skip path (17:59:09, 18:11:14).
 
+- [x] **`master` = 1.0.0b4** (2026-10-14, hardware report 83), promoted at
+      `abe3323` (local; owner pushes). Reference server: 1.0.0b4 installed, log
+      clean, `user_version=7`; settings poll one GET per 5 s on Material and
+      Default, rescan notice and greyed buttons within ~5 s, no GETs while the tab
+      is hidden, no console error of ours, no connection to the Discogs addresses
+      while idle. Production (Docker): updated, log clean, status refreshes,
+      logging level saved. Still open: website `repo.xml` names 1.0.0b4 and zip
+      sha1 matches, after the push; Info-level lines for the master job and the
+      scan-time sync on the next album additions.
+
 - [x] **`master` = 1.0.0b1** (2026-10-13, hardware report 74), promoted at
       `e151111`. Reference server: LMS offered 1.0.0b1 over 0.0.0.24, loads
       cleanly, `user_version=7`, "You own a version" renders, owned view 205
