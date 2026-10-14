@@ -1380,6 +1380,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-14: limit master lookups to tagged albums that could plausibly
+      match something in the collection.** Idea only, from a design session; not
+      designed, do not build. The lookup (`Derive.pm`, `_pending`) runs for every
+      identified album, 475 releases cold on the reference library. Risk: a
+      plausibility filter misses exactly the pressing-mismatch cases node F
+      exists for (`Derive.pm` header; decisions §15.19, §15.22). Unverified
+      whether any filter could be cheap and safe enough to be worth the loss.
+
 - [x] **2026-10-13: scan progress labels should carry the plugin name.** The
       scan screen lines read "Discogs matching" and "Discogs collection sync"
       (`PLUGIN_SQUEEZEWAX_MATCH_PROGRESS`, `PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS`
@@ -2257,6 +2265,16 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **2026-10-14: large collections against the scan-time sync cap.**
+      `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
+      `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
+      `API.pm:350`), about 100 s or more at 60 a minute, so the cap is close.
+      **Unverified:** (a) what the user sees when the cap is hit; (b) that the
+      post-scan fallback sync (`Plugin.pm` `_rescanDone` → `_syncTick`) then
+      completes it; (c) the ownership pass's in-memory cost at that size (the
+      only reference is 203 items / 765 albums). Needs a large real or simulated
+      collection. Source: forum feedback on 1.0.0b3.
+
 - [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
       skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
       and 4 there are run on b3 too. Promote only after these pass.
@@ -3096,6 +3114,22 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-14: forum user (Paul Webster) asked for configurable filters,
+      e.g. title = ISIHAC\*,** to avoid "unnecessary Discogs calls" for
+      recordings never on Discogs (old radio shows). Waiting for his answer: did
+      he see requests, a badge or a queue entry, or was he reading the
+      description?
+      **Inferred from reading the code (v1-buildout at 060982a, same plugin source
+      as master's 1.0.0b3), not observed on a running server:** the
+      request-saving reason does not apply. An untagged album causes 0 Discogs
+      requests. The requests are: the collection sync (identity +
+      ceil(items/100)); the master lookup, only for albums with a
+      `discogs_release_id` (`Derive.pm` `_pending`); the two details submenus when
+      opened (`Details.pm`); and Test token (`Settings.pm`, `/oauth/identity`).
+      No search, marketplace or wantlist endpoint is called anywhere.
+      **Possible residual value (unverified):** "never badge or queue this album"
+      if title matching mis-fires. v2 candidate, not designed.
+
 - [ ] **2026-10-13: two more questions for Help Center Request #1281019 (or a
       follow-up)** (§15.36). (a) Plain-text attribution on players (§15.31
       ruling 10): is "Data provided by Discogs" plus the address as text
@@ -3134,6 +3168,13 @@ Each names its sites so the work is mechanical rather than a search.
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
+
+- [x] **2026-10-14: stale cost figure in `Derive.pm`'s header and plan 8c §5.**
+      "Measured: 475 requests, 11.0 minutes" was the plan's estimate; hardware
+      measured 25 min 18 s over 18 runs, because the estimate left out the 60 s
+      re-arm between runs. The shape is runs × ~90 s (decisions "out by a factor
+      of 2.3", around `docs/squeezewax-v1-decisions.md:5424`). Comment and plan
+      correction only; no behaviour change.
 
 - [x] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
       **and any Discogs logo use** against the Application Name and Description
@@ -3440,6 +3481,14 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **2026-10-14: add to wantlist from the album menu — v2.** Wantlist is v2
+  (decisions §5, line 733; endpoint `PUT /users/{username}/wants/{release_id}`
+  recorded there). Should be user-triggered only. Supporting rule, in decisions §9.5's
+  neighbourhood (`:1362`): "request count bounded by user actions → live". It
+  supports a user-triggered write but does not itself say "only". **Open:** an unowned album usually
+  has no Discogs id, so this needs a search plus a user pick, the problem §13.8
+  moved away from. **Unchecked:** the wantlist write endpoint's terms.
 
 - [ ] **Settings-page button that starts a scan — v2 (§15.38).**
 
