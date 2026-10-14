@@ -3171,7 +3171,7 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
-- [ ] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
+- [x] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
       greyed out during a scan; do they need to be?** For the design chat.
       §15.39 item 2 disables all three action buttons alike. Test Token makes one
       Discogs `/oauth/identity` call and writes nothing (`Settings.pm:351-361`),
@@ -3183,14 +3183,16 @@ Each names its sites so the work is mechanical rather than a search.
       `Settings.pm:127-135`), which is refused server-side with the busy warning
       and is not a page-level disable. Those are inferences from reading; no
       recorded decision gives a reason beyond consistency. Not changed in b4.
+      Decided 2026-10-14: kept disabled, §15.39 note.
 
-- [ ] **2026-10-14 (hand-off 83): `promote-master.sh 1.0.0b4 83` stops on a
+- [x] **2026-10-14 (hand-off 83): `promote-master.sh 1.0.0b4 83` stops on a
       `TODO.md` conflict.** master carries a `TODO.md` entry added by the `site`
       branch (project site redesign, Housekeeping); v1-buildout edited the same
       region since `bb6ef2f`. The script allows conflicts only in `repo.xml` and
       `dist/` (step 5), so it aborts for both the package commit and
       `--merge-head`. Needs an owner decision: resolve by hand (keep both
       entries), or let the script permit `TODO.md`. No promotion made.
+      Done: the script allows it after a line check, §15.41 (hand-off 84).
 
 - [ ] **2026-10-14: `v1-buildout`'s `SqueezeWax/` now differs from the 1.0.0b3
       package commit** (`bb6ef2f`): `873dce5` changed comments only, in

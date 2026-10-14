@@ -6739,6 +6739,28 @@ in Material (report 76 A4 point 2), so b2 would be promoted with a known gap.
   Detect's progress and result are a sixth region, `swxDetectResult`, which
   holds text and tables only.
 
+- **2026-10-14 (owner): keep Test token and Detect disabled during a scan; item 2
+  stands.** Enabling Test token would also need its own scan-time hint, removing
+  the server refusal (`Settings.pm` `_testToken` ~l.354-356), and settling whether
+  a token saved mid-scan affects the running scan (it saves `discogsToken` via
+  `SUPER::handler`; `Slim/Web/Settings.pm:156-162`). Not worth it.
+
+### 15.41 Promotion: TODO.md conflicts — 2026-10-14
+
+- **Cause:** PR #1 (`site`, `84019ca`) edited master's `TODO.md`; the promotion of
+  1.0.0b4 aborted on it (report 83 B), because `promote-master.sh` allowed
+  conflicts only in `repo.xml` and `dist/`.
+- **Rule:** `promote-master.sh` takes the package commit's `TODO.md` on a conflict,
+  but only after a line check: every non-blank line added to master's `TODO.md`
+  since master's last "Promote SqueezeWax" commit must appear verbatim in the
+  package commit's `TODO.md`. Any missing line aborts the merge, is listed, and
+  the script stops.
+- **Rule:** any branch merged into master copies its `TODO.md` edits to
+  `v1-buildout` first (as was done for `site`).
+- **Verified 2026-10-14:** all lines master added at `84019ca` are present in
+  `1585466`'s `TODO.md` (13 non-blank lines, plus one blank, 14 in all; the
+  script prints "13 master lines confirmed present").
+
 ### 15.40 Settings page poll interval 5 s — 1.0.0b4 (2026-10-14)
 
 - **Owner suggestion, report 78:** 10 s felt slow.

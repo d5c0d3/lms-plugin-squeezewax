@@ -25,7 +25,11 @@
 #   5. `git merge --no-ff --no-commit` of the package commit. --merge-head
 #      merges v1-buildout's HEAD instead, allowed only when SqueezeWax/ and
 #      LICENSE are identical to the package commit's. Conflicts are allowed
-#      only in repo.xml and dist/.
+#      only in repo.xml, dist/ and TODO.md. A TODO.md conflict is settled by taking
+#      the package commit's TODO.md, but only after a check: every non-blank line
+#      master added to TODO.md since master's last "Promote SqueezeWax" commit
+#      must appear verbatim in it. Any missing line aborts the merge and is
+#      listed (decisions §15.41).
 #   6. Fixes the two paths whose policy differs from the branch: dist/ keeps
 #      the zips already on master plus this build's; repo.xml is the package
 #      commit's with only the <url>'s /v1-buildout/ changed to /master/.
@@ -163,16 +167,45 @@ W rev-parse -q --verify MERGE_HEAD >/dev/null \
 	|| die "the merge did not start (already up to date, or git refused); nothing changed"
 
 BAD=""
+TODO_CONFLICT=0
 while IFS= read -r f; do
 	[ -n "$f" ] || continue
 	case "$f" in
 		repo.xml | dist/*) ;;
+		TODO.md) TODO_CONFLICT=1 ;;
 		*) BAD="$BAD $f" ;;
 	esac
 done < <(W diff --name-only --diff-filter=U)
 if [ -n "$BAD" ]; then
 	W merge --abort || true
-	die "conflict outside repo.xml and dist/ (merge aborted):$BAD"
+	die "conflict outside repo.xml, dist/ and TODO.md (merge aborted):$BAD"
+fi
+
+# TODO.md (decisions §15.41): the package commit's version wins, but only if it
+# already carries every line master added since master's last promotion.
+if [ "$TODO_CONFLICT" -eq 1 ]; then
+	LAST_PROMO="$(W log -1 --format=%H --grep='^Promote '"$NAME"' ' master)"
+	[ -n "$LAST_PROMO" ] \
+		|| { W merge --abort || true; die "TODO.md conflicts and master has no \"Promote $NAME\" commit to measure from; resolve by hand"; }
+	TODO_THEIRS="$(git show "$TARGET:TODO.md")"
+	MISSING=""
+	N_CHECKED=0
+	while IFS= read -r line; do
+		[ -n "${line//[[:space:]]/}" ] || continue
+		N_CHECKED=$((N_CHECKED + 1))
+		grep -qxF -- "$line" <<< "$TODO_THEIRS" \
+			|| MISSING="$MISSING$line"$'\n'
+	done < <(git diff "$LAST_PROMO" master -- TODO.md | grep '^+' | grep -v '^+++' | cut -c2-)
+	if [ -n "$MISSING" ]; then
+		W merge --abort || true
+		echo "error: TODO.md: master added lines since $(git rev-parse --short "$LAST_PROMO") that $TARGET_DESC lacks (merge aborted):" >&2
+		printf '%s' "$MISSING" | sed 's/^/    /' >&2
+		echo "       Copy them to $DEV_BRANCH first (decisions §15.41), then promote." >&2
+		exit 1
+	fi
+	git show "$TARGET:TODO.md" > "$WT/TODO.md"
+	W add -- TODO.md
+	echo "==> TODO.md: took package commit's version; $N_CHECKED master lines confirmed present"
 fi
 
 # --- 6. The two policy paths -----------------------------------------------------
