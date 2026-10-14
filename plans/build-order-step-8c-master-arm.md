@@ -322,8 +322,10 @@ which is the shape §13.8 refused, so the difference is argued rather than assum
 - **It buys something collection-first cannot.** The collection tells us which
   masters the user owns; nothing in it tells us the master of a release the user
   does *not* own, which is precisely node F's question.
-- **Measured cost:** 475 requests, 11.0 minutes, on a cold library of this size,
-  spread across runs of 30. A settled library: zero.
+- **Measured cost:** ~~475 requests, 11.0 minutes~~ 475 requests, **25 min 18 s
+  over 18 runs** on hardware (the estimate left out the 60 s re-arm between
+  runs; the shape is runs × ~90 s, decisions "out by a factor of 2.3"), on a cold
+  library of this size, spread across runs of 30. A settled library: zero.
 
 ---
 

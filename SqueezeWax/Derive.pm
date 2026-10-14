@@ -35,14 +35,15 @@ package Plugins::SqueezeWax::Derive;
 # identifier, so it is never re-fetched to stay fresh; and it buys what
 # collection-first cannot - the collection names the masters the user owns, and
 # nothing in it gives the master of a release they do NOT own, which is exactly
-# node F's question. Measured: 475 requests, 11.0 minutes, on a cold library of
-# this size; zero on a settled one.
+# node F's question. Cold library of this size: 475 requests, but 25 min 18 s over
+# 18 runs on hardware (the shape is runs x ~90 s, because of the 60 s re-arm
+# between runs); zero requests on a settled one.
 #
 # WHY IT IS A MODULE OF ITS OWN. Not API/Async.pm, which is the collection client
 # and long enough already. Not the ownership pass, which must stay request-free
 # (§15.4). Not the scanner, which has no event loop (scanner.pl:498,
 # `sub idleStreams {}`) and whose sync is bounded at 120 s by §15.18 part 10,
-# against a job that is 11 minutes cold.
+# against a job that is about 25 minutes cold.
 #
 # WHAT IT NEVER DOES. It does not identify, does not snapshot, does not touch
 # ownership, state, match_tier or review_reason, and does not write
