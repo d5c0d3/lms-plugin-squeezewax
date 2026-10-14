@@ -18,9 +18,10 @@ never plays audio and never changes your Discogs collection.
   ships with LMS or with Perl itself, except HTTPS support (`IO::Socket::SSL`),
   which the plugin uses only through LMS's own HTTP classes. LMS bundles that
   for macOS only; on other systems it comes from the system's Perl, and without
-  it the scan-time sync fails with only a warning in the scanner log (the
-  fallback sync after the scan is then the one that works, and only if the
-  server has HTTPS too).
+  it the scan-time sync fails without any message in the default log settings
+  (LMS reports it only under the `network.http` log category, which is off by
+  default). The fallback sync after the scan is then the one that works, and
+  only if the server has HTTPS too.
 
 ### Needed for exact pressings
 
@@ -248,8 +249,8 @@ anything you have typed.
   same title and artist, or for compilations ("Various Artists"); those albums
   go to the review queue.
 - The review queue's "Choose from my collection" lists a fixed set of fields.
-- This is a beta. Untested: Windows, Docker, piCorePlayer; the scan-time sync's
-  HTTPS outside macOS.
+- This is a beta. Tested on one Linux and one Docker server. Untested: Windows,
+  macOS, piCorePlayer.
 - Whether ownership results need a freshness limit is an open question with
   Discogs (Help Center request #1281019); the plugin may change with the
   answer.

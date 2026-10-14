@@ -3190,6 +3190,18 @@ Each names its sites so the work is mechanical rather than a search.
       it because `v1-buildout` never had them and so never deletes them. Check
       the `promote-master.sh --dry-run` diff for b4 shows no deletion of them.
 
+- [x] 2026-10-14: README Limitations line and scanner-log wording fixed (hand-off
+      80). Evidence: Linux reference server, scan-time sync over HTTPS works
+      (decisions, 'HTTPS from the scanner is platform-dependent'); Docker,
+      `docker exec lyrion-server perl -MIO::Socket::SSL -e 'print "ok\n"'` printed
+      ok (owner, 2026-10-14). Unverified: that LMS in the container uses that
+      perl; scan-time sync over HTTPS not observed on Docker. Source for wording:
+      slimserver eb59bbf, `Slim/Networking/SimpleSyncHTTP.pm:79` warns under
+      network.http, default ERROR (`Slim/Utils/Log.pm:897`).
+- [ ] 2026-10-14: open question strengthened: should ScanSync check hasSSL
+      itself and log at error, given LMS's own warning is hidden by default.
+      Decide before 1.0 release.
+
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README
       stays the full documentation and is linked from both. Open:
