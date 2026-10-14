@@ -3171,6 +3171,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-14 (hand-off 83): `promote-master.sh 1.0.0b4 83` stops on a
+      `TODO.md` conflict.** master carries a `TODO.md` entry added by the `site`
+      branch (project site redesign, Housekeeping); v1-buildout edited the same
+      region since `bb6ef2f`. The script allows conflicts only in `repo.xml` and
+      `dist/` (step 5), so it aborts for both the package commit and
+      `--merge-head`. Needs an owner decision: resolve by hand (keep both
+      entries), or let the script permit `TODO.md`. No promotion made.
+
 - [ ] **2026-10-14: `v1-buildout`'s `SqueezeWax/` now differs from the 1.0.0b3
       package commit** (`bb6ef2f`): `873dce5` changed comments only, in
       `Derive.pm`. So `promote-master.sh --merge-head` is unavailable until the
