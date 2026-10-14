@@ -3169,6 +3169,36 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-14: `v1-buildout`'s `SqueezeWax/` now differs from the 1.0.0b3
+      package commit** (`bb6ef2f`): `873dce5` changed comments only, in
+      `Derive.pm`. So `promote-master.sh --merge-head` is unavailable until the
+      next checked build, because dev-repo-workflow §5b allows it "only when
+      `SqueezeWax/` and `LICENSE` are identical to the package commit". A
+      docs/TODO-only promotion therefore waits for b4. Decided 2026-10-14: keep
+      the comment fix rather than revert it.
+
+- [ ] **2026-10-14: master is ahead of `v1-buildout` by the site PR** (`84019ca`,
+      PR #1 from `site`: `index.html`, `worked-example.html`, `assets/owned.svg`,
+      and the TODO item below). Workflow §2: "`master` is never merged into a
+      build line", so the TODO item was copied by hand, not merged. The site files
+      are not on `v1-buildout`. **Expect a `TODO.md` conflict at the next
+      promotion**, since both sides added to Housekeeping: keep both items.
+
+- [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
+      `worked-example.html` replace the README as the Pages entry page; the README
+      stays the full documentation and is linked from both. Open:
+      (1) ~~release info is hard-coded~~ — done: `index.html` reads the
+      version and the LMS range (`minTarget`/`maxTarget`) from `repo.xml` at
+      load time (badge, record label, requirements; hidden if it cannot be
+      read), so a `repo.xml` bump updates the site. "tested on 9.1.1" is not in
+      `repo.xml` and stays hand-written, in step with the README;
+      (2) `worked-example.html` has three `[Screenshot: …]` placeholders to fill;
+      (3) `assets/owned.svg` is a recoloured copy of the plugin's
+      `owned.svg` (`_config.yml` keeps `SqueezeWax/` out of the site) — keep the
+      two in step; (4) merge `site` into `master` to publish; `repo.xml` and
+      `dist/` must stay where they are.
+      (Copied from master's `TODO.md` at `84019ca`; (4) is done there, via PR #1.)
+
 - [x] **2026-10-14: stale cost figure in `Derive.pm`'s header and plan 8c §5.**
       "Measured: 475 requests, 11.0 minutes" was the plan's estimate; hardware
       measured 25 min 18 s over 18 runs, because the estimate left out the 60 s
