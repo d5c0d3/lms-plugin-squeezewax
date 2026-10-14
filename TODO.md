@@ -1420,12 +1420,14 @@ Each names its sites so the work is mechanical rather than a search.
       master (443 -> 437 = these 5 + the manual row). Ownership is unaffected: a
       conflict row counts as untagged (§15.16 part 4), which matches the counts.
       Recorded in §15.36 part 3's "Lost" list.
-- [ ] **2026-10-13: hardware sessions cannot read our `info` log lines.** Hand-off
-      71 C5: `Derive`'s `info` lines were absent from `server.log` (running level
-      for the category back at ERROR, §4.1 rule 3), so Derive runs and request
-      count were inferred from `derived_at` only (one request per release
-      assumed). A hand-off needing them must first have the owner raise the
-      plugin's own category (never `network.*`).
+- [x] **2026-10-14: missing `info` lines (reports 71 C5, 78 Docker) = level not
+      saved; restart fell back** (slimserver eb59bbf, `Slim/Utils/Log.pm`
+      `addLogCategory`: --debug > log.conf > defaultLevel WARN > ERROR). Not a
+      defect. Rule: any hand-off needing info lines sets `plugin.squeezewax` to
+      Info AND ticks 'Save logging settings for use at next application restart'
+      (`strings.txt:23650`) before any restart, and restores it afterwards.
+      Unexplained: report 71 saw ERROR, default is WARN (stale `log.conf`?
+      unchecked).
 - [x] **2026-10-13: rules before a v2 branch is created (not designed).** Its
       own build version series (whether LMS ranks e.g. `0.0.1.N` above
       `0.0.0.N` is unverified); database and prefs migration numbers cannot be
@@ -3627,3 +3629,5 @@ Each names its sites so the work is mechanical rather than a search.
   "Master releases" paused→running check, and the master job itself. Scan-time
   sync on Docker not distinguishable from the manual button. Re-check when a
   library change leaves derive work pending.
+  Likely the same unsaved-level cause (inferred, 2026-10-14). Re-run with the
+  level saved before closing.

@@ -99,6 +99,9 @@ Six rules, all learned the hard way on the reference server.
   evidence that does not depend on our own logging: rendered pages, database
   state, our own one-line-per-reply log for outbound requests (never
   `network.asynchttp`; see the rule below).
+  A level raised for a session must be **saved** (tick "Save logging settings for
+  use at next application restart") before any restart, or the restart falls
+  back to the default and the lines vanish (2026-10-14); restore it afterwards.
 - **Never read the prefs file.** Pref **key names** come from the source
   (`Plugin.pm`'s `$prefs->init`, `Settings.pm`); a pref **value** comes from the
   owner, if it is needed at all. A session looking up key names grepped
