@@ -182,12 +182,20 @@ built; they serve the collection sync at step 5.
 - Design decisions, research, open questions → the claude.ai project (chat)
 - Implementation and spec edits → here
 
+## Pushing
+
+Never run `git push` and never try to work around it. Commit locally, then end your report with:
+
+> Ready to push: `git push origin <branch>` (<N> new commits, last <hash>)
+
+The owner pushes.
+
 ## Sync reminder
 
 `docs/squeezewax-design.md` is mirrored into a claude.ai project via
 the GitHub connector. That connector does **not** auto-sync.
 
-After you commit a change under `docs/`, or after any push, add one line:
+After you commit a change under `docs/`, or when telling the owner to push, add one line:
 
 > Pushed — hit "Sync now" in the claude.ai project before your next design chat.
 

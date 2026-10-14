@@ -1380,6 +1380,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-14: limit master lookups to tagged albums that could plausibly
+      match something in the collection.** Idea only, from a design session; not
+      designed, do not build. The lookup (`Derive.pm`, `_pending`) runs for every
+      identified album, 475 releases cold on the reference library. Risk: a
+      plausibility filter misses exactly the pressing-mismatch cases node F
+      exists for (`Derive.pm` header; decisions §15.19, §15.22). Unverified
+      whether any filter could be cheap and safe enough to be worth the loss.
+
 - [x] **2026-10-13: scan progress labels should carry the plugin name.** The
       scan screen lines read "Discogs matching" and "Discogs collection sync"
       (`PLUGIN_SQUEEZEWAX_MATCH_PROGRESS`, `PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS`
@@ -1412,12 +1420,14 @@ Each names its sites so the work is mechanical rather than a search.
       master (443 -> 437 = these 5 + the manual row). Ownership is unaffected: a
       conflict row counts as untagged (§15.16 part 4), which matches the counts.
       Recorded in §15.36 part 3's "Lost" list.
-- [ ] **2026-10-13: hardware sessions cannot read our `info` log lines.** Hand-off
-      71 C5: `Derive`'s `info` lines were absent from `server.log` (running level
-      for the category back at ERROR, §4.1 rule 3), so Derive runs and request
-      count were inferred from `derived_at` only (one request per release
-      assumed). A hand-off needing them must first have the owner raise the
-      plugin's own category (never `network.*`).
+- [x] **2026-10-14: missing `info` lines (reports 71 C5, 78 Docker) = level not
+      saved; restart fell back** (slimserver eb59bbf, `Slim/Utils/Log.pm`
+      `addLogCategory`: --debug > log.conf > defaultLevel WARN > ERROR). Not a
+      defect. Rule: any hand-off needing info lines sets `plugin.squeezewax` to
+      Info AND ticks 'Save logging settings for use at next application restart'
+      (`strings.txt:23650`) before any restart, and restores it afterwards.
+      Unexplained: report 71 saw ERROR, default is WARN (stale `log.conf`?
+      unchecked).
 - [x] **2026-10-13: rules before a v2 branch is created (not designed).** Its
       own build version series (whether LMS ranks e.g. `0.0.1.N` above
       `0.0.0.N` is unverified); database and prefs migration numbers cannot be
@@ -2256,6 +2266,16 @@ Each names its sites so the work is mechanical rather than a search.
       not yet seen on hardware.
 
 ## Waiting — needs a real server
+
+- [ ] **2026-10-14: large collections against the scan-time sync cap.**
+      `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
+      `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
+      `API.pm:350`), about 100 s or more at 60 a minute, so the cap is close.
+      **Unverified:** (a) what the user sees when the cap is hit; (b) that the
+      post-scan fallback sync (`Plugin.pm` `_rescanDone` → `_syncTick`) then
+      completes it; (c) the ownership pass's in-memory cost at that size (the
+      only reference is 203 items / 765 albums). Needs a large real or simulated
+      collection. Source: forum feedback on 1.0.0b3.
 
 - [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
       skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
@@ -3096,6 +3116,22 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-14: forum user (Paul Webster) asked for configurable filters,
+      e.g. title = ISIHAC\*,** to avoid "unnecessary Discogs calls" for
+      recordings never on Discogs (old radio shows). Waiting for his answer: did
+      he see requests, a badge or a queue entry, or was he reading the
+      description?
+      **Inferred from reading the code (v1-buildout at 060982a, same plugin source
+      as master's 1.0.0b3), not observed on a running server:** the
+      request-saving reason does not apply. An untagged album causes 0 Discogs
+      requests. The requests are: the collection sync (identity +
+      ceil(items/100)); the master lookup, only for albums with a
+      `discogs_release_id` (`Derive.pm` `_pending`); the two details submenus when
+      opened (`Details.pm`); and Test token (`Settings.pm`, `/oauth/identity`).
+      No search, marketplace or wantlist endpoint is called anywhere.
+      **Possible residual value (unverified):** "never badge or queue this album"
+      if title matching mis-fires. v2 candidate, not designed.
+
 - [ ] **2026-10-13: two more questions for Help Center Request #1281019 (or a
       follow-up)** (§15.36). (a) Plain-text attribution on players (§15.31
       ruling 10): is "Data provided by Discogs" plus the address as text
@@ -3135,6 +3171,37 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-14: `v1-buildout`'s `SqueezeWax/` now differs from the 1.0.0b3
+      package commit** (`bb6ef2f`): `873dce5` changed comments only, in
+      `Derive.pm`. So `promote-master.sh --merge-head` is unavailable until the
+      next checked build, because dev-repo-workflow §5b allows it "only when
+      `SqueezeWax/` and `LICENSE` are identical to the package commit". A
+      docs/TODO-only promotion therefore waits for b4. Decided 2026-10-14: keep
+      the comment fix rather than revert it.
+
+- [ ] **2026-10-14: master is ahead of `v1-buildout` by the site PR** (`84019ca`,
+      PR #1 from `site`: `index.html`, `worked-example.html`, `assets/owned.svg`,
+      and the TODO item below). Workflow §2: "`master` is never merged into a
+      build line", so the TODO item was copied by hand, not merged. The site files
+      are not on `v1-buildout`. **Expect a `TODO.md` conflict at the next
+      promotion**, since both sides added to Housekeeping: keep both items.
+      **Inferred, not tested:** promotion merges the package commit into master,
+      and the site files (`index.html`, `worked-example.html`, `assets/`) survive
+      it because `v1-buildout` never had them and so never deletes them. Check
+      the `promote-master.sh --dry-run` diff for b4 shows no deletion of them.
+
+- [x] 2026-10-14: README Limitations line and scanner-log wording fixed (hand-off
+      80). Evidence: Linux reference server, scan-time sync over HTTPS works
+      (decisions, 'HTTPS from the scanner is platform-dependent'); Docker,
+      `docker exec lyrion-server perl -MIO::Socket::SSL -e 'print "ok\n"'` printed
+      ok (owner, 2026-10-14). Unverified: that LMS in the container uses that
+      perl; scan-time sync over HTTPS not observed on Docker. Source for wording:
+      slimserver eb59bbf, `Slim/Networking/SimpleSyncHTTP.pm:79` warns under
+      network.http, default ERROR (`Slim/Utils/Log.pm:897`).
+- [ ] 2026-10-14: open question strengthened: should ScanSync check hasSSL
+      itself and log at error, given LMS's own warning is hidden by default.
+      Decide before 1.0 release.
+
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README
       stays the full documentation and is linked from both. Open:
@@ -3148,6 +3215,14 @@ Each names its sites so the work is mechanical rather than a search.
       `owned.svg` (`_config.yml` keeps `SqueezeWax/` out of the site) — keep the
       two in step; (4) merge `site` into `master` to publish; `repo.xml` and
       `dist/` must stay where they are.
+      (Copied from master's `TODO.md` at `84019ca`; (4) is done there, via PR #1.)
+
+- [x] **2026-10-14: stale cost figure in `Derive.pm`'s header and plan 8c §5.**
+      "Measured: 475 requests, 11.0 minutes" was the plan's estimate; hardware
+      measured 25 min 18 s over 18 runs, because the estimate left out the 60 s
+      re-arm between runs. The shape is runs × ~90 s (decisions "out by a factor
+      of 2.3", around `docs/squeezewax-v1-decisions.md:5424`). Comment and plan
+      correction only; no behaviour change.
 
 - [x] **2026-10-12: check the plugin's displayed name** (`install.xml`, `strings.txt`)
       **and any Discogs logo use** against the Application Name and Description
@@ -3455,6 +3530,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **2026-10-14: add to wantlist from the album menu — v2.** Wantlist is v2
+  (decisions §5, line 733; endpoint `PUT /users/{username}/wants/{release_id}`
+  recorded there). Should be user-triggered only. Supporting rule, in decisions §9.5's
+  neighbourhood (`:1362`): "request count bounded by user actions → live". It
+  supports a user-triggered write but does not itself say "only". **Open:** an unowned album usually
+  has no Discogs id, so this needs a search plus a user pick, the problem §13.8
+  moved away from. **Unchecked:** the wantlist write endpoint's terms.
+
 - [ ] **Settings-page button that starts a scan — v2 (§15.38).**
 
 - [ ] **Website design (beyond the README): later.**
@@ -3547,3 +3630,19 @@ Each names its sites so the work is mechanical rather than a search.
   shows a fixed set.
 - Future: orphan relink for users with manual links and no tag names
   (decisions §15.16 part 11).
+- [x] **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
+  ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
+  promoted bytes are the ones hardware-checked. Consider for the next build.
+  Report 78 A: the no-tag-names and first-steps notices were not provoked.
+  → Done 2026-10-14, decisions §15.40: 5 s.
+- [ ] Hardware check for 1.0.0b4: settings status refreshes in ~5 s (reference
+      server).
+- **2026-10-13: report 78 recorded — `master` = 1.0.0b3 (`91300ec`).** A pass
+  (reference server, Material and Default); B pass (website `repo.xml` and zip
+  sha1 `58c22a97…3183` verified); C: Docker install and load pass, log clean,
+  205 items synced. Not observed on Docker, because nothing was pending: the
+  "Master releases" paused→running check, and the master job itself. Scan-time
+  sync on Docker not distinguishable from the manual button. Re-check when a
+  library change leaves derive work pending.
+  Likely the same unsaved-level cause (inferred, 2026-10-14). Re-run with the
+  level saved before closing.

@@ -364,7 +364,7 @@
 
 	wire(form);
 
-	// Live status (decisions §15.38 item 3, §15.39 items 1 and 3). Every 10 s
+	// Live status (decisions §15.38 item 3, §15.39 items 1 and 3). Every 5 s
 	// while the page is open, fetch the page itself and replace the contents of
 	// these regions, and nothing else. The form fields the user types into are
 	// outside all of them.
@@ -396,6 +396,7 @@
 
 	if (!window.fetch || !window.DOMParser) { return; }
 
+	var POLL_MS = 5000;
 	var timer = null;
 	var busy  = false;
 
@@ -434,7 +435,7 @@
 		}).then(function () {
 			busy = false;
 
-			if (!fired && !timer) { timer = setTimeout(tick, 10000); }
+			if (!fired && !timer) { timer = setTimeout(tick, POLL_MS); }
 		});
 	};
 
@@ -447,7 +448,7 @@
 		tick();
 	});
 
-	timer = setTimeout(tick, 10000);
+	timer = setTimeout(tick, POLL_MS);
 })();
 </script>
 
