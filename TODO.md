@@ -3171,6 +3171,19 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
+      greyed out during a scan; do they need to be?** For the design chat.
+      §15.39 item 2 disables all three action buttons alike. Test Token makes one
+      Discogs `/oauth/identity` call and writes nothing (`Settings.pm:351-361`),
+      so a scan does not make it unsafe; only the shared rate budget touches it,
+      and one request is negligible. Detect reads `library.db` and the files and
+      never writes `squeezewax.db`, so the scanner's write lock does not touch
+      it; the only reason is a partial sample of a library still changing. The
+      one real hazard is applying changed tag names (`_saveTagNames`,
+      `Settings.pm:127-135`), which is refused server-side with the busy warning
+      and is not a page-level disable. Those are inferences from reading; no
+      recorded decision gives a reason beyond consistency. Not changed in b4.
+
 - [ ] **2026-10-14 (hand-off 83): `promote-master.sh 1.0.0b4 83` stops on a
       `TODO.md` conflict.** master carries a `TODO.md` entry added by the `site`
       branch (project site redesign, Housekeeping); v1-buildout edited the same
