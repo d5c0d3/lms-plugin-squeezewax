@@ -3210,7 +3210,9 @@ Each names its sites so the work is mechanical rather than a search.
       load time (badge, record label, requirements; hidden if it cannot be
       read), so a `repo.xml` bump updates the site. "tested on 9.1.1" is not in
       `repo.xml` and stays hand-written, in step with the README;
-      (2) `worked-example.html` has three `[Screenshot: …]` placeholders to fill;
+      (2) ~~screenshot placeholders~~ — done 2026-10-16: owner's Audacity,
+      foobar2000 and Material screenshots in `assets/worked-example/` (the
+      Material panels show a different album than the example, and say so);
       (3) `assets/owned.svg` is a recoloured copy of the plugin's
       `owned.svg` (`_config.yml` keeps `SqueezeWax/` out of the site) — keep the
       two in step; (4) merge `site` into `master` to publish; `repo.xml` and
