@@ -6486,6 +6486,10 @@ Each citation was located by symbol in `v1-buildout` and `refs/slimserver/`
 
 ### 15.37 Branches, version numbers and channels — for all lines
 
+> **Partly superseded by §15.43 (2026-10-15):** parts 1 (`v2-buildout` and
+> `vN-buildout` rows), 2 (no minor series), 5 (migrations) and 6 (retirement).
+> Parts 3, 4, 7 and 8 stand.
+
 **Decided 2026-10-13** (owner). Replaces the open "v2 branch rules" question
 (§15.36 TODO edit 6). Refines §15.36 part 1 (the tester URL is now the website).
 
@@ -6920,3 +6924,98 @@ server on perl 5.32+ has 3.46.1", and the tester's server is perl 5.32.1 with
 - **Order of this file.** §15.41 precedes §15.40 above (`### 15.41` is followed
   by `### 15.40`), so "the end of the file" is not "the highest number". §15.42
   is appended last; the pair is left as found.
+
+### 15.43 Per-feature releases after 1.0.0 — 2026-10-15
+
+**Decided in the design chat, 2026-10-15** (owner ruling on the model; rulings
+3-9 are the design chat's proposals, labelled below). After 1.0.0, ship **one
+feature per release**, tracked as GitHub issues. Supersedes parts of §15.37, as
+marked on each ruling; parts 3, 4, 7 and 8 of §15.37 are unchanged.
+
+Status keys: **verified** = checked in source or docs; **inferred** = read, not
+run; **proposed** = design chat's design, owner to confirm.
+
+#### Rulings
+
+1. **No more "v2" bundle.** Every deferred item becomes a GitHub issue. A
+   milestone = one release (`1.1.0`, `1.2.0`, …). Owner ruling.
+2. **Version numbers: minor series allowed.** A feature release is `1.N.0`, its
+   fixes `1.N.M`, betas `1.N.0bK`, dev builds `1.N.0aK`. `2.0.0` is kept for a
+   change that breaks existing users. **Supersedes §15.37 part 2** ("there is no
+   minor series"; "a milestone vN is `N.0.0`").
+   - **Verified** with `Slim::Utils::Versions->compareVersions`,
+     `LMS-Community/slimserver` `public/9.1` @ `582a1b2` (2026-10-11), each
+     pair = -1: `1.0.9<1.1.0`, `1.1.0b1<1.1.0`, `1.0.0<1.1.0a1`,
+     `1.1.0a1<1.1.0b1`, `1.1.0<1.2.0`, `1.9.0<1.10.0`, `1.10.0<2.0.0`,
+     `1.0.0b4<1.1.0`. Note: `refs/` is pinned at `a670a38`, not re-run there.
+   - **Inferred** (from `claude/build-version-scheme.md`, not the script):
+     `package-build.sh --version 1.1.0b1` already passes its pattern and line
+     guard, so no script change is needed.
+3. **One development line: `v1-buildout`.** No `v2-buildout`. **Supersedes
+   §15.37 part 1's `v2-buildout`/`vN-buildout` rows and part 6** (retirement
+   when `N+1.0.0` is promoted). **Proposed.**
+4. **Each feature on its own branch** `feature/<issue#>-<slug>`, merged into
+   `v1-buildout` only when ready for beta. **Proposed.** Why: a fix to the
+   released version must not ship half-finished work.
+5. **Fixes to a released version** while a newer feature is in beta: a branch
+   from the last promoted commit, version `1.N.M`, no migration, then merged
+   forward. This is §15.37 part 4 applied to releases instead of lines.
+   **Proposed.**
+6. **Migrations. Supersedes §15.37 part 5** ("only the newest line adds a
+   migration"). **Proposed.**
+   - A migration number is taken at **merge** into `v1-buildout`, never on the
+     feature branch.
+   - Features that share a migration ship in one release. Known case: TODO
+     2026-09-30 "link the release the user actually owns" goes with wantlist
+     and master search.
+   - Feature-branch builds are never published to `repo.xml`/`beta.xml`. A
+     server that installed one needs "Starting over" afterwards.
+   - **Failure mode this prevents:** two branches (e.g. two contributors) both
+     adding migration N. Servers that installed either build are stuck,
+     one-way and silent (§15.37 part 5's reason).
+7. **Betas** go through `beta.xml` (already planned for after 1.0.0, TODO).
+   At most one feature in beta at a time. **Proposed.**
+8. **Decisions stay in the docs.** An issue links to its §, and the § is what
+   closes it. A refused request gets a `wont-do` label and a link to the ruling
+   that refused it (e.g. §15.31 ruling 4). **Proposed.**
+9. **Issues replace TODO.md for feature items.** TODO.md keeps blocked items,
+   items needing a real server, and process items. **Proposed.**
+
+#### Open point on ruling 6
+
+The feature split (`claude/feature-split-proposal.md`) pushes back on "C1,
+master search and wantlist share a migration, so ship together": the TODO items
+share a **design question** (what a sync may keep; TODO 2026-09-13), not one
+migration. **Inferred:** design them together, but each can ship alone with its
+own migration number taken at merge. **Owner to decide.**
+
+#### Claude Code on the web and GitHub issues
+
+- **Verified (docs):** cloud sessions route GitHub calls through a proxy that
+  **rejects GraphQL**, so `gh issue create` gets a 403. REST via `gh api` works
+  for attached repos; `gh` is pre-installed. Built-in tools are documented to
+  "read issues … post comments" — creating is not listed.
+  Source: code.claude.com/docs/en/cloud-environments, "GitHub proxy" and
+  "Work with GitHub issues and pull requests" (fetched 2026-10-15).
+- **Inferred, not run:** `gh api repos/d5c0d3/lms-plugin-squeezewax/issues -f
+  title=… -f body=…` (REST `POST /issues`) should create an issue.
+- **Unverified:** whether this owner's sessions can write to GitHub at all.
+  Earlier hand-offs say "Push fails here as usual; the owner pushes"
+  (`claude/build-version-scheme.md`). If push fails, issue creation likely
+  fails too (inferred). Also unverified: whether the Claude GitHub App has the
+  Issues write permission on this repo.
+
+#### Not changed
+
+§15.37 parts 3 (channels), 4 (merge forward), 7 (project knowledge follows
+`master` + `v1-buildout`), 8 (test servers; now applies to feature builds with
+migrations).
+
+#### Open
+
+- Discogs: whether contributors may share the registered "SqueezeWax" app or
+  must register their own. **Unchecked.** Before inviting developers.
+- Project knowledge does not sync issues (sync config lists two branches only;
+  verified in project settings). Feature requests reach design chats only if
+  pasted.
+- The feature split's open questions for A1 and A2 are in `TODO.md`.

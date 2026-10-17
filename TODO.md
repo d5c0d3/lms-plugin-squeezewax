@@ -1458,6 +1458,26 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-15: A1 — "Rescan album" also updates SqueezeWax for that album**
+      (decisions §15.43; feature split). Open for the owner: (1) should an album
+      rescan still trigger the whole-collection fallback sync? Re-reading one
+      album's tags and re-checking its ownership needs no Discogs request
+      (inferred from §13.1). Not checked: whether `_syncTick` already skips that
+      sync after `rescan album`. (2) Which forum post asked for this? Link it in
+      the issue.
+- [ ] **2026-10-15: A2 — SqueezeWax items at the top of the context menu
+      (setting).** Open for the owner: (1) which app does the forum user use?
+      Get the post link; "top level" most likely means Material's first-level
+      menu (unverified). (2) Is "the same item on every album" acceptable?
+      Inferred: Material's `registerCustomAction` list cannot be filtered per
+      album, so the item cannot be hidden on unowned albums. If not acceptable,
+      ask Craig on Material #1288 for a per-album condition (upstream). (3)
+      Option a (one checkbox) or b (per item): decide after 1 and 2.
+- [ ] **2026-10-15: Discogs: may contributors share the registered app? Check
+      before inviting developers.** Whether contributors may share the registered
+      "SqueezeWax" application or must register their own. Unchecked (decisions
+      §15.43, Open).
+
 - [ ] **2026-10-14: limit master lookups to tagged albums that could plausibly
       match something in the collection.** Idea only, from a design session; not
       designed, do not build. The lookup (`Derive.pm`, `_pending`) runs for every
@@ -3249,6 +3269,12 @@ Each names its sites so the work is mechanical rather than a search.
       LMS owns, and migrating later is cheap.
 
 ## Housekeeping
+
+- [ ] **2026-10-15: Issues replace TODO for feature items once filed (§15.43
+      ruling 9).** From the first 1.N release on, a feature item lives in its
+      GitHub issue and leaves this file; TODO.md keeps blocked items, items
+      needing a real server, and process items. Unverified: whether this owner's
+      Claude Code sessions can create issues (§15.43, "Claude Code on the web").
 
 - [x] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
       greyed out during a scan; do they need to be?** For the design chat.
