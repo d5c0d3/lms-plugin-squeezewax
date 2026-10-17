@@ -3700,10 +3700,13 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **`beta.xml` and `promote-master.sh --channel beta`:** build at the first
   beta after 1.0.0 (§15.37 part 3).
 
-- [ ] **Clear & rebuild matches (decisions §10): v2** (§15.36 part 6). The
+- [ ] **Clear & rebuild matches (decisions §10) — GitHub #5, open, unscheduled
+  (owner, 2026-10-17: build when a user needs it or beta reports show bad
+  states; §15.36 part 6's reasoning stands).** The
   manual reset in the README ("Starting over") covers a bad state; the cost
   accepted is that it loses hand-made matches. Unverified: whether old "no
   match" records still need clearing in today's code (item 2026-09-24).
+  - Open: whether review-queue choices other than manual matches can be kept.
 
 - [x] ~~**Remove plugin data on uninstall.**~~ Won't do, 2026-10-12: LMS gives
   plugins no uninstall hook (decisions §15.30 part 2).
