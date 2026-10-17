@@ -28,10 +28,19 @@ Shared reminder list. Both I and Claude Code read and update this.
 - [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
       aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
       completes and the scanner log has no SQL error.
-- [ ] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
+- [x] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
       cannot reproduce the bug): a rescan completes, and identified, conflict,
       manual and owned albums keep their `discogs_match` values (ownership,
       snapshots, release ids) across it.
+      **Done 2026-10-17 (B, share mounted first):** all 507 `discogs_match` rows
+      (and 100 `discogs_no_match`) dumped before and after: identical (ownership,
+      release/master ids, `review_reason`, snapshots, derived master). Updated
+      b4 -> b5 from the dev repo.xml (sha matched), restart clean, `user_version=7`,
+      "More Info" link shown. The ordinary rescan skipped all 765 albums
+      (`_canSkip`), so the UPDATE path ran only in the repro container (A4); the
+      view built 205 albums. The scan-time sync failed `unauthorized` (the Discogs
+      token is rejected; the same "Discogs rejected the token" at 14:16 predates
+      this session). Not touched. Repository switched back to the website URL.
 - [ ] *Unverified, optional:* where piCorePlayer's DBD::SQLite 1.58 comes from
       (decisions §15.42). Not needed for the fix.
 - [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
