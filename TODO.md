@@ -17,6 +17,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
 reference server SQLite 3.46.1)
 
+`master` = 1.0.0b5 (promoted at `075f38a`, pushed 2026-10-17; the website's repo.xml
+names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
+matches it).
+
 ## v1 RELEASE CHECKLIST
 
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
