@@ -182,10 +182,13 @@ SKIP: {
 	$linked->do("ATTACH '$dir/link/squeezewax.db' AS squeezewax");
 
 	my $reported = $S->_attachedFile($linked);
-	is( $reported, "$dir/real/squeezewax.db",
-		'SQLite reports the symlink-resolved path, not the one we passed' );
-	isnt( $reported, "$dir/link/squeezewax.db",
-		'  ...so a raw string comparison against dbFile() would not match' );
+	# Either answer is legitimate: newer SQLite builds report the
+	# symlink-resolved path, 3.22.0 reports the path it was given (observed in
+	# the repro container, decisions §15.42). Which one is not ours to assert;
+	# that _samePath copes with both is, and it is asserted below.
+	ok( $reported eq "$dir/real/squeezewax.db" || $reported eq "$dir/link/squeezewax.db",
+		'SQLite reports the resolved path or the one we passed' );
+	like( $reported, qr{/squeezewax\.db\z}, '  ...naming our file either way' );
 
 	ok( $S->_samePath( $reported, "$dir/link/squeezewax.db" ),
 		'_samePath sees through a symlinked directory' );
