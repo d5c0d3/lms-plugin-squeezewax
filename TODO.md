@@ -41,6 +41,12 @@ Shared reminder list. Both I and Claude Code read and update this.
       view built 205 albums. The scan-time sync failed `unauthorized` (the Discogs
       token is rejected; the same "Discogs rejected the token" at 14:16 predates
       this session). Not touched. Repository switched back to the website URL.
+      **Re-run with a refreshed token, 16:34:** scan-time sync fetched 205 items in
+      4 requests, ownership pass wrote nothing (exact=151, version=54, absent-with-row=302
+      = the before counts), the server-side fallback sync also completed, no SQL
+      error. All 507 rows identical except one `artist-disagree` queue row that
+      was manually matched in the review queue at 16:36:03, after the rescan's
+      pass (not by the rescan; ownership then 152 exact).
 - [ ] *Unverified, optional:* where piCorePlayer's DBD::SQLite 1.58 comes from
       (decisions §15.42). Not needed for the fix.
 - [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
