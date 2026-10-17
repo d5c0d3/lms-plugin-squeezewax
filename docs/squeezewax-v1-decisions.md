@@ -7044,3 +7044,41 @@ migrations).
   verified in project settings). Feature requests reach design chats only if
   pasted.
 - The feature split's open questions for A1 and A2 are in `TODO.md`.
+
+### 15.44 A2 (GitHub #3): a Discogs item at the top of Material's album menu — 2026-10-17
+
+**Owner ruling: option 2, a hybrid.** A server setting, off by default: "Also
+show a Discogs item at the top of Material's album menu". The item appears on
+every album. It opens a SqueezeWax page for the album (Material `lmsbrowse`
+action with the album id) showing the owned entries and the Discogs link, or
+"not on record". No new Discogs requests (inferred: the same data the More
+entries use).
+
+The More entries always stay (`Menu.pm` init, `registerInfoProvider`). A
+provider cannot tell Material apart from other app-style clients: it receives
+only `menuMode`, `menuContext` and `playlistIndex` (slimserver `eb59bbf`,
+`Slim/Menu/AlbumInfo.pm` ~652-667). Material sends `menu:1 html:1`
+(`browse-page.js:1265`, Material `631a481`), and `html` is not passed on.
+Filtering on `menuMode` would also hide the entries in other app-style clients
+(inferred; Jivelite unchecked). Listen Later `ecb3622` keeps both too
+(`Plugin.pm:1691-1716`). Accept the duplicate in Material.
+
+**Verified** (Material `631a481` and `e85a897`): `registerCustomAction`
+(`MaterialSkin/Plugin.pm:545-553`) only adds and has no unregister. So
+switching the setting on can take effect at once; switching it off takes effect
+after an LMS restart, and the settings page must say so. Material 6.4.6 added
+the plugin hook (ChangeLog 6.4.6 item 7). Show the setting only when Material
+>= 6.4.6 is loaded. Handle the 6.4.6/6.4.7 one-argument pitfall the way Listen
+Later `ecb3622` does (its CLAUDE.md ~2176).
+
+**Inferred:** the setting is server-wide, so it applies to every Material user
+on that server. Material's top-level list cannot vary per album
+(`customactions.js` `getSectionActions` filters only on `locked`, `localonly`
+and an id prefix).
+
+**Unverified:** the minimum Material version for `lmsbrowse`; whether LyrPlay
+(iPhone/iPad) and Squeeze-LX (Windows 11) show the item, and whether they need
+reopening after it is switched on.
+
+Requested by forum user Dentaku (Material in LyrPlay and Squeeze-LX). Decided
+in the design chat "Top-level menu setting request".

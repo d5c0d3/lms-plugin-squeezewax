@@ -1482,14 +1482,14 @@ Each names its sites so the work is mechanical rather than a search.
       Needs a real server: the album id arrives before `['rescan','done']`; an
       album whose LMS id changes keeps its match (`album_key`); a rescan album
       queued during a full scan; a manual-match album stays manual.
-- [ ] **2026-10-15: A2 — SqueezeWax items at the top of the context menu
-      (setting).** Open for the owner: (1) which app does the forum user use?
-      Get the post link; "top level" most likely means Material's first-level
-      menu (unverified). (2) Is "the same item on every album" acceptable?
-      Inferred: Material's `registerCustomAction` list cannot be filtered per
-      album, so the item cannot be hidden on unowned albums. If not acceptable,
-      ask Craig on Material #1288 for a per-album condition (upstream). (3)
-      Option a (one checkbox) or b (per item): decide after 1 and 2.
+- [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
+      setting off by default, More entries stay, switching off needs a
+      restart).**
+      Open: the minimum Material version for `lmsbrowse`.
+      Needs a real server: the item appears in LyrPlay, Squeeze-LX and a desktop
+      browser; whether the apps need reopening after the setting is switched on;
+      switching off works only after a restart; the page reads well at phone
+      width.
 - [ ] **2026-10-15: Discogs: may contributors share the registered app? Check
       before inviting developers.** Whether contributors may share the registered
       "SqueezeWax" application or must register their own. Unchecked (decisions
