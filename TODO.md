@@ -14,6 +14,9 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ---
 
+report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
+reference server SQLite 3.46.1)
+
 ## v1 RELEASE CHECKLIST
 
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
@@ -24,7 +27,9 @@ Shared reminder list. Both I and Claude Code read and update this.
       repro container ("Records I own" registered, no error). Likely cause,
       *unverified*: `initPlugin` ran a second time in one process. Effect: the
       first registration stands; not checked whether the view or node is affected.
-      Reference server (B) not checked: share unmounted. Not fixed.
+      Seen once, only with an unpackaged copy; not seen on packaged b5 (2 repro
+      container restarts, 1 reference-server restart). Not chased (owner, 2026-10-17).
+      If it recurs, check whether "Records I own" is missing until restart.
 - [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
       aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
       completes and the scanner log has no SQL error.
@@ -41,6 +46,10 @@ Shared reminder list. Both I and Claude Code read and update this.
       view built 205 albums. The scan-time sync failed `unauthorized` (the Discogs
       token is rejected; the same "Discogs rejected the token" at 14:16 predates
       this session). Not touched. Repository switched back to the website URL.
+      Owner ruling 2026-10-17: the UPDATE path is covered where the bug was (the
+      3.22.0 container, a real scan) and by match-check on both drivers; the
+      reference run shows no regression on 3.46.1. No forced re-examination on the
+      NAS.
       **Re-run with a refreshed token, 16:34:** scan-time sync fetched 205 items in
       4 requests, ownership pass wrote nothing (exact=151, version=54, absent-with-row=302
       = the before counts), the server-side fallback sync also completed, no SQL
