@@ -1466,7 +1466,7 @@ Each names its sites so the work is mechanical rather than a search.
       (`Ownership.pm` `_indexCollection`). Revisit at issue #1's development.
       Partly answers 2026-09-13 "per-release lookup of the caller's own
       collection entry?".
-- [ ] **2026-10-15: A1 — "Rescan album" also updates SqueezeWax for that album**
+- [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
       (decisions §15.43; feature split). Owner, 2026-10-17: (1) Stop today's
       unconditional fallback sync after rescan album. Inferred: `_syncTick` does
       not skip it, since no scan marker is written, so each album rescan costs a
