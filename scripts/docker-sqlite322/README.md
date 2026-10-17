@@ -60,6 +60,15 @@ docker restart squeezewax-sqlite322
 `squeezewax.db` in `tmp/sqlite322/prefs/` survives that; delete it (or `reset`)
 for a clean first-install.
 
+## Running the offline suites on 3.22.0
+
+`scripts/check-all.sh` does this itself: after the bundled-driver pass it runs
+`scripts/docker-sqlite322/check.sh` if the `squeezewax-sqlite322` image exists
+(otherwise it prints `3.22.0 pass skipped (no image)`), and its exit status is
+the OR of both. The container needs not be running; the repo is mounted
+read-only. Each pass prints a `driver:` line. `SQUEEZEWAX_DBD_INC=<dirs>`
+(colon-separated) puts another DBD::SQLite ahead of refs/ for one pass.
+
 ## Known differences from the tester
 
 - x86_64 here, aarch64 there; Debian 11 here, piCorePlayer there.
