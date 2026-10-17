@@ -16,12 +16,26 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
+      aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
+      completes and the scanner log has no SQL error.
+- [ ] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
+      cannot reproduce the bug): a rescan completes, and identified, conflict,
+      manual and owned albums keep their `discogs_match` values (ownership,
+      snapshots, release ids) across it.
+- [ ] *Unverified, optional:* where piCorePlayer's DBD::SQLite 1.58 comes from
+      (decisions §15.42). Not needed for the fix.
+- [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
+      as an alternative to the container pass; the container does it.
 - [ ] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
       scan completes, albums A/B/C give an identified row, a strict no-match row
       and a conflict row; no SQL error. 1.0.0b4 reproduced 2026-10-17: scan aborts
       on `near "ON": syntax error` at `Match.pm` `_recordMatch` (album A, the first
       album), so B and C were never reached; migrations 1-7 completed
-      (`user_version=7`).
+      (`user_version=7`). 2026-10-17: the branch's unpackaged tree, in the same
+      container, passes (A release 198756 strict, B strict no-match only, C
+      `conflict`, rescan clean and unchanged); tick this only after b5 is
+      installed from repo.xml.
 - [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only
@@ -1298,10 +1312,12 @@ Each names its sites so the work is mechanical rather than a search.
       without stored state. Step 8 adds a nullable reason column
       (ambiguous | artist disagrees | artist absent | Various-gated) by
       `ADD COLUMN`, and the ownership pass writes it. `ADD COLUMN` with a
-      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and LMS bundles
+      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and ~~LMS bundles
       SQLite 3.46.1 (DBD::SQLite 1.76, perl 5.32–5.42 trees in
       `refs/slimserver/CPAN/arch`; VERIFIED 2026-09-20 by Claude Code, Phase
-      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0. Step 7's pass
+      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0.~~ → 2026-10-17: true of
+      LMS's own tree, not of what a server runs; 3.22.0 is the floor (decisions
+      §15.42). Step 7's pass
       already counts all four buckets in its summary, so the queue's size is
       known before it is built.
       → 2026-09-24: six values, not four. conflict and orphan are added by
