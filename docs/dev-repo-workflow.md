@@ -138,6 +138,7 @@ for beta, so a fix to the released version never ships half-finished work. At
 most one feature is in beta at a time (through `beta.xml`). Feature-branch builds
 are never published to `repo.xml` or `beta.xml`; a server that installed one
 needs "Starting over" afterwards.
+Issue numbers share GitHub's counter with pull requests; #1 is the closed site PR, so the first feature issue is #2.
 
 **Fixes to a released version (§15.43 ruling 5).** While a newer feature is in
 beta, a fix is a branch from the last promoted commit, numbered `1.N.M`, with no
