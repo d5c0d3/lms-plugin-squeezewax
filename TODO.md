@@ -16,6 +16,15 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
+      Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
+      source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
+      registered, so `View::init` logs "could not register" and returns before
+      `registerNode`). Not seen on packaged b5 after two clean restarts in the
+      repro container ("Records I own" registered, no error). Likely cause,
+      *unverified*: `initPlugin` ran a second time in one process. Effect: the
+      first registration stands; not checked whether the view or node is affected.
+      Reference server (B) not checked: share unmounted. Not fixed.
 - [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
       aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
       completes and the scanner log has no SQL error.
@@ -27,7 +36,7 @@ Shared reminder list. Both I and Claude Code read and update this.
       (decisions §15.42). Not needed for the fix.
 - [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
       as an alternative to the container pass; the container does it.
-- [ ] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
+- [x] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
       scan completes, albums A/B/C give an identified row, a strict no-match row
       and a conflict row; no SQL error. 1.0.0b4 reproduced 2026-10-17: scan aborts
       on `near "ON": syntax error` at `Match.pm` `_recordMatch` (album A, the first
@@ -36,6 +45,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       container, passes (A release 198756 strict, B strict no-match only, C
       `conflict`, rescan clean and unchanged); tick this only after b5 is
       installed from repo.xml.
+      **Done 2026-10-17 (A, 1.0.0b5 from the dev repo.xml):** update b4 -> b5 as a
+      user (no `?v=5` needed), DBD::SQLite 1.58 / sqlite 3.22.0, `user_version=7`,
+      no SQL error. A strict row (198756), B strict no-match only, C `conflict`.
+      The wipecache skipped all three (`_canSkip`, `Importer.pm:466`: equal
+      `source_timestamp`; our DB survives wipecache), so the UPDATE path was
+      exercised by touching the six files and rescanning: examined 3, no SQL error,
+      one row per album, `source_timestamp` refreshed, release ids, `review_reason`
+      and snapshots unchanged (`lms_album_id` 10/12 -> 13/15, as LMS reassigned
+      album ids; identity is `album_key`).
 - [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only

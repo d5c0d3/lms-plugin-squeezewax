@@ -4291,7 +4291,9 @@ not chosen by the user and are open.
 - **Whether collection images may be shown** is unverified against Discogs'
   terms, so the re-match list shows none.
 - **`ADD COLUMN` with a CHECK on SQLite 3.22.0** is confirmed from the SQLite
-  documentation, not from a run on a 3.22 build.
+  documentation, ~~not from a run on a 3.22 build~~. Corrected 2026-10-17:
+  migrations 1-7 ran on SQLite 3.22.0 in the repro container
+  (`scripts/docker-sqlite322/`, `user_version=7`; §15.42).
 - **Incumbent conflicts written before migration 4 cannot be found.** Nothing
   recorded them. They surface when their files next change.
 
