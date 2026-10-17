@@ -1458,13 +1458,30 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-17: single-release collection check.** Discogs lists a
+      "Collection Items By Release" endpoint (docs navigation; body not read, so
+      unverified; python3-discogs-client `collection_items(release_id)` is
+      third-party, thin evidence). Could cut sync cost when few albums changed.
+      It does not replace the full list: version and title ownership need it
+      (`Ownership.pm` `_indexCollection`). Revisit at issue #1's development.
+      Partly answers 2026-09-13 "per-release lookup of the caller's own
+      collection entry?".
 - [ ] **2026-10-15: A1 — "Rescan album" also updates SqueezeWax for that album**
-      (decisions §15.43; feature split). Open for the owner: (1) should an album
-      rescan still trigger the whole-collection fallback sync? Re-reading one
-      album's tags and re-checking its ownership needs no Discogs request
-      (inferred from §13.1). Not checked: whether `_syncTick` already skips that
-      sync after `rescan album`. (2) Which forum post asked for this? Link it in
-      the issue.
+      (decisions §15.43; feature split). Owner, 2026-10-17: (1) Stop today's
+      unconditional fallback sync after rescan album. Inferred: `_syncTick` does
+      not skip it, since no scan marker is written, so each album rescan costs a
+      full sync, about ceil(items/100)+1 requests (`API.pm` PER_PAGE): 4 for 203
+      items, about 51 for a 5,000-item collection. (2) No forum post to link;
+      the owner raised it in a forum reply. (3) Leading option D: re-read the
+      album's tags (0 requests). If the release id is new or changed, make one
+      per-release collection lookup: owned → exact, not owned → leave ownership
+      for the next scan or sync. Decide at development; a phase 0 check of the
+      endpoint comes first. Design note:
+      `claude/design-issue-1-rescan-album.md` (design project). It touches
+      §15.16 part 3 (who may write conflict) and §15.18 part 5.
+      Needs a real server: the album id arrives before `['rescan','done']`; an
+      album whose LMS id changes keeps its match (`album_key`); a rescan album
+      queued during a full scan; a manual-match album stays manual.
 - [ ] **2026-10-15: A2 — SqueezeWax items at the top of the context menu
       (setting).** Open for the owner: (1) which app does the forum user use?
       Get the post link; "top level" most likely means Material's first-level
