@@ -470,7 +470,7 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'  ...but the adjudicated id is KEPT, not NULLed - §2a protects a decision' );
 
 	# The snapshots of the row it landed on survive, because _recordConflict's
-	# ON CONFLICT list does not name them. §15.4 bars a conflict from CAPTURING
+	# UPDATE's column list does not name them. §15.4 bars a conflict from CAPTURING
 	# a snapshot; it does not ask an existing one to be thrown away, and
 	# throwing it away would cost the album its orphan recovery over a tagging
 	# mistake. Described here, not changed.
