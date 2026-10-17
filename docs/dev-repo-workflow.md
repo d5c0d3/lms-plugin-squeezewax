@@ -350,6 +350,14 @@ the one-way dev channel by mistake). Anyone who added the older
 keeps both. During the v1 beta this `repo.xml` carries the beta, so testers move
 to 1.0.0 with no URL change; `beta.xml` is built at the first beta after 1.0.0.
 
+**After the official listing (§15.43 ruling 10).** Once SqueezeWax is in
+`LMS-Community/lms-plugin-repository`'s `include.json`, `repo.xml` carries
+**releases only**. Betas go in `beta.xml` alone, and `beta.xml` is never added
+to `include.json`. LMS always includes the official repository and keeps the
+highest version across repositories, and never downgrades
+(`ExtensionsManager.pm`, `findUpdates`), so a tester who leaves `beta.xml` stays
+on the beta until the next release. The listing is rebuilt every 6 hours.
+
 - **Promotion merges a checked package commit and copies its zip. It never
   rebuilds.** `package-build.sh` bumps the version on every run, so a rebuild
   would ship a version nobody hardware-checked. The zip is carried byte for

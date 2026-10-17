@@ -3270,6 +3270,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-17: before the first feature branch — `package-build.sh` must
+      refuse feature branches.** It only warns on a non-`vN-buildout` branch
+      (lines 37-38, 175-186), so a feature-branch build commits `repo.xml` and the
+      zip there and `--publish` pushes them, against §15.43 ruling 6. Refuse
+      `feature/*`, or refuse `--publish` off `v1-buildout`.
+
 - [ ] **2026-10-15: Issues replace TODO for feature items once filed (§15.43
       ruling 9).** From the first 1.N release on, a feature item lives in its
       GitHub issue and leaves this file; TODO.md keeps blocked items, items
@@ -3650,7 +3656,8 @@ Each names its sites so the work is mechanical rather than a search.
       The version scheme (`1.0.0bN`, `1.0.0`) replaces `0.0.0.N`.
       Still to do: bump the extension repo URL's `?v=` cache-buster, which reads
       `?v=0.0.0.8` on the reference server (stale; cheapest at the next build).
-- [ ] **Submit SqueezeWax to the official plugin list at v1:** an entry in
+- [ ] **Submit SqueezeWax to the official plugin list at v1 — only once
+      `repo.xml` carries 1.0.0 (§15.43 ruling 10):** an entry in
       `LMS-Community/lms-plugin-repository` `include.json`, using the website
       `repo.xml` URL (§15.37 part 3; raw and Pages URLs are both accepted there).
 - [ ] **§15.37 part 8: once the reference server runs a v2 dev build, v1 fixes

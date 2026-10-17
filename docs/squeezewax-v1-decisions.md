@@ -6928,12 +6928,12 @@ server on perl 5.32+ has 3.46.1", and the tester's server is perl 5.32.1 with
 ### 15.43 Per-feature releases after 1.0.0 — 2026-10-15
 
 **Decided in the design chat, 2026-10-15** (owner ruling on the model; rulings
-3-9 are the design chat's proposals, labelled below). After 1.0.0, ship **one
+3-9 confirmed by the owner 2026-10-17, ruling 10 added the same day). After 1.0.0, ship **one
 feature per release**, tracked as GitHub issues. Supersedes parts of §15.37, as
 marked on each ruling; parts 3, 4, 7 and 8 of §15.37 are unchanged.
 
 Status keys: **verified** = checked in source or docs; **inferred** = read, not
-run; **proposed** = design chat's design, owner to confirm.
+run; **Owner ruling, 2026-10-17** = a design-chat proposal the owner confirmed.
 
 #### Rulings
 
@@ -6953,16 +6953,16 @@ run; **proposed** = design chat's design, owner to confirm.
      guard, so no script change is needed.
 3. **One development line: `v1-buildout`.** No `v2-buildout`. **Supersedes
    §15.37 part 1's `v2-buildout`/`vN-buildout` rows and part 6** (retirement
-   when `N+1.0.0` is promoted). **Proposed.**
+   when `N+1.0.0` is promoted). **Owner ruling, 2026-10-17.**
 4. **Each feature on its own branch** `feature/<issue#>-<slug>`, merged into
-   `v1-buildout` only when ready for beta. **Proposed.** Why: a fix to the
+   `v1-buildout` only when ready for beta. **Owner ruling, 2026-10-17.** Why: a fix to the
    released version must not ship half-finished work.
 5. **Fixes to a released version** while a newer feature is in beta: a branch
    from the last promoted commit, version `1.N.M`, no migration, then merged
    forward. This is §15.37 part 4 applied to releases instead of lines.
-   **Proposed.**
+   **Owner ruling, 2026-10-17.**
 6. **Migrations. Supersedes §15.37 part 5** ("only the newest line adds a
-   migration"). **Proposed.**
+   migration"). **Owner ruling, 2026-10-17.**
    - A migration number is taken at **merge** into `v1-buildout`, never on the
      feature branch.
    - Features that share a migration ship in one release. Known case: TODO
@@ -6974,20 +6974,45 @@ run; **proposed** = design chat's design, owner to confirm.
      adding migration N. Servers that installed either build are stuck,
      one-way and silent (§15.37 part 5's reason).
 7. **Betas** go through `beta.xml` (already planned for after 1.0.0, TODO).
-   At most one feature in beta at a time. **Proposed.**
+   At most one feature in beta at a time. **Owner ruling, 2026-10-17.**
 8. **Decisions stay in the docs.** An issue links to its §, and the § is what
    closes it. A refused request gets a `wont-do` label and a link to the ruling
-   that refused it (e.g. §15.31 ruling 4). **Proposed.**
+   that refused it (e.g. §15.31 ruling 4). **Owner ruling, 2026-10-17.**
 9. **Issues replace TODO.md for feature items.** TODO.md keeps blocked items,
-   items needing a real server, and process items. **Proposed.**
+   items needing a real server, and process items. **Owner ruling, 2026-10-17.**
 
-#### Open point on ruling 6
+10. **Beta channel after the official listing. Owner ruling, 2026-10-17.**
+    Verified by reading; not run.
+    - **LMS side** (`LMS-Community/slimserver` `public/9.1` @ `582a1b2`,
+      `Slim/Utils/ExtensionsManager.pm`): the official repository is always
+      included (line 115). When several repositories name one plugin, the
+      highest version wins (`getAllPluginRepos`, ~460; `findUpdates`, 382 and
+      392). An update is offered only if it is higher than the installed
+      version (392), so there is **no downgrade**. Local `refs/` is pinned at
+      `a670a38`, where the same code sits at `:114`, `:460`, `:382`, `:392`.
+    - **Listing side** (`LMS-Community/lms-plugin-repository` @ `e8fa6bd`): the
+      official list is rebuilt every 6 hours
+      (`update-extensions-repository.yml`); `buildrepo.pl` reads `include.json`.
+    - **Rules.** (a) Once SqueezeWax is in the official listing, `repo.xml`
+      carries **releases only**. (b) Betas appear only in `beta.xml`. (c)
+      `beta.xml` never goes in `include.json`. (d) A tester who leaves the beta
+      channel stays on the beta build until the next release, because LMS
+      offers only a higher version.
+    - **Why.** The official listing and `repo.xml` are both always read; a beta
+      in `repo.xml` would reach every user of the listing.
+    - Supersedes the §15.37 part 3 / §15.36 part 1 wording that `repo.xml`
+      carries the beta: that holds only until the listing exists.
 
-The feature split (`claude/feature-split-proposal.md`) pushes back on "C1,
+#### Closed: point on ruling 6 (owner, 2026-10-17)
+
+The feature split (`claude/feature-split-proposal.md`) pushed back on "C1,
 master search and wantlist share a migration, so ship together": the TODO items
 share a **design question** (what a sync may keep; TODO 2026-09-13), not one
-migration. **Inferred:** design them together, but each can ship alone with its
-own migration number taken at merge. **Owner to decide.**
+migration. **Ruled:** the C-group features (C1-C6) ship as individual features,
+designed together where they share the "what may a sync keep" question. Each
+takes its own migration number at merge (ruling 6). Ruling 6's "features that
+share a migration ship in one release" applies only where a feature really
+needs the same migration, and the TODO 2026-09-30 example no longer forces it.
 
 #### Claude Code on the web and GitHub issues
 
