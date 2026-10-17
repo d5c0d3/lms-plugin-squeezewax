@@ -188,7 +188,11 @@ Never run `git push` and never try to work around it. Commit locally, then end y
 
 > Ready to push: `git push origin <branch>` (<N> new commits, last <hash>)
 
+Before calling anything pushed, unpushed, live or not yet visible: run `git fetch` and compare with origin/<branch>; for the website, fetch the live URL. Never infer it from not having pushed. Print the 'Ready to push' line only when the fetch shows local commits ahead.
+
 The owner pushes.
+
+`package-build.sh --publish` pushes; never use it. Build without it and commit as in hand-off 82.
 
 ## Sync reminder
 

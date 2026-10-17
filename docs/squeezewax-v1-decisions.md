@@ -2658,8 +2658,10 @@ appears newer than the text. It does not change the outcome: our CHECK is
 written inline and unnamed, so there is nothing to `DROP CONSTRAINT`, and CHECK
 constraints combine conjunctively, so adding one narrows rather than widens.
 
-**Unverified:** which SQLite version is bundled with the DBD::SQLite in `refs/`.
-Not checked. It does not change the outcome either, since the CHECK forces the
+~~**Unverified:** which SQLite version is bundled with the DBD::SQLite in `refs/`.
+Not checked.~~ → 2026-10-17: 3.46.1 for perl 5.32–5.42 and 3.22.0 for 5.20–5.30 in
+LMS's own tree, but a server on perl 5.32 can run 3.22.0 (piCorePlayer), so 3.22.0
+is the floor (decisions §15.42). It does not change the outcome either, since the CHECK forces the
 rebuild regardless of what `ALTER COLUMN` supports.
 
 **Consequence: migration 3 is a 12-step table rebuild of `discogs_match`, not an
@@ -5697,6 +5699,8 @@ Recorded so they are not re-proposed as new:
   inferred URL forms, hardware checks.
 - One library, one collection.
 
+**2026-10-14:** Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: https://github.com/CDrummond/lms-material/issues/1288. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
+
 ### 15.26 Step 9 on hardware, and step 9b: links for apps, a line for players
 
 **Observed 2026-09-30** on the reference server (0.0.0.14, hand-offs 41 and 44);
@@ -6739,6 +6743,28 @@ in Material (report 76 A4 point 2), so b2 would be promoted with a known gap.
   Detect's progress and result are a sixth region, `swxDetectResult`, which
   holds text and tables only.
 
+- **2026-10-14 (owner): keep Test token and Detect disabled during a scan; item 2
+  stands.** Enabling Test token would also need its own scan-time hint, removing
+  the server refusal (`Settings.pm` `_testToken` ~l.354-356), and settling whether
+  a token saved mid-scan affects the running scan (it saves `discogsToken` via
+  `SUPER::handler`; `Slim/Web/Settings.pm:156-162`). Not worth it.
+
+### 15.41 Promotion: TODO.md conflicts — 2026-10-14
+
+- **Cause:** PR #1 (`site`, `84019ca`) edited master's `TODO.md`; the promotion of
+  1.0.0b4 aborted on it (report 83 B), because `promote-master.sh` allowed
+  conflicts only in `repo.xml` and `dist/`.
+- **Rule:** `promote-master.sh` takes the package commit's `TODO.md` on a conflict,
+  but only after a line check: every non-blank line added to master's `TODO.md`
+  since master's last "Promote SqueezeWax" commit must appear verbatim in the
+  package commit's `TODO.md`. Any missing line aborts the merge, is listed, and
+  the script stops.
+- **Rule:** any branch merged into master copies its `TODO.md` edits to
+  `v1-buildout` first (as was done for `site`).
+- **Verified 2026-10-14:** all lines master added at `84019ca` are present in
+  `1585466`'s `TODO.md` (13 non-blank lines, plus one blank, 14 in all; the
+  script prints "13 master lines confirmed present").
+
 ### 15.40 Settings page poll interval 5 s — 1.0.0b4 (2026-10-14)
 
 - **Owner suggestion, report 78:** 10 s felt slow.
@@ -6748,3 +6774,147 @@ in Material (report 76 A4 point 2), so b2 would be promoted with a known gap.
   poll runs only while the page is visible (§15.39).
 - **Inferred:** load doubles on a negligible base; no Discogs impact.
 - **Unverified:** cost on slow hardware (piCorePlayer); not measured.
+
+### 15.42 SQLite 3.22.0 is the floor; no UPSERT — 1.0.0b5 (2026-10-16)
+
+**Decided 2026-10-16** (owner). Trigger: a forum tester's scan aborted in the
+importer on 1.0.0b4.
+
+#### What happened
+
+The tester's scanner log:
+
+```
+DBD::SQLite::db do failed: near "ON": syntax error
+[for Statement " INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at) VALUES (?, 'strict', ?, ?)
+ON CONFLICT(album_key, tier) DO UPDATE SET ..."]
+```
+
+Their server, as reported by the tester (2026-10-16):
+
+| | |
+|---|---|
+| LMS | 9.2.0 - 1790144028 @ Thu Sep 24 03:48:16 UTC 2026 |
+| OS / platform | piCore - DE - utf8 (aarch64-linux) |
+| Perl | 5.32.1 - aarch64-linux-thread-multi |
+| DBD::SQLite | 1.58 (sqlite 3.22.0) |
+
+UPSERT (`INSERT ... ON CONFLICT(...) DO UPDATE`) was added in SQLite 3.24.0
+(2018-06-04); multiple ON CONFLICT clauses and a target-less DO UPDATE in 3.35.0
+(sqlite.org/lang_upsert.html, §4 History). 3.22.0 cannot parse it.
+
+#### Correction to the recorded bundling claim
+
+~~LMS bundles SQLite 3.46.1 (DBD::SQLite 1.76) for perl 5.32–5.42; perl
+5.20–5.30 trees carry 3.22.0~~ (`TODO.md` step 6–7 Phase 0 item, `Schema.pm`
+migration 3 and 4 comments, decisions §15.9's neighbourhood). **True of LMS's own
+CPAN tree, false as a statement about what a server runs.** It was read as "a
+server on perl 5.32+ has 3.46.1", and the tester's server is perl 5.32.1 with
+3.22.0.
+
+- **Verified** (design chat, 2026-10-16, slimserver `public/9.2` @ `eb59bbf`,
+  2026-10-12): `CPAN/arch/5.32/DBD/SQLite.pm` is `1.76`; the SQLite inside
+  `CPAN/arch/5.32/aarch64-linux-thread-multi/auto/DBD/SQLite/SQLite.so` is
+  `3.46.1` (read from the binary's version strings). `CPAN/arch/5.30/DBD/SQLite.pm`
+  is `1.58`, and `CPAN/arch/5.30/aarch64-linux-gnu-thread-multi/.../SQLite.so`
+  carries `3.22.0`. So the tester's 1.58/3.22.0 pairing exists in LMS's tree only
+  under perl 5.30, never under 5.32.
+- **Inferred:** on piCorePlayer, DBD::SQLite comes from somewhere other than
+  LMS's own `CPAN/arch/5.32` tree.
+- **Unverified:** where. piCorePlayer packages LMS's CPAN modules as its own
+  extension (`slimserver-CPAN.tcz` exists in pCP's repository); its contents could
+  not be read from the design chat. Not needed for this ruling.
+
+#### Rulings
+
+1. **The minimum supported SQLite is 3.22.0.** Plugin SQL uses nothing newer.
+   This is the oldest version *observed* on a real server running SqueezeWax, not
+   a proven floor for every distribution; an older one, if reported, reopens this.
+2. **No UPSERT anywhere in `SqueezeWax/`.** The four sites in `Match.pm`
+   (`_recordMatch`, `_recordConflict`, `_recordNoMatch`, `recordManual`) become
+   **UPDATE first, INSERT only if the UPDATE changed no row**:
+   - The UPDATE sets **exactly** the columns of the old `DO UPDATE SET` list, to
+     the values the old INSERT supplied for them, and no others. This is what
+     preserves `_recordConflict`'s carried columns (incumbent
+     `discogs_release_id`, `discogs_master_id`, the snapshots) and every
+     column no writer names (`ownership`, `mb_album_id`, the `derived_*` columns).
+   - The INSERT is the old INSERT without its ON CONFLICT clause.
+   - Both statements run in one transaction: the scanner's long-lived one, or
+     `Match.pm`'s existing `$ownTxn` pattern (`relinkOrphan`) when the handle is
+     AutoCommit.
+3. **`INSERT OR REPLACE` is rejected for `discogs_match`.** REPLACE deletes the
+   conflicting row and inserts a new one (sqlite.org/lang_conflict.html), so
+   every column the statement does not name resets: `ownership` to `'absent'`
+   (badge gone until the next sync), and the snapshots and incumbent id that
+   `_recordConflict` exists to carry. It would be equivalent for
+   `discogs_no_match` (four columns, all written), but that site takes the same
+   shape as the other three: one pattern, greppable, nothing to remember.
+4. **The offline suites must pass on SQLite 3.22.0 as well as on the bundled
+   3.46.1**, using a real DBD::SQLite 1.58 build. Reading the SQLite changelog is
+   not a substitute: this bug existed while the repo already recorded that 3.22.0
+   was in LMS's tree.
+5. **A guard**: `scripts/syntax-check.sh` fails on UPSERT syntax in non-comment
+   lines of `SqueezeWax/`. Cheap, and it catches the specific regression even on a
+   machine that cannot run the 3.22.0 suites.
+
+#### What does not change
+
+- No schema change, so no migration (§15.37 part 5 is not engaged).
+- No decision rule changes, so `Tags::LOGIC_VERSION` is **not** bumped (§15.23).
+- Ships as the next number on `v1-buildout`, 1.0.0b5 (§15.37 parts 1–2).
+
+#### Where the evidence is thin
+
+- **Migrations 1–7 on 3.22.0 — verified 2026-10-17** in the repro container
+  (`scripts/docker-sqlite322/`, commits `4a94146`, `75267f3`): LMS 9.2.0 at
+  slimserver `eb59bbf`, perl 5.32.1 x86_64, LMS's Information page reading
+  `DBD::SQLite: 1.58 (sqlite 3.22.0)`. `squeezewax.db` reached `user_version=7`,
+  `discogs_collection` dropped. ~~Inferred from the tester's log~~ (the inference
+  was right).
+- **The crash reproduced on 1.0.0b4 — verified, same container.** With album A
+  tagged first, the failing statement is `_recordMatch`'s UPSERT on
+  `discogs_match` (`Match.pm` line 714, from `recordStrict` at `Importer.pm:283`),
+  not the tester's `discogs_no_match` one: the importer aborts on the first
+  album it writes, whichever writer that is. The log then shows `Failed when
+  running scan post-process` and `Not updating lastRescanTime!`. So on SQLite
+  older than 3.24.0, **every scan with tag names configured fails its
+  post-process** — not only identification. The container is x86_64; the tester
+  is aarch64 (inferred irrelevant: the failure is SQLite's parser).
+- **DBD::SQLite loading — correction.** ~~LMS retries modules that fail from its
+  own tree against the system perl~~ (design chat, from `bootstrap.pm`): the
+  retry list (`Slim/bootstrap.pm:54`, `@default_required_modules`) does not
+  include DBD::SQLite, which is loaded by a plain `use` (`Slim/Utils/DbCache.pm:10`)
+  that searches LMS's own directories first. Found by the repro session's
+  Phase 0. The container therefore overlays 1.58 into LMS's own `CPAN/arch/5.32`.
+- **No concurrent writer between UPDATE and INSERT — inferred from reading.**
+  `_writeOk` refuses server-side writes while a scan runs, and the scanner is one
+  process. Not tested under contention.
+- **The fix is not reproducible on the reference server**, which runs 3.46.1.
+  Hardware confirmation comes from the reporting tester.
+
+#### Re-verification (Claude Code, 2026-10-17)
+
+- **The 3.22.0 test path.** The suites run unmodified on a real DBD::SQLite 1.58
+  (SQLite 3.22.0) inside the repro container: `scripts/check-all.sh` starts each
+  suite with `-I<container's CPAN/arch/5.32> -MDBI -MDBD::SQLite` (from
+  `SQUEEZEWAX_DBD_INC`), so the module is already loaded when a suite's BEGIN puts
+  `refs/slimserver` on `@INC`. `scripts/docker-sqlite322/check.sh` mounts the repo
+  read-only and does that; `check-all.sh` calls it when the image exists and
+  otherwise prints `3.22.0 pass skipped (no image)`. Each pass prints its driver
+  (`DBD::SQLite 1.76 (sqlite 3.46.1)`, then `1.58 (sqlite 3.22.0)`). No perl 5.30
+  binary exists on the development machine, and building 1.58 on the host was
+  not attempted.
+- **Finding A: `schema-check.pl` 9 and 10 depend on the SQLite version.** They
+  asserted that SQLite reports a symlink-resolved path; 3.22.0 reports the path
+  it was given. Resolved by accepting either, which is the contract `_samePath`
+  already enforces (its own assertions are unchanged). Not skipped by version: no
+  source says which version began resolving.
+- **Finding B: `settings-check.pl` 186 and 190 were already red on HEAD**, on
+  the bundled driver too: `8ddc0e0` (§15.40) moved the poll to 5 s and the two
+  assertions still named 10000. A stale test; updated.
+- **RED run.** Before the rewrite, on 3.22.0, exactly `match-check.pl` (dying at
+  `_recordMatch`) and `queue-check.pl` (at `_recordConflict`) failed, each on
+  `near "ON": syntax error`, and the guard named all four statements.
+- **Order of this file.** §15.41 precedes §15.40 above (`### 15.41` is followed
+  by `### 15.40`), so "the end of the file" is not "the highest number". §15.42
+  is appended last; the pair is left as found.

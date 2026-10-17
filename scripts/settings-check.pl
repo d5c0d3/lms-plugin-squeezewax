@@ -1475,14 +1475,14 @@ diag('§15.38 item 3: the status regions carry stable ids');
 	like( $script, qr/fetch\(window\.location\.pathname,/,
 		'the refresh fetches the page\'s own path, with no query string' );
 	like( $script, qr/method:\s*'GET'/, '  ...with GET' );
-	like( $script, qr/setTimeout\(tick, 10000\)/, '  ...every 10 s' );
+	like( $script, qr/var POLL_MS = 5000;.*?setTimeout\(tick, POLL_MS\)/s, '  ...every 5 s (decisions §15.40)' );
 	unlike( $script, qr/location\.reload|\.submit\(|location\.href\s*=/,
 		'  ...and never reloads or submits' );
 	like( $script, qr/var regions = \['swxSyncLast', 'swxDerive', 'swxScanToken', 'swxScanSync', 'swxScanDetect', 'swxDetectResult'\]/,
 		'  ...replacing only the named regions' );
 	unlike( $script, qr/swxDeriveLine|querySelector\('\.swxScanNotice'\)|active\(\)/,
 		'  ...whatever the page shows: nothing gates the loop on what is pending (§15.39 item 1)' );
-	like( $script, qr/\n\ttimer = setTimeout\(tick, 10000\);\n\}\)\(\);\s*$/,
+	like( $script, qr/\n\ttimer = setTimeout\(tick, POLL_MS\);\n\}\)\(\);\s*$/,
 		'  ...armed unconditionally on load' );
 	like( $script, qr/if \(fired \|\| document\.hidden\) \{ return; \}/,
 		'  ...no fetch while the page is hidden' );

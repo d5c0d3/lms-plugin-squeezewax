@@ -176,6 +176,9 @@ promotion**, not once at release, and `scripts/promote-master.sh` does it:
   name are untouched, because they describe the zip's bytes.
 - Master's `dist/` holds the zips already on master plus the promoted one.
   Every other zip the merge brings in is removed.
+- `TODO.md`, if it conflicts, is the package commit's, after a check that every
+  line master added since its last promotion is already there; otherwise the
+  script stops (decisions §15.41).
 
 ---
 
@@ -198,7 +201,7 @@ directly):
 			<creator>d5c0d3</creator>
 			<category>musicservices</category>
 			<url>https://raw.githubusercontent.com/d5c0d3/lms-plugin-squeezewax/<branch>/dist/SqueezeWax_1_0_0b1.zip</url>
-			<link>https://github.com/d5c0d3/lms-plugin-squeezewax/issues</link>
+			<link>https://d5c0d3.github.io/lms-plugin-squeezewax/</link>
 			<sha>&lt;sha1 of that exact zip&gt;</sha>
 		</plugin>
 	</plugins>

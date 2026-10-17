@@ -661,6 +661,49 @@ sub recordStrict {
 	return $class->_recordNoMatch( $album, $state );
 }
 
+# UPDATE the row, and INSERT it only if the UPDATE changed none. Replaces
+# `INSERT ... ON CONFLICT DO UPDATE`: SQLite parses that from 3.24.0 and the
+# floor is 3.22.0 (decisions §15.42). INSERT OR REPLACE is not a substitute for
+# discogs_match - it deletes the row, so every column the statement does not name
+# resets (ownership, the snapshots and incumbent id _recordConflict carries).
+#
+# Each caller's UPDATE names exactly the columns the old DO UPDATE SET list did,
+# and no others; that list is what decides what an existing row keeps.
+#
+# One transaction, by relinkOrphan's shape: in the scanner the handle is
+# AutoCommit = 0 with one open for the whole scan, in the server it is
+# AutoCommit = 1 and one is opened here. A failure rolls back the handle's own
+# transaction and is re-raised, so the caller sees what it saw from the single
+# statement (RaiseError, Slim/Schema.pm:273).
+sub _updateElseInsert {
+	my ( $dbh, $update, $updateBind, $insert, $insertBind ) = @_;
+
+	my $ownTxn = $dbh->{AutoCommit} ? 1 : 0;
+
+	$dbh->begin_work if $ownTxn;
+
+	my $ok = eval {
+		# "0E0" when nothing matched: compare the number, not the truth.
+		my $n = $dbh->do( $update, undef, @$updateBind );
+
+		$dbh->do( $insert, undef, @$insertBind ) unless $n && $n + 0 > 0;
+
+		1;
+	};
+
+	if ( !$ok ) {
+		my $err = $@ || "unknown error\n";
+
+		eval { $dbh->rollback; 1 } if $ownTxn;
+
+		die $err;
+	}
+
+	$dbh->commit if $ownTxn;
+
+	return 1;
+}
+
 # A clean hit: the tag names the release, so there is nothing to resolve at this
 # tier. It is an IDENTIFICATION, not a confirmation. Confirmation means the
 # release is in the user's collection, which this process has not checked and
@@ -686,7 +729,28 @@ sub _recordMatch {
 	my $dbh = Slim::Schema->dbh;
 	my $key = $album->{album_key};
 
-	$dbh->do(
+	my $now = time();
+
+	_updateElseInsert(
+		$dbh,
+		q{
+			UPDATE squeezewax.discogs_match SET
+				lms_album_id         = ?,
+				discogs_release_id   = ?,
+				discogs_master_id    = ?,
+				match_tier           = 'strict',
+				state                = 'candidate',
+				matched_at           = ?,
+				source_timestamp     = ?,
+				snapshot_album_title = ?,
+				snapshot_track_count = ?,
+				snapshot_artist      = ?,
+				review_reason        = NULL
+			 WHERE album_key = ?
+		},
+		[ $album->{album_id}, $decision->{id}, $decision->{master_id},
+		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		  $album->{artist}, $key ],
 		q{
 			INSERT INTO squeezewax.discogs_match
 				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
@@ -694,23 +758,10 @@ sub _recordMatch {
 				 snapshot_album_title, snapshot_track_count, snapshot_artist,
 				 review_reason)
 			VALUES (?,?,?,?,'strict','candidate',?,?,?,?,?,NULL)
-			ON CONFLICT(album_key) DO UPDATE SET
-				lms_album_id         = excluded.lms_album_id,
-				discogs_release_id   = excluded.discogs_release_id,
-				discogs_master_id    = excluded.discogs_master_id,
-				match_tier           = excluded.match_tier,
-				state                = excluded.state,
-				matched_at           = excluded.matched_at,
-				source_timestamp     = excluded.source_timestamp,
-				snapshot_album_title = excluded.snapshot_album_title,
-				snapshot_track_count = excluded.snapshot_track_count,
-				snapshot_artist      = excluded.snapshot_artist,
-				review_reason        = excluded.review_reason
 		},
-		undef,
-		$key, $album->{album_id}, $decision->{id}, $decision->{master_id},
-		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
-		$album->{artist}
+		[ $key, $album->{album_id}, $decision->{id}, $decision->{master_id},
+		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		  $album->{artist} ]
 	);
 
 	_clearNoMatch( $dbh, $key );
@@ -755,7 +806,7 @@ sub _recordConflict {
 	# No snapshot columns here, by rule (§15.4): a snapshot on a conflict row
 	# would make _recordNoMatch's narrow delete unreachable and the row would
 	# advertise a conflict forever. An EXISTING row's snapshots survive because
-	# the ON CONFLICT list below does not name them - they are carried, not
+	# the UPDATE's column list below does not name them - they are carried, not
 	# rewritten.
 	my $incumbent = ( $state && $state->{src} eq 'match' )
 		? $state->{discogs_release_id}
@@ -786,21 +837,27 @@ sub _recordConflict {
 		. ( defined $incumbent ? " (keeping the existing match $incumbent)" : '' )
 	);
 
-	$dbh->do(
+	my $now = time();
+
+	_updateElseInsert(
+		$dbh,
+		q{
+			UPDATE squeezewax.discogs_match SET
+				lms_album_id     = ?,
+				match_tier       = 'strict',
+				state            = 'candidate',
+				source_timestamp = ?,
+				review_reason    = 'conflict'
+			 WHERE album_key = ?
+		},
+		[ $album->{album_id}, $album->{source_timestamp}, $key ],
 		q{
 			INSERT INTO squeezewax.discogs_match
 				(album_key, lms_album_id, discogs_release_id,
 				 match_tier, state, matched_at, source_timestamp, review_reason)
 			VALUES (?,?,?,'strict','candidate',?,?,'conflict')
-			ON CONFLICT(album_key) DO UPDATE SET
-				lms_album_id     = excluded.lms_album_id,
-				match_tier       = excluded.match_tier,
-				state            = excluded.state,
-				source_timestamp = excluded.source_timestamp,
-				review_reason    = excluded.review_reason
 		},
-		undef,
-		$key, $album->{album_id}, $incumbent, time(), $album->{source_timestamp}
+		[ $key, $album->{album_id}, $incumbent, $now, $album->{source_timestamp} ]
 	);
 
 	_clearNoMatch( $dbh, $key );
@@ -884,15 +941,21 @@ sub _recordNoMatch {
 		return 'kept';
 	}
 
-	$dbh->do(
+	my $now = time();
+
+	_updateElseInsert(
+		$dbh,
+		q{
+			UPDATE squeezewax.discogs_no_match
+			   SET source_timestamp = ?, checked_at = ?
+			 WHERE album_key = ? AND tier = 'strict'
+		},
+		[ $album->{source_timestamp}, $now, $key ],
 		q{
 			INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
 			VALUES (?, 'strict', ?, ?)
-			ON CONFLICT(album_key, tier) DO UPDATE SET
-				source_timestamp = excluded.source_timestamp,
-				checked_at       = excluded.checked_at
 		},
-		undef, $key, $album->{source_timestamp}, time()
+		[ $key, $album->{source_timestamp}, $now ]
 	);
 
 	return 'none';
@@ -947,7 +1010,28 @@ sub recordManual {
 	my $dbh = Slim::Schema->dbh;
 	my $key = $album->{album_key};
 
-	$dbh->do(
+	my $now = time();
+
+	_updateElseInsert(
+		$dbh,
+		q{
+			UPDATE squeezewax.discogs_match SET
+				lms_album_id         = ?,
+				discogs_release_id   = ?,
+				discogs_master_id    = ?,
+				match_tier           = 'manual',
+				state                = 'confirmed',
+				matched_at           = ?,
+				source_timestamp     = ?,
+				snapshot_album_title = ?,
+				snapshot_track_count = ?,
+				snapshot_artist      = ?,
+				review_reason        = NULL
+			 WHERE album_key = ?
+		},
+		[ $album->{album_id}, $releaseId, $masterId,
+		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		  $album->{artist}, $key ],
 		q{
 			INSERT INTO squeezewax.discogs_match
 				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
@@ -955,23 +1039,10 @@ sub recordManual {
 				 snapshot_album_title, snapshot_track_count, snapshot_artist,
 				 review_reason)
 			VALUES (?,?,?,?,'manual','confirmed',?,?,?,?,?,NULL)
-			ON CONFLICT(album_key) DO UPDATE SET
-				lms_album_id         = excluded.lms_album_id,
-				discogs_release_id   = excluded.discogs_release_id,
-				discogs_master_id    = excluded.discogs_master_id,
-				match_tier           = excluded.match_tier,
-				state                = excluded.state,
-				matched_at           = excluded.matched_at,
-				source_timestamp     = excluded.source_timestamp,
-				snapshot_album_title = excluded.snapshot_album_title,
-				snapshot_track_count = excluded.snapshot_track_count,
-				snapshot_artist      = excluded.snapshot_artist,
-				review_reason        = excluded.review_reason
 		},
-		undef,
-		$key, $album->{album_id}, $releaseId, $masterId,
-		time(), $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
-		$album->{artist}
+		[ $key, $album->{album_id}, $releaseId, $masterId,
+		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
+		  $album->{artist} ]
 	);
 
 	_clearNoMatch( $dbh, $key );

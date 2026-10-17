@@ -470,7 +470,7 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'  ...but the adjudicated id is KEPT, not NULLed - §2a protects a decision' );
 
 	# The snapshots of the row it landed on survive, because _recordConflict's
-	# ON CONFLICT list does not name them. §15.4 bars a conflict from CAPTURING
+	# UPDATE's column list does not name them. §15.4 bars a conflict from CAPTURING
 	# a snapshot; it does not ask an existing one to be thrown away, and
 	# throwing it away would cost the album its orphan recovery over a tagging
 	# mistake. Described here, not changed.
@@ -1745,6 +1745,148 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 	my ($seen) = grep { $_->{album_key} eq $key } @{ $M->snapshotRows };
 	ok( $seen, 'snapshotRows still returns an ownership-only row, by design' );
 	is( $seen->{match_tier}, undef, '  ...with a NULL match_tier, so it is never an orphan' );
+}
+
+# --- UPDATE-then-INSERT semantics (decisions §15.42) -----------------------
+# The four writers used to be UPSERTs; they are now an UPDATE of exactly the old
+# DO UPDATE SET columns, then an INSERT only when it changed no row. These pin
+# what that must still do. Already covered above, not repeated: a conflict over
+# an identified row keeps the release id and the snapshots and sets 'conflict'
+# (the "second tagged ... conflict" block), and _recordMatch / _recordConflict /
+# recordManual keep ownership.
+{
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Schema::isReady = sub { 1 };
+	local $main::SCANNING = 0;
+
+	my $M   = 'Plugins::SqueezeWax::Match';
+	my $key = 'u' x 32;
+
+	my $album = {
+		album_key        => $key,
+		album_id         => 11,
+		title            => 'Blue Train',
+		artist           => 'John Coltrane',
+		source_timestamp => 900,
+		local_tracks     => 5,
+	};
+
+	my $count = sub {
+		my ( $table, $k ) = @_;
+		my ($n) = $dbh->selectrow_array(
+			"SELECT COUNT(*) FROM squeezewax.$table WHERE album_key = ?", undef, $k );
+		return $n;
+	};
+
+	my $clear = sub {
+		$dbh->do('DELETE FROM squeezewax.discogs_match');
+		$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+	};
+
+	# A column no writer names, set by hand the way the ownership pass and the
+	# derive job do.
+	my $decorate = sub {
+		$dbh->do(
+			q{UPDATE squeezewax.discogs_match
+			     SET ownership = 'exact', mb_album_id = 'mb-1',
+			         derived_master_id = 77, derived_from_release_id = 123, derived_at = 5
+			   WHERE album_key = ?}, undef, $_[0]
+		);
+	};
+
+	my $untouched = sub {
+		my ( $label, $r ) = @_;
+		is( $r->{ownership},               'exact', "$label: ownership unchanged" );
+		is( $r->{mb_album_id},             'mb-1',  "$label: mb_album_id unchanged" );
+		is( $r->{derived_master_id},       77,      "$label: derived_master_id unchanged" );
+		is( $r->{derived_from_release_id}, 123,     "$label: derived_from_release_id unchanged" );
+		is( $r->{derived_at},              5,       "$label: derived_at unchanged" );
+	};
+
+	# Each writer on a fresh key inserts exactly one row.
+	$clear->();
+	$M->recordStrict( $album, { id => 123, master_id => 9 }, undef );
+	is( $count->( 'discogs_match', $key ), 1, '_recordMatch on a fresh key inserts one row' );
+
+	$clear->();
+	$M->recordStrict( $album, { conflict => ['A=1', 'B=2'] }, undef );
+	is( $count->( 'discogs_match', $key ), 1, '_recordConflict on a fresh key inserts one row' );
+
+	$clear->();
+	$M->recordStrict( $album, {}, undef );
+	is( $count->( 'discogs_no_match', $key ), 1, '_recordNoMatch on a fresh key inserts one row' );
+	is( $count->( 'discogs_match', $key ),    0, '  ...and no match row' );
+
+	$clear->();
+	$M->recordManual( $album, 4242, 99 );
+	is( $count->( 'discogs_match', $key ), 1, 'recordManual on a fresh key inserts one row' );
+
+	# _recordMatch over an existing row: rewrites its columns, leaves the rest.
+	$clear->();
+	$M->recordStrict( $album, { id => 123, master_id => 9 }, undef );
+	$decorate->($key);
+	$M->recordStrict( { %$album, source_timestamp => 950 }, { id => 456, master_id => 8 },
+		$M->strictState($key) );
+	is( $count->( 'discogs_match', $key ), 1, '_recordMatch over a row still leaves one row' );
+	is( row($key)->{discogs_release_id}, 456, '  ...with the new release id' );
+	$untouched->( '_recordMatch', row($key) );
+
+	# recordManual over an existing row, likewise.
+	$clear->();
+	$M->recordStrict( $album, { id => 123 }, undef );
+	$decorate->($key);
+	$M->recordManual( $album, 5555, 66 );
+	is( $count->( 'discogs_match', $key ), 1, 'recordManual over a row still leaves one row' );
+	is( row($key)->{discogs_release_id}, 5555, '  ...with the chosen release id' );
+	$untouched->( 'recordManual', row($key) );
+
+	# _recordConflict over an identified row: the carried columns survive, the
+	# named ones move.
+	$clear->();
+	$M->recordStrict( $album, { id => 123, master_id => 9 }, undef );
+	$decorate->($key);
+	my $before = row($key);
+	$M->recordStrict( { %$album, source_timestamp => 960 },
+		{ conflict => ['A=123', 'B=456'] }, $M->strictState($key) );
+	my $after = row($key);
+	is( $after->{review_reason}, 'conflict', '_recordConflict over an identified row sets conflict' );
+	is( $after->{source_timestamp}, 960, '  ...and refreshes source_timestamp' );
+	is( $after->{discogs_release_id}, 123, '  ...keeps discogs_release_id' );
+	is( $after->{discogs_master_id},  9,   '  ...keeps discogs_master_id' );
+	is( $after->{matched_at}, $before->{matched_at}, '  ...keeps matched_at' );
+	is( $after->{snapshot_album_title}, 'Blue Train',    '  ...keeps snapshot_album_title' );
+	is( $after->{snapshot_track_count}, 5,               '  ...keeps snapshot_track_count' );
+	is( $after->{snapshot_artist},      'John Coltrane', '  ...keeps snapshot_artist' );
+	$untouched->( '_recordConflict', $after );
+
+	# _recordNoMatch twice: one row, the second call's values.
+	$clear->();
+	$M->recordStrict( $album, {}, undef );
+	$dbh->do(q{UPDATE squeezewax.discogs_no_match SET checked_at = 1 WHERE album_key = ?},
+		undef, $key );
+	$M->recordStrict( { %$album, source_timestamp => 970 }, {}, undef );
+	is( $count->( 'discogs_no_match', $key ), 1, '_recordNoMatch twice leaves one no-match row' );
+	is( noMatchRow($key)->{source_timestamp}, 970, '  ...with the second call\'s source_timestamp' );
+	cmp_ok( noMatchRow($key)->{checked_at}, '>', 1, '  ...and the second call\'s checked_at' );
+
+	# The scanner's shape: AutoCommit off, one transaction already open. The
+	# writers must ride it - begin_work would die - and leave the commit to
+	# whoever owns it.
+	$clear->();
+	$dbh->{AutoCommit} = 0;
+	my $ok = eval {
+		$M->recordStrict( $album, { id => 123 }, undef );
+		$M->recordStrict( $album, { id => 124 }, $M->strictState($key) );
+		1;
+	};
+	my $err = $@;
+	my $stillOpen = !$dbh->{AutoCommit};
+	$dbh->rollback;
+	$dbh->{AutoCommit} = 1;
+	ok( $ok, 'the writers run inside an open transaction without opening their own' )
+		or diag $err;
+	ok( $stillOpen, '  ...and leave that transaction open' );
+	is( $count->( 'discogs_match', $key ), 0, '  ...so the caller\'s rollback discards them' );
 }
 
 done_testing();

@@ -171,8 +171,24 @@ BEGIN {
 	*Slim::Utils::PluginManager::dataForPlugin = sub { {} };
 }'
 
-MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Details Importer ScanSync Settings Queue Menu View Plugin"
+# No UPSERT anywhere in the plugin (decisions §15.42): SQLite added it in 3.24.0
+# and the floor is 3.22.0, where `ON CONFLICT(...) DO UPDATE` is a syntax error
+# that aborts the scan's post-process. Cheap, and it catches the regression on a
+# machine that cannot run the 3.22.0 suites. Comment lines are skipped, so prose
+# that names the syntax is fine; INSERT OR REPLACE / OR IGNORE do not match.
 STATUS=0
+upsert=$(grep -nEi 'ON[[:space:]]+CONFLICT[[:space:]]*(\(|DO([[:space:]]|$))' \
+	"$ROOT"/SqueezeWax/*.pm "$ROOT"/SqueezeWax/*/*.pm 2>/dev/null \
+	| grep -Ev '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+if [ -n "$upsert" ]; then
+	printf '  FAIL  UPSERT syntax (SQLite 3.22.0 cannot parse it, decisions §15.42):\n'
+	printf '%s\n' "$upsert" | sed 's/^/          /'
+	STATUS=1
+else
+	printf '  ok    no UPSERT syntax in SqueezeWax/\n'
+fi
+
+MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Details Importer ScanSync Settings Queue Menu View Plugin"
 
 for scanner in 0 1; do
 	if [ "$scanner" = 0 ]; then mode=server; else mode=scanner; fi

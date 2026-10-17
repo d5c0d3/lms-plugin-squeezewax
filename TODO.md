@@ -16,6 +16,26 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
+      aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
+      completes and the scanner log has no SQL error.
+- [ ] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
+      cannot reproduce the bug): a rescan completes, and identified, conflict,
+      manual and owned albums keep their `discogs_match` values (ownership,
+      snapshots, release ids) across it.
+- [ ] *Unverified, optional:* where piCorePlayer's DBD::SQLite 1.58 comes from
+      (decisions §15.42). Not needed for the fix.
+- [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
+      as an alternative to the container pass; the container does it.
+- [ ] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
+      scan completes, albums A/B/C give an identified row, a strict no-match row
+      and a conflict row; no SQL error. 1.0.0b4 reproduced 2026-10-17: scan aborts
+      on `near "ON": syntax error` at `Match.pm` `_recordMatch` (album A, the first
+      album), so B and C were never reached; migrations 1-7 completed
+      (`user_version=7`). 2026-10-17: the branch's unpackaged tree, in the same
+      container, passes (A release 198756 strict, B strict no-match only, C
+      `conflict`, rescan clean and unchanged); tick this only after b5 is
+      installed from repo.xml.
 - [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only
@@ -35,6 +55,16 @@ Shared reminder list. Both I and Claude Code read and update this.
       under **Waiting** decide it.
 - [x] A7 evidence: the "nothing to derive: …" info line **does** appear, after
       the manual sync (17:52:21) and from the scan-skip path (17:59:09, 18:11:14).
+
+- [x] **`master` = 1.0.0b4** (2026-10-14, hardware report 83), promoted at
+      `abe3323` (local; owner pushes). Reference server: 1.0.0b4 installed, log
+      clean, `user_version=7`; settings poll one GET per 5 s on Material and
+      Default, rescan notice and greyed buttons within ~5 s, no GETs while the tab
+      is hidden, no console error of ours, no connection to the Discogs addresses
+      while idle. Production (Docker): updated, log clean, status refreshes,
+      logging level saved. Still open: website `repo.xml` names 1.0.0b4 and zip
+      sha1 matches, after the push; Info-level lines for the master job and the
+      scan-time sync on the next album additions.
 
 - [x] **`master` = 1.0.0b1** (2026-10-13, hardware report 74), promoted at
       `e151111`. Reference server: LMS offered 1.0.0b1 over 0.0.0.24, loads
@@ -1282,10 +1312,12 @@ Each names its sites so the work is mechanical rather than a search.
       without stored state. Step 8 adds a nullable reason column
       (ambiguous | artist disagrees | artist absent | Various-gated) by
       `ADD COLUMN`, and the ownership pass writes it. `ADD COLUMN` with a
-      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and LMS bundles
+      CHECK needs no rebuild — OBSERVED on SQLite 3.45.1, and ~~LMS bundles
       SQLite 3.46.1 (DBD::SQLite 1.76, perl 5.32–5.42 trees in
       `refs/slimserver/CPAN/arch`; VERIFIED 2026-09-20 by Claude Code, Phase
-      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0. Step 7's pass
+      0 of steps 6–7). Perl 5.20–5.30 trees carry 3.22.0.~~ → 2026-10-17: true of
+      LMS's own tree, not of what a server runs; 3.22.0 is the floor (decisions
+      §15.42). Step 7's pass
       already counts all four buckets in its summary, so the queue's size is
       known before it is built.
       → 2026-09-24: six values, not four. conflict and orphan are added by
@@ -2180,6 +2212,7 @@ Each names its sites so the work is mechanical rather than a search.
       (emblems are a fixed list keyed on `extid`) and LMS core (one icon slot in
       the Default UI's `xmlbrowser.html`). Needed for design §4's artwork badge.
       Not decided whether or when to ask. Decisions §15.25.
+      2026-10-14: Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: https://github.com/CDrummond/lms-material/issues/1288. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
 - [ ] **2026-09-29, future feature: a SqueezeWax app** (Listen Later's `is_app`
       pattern) as a low-level Discogs browse. Design §11 v3, beside Flow 2.
 - [ ] **2026-09-29, v2: master search for version albums**, so a version album
@@ -3171,6 +3204,29 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [x] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
+      greyed out during a scan; do they need to be?** For the design chat.
+      §15.39 item 2 disables all three action buttons alike. Test Token makes one
+      Discogs `/oauth/identity` call and writes nothing (`Settings.pm:351-361`),
+      so a scan does not make it unsafe; only the shared rate budget touches it,
+      and one request is negligible. Detect reads `library.db` and the files and
+      never writes `squeezewax.db`, so the scanner's write lock does not touch
+      it; the only reason is a partial sample of a library still changing. The
+      one real hazard is applying changed tag names (`_saveTagNames`,
+      `Settings.pm:127-135`), which is refused server-side with the busy warning
+      and is not a page-level disable. Those are inferences from reading; no
+      recorded decision gives a reason beyond consistency. Not changed in b4.
+      Decided 2026-10-14: kept disabled, §15.39 note.
+
+- [x] **2026-10-14 (hand-off 83): `promote-master.sh 1.0.0b4 83` stops on a
+      `TODO.md` conflict.** master carries a `TODO.md` entry added by the `site`
+      branch (project site redesign, Housekeeping); v1-buildout edited the same
+      region since `bb6ef2f`. The script allows conflicts only in `repo.xml` and
+      `dist/` (step 5), so it aborts for both the package commit and
+      `--merge-head`. Needs an owner decision: resolve by hand (keep both
+      entries), or let the script permit `TODO.md`. No promotion made.
+      Done: the script allows it after a line check, §15.41 (hand-off 84).
+
 - [ ] **2026-10-14: `v1-buildout`'s `SqueezeWax/` now differs from the 1.0.0b3
       package commit** (`bb6ef2f`): `873dce5` changed comments only, in
       `Derive.pm`. So `promote-master.sh --merge-head` is unavailable until the
@@ -3646,5 +3702,18 @@ Each names its sites so the work is mechanical rather than a search.
   "Master releases" paused→running check, and the master job itself. Scan-time
   sync on Docker not distinguishable from the manual button. Re-check when a
   library change leaves derive work pending.
-  Likely the same unsaved-level cause (inferred, 2026-10-14). Re-run with the
-  level saved before closing.
+  Correction 2026-10-14: the cause is nothing pending (above), not the log
+  level. Saving plugin.squeezewax at Info may help only with telling scan-time
+  sync from the manual button (inferred). Opportunistic check on production
+  after 1.0.0b4 is promoted: next time albums are added, with the level set to
+  Info AND saved. Not a gate for b4.
+- [ ] Next build: installed entry on the LMS plugins page has no "More info"
+      link — install.xml had no homepageURL (slimserver eb59bbf
+      ExtensionsManager.pm:340; repo.xml link is not merged into installed
+      entries, Settings/Server/Plugins.pm prepareDetails). Fixed on branch
+      (hand-off 86); live after the next promotion. Check: plugins page shows
+      the link for the installed plugin.
+- [ ] promote-master.sh: the TODO.md line-check's abort path (a missing master
+      line) is untested (report 83/84).
+- [x] Report 83/84 recorded: 1.0.0b4 promoted (abe3323), website and zip sha
+      verified, production Docker updated, log level Info saved.

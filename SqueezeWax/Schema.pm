@@ -579,8 +579,10 @@ sub _migration_2 {
 # ('strict','manual') (§14.1), state becomes nullable and loses its default
 # (§14.8), and ownership arrives (§13.3, §15.3). ALTER COLUMN ... DROP NOT NULL
 # would cover the nullability half only, and it landed in SQLite 3.53.0 while
-# LMS bundles 3.46.1 - DBD::SQLite 1.76, refs/slimserver/CPAN/arch/5.32..5.42,
-# verified 2026-09-20. So the rebuild is required rather than chosen.
+# LMS's own tree carries 3.46.1 - DBD::SQLite 1.76,
+# refs/slimserver/CPAN/arch/5.32..5.42, verified 2026-09-20 - but a server on perl
+# 5.32 can run 3.22.0 (decisions §15.42), which is the floor and has neither. So
+# the rebuild is required rather than chosen.
 sub _migration_3 {
 	my $dbh = shift;
 
@@ -668,10 +670,12 @@ sub _migration_3 {
 # restrictions are PRIMARY KEY/UNIQUE, a non-constant default, NOT NULL without
 # a default, REFERENCES under enforced foreign keys, and GENERATED ... STORED -
 # a CHECK is none of them). Testing it against pre-existing rows arrived in
-# SQLite 3.37.0, and LMS bundles 3.22.0 for perl 5.20-5.30 - which changes
+# SQLite 3.37.0, and 3.22.0 is the floor (LMS's perl 5.20-5.30 trees carry it,
+# and so did a perl 5.32 server; decisions §15.42) - which changes
 # nothing here, since every existing row takes NULL and `NULL IN (...)` is NULL,
 # which a CHECK treats as satisfied. OBSERVED on 3.50.6, schema-qualified, on an
-# attached database; INFERRED for 3.22.0 from the documentation.
+# attached database; on 3.22.0 migrations 1-7 ran to completion in the repro
+# container (decisions §15.42).
 sub _migration_4 {
 	my $dbh = shift;
 
