@@ -1463,7 +1463,7 @@ Each names its sites so the work is mechanical rather than a search.
       unverified; python3-discogs-client `collection_items(release_id)` is
       third-party, thin evidence). Could cut sync cost when few albums changed.
       It does not replace the full list: version and title ownership need it
-      (`Ownership.pm` `_indexCollection`). Revisit at issue #1's development.
+      (`Ownership.pm` `_indexCollection`). Revisit at GitHub #2's (A1) development.
       Partly answers 2026-09-13 "per-release lookup of the caller's own
       collection entry?".
 - [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
@@ -1477,7 +1477,7 @@ Each names its sites so the work is mechanical rather than a search.
       per-release collection lookup: owned → exact, not owned → leave ownership
       for the next scan or sync. Decide at development; a phase 0 check of the
       endpoint comes first. Design note:
-      `claude/design-issue-1-rescan-album.md` (design project). It touches
+      `claude/design-gh2-rescan-album.md` (claude.ai design project, not in this repo). It touches
       §15.16 part 3 (who may write conflict) and §15.18 part 5.
       Needs a real server: the album id arrives before `['rescan','done']`; an
       album whose LMS id changes keeps its match (`album_key`); a rescan album
