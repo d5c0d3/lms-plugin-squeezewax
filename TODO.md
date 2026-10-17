@@ -16,6 +16,12 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
+      scan completes, albums A/B/C give an identified row, a strict no-match row
+      and a conflict row; no SQL error. 1.0.0b4 reproduced 2026-10-17: scan aborts
+      on `near "ON": syntax error` at `Match.pm` `_recordMatch` (album A, the first
+      album), so B and C were never reached; migrations 1-7 completed
+      (`user_version=7`).
 - [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only
