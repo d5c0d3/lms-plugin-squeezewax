@@ -2451,7 +2451,7 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
+- [x] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
       §6; offline suites green on both drivers, nothing run on a server):
       1. Repro container (SQLite 3.22.0): on b5, insert a manual row with
          `sqlite3`; update to b6 from the dev `repo.xml`; restart:
@@ -2509,7 +2509,12 @@ Each names its sites so the work is mechanical rather than a search.
         only (LMS reassigned ids: 3413→4203, 3416→4206, 3417→4207, 3421→4211);
         `4ecfede3…` is now `absent`/`artist-disagree` (as expected);
         `78b6b24a…` is now `absent`/**`ambiguous`**.
-        **Deviations to decide:** (1) the plan expected the formerly manual
+        **Deviations: explained, see §15.46 part 6 correction; no code change.**
+        *(Check on 2026-10-19: the two ex-manual albums, `78b6b24a…` = album 4323
+        and `4ecfede3…` = album 4298, have 0 local and 18 / 19 remote tracks in
+        LMS; `snapshot_track_count` 0 in the before-dump. The importer's
+        `local_tracks` gate skips them.)*
+        Original wording: (1) the plan expected the formerly manual
         album to be examined in the scan; the log's 5 examined are the
         conflicts, the two ownership-only rows were not (skipped or untagged:
         not distinguished). (2) exact is **150, not 151**: both ex-manual albums

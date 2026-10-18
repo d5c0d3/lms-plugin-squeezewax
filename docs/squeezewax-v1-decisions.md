@@ -7208,7 +7208,13 @@ GitHub #8.
   `Ownership::_effectiveMaster` returns undef). The next scan re-examines the album
   (no strict row and no no-match row: `Match.pm` `$STATE_SQL` filters
   `match_tier IS NOT NULL`; `recordManual` had cleared the no-match row;
-  `Importer.pm` `_canSkip` returns 0 with no state). The next sync re-decides
+  `Importer.pm` `_canSkip` returns 0 with no state). — Corrected 2026-10-19 (b6
+  check B): not an album with only streaming tracks; the importer skips those
+  (`Importer.pm` `local_tracks` gate). Its ownership is decided by title and
+  artist at the next sync. On the reference server one such album went back to
+  `artist-disagree` and one became `ambiguous` (two or more owned pressings with
+  that title and artist). Exact 152 → 150, queue 5 → 7, as the rules give
+  (part 3). The next sync re-decides
   ownership by tags or title (`Ownership.pm` `_decide`): owned, back in the queue,
   or not owned. A gone album's converted row is deleted by the pass
   (`Ownership.pm` `_apply`, gone-row loop, `_isOwnershipOnly`).
