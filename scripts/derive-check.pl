@@ -561,16 +561,20 @@ my $K4 = 'd' x 32;
 	reset_state();
 	wipe();
 
-	# Selection is by release id, so a manual link is derived too: node F is the
-	# same node for both, and a manual row is the one case the user cared enough
-	# to set by hand.
-	matchRow( album_key => $K1, match_tier => 'manual', discogs_release_id => 555 );
+	# Selection is by release id alone, so an INCUMBENT conflict - strict, its
+	# release id kept, review_reason 'conflict' - is derived too, though nothing
+	# reads a conflict row's master (Ownership::_decide, Menu::_entries). Pinned
+	# as it stands, not endorsed: one request per such release, recorded in
+	# TODO.md (2026-10-18). Until §15.46 this case was a manual row.
+	matchRow( album_key => $K1, match_tier => 'strict', state => 'candidate',
+		discogs_release_id => 555, review_reason => 'conflict' );
 
 	@RESPONSES = ( release_response( id => 555, master => 2002 ) );
 
 	$D->arm;
 
-	is( rowFor($K1)->{derived_master_id}, 2002, 'a manual row is derived too' );
+	is( rowFor($K1)->{derived_master_id}, 2002,
+		'an incumbent conflict row is derived too - selection is by release id alone' );
 }
 
 # ---------------------------------------------------------------------------

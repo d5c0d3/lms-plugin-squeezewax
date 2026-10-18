@@ -345,8 +345,8 @@ The master release id node F should compare, or undef when there is none.
 # Two sources, in this order, and the order is a decision rather than a
 # preference (decisions §15.22, build-order step 8c).
 #
-# 1. discogs_master_id, which is tag-only: written by Match::_recordMatch and
-#    recordManual from a DISCOGS_MASTER_ID-family tag (Tags.pm's _masterId). A
+# 1. discogs_master_id, which is tag-only: written by Match::_recordMatch from a
+#    DISCOGS_MASTER_ID-family tag (Tags.pm's _masterId). A
 #    tag is the user's assertion about their own files and OURS NEVER OVERRIDES
 #    IT. If it names a master they do not own, that is the answer - node F says
 #    no, and the title route gets its turn.

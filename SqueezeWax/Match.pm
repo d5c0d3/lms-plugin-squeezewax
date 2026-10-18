@@ -491,8 +491,9 @@ pass-written reason is re-derived too. The predicate is §15.13 part 5's, writte
 out here rather than borrowed, because this is a different caller with a
 different justification.
 
-Closes TODO 2026-09-19 "an ownership-only row blocks a later relink", for both
-callers: the scanner's pre-pass and the queue page's relink.
+Closes TODO 2026-09-19 "an ownership-only row blocks a later relink". One
+caller since §15.46, the scanner's pre-pass; the queue page's relink, the
+other, is gone.
 
 C<source_timestamp> riding along unchanged is what makes the main loop skip the
 album afterwards: its files moved but did not change, so there is nothing to
@@ -508,13 +509,14 @@ sub relinkOrphan {
 
 	my $dbh = Slim::Schema->dbh;
 
-	# The two statements must land together or not at all, and the two callers
-	# arrive with different transaction states. In the scanner the handle is
-	# AutoCommit = 0 with one long-lived transaction open for the whole scan
-	# (scanner.pl:295, quoted in Importer.pm's COMMIT_EVERY comment), so both
-	# statements already ride it and begin_work would die with "already in a
-	# transaction". In the server the handle is AutoCommit = 1
-	# (Slim/Schema.pm:274) and there is nothing to ride, so one is opened here.
+	# The statements must land together or not at all, and the handle's
+	# transaction state depends on the process. In the scanner - the only caller
+	# since §15.46 removed the queue page's relink - the handle is AutoCommit = 0
+	# with one long-lived transaction open for the whole scan (scanner.pl:295,
+	# quoted in Importer.pm's COMMIT_EVERY comment), so the statements already
+	# ride it and begin_work would die with "already in a transaction". In the
+	# server the handle is AutoCommit = 1 (Slim/Schema.pm:274) and there is
+	# nothing to ride, so one is opened here; the suites drive both.
 	#
 	# Hence the conditional rather than an unconditional begin_work: the
 	# guarantee is "one transaction", not "a transaction this sub opened".
@@ -551,10 +553,11 @@ sub relinkOrphan {
 		# case is one album re-read at the next scan. That is what puts it
 		# inside §2a invariant 3 rather than against it.
 		#
-		# The SCANNER never reaches this: _prePass excludes no-match albums from
-		# its key misses, so it offers no such target and its behaviour is
-		# unchanged. This clause exists for the queue page, which decides after
-		# the scan, when every current album already has a row of some kind.
+		# Unreached since §15.46. _prePass excludes no-match albums from its key
+		# misses, so the scanner offers no such target; this clause existed for
+		# the queue page's relink, which decided after the scan, when every
+		# current album already had a row of some kind. Kept rather than removed:
+		# it is the invariant-1 guard should a caller ever offer such a target.
 		$dbh->do(
 			q{DELETE FROM squeezewax.discogs_no_match
 			   WHERE album_key = ? AND tier = 'strict'},

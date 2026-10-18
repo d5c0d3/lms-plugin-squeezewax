@@ -4,9 +4,9 @@ package Plugins::SqueezeWax::Derive;
 #
 # WHY THIS EXISTS. Design §3 node F badges an album whose release the user does
 # not own but whose MASTER they do - own one pressing, rip another. It compares
-# discogs_match.discogs_master_id, which is written in exactly two places
-# (Match.pm's _recordMatch and recordManual) and in both from a
-# DISCOGS_MASTER_ID-family TAG (Tags.pm's _masterId). Nothing resolved a release
+# discogs_match.discogs_master_id, which is written in one place (Match.pm's
+# _recordMatch; recordManual was the second until §15.46 removed it) and only
+# from a DISCOGS_MASTER_ID-family TAG (Tags.pm's _masterId). Nothing resolved a release
 # id to its master. So on the reference library that column was NULL on all but 2
 # of 506 rows, node F had never once fired, and every one of the 50 `version`
 # badges came from the title route - §15.19. Albums the owner demonstrably owns
@@ -505,8 +505,8 @@ sub _handle {
 	# the response when this sub returns (§9.5).
 	my $master = ( ref $result->{data} eq 'HASH' ) ? $result->{data}->{master_id} : undef;
 
-	# 0 and absent collapse to "no master", matching Match::recordManual's guard
-	# and Ownership::_indexCollection's: Discogs reports a release with no master
+	# 0 and absent collapse to "no master", matching Ownership::_indexCollection's
+	# guard: Discogs reports a release with no master
 	# as master_id 0, and a response that omits the field leaves it undef. Either
 	# taken at face value would make every masterless release collide on one key
 	# at node F.

@@ -526,6 +526,13 @@ match( $K{exact_norel_master}, ownership => 'exact', discogs_master_id => 9015 )
 $K{ver_norel_master} = album( 16, 'A Version With A Master And No Release' );
 match( $K{ver_norel_master}, ownership => 'version', discogs_master_id => 9016 );
 
+# A former manual link as migration 8 leaves it (§15.46 part 6): ownership kept,
+# match_tier and every id NULL. Written as SQL because match() defaults the tier.
+# The menu keeps the ownership line and has no link to give.
+$K{converted} = album( 18, 'A Former Manual Link' );
+$dbh->do( q{INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership)
+	VALUES (?, 18, 'exact')}, undef, $K{converted} );
+
 # Absent with everything stored: owning nothing is shown as nothing, however
 # much is known about the release.
 $K{absent_full} = album( 17, 'Not Owned, Fully Identified' );
@@ -580,6 +587,7 @@ my %ROW = (
 	                   entries => [ LINK_OWNED(1001), DETAILS_RELEASE(1001) ] },
 	exact_conf   => { id => 2,  line => $OWN_PRESSING, entries => [] },
 	exact_norel  => { id => 3,  line => $OWN_PRESSING, entries => [] },
+	converted    => { id => 18, line => $OWN_PRESSING, entries => [] },
 	exact_master => { id => 12, line => $OWN_PRESSING,
 	                   entries => [ LINK_OWNED(1012), DETAILS_RELEASE(1012),
 	                                LINK_MASTER(9012), DETAILS_MASTER(9012) ] },
@@ -806,9 +814,11 @@ sub buildView {
 
 	# Owned: the exact match (now at 101), the contested exact (2), the exact
 	# with no release (3), the four version rows (4-7), the version with no
-	# master (8) and the owned stream (11). Not: the absent album (9), the one
-	# with no row (10), or the usurper that inherited id 1.
-	is_deeply( $albums, [ 2, 3, 4, 5, 6, 7, 8, 11, 101 ],
+	# master (8), the owned stream (11) and the former manual link (18) - the
+	# view and the menu agree on it, which is why migration 8 keeps the row
+	# (§15.46 part 6). Not: the absent album (9), the one with no row (10), or
+	# the usurper that inherited id 1.
+	is_deeply( $albums, [ 2, 3, 4, 5, 6, 7, 8, 11, 18, 101 ],
 		'the view holds exactly the albums the ownership column names' );
 
 	# A contested album is in the view although the menu gives it no link. The
