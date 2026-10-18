@@ -956,6 +956,38 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 			'  ...with the sentence that case always meant' );
 	}
 
+	# GitHub #6 (§15.46 part 7): a value that is not a release ID at all is not
+	# "two tags naming different releases", and the page says which it is.
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 'see the sleeve' },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'unreadable',
+			'an unreadable value with no readable id renders as unreadable' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE',
+			'  ...with its own sentence' );
+		like( $item->{tags}{conflict}[0], qr/see the sleeve/, '  ...naming the value' );
+	}
+
+	{
+		local $PREFS{discogsTagNames} = [ 'DISCOGS_RELEASE_ID', 'DISCOGS_RELEASE' ];
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 793593, DISCOGS_RELEASE => 'n/a' },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'unreadable-mixed',
+			'one readable id plus an unreadable value renders as unreadable-mixed' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED',
+			'  ...with its own sentence' );
+	}
+
 	# The tags agree again: still 'resolved', and the kind sentence is not shown.
 	# Only the importer clears 'conflict', and only on a scan (§15.16 part 3).
 	{

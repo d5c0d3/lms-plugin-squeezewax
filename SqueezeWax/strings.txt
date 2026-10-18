@@ -257,6 +257,12 @@ PLUGIN_SQUEEZEWAX_REASON_ORPHAN
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE
 	EN	One file carries two tags naming different releases
 
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE
+	EN	A Discogs tag holds a value that is not a release ID SqueezeWax can read. Correct it to the release number or its Discogs address, or delete it, then rescan.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED
+	EN	This file names a release, but another Discogs tag on it cannot be read. Delete or correct that value, then rescan.
+
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS
 	EN	These files name different releases
 

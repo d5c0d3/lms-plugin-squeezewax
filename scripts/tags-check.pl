@@ -261,6 +261,72 @@ ok( !!@{ $bad->{conflict} }, '  ...and is reported' );
 # discogs_no_match row.
 isnt( scalar keys %$bad, 0, 'an unparseable value does not look like absence' );
 
+# --- decide: the unreadable values are named on their own (GitHub #6) ------
+#
+# Wording only (§15.46 part 7): the verdict stays a conflict. What changes is
+# that a caller can say "this value is not a release ID" instead of "these tags
+# disagree".
+is_deeply( $bad->{unparsed}, ['DISCOGS_RELEASE_ID=https://example.com/nope'],
+	'decide names the unreadable value in unparsed' );
+ok( !exists $conflict->{unparsed},
+	'  ...and two readable ids disagreeing carry no unparsed key' );
+ok( !exists $T->decide( { DISCOGS_RELEASE_ID => '123456' } )->{unparsed},
+	'  ...nor does a clean identification' );
+
+# --- examineCandidates: two more in-file kinds (GitHub #6) ------------------
+{
+	Test::StubPrefs->new->set( 'discogsTagNames', [ 'DISCOGS_RELEASE_ID', 'DISCOG_RELEASE_ID' ] );
+
+	my %files;
+
+	no warnings 'redefine', 'once';
+	local *Plugins::SqueezeWax::Tags::readTrack = sub { return +{ %{ $files{ $_[1] } || {} } } };
+
+	my $readable = { TITLE => 'A Song', CONTENT_TYPE => 'flc' };
+
+	my $examine = sub {
+		%files = @_;
+		return $T->examineCandidates( [ sort keys %files ] );
+	};
+
+	my $only = $examine->(
+		'file:///a/1.flac' => { %$readable, DISCOGS_RELEASE_ID => 'not a release' },
+		'file:///a/2.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456' },
+	);
+	is( $only->{kind}, 'unreadable', 'an unreadable value with no readable id is unreadable' );
+	ok( $only->{conflict} && !defined $only->{id}, '  ...and still a conflict, with no id' );
+
+	my $mixed = $examine->(
+		'file:///a/1.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456',
+		                        DISCOG_RELEASE_ID => 'garbage' },
+		'file:///a/2.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456' },
+	);
+	is( $mixed->{kind}, 'unreadable-mixed',
+		'one readable id plus an unreadable value is unreadable-mixed' );
+	ok( $mixed->{conflict} && !defined $mixed->{id}, '  ...and still a conflict, with no id' );
+
+	my $two = $examine->(
+		'file:///a/1.flac' => { %$readable, DISCOGS_RELEASE_ID => [ '111', '222', 'junk' ] },
+	);
+	is( $two->{kind}, 'in-file',
+		'two readable ids disagreeing stay in-file, an unreadable value beside them or not' );
+
+	my $plain = $examine->(
+		'file:///a/1.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456',
+		                        DISCOG_RELEASE_ID => '654321' },
+	);
+	is( $plain->{kind}, 'in-file', 'two readable ids in one file are in-file, as before' );
+
+	my $clean = $examine->(
+		'file:///a/1.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456' },
+		'file:///a/2.flac' => { %$readable, DISCOGS_RELEASE_ID => '123456' },
+	);
+	is( $clean->{id}, 123456, 'files that agree still identify' );
+	ok( !$clean->{kind}, '  ...with no kind' );
+
+	Test::StubPrefs->new->set( 'discogsTagNames', ['DISCOGS_RELEASE_ID'] );
+}
+
 # --- decide: conflict reports the raw value, not the parsed id ----------
 Test::StubPrefs->new->set( 'discogsTagNames', [ 'DISCOGS_RELEASE_ID', 'DISCOG_RELEASE_ID' ] );
 my $urlConflict = $T->decide( {

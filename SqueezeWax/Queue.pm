@@ -56,12 +56,17 @@ my $log = logger('plugin.squeezewax');
 # it of an album where one file is tagged and another is not tells the user
 # something untrue about their own library, which §15.17 part 3 ranks below a
 # missing feature. So that string became the generic one - true of every conflict,
-# which is what the reason COLUMN can honestly claim - and these three carry the
+# which is what the reason COLUMN can honestly claim - and these carry the
 # specifics.
+#
+# GitHub #6 added two in-file kinds (§15.46 part 7): a value that is not a
+# release ID at all said "two tags name different releases", which it was not.
 my %CONFLICT_KIND_STRING = (
-	'in-file'       => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE',
-	'cross-ids'     => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS',
-	'cross-partial' => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL',
+	'in-file'          => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE',
+	'unreadable'       => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE',
+	'unreadable-mixed' => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED',
+	'cross-ids'        => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS',
+	'cross-partial'    => 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL',
 );
 
 my %REASON_STRING = (
@@ -356,7 +361,7 @@ sub _reviewList {
 			$item->{tags} = _readTags($a);
 
 			# The kind's sentence, resolved here rather than in the template. A
-			# template mapping three kinds onto three tokens would be a second copy
+			# template mapping five kinds onto five tokens would be a second copy
 			# of the vocabulary, and the copy that went stale would be the one
 			# nothing compiles. An unrecognised kind falls back to the generic
 			# reason text, which is true of every conflict.
@@ -397,8 +402,8 @@ sub _reviewList {
 # fine, and the tags no longer disagree", which means the conflict is stale and
 # the next scan will clear it.
 #
-# `kind` is what the page renders distinctly (§15.22): 'in-file', 'cross-ids' or
-# 'cross-partial'. The stored review_reason is 'conflict' for all three - one
+# `kind` is what the page renders distinctly (§15.22, GitHub #6): 'in-file',
+# 'unreadable', 'unreadable-mixed', 'cross-ids' or 'cross-partial'. The stored review_reason is 'conflict' for all three - one
 # reason value, because the column records "these tags are contested" and the
 # remedy is the same either way - and what differs is the MESSAGE, which is
 # display, computed here from the files as they read right now.
