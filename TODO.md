@@ -23,6 +23,9 @@ matches it).
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+      Needs a real server: the queue page shows the link; an own compilation with
+      its release-ID tag removed leaves the queue after a rescan (#8 part 9).
 - [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a

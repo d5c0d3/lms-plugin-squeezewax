@@ -61,7 +61,27 @@ A various-artists record is the awkward case for matching by title, but it did
 not matter here: SqueezeWax checks the tagged release against your collection
 first, and only looks at artist names if that fails.
 
-### Optional tagging tips
+### Tagging for SqueezeWax
+
+*These tags are what SqueezeWax reads. Set the tag name for the release ID under
+Settings.*
+
+- **One album, one release ID.** Every file of an album carries the same Discogs
+  release ID, in the tag name set in SqueezeWax's settings.
+- **Multi-disc sets.** Put the same release ID on every disc.
+- **Your own compilations and mixtapes.** Leave the release ID out of the tag
+  name SqueezeWax reads. If you want to keep each track's ID, put it in another
+  tag name.
+- **Master release (optional).** A `DISCOGS_MASTER_ID` tag lets "You own a
+  version" show right after the rescan, without waiting for the background
+  master lookup.
+- **Artist names.** If the artist is spelled differently in your files and in
+  your Discogs collection, change one so they match.
+- **Streaming albums** can't be tagged. SqueezeWax matches them by title and
+  artist only.
+- **After tagging,** rescan with "Look for new and changed media files".
+
+### Other tagging tips (good for LMS, not needed by SqueezeWax)
 
 *These are good practice for LMS and are **not needed by SqueezeWax**.*
 

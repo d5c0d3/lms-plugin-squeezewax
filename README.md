@@ -159,7 +159,7 @@ anything you have typed.
 
 ## Using it
 
-- **New to it?** [docs/user-guide.md](docs/user-guide.md) walks through the everyday workflow, from a new record to "You own a pressing".
+- **New to it?** [docs/user-guide.md](docs/user-guide.md) walks through the everyday workflow, from a new record to "You own a pressing". Its [Tagging for SqueezeWax](docs/user-guide.md#tagging-for-squeezewax) section lists what to tag.
 - **Album and track menus.** Only albums you own get entries.
   - **Your exact pressing**, in apps and web pages that can open links:
     "Discogs: Browse your pressing" (a link to it on Discogs), "Discogs: Show
