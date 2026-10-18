@@ -79,9 +79,9 @@ first, and only looks at artist names if that fails.
 | Nothing for any album | No tag name is set in "Discogs release ID tags", so only the title-and-artist rule runs. Or no token. | Fill in the tag name (or "Detect") and the token, then rescan. |
 | Not owned, tagged correctly | The release is not in your main collection, and neither is another pressing of the same master. | Add it to your collection, then rescan or press "Sync collection now". |
 | "You own a version", not "a pressing" | The tagged release is not in your collection, but another pressing of its master is. | Add the exact pressing, or fix the tag if it names the wrong release. |
-| Album is in the review queue | Some tracks carry a Discogs tag and others don't, or two tracks name different releases. | Open Settings, then Review queue: "Show tags" to see which files disagree, then retag them or choose the record yourself. |
+| Album is in the review queue | Some tracks carry a Discogs tag and others don't, two tracks name different releases, or a tag's value can't be read. | Open Settings, then Review queue: each album says what to fix. "Show tags" shows which files disagree. Retag them, then rescan. |
 | No tag, owned as "a version" | Exactly one collection entry has the same album title and artist. | Nothing; this is the title-and-artist rule. |
-| No tag, in the review queue | Two or more entries share title and artist; or both sides say "Various Artists"; or the title matches one entry but the artist differs or is missing. | Use "Choose from my collection" in the review queue, or tag the files. |
+| No tag, in the review queue | Two or more entries share title and artist; or both sides say "Various Artists"; or the title matches one entry but the artist differs or is missing. | Tag the files with the release ID, then rescan. Albums with only streaming tracks can't be tagged. |
 | No tag, not owned | No entry in your collection has that title (or several share it and none is by this artist). | Tag the files with the release ID. |
 
 If the files carry the right tag and the release is in your collection but the
