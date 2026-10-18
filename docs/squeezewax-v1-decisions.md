@@ -737,6 +737,8 @@ a button is forgetting. It is also far lower risk: a want is a release ID plus
 optional notes and rating, against a collection instance's condition, sleeve
 grading, folder, date and custom fields.
 
+**2026-10-17 (owner):** no per-pressing add from LMS; see GitHub #11 for the master idea.
+
 Endpoint: **`PUT /users/{username}/wants/{release_id}`**. Two Discogs forum
 threads report `POST` on the same path returning *"That release does not exist
 in the user's wantlist"* — POST updates an existing want, PUT creates one.

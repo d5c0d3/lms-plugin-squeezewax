@@ -1230,7 +1230,7 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - Menus for owned versions: the release link and release details for the
   pressing a `version` album's owner actually holds, which needs that release id
   stored (§15.31 ruling 17). — GitHub #7, decided §15.45.
-- "Add to Discogs wantlist" (§15.31). Unverified: whether a personal token may
+- "Add to Discogs wantlist" (§15.31) → per-pressing add dropped 2026-10-17; master idea GitHub #11 (undecided). Unverified: whether a personal token may
   write to the user's wantlist.
 
 **Not planned:** any write to the Discogs Collection (§5) — adding a release

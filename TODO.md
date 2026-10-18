@@ -3734,6 +3734,13 @@ Each names its sites so the work is mechanical rather than a search.
   supports a user-triggered write but does not itself say "only". **Open:** an unowned album usually
   has no Discogs id, so this needs a search plus a user pick, the problem §13.8
   moved away from. **Unchecked:** the wantlist write endpoint's terms.
+  → 2026-10-17 (owner): adding a specific pressing is dropped; done on Discogs
+  via the master link. Remaining idea, GitHub #11 (`undecided`): add the master
+  (optionally with a format) to the wantlist. First check: can the wantlist hold
+  a master or a format preference? The only endpoint on record takes a release
+  id (decisions §5, forum reports). Also unchecked: token write permission and
+  terms. If releases only, drop #11. Related to Listen Later's "Add to Wish
+  List" (#10).
 
 - [x] **Settings-page button that starts a scan — not planned (owner, 2026-10-17; GitHub #4, closed as not planned).** The docs already name the LMS path in three places (README.md first-time setup, docs/user-guide.md step 6, PLUGIN_SQUEEZEWAX_FIRST_STEPS). Revisit if users ask. If built: LMS's own command is `Slim::Music::Import->getScanCommand('1rescan')` = `['rescan']` (`Slim/Music/Import.pm` `%scanTypes`, `Slim/Web/Settings/Server/Basic.pm` handler, slimserver `public/9.1` @ 582a1b2).
 
