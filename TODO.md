@@ -2469,6 +2469,26 @@ Each names its sites so the work is mechanical rather than a search.
       6. Rescan (share mounted): log shows the formerly manual and conflict
          albums examined; after the scan's sync the reference album is back as
          `artist-disagree`; exact back to 151 (inferred).
+      **2026-10-19 session results (`tmp/check-1.0.0b6.md`):**
+      - Scope: `git diff 3206ba2 5194fe3 --stat -- SqueezeWax` is exactly the
+        12 files of `137efda`..`0be60ba`. Pass.
+      - **A (repro container, SQLite 3.22.0): PASS.** b5 DB with a `manual`
+        `exact` row on album A's key (original strict row saved in
+        `tmp/checkb6/`, git-ignored) and a `manual` `absent` row on
+        `0123456789abcdef0123456789abcdef`; dev `repo.xml`, update to 1.0.0b6,
+        restart: `user_version = 8`; "migration 8: 1 manual row(s) owning
+        nothing deleted, 1 manual row(s) made ownership-only, 0 orphan mark(s)
+        cleared, 1 conflict row(s) set to be re-examined"; no SQL error; A
+        ownership-only (`exact` kept, all else NULL), absent row gone, C
+        `source_timestamp` NULL. Rescan: examined 2, identified 1, conflicts 1,
+        skipped 1; A strict 198756 again, C still `conflict`; no SQL error.
+        (Starting the container ran b5 once on the edited DB before the update;
+        rows were untouched.)
+      - **B (reference server): NOT RUN.** The session's permission classifier
+        refused listing `/var/lib/squeezeboxserver/prefs/` and a `sudo -n` probe
+        (needed to stop LMS and copy `squeezewax.db`/`-wal`/`-shm`). The share
+        `/mnt/nas-music` is mounted (cifs, ro). Nothing on the reference server
+        was touched. Owner: run B, or allow the stop/copy.
 - [ ] **2026-10-14: large collections against the scan-time sync cap.**
       `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
       `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
