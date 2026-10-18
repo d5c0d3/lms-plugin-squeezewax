@@ -1218,7 +1218,7 @@ reflect their shelves is outside what this plugin can usefully do for them.
 
 **v2:**
 - Wantlist sync & wantlist badge.
-- Triage / library-health page (problem releases only).
+- ~~Triage / library-health page (problem releases only).~~ — dropped 2026-10-17, see decisions §5 note.
 - Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
 - A field picker for the review queue's re-match list.

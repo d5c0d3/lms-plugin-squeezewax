@@ -2178,10 +2178,15 @@ Each names its sites so the work is mechanical rather than a search.
       exist (§13.8). `scalar @{discogsTagNames}` is correct for tag-driven
       identification and is left alone. Closed by the build-order rewrite,
       not implemented.
-- [ ] **v2 triage page must distinguish "unparseable tag" from "tags
-      disagree".** Both write `(strict, candidate, NULL)` in v1, which is
-      correct for v1 — neither is a match — but they are different user actions
-      (fix one file's tag vs. decide between two). Recorded, not designed.
+- [ ] **GitHub #6 (bug): the review queue reports an unreadable Discogs tag as
+      "tags disagree".** Verified by reading: `Tags::decide` puts present-but-
+      unparseable values in `conflict`, and `Tags::examineCandidates` then
+      returns kind `in-file`. So the queue shows `PLUGIN_SQUEEZEWAX_REASON_CONFLICT`
+      and `PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE` ("One file carries two tags naming
+      different releases"). The fix is wording at render time. The stored
+      `review_reason` stays 'conflict', so no migration and no `LOGIC_VERSION`
+      bump (inferred). Word the mixed case (one readable id + one unreadable
+      value) at development.
 - [ ] ~~**`discogs_collection` wantlist rekey (v2).** `instance_id` as
       primary key cannot hold wantlist rows — a Discogs want has no
       instance id. The table is entirely regenerable (design §10), so the
@@ -3779,7 +3784,12 @@ Each names its sites so the work is mechanical rather than a search.
   does not capture it. When v3 lands, do both in one migration — the parser
   already has `_parseEntityId`, so the capture is a few lines once the column
   exists.
-- v2: triage / library-health page (problem releases only).
+- ~~Triage / library-health page~~ — dropped (owner, 2026-10-17); the review
+  queue covers it. Split: #6 (unreadable-tag wording). "Release deleted on
+  Discogs" is record-only; revisit if users meet it. It is detected but not
+  shown: `Derive.pm`'s `not_found` branch records it as "no master", and telling
+  the two apart needs a stored-value change. "List albums without a Discogs tag"
+  is out of scope, because tagging is done outside LMS.
 - v2: completeness check ("you have 9 of 12 tracks").
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.

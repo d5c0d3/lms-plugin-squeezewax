@@ -39,7 +39,7 @@ v9.2.0 — resolve by symbol, not line, on `public/9.1`.
 - **Triage / library-health page** → v2. A settings page listing only
   *problematic* releases so the owner can fix tags at source. Read-only about
   ownership; tagging is done elsewhere. Problem classes to show are listed in
-  §5.
+  §5. — dropped 2026-10-17, see §5 note.
 - **Completeness / misalignment detection** ("you have 9 of 12 tracks") → v2.
   Requires one release fetch per matched album; see §4.
 - **"Add to Wantlist" action** → v2, alongside Wantlist sync.
@@ -747,6 +747,13 @@ with a non-zero `folder_id` (0 is the read-only "All" view, 1 is
 "Uncategorized").
 
 ### Triage page (v2) — problem classes to surface
+
+**Superseded 2026-10-17 (owner):** no separate page; see `TODO.md` (#6). Of the
+eight classes: disagreeing tags are in the review queue; unparseable → #6;
+deleted release → recorded only; no tag found → out of scope; Structural → gone
+(§13.8); "neither Collection nor Wantlist" is not a problem under
+collection-first ownership (§13); incomplete → dropped (part 3); partial
+multi-disc → not identified in today's code.
 
 Read-only about ownership. Show only rows with a problem, plus a summary line
 ("1,847 matched, 112 need attention"); do not render the whole library.
