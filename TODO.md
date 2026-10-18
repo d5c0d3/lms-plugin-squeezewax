@@ -26,6 +26,11 @@ matches it).
 - [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
       Needs a real server: the queue page shows the link; an own compilation with
       its release-ID tag removed leaves the queue after a rescan (#8 part 9).
+      After the next promotion to master: the queue page's "Tagging tips" link
+      opens the website user guide at the "Tagging for SqueezeWax" section
+      (anchor `#tagging-for-squeezewax`, inferred from the site's heading-id
+      pattern, unverified until published). Before that promotion it lands at the
+      top of the page, because the website serves master.
 - [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a
