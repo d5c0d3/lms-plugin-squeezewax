@@ -27,6 +27,10 @@ matches it).
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a
       build with manual rows.
+      → 2026-10-18: settled (§15.46 parts 6–12); plan
+      `plans/build-order-gh8-queue-read-only.md`; built for 1.0.0b6
+      (`137efda`..`0be60ba`). Hardware checks: "1.0.0b6 / GitHub #8 checks" under
+      Waiting — needs a real server.
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
       Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
       source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
@@ -1345,7 +1349,7 @@ Each names its sites so the work is mechanical rather than a search.
       rows stay orphaned: no loss, no automatic relink.
       → 2026-09-24: offered from the orphan list (step 8 plan R5, D4).
       Ticked in commit C1.
-- [ ] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
+- [x] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
       albums with no album artist.** VERIFIED at slimserver `a670a38`:
       `Slim::Schema::_createOrUpdateAlbum` sets `albums.contributor` per
       track from `_postCheckAttributes`'s primary contributor (`ALBUMARTIST`,
@@ -1355,6 +1359,7 @@ Each names its sites so the work is mechanical rather than a search.
       (identification recovers it) and loses a manual row's choice. Same
       shape as the retagged-title hole. Recorded, not solved — revisit if
       seen on hardware.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [x] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
       part 4: step 7 stores none. An ambiguous or artist-disagreeing album
       is `ownership = 'absent'` if tagged and has NO ROW if untagged, and
@@ -1462,11 +1467,33 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
-- [ ] **2026-10-17: opening re-match runs a full collection sync** (decisions
+- [ ] **2026-10-18, low: the settings page's queue count can exceed the queue
+      list.** It also counts conflict rows whose album left the library, which
+      the queue page does not list (`Settings.pm` `beforeRender` count vs
+      `Queue.pm` `beforeRender`). Pre-existing. Verified by reading, not run.
+- [ ] **2026-10-18, low: removing all Discogs tags from an identified album
+      keeps its identification and ownership** (`Match.pm` `_recordNoMatch`
+      "kept" path). Pre-existing; record only, post-1.0. Verified by reading, not
+      run.
+- [ ] **2026-10-18, low: `Derive.pm` fetches masters for conflict rows' release
+      ids** (`$IDENTIFIED`), which nothing reads (`Menu.pm` `_entries`,
+      `Ownership.pm` `_decide`); one request per such release. Pinned as it
+      stands in `derive-check.pl`. Verified by reading, not run.
+- [ ] **2026-10-18, low: §15.46 part 9 also fires when no candidate file could
+      be read.** `Tags::examineCandidates` returns `{ read => 0 }`, which
+      `Match::recordStrict` treats as "no tag", so an incumbent conflict
+      examined while its files are unreachable is deleted and gets a no-match
+      row; once the files return unchanged, `_canSkip` skips the album and the
+      conflict stays unseen until its files next change. Already true of fresh
+      conflicts and of every untagged album before §15.46. A guard on `read`
+      in `_recordNoMatch` would be the fix; not decided. Found while building;
+      verified by reading, not run.
+- [x] **2026-10-17: opening re-match runs a full collection sync** (decisions
       §15.16 part 6; inferred from the text, not run): ceil(items/100)+1 requests
       per open, e.g. 4 for 203 items, about 51 for a 5,000-item collection. Not
       urgent. Look at it with GitHub #2's single-release check, because it is the
       same cost question. → moot once #8 lands (re-match removed).
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [ ] **GitHub #7:** unverified whether Discogs treats ids from a user's private
       collection differently from other identifiers (§15.45 point 3).
 - [ ] **2026-10-17: single-release collection check.** Discogs lists a
@@ -1904,10 +1931,11 @@ Each names its sites so the work is mechanical rather than a search.
       inferred, not read.** It is decisions §15.18 part 1's stated motivation.
       Read `refs/lms-plugin-tidal`'s importer and confirm or correct it.
       → 2026-09-27: VERIFIED. TIDAL's importer calls its sync from startScan (refs/lms-plugin-tidal/Importer.pm:21, :24, :67, :90) over SimpleSyncHTTP with timeout => 15 (API/Sync.pm:104-105). Decisions §15.18's amendment to part 1 records it; our 15 s is the same figure.
-- [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
+- [x] **2026-09-26: a manual link on an all-remote album snapshots a track
       count of 0.** Recorded, not changed (decisions §15.17). Its fit key
       (artist, title, 0) is shared by every all-remote copy of the album.
       Revisit if a relink ever pairs the wrong one.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [x] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
       queue re-reads conflict tags on every list render, not when an entry is
       opened.** Plan §3.1 said "re-read … when opened" (§3a). `Queue.pm:562`
@@ -1963,13 +1991,17 @@ Each names its sites so the work is mechanical rather than a search.
       (`…/release/14590709-Depeche-Mode-Violator?redirected=true`), and
       corroborated by captured payloads' `uri`. NOT documented as a stable
       address. Revisit if it stops resolving; the fix is one format string.
-- [ ] **2026-09-24: may collection images be shown?** `basic_information`
+      → 2026-10-18: the re-match list part is moot (§15.46, GitHub #8); the
+      menus still build the same link, so the item stays open.
+- [x] **2026-09-24: may collection images be shown?** `basic_information`
       carries `thumb` and `cover_image`. Unverified against Discogs' terms, and
       decisions §9.9 already records that image URLs are withheld without
       authentication. The step 8 re-match list shows none. Not decided.
-- [ ] **2026-09-24: an orphan that fits no current album can only be
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
+- [x] **2026-09-24: an orphan that fits no current album can only be
       rejected.** DEFAULT (decisions §15.16 part 13). Relinking one to an album
       the user picks is future work. Revisit if a manual row is lost this way.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [ ] **2026-09-24: incumbent conflicts written before migration 4 cannot be
       found.** Nothing recorded them and `scanner.log` is rewritten each scan.
       They get `conflict` when their files next change. Fresh ones are found by
@@ -2006,12 +2038,13 @@ Each names its sites so the work is mechanical rather than a search.
       already unclear before decisions §13 and the reconciliation carried it
       verbatim rather than inventing a meaning for it. Either work out what it
       means and say so, or delete it.
-- [ ] **2026-09-13: what does a `version`-ownership context menu offer beyond
+- [x] **2026-09-13: what does a `version`-ownership context menu offer beyond
       stating the fact?** A version picker promoting the choice to a manual
       match is the candidate, recorded in the reject/dismiss item as
       "refinement, not rejection" and never decided. Design §4 states what
       the menu says and stops there, because design does not specify
       mechanisms only a `TODO.md` note proposes.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [x] **2026-09-13, v2: should the sync retain the release id of the owned
       collection entry?** Decisions §14.10 rules NO for v1, so pressing
       details, credits and value are ABSENT from the context menu for an
@@ -2284,7 +2317,7 @@ Each names its sites so the work is mechanical rather than a search.
       while sitting at `candidate`, and they are the rows whose tags can no
       longer reproduce their identification. §15.5 keys reach on having an
       identification instead.
-- [ ] **2026-09-15: a retagged album title defeats orphan recovery, and a
+- [x] **2026-09-15: a retagged album title defeats orphan recovery, and a
       manual row's work is lost.** Decisions §15.5's predicate is exact
       equality on artist, album title and track count. Change the title tag
       and nothing fits, so the row stays orphaned — for a tagged album
@@ -2292,6 +2325,7 @@ Each names its sites so the work is mechanical rather than a search.
       is gone with no notice. Recorded rather than solved: two-of-three
       matching and normalised comparison both trade a fail-safe predicate for
       a guess. Revisit if it happens on hardware.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [ ] **2026-09-18: `docs/implementation-plan.md` needs its own
       survey-then-reconcile session.** Same shape as the design
       reconciliation, and deliberately NOT done during the build-order
@@ -2417,6 +2451,24 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
+      §6; offline suites green on both drivers, nothing run on a server):
+      1. Repro container (SQLite 3.22.0): on b5, insert a manual row with
+         `sqlite3`; update to b6 from the dev `repo.xml`; restart:
+         `user_version = 8`, migration 8's info line, no SQL error; the row is
+         ownership-only.
+      2. Reference server, before update: dump
+         `SELECT album_key, discogs_release_id, ownership, review_reason FROM
+         discogs_match WHERE match_tier = 'manual' OR review_reason IN
+         ('orphan','conflict');`.
+      3. Update to b6, restart: manual rows ownership-only (or gone if absent),
+         no `'orphan'`, conflict rows `source_timestamp` NULL.
+      4. Menu of the formerly manual album: ownership line, no Discogs links.
+      5. Queue page: no orphan list, no choose/remove/move buttons; each item has
+         why + what to do; Show tags works; settings count vs list length noted.
+      6. Rescan (share mounted): log shows the formerly manual and conflict
+         albums examined; after the scan's sync the reference album is back as
+         `artist-disagree`; exact back to 151 (inferred).
 - [ ] **2026-10-14: large collections against the scan-time sync cap.**
       `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
       `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
@@ -3680,6 +3732,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server (packaging)
 
+- [ ] **At b6 promotion, website on `master`:** `index.html` Review queue card:
+      "Albums it couldn't decide. Show tags, choose from your collection, or
+      remove a match." → "Albums it couldn't decide, each with what to change in
+      your tags or your Discogs collection." Commit on `master` after promotion,
+      as `d30a91c`/`cd819fc` did; `site` is behind `master` and is not the
+      source.
 - [x] **The dev LMS's Additional Repositories entry still points at
       `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. Done
       2026-09-07: `v1-buildout` cut its first build
