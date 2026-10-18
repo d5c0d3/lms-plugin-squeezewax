@@ -6093,7 +6093,7 @@ decisions §15.31 and design §4 / §7 / §9 / §11 edits. Closes `TODO.md`
 #### v2 (record only, not designed)
 
 - **Master info for albums the user does not own.** The owner first asked for it,
-  then placed it in v2.
+  then placed it in v2. → GitHub #9, owner undecided (2026-10-17).
 - **Menus for owned versions.** This keeps step 9b ruling 4 (§15.26). Inferred
   blocker: the owned pressing id for a `version` album may not be stored
   (`claude/plan-step-9.md` §0.2 D2, citing §13.2). Not checked in code.

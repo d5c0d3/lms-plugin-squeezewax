@@ -3707,6 +3707,14 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **GitHub #9 — master link + "Master info" for tagged albums not owned.
+  Owner undecided (2026-10-17), label `undecided`.** Cheap: `Derive.pm` covers
+  every identified album, owned or not (`$IDENTIFIED = discogs_release_id IS NOT
+  NULL`), so the master id is stored; the submenu fetches on open, 1 request
+  (§15.31). Master only: the files' release link and "Release details" stay out
+  (§15.31 ruling 17). Trade-off: entries on most tagged albums, a busier More
+  menu.
+
 - [ ] **2026-10-14: add to wantlist from the album menu — v2.** Wantlist is v2
   (decisions §5, line 733; endpoint `PUT /users/{username}/wants/{release_id}`
   recorded there). Should be user-triggered only. Supporting rule, in decisions §9.5's
