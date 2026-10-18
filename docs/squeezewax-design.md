@@ -1221,8 +1221,8 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - ~~Triage / library-health page (problem releases only).~~ — dropped 2026-10-17, see decisions §5 note.
 - Completeness / misalignment detection ("you have 9 of 12 tracks").
 - Flow 1 (streaming → Discogs pressings grid).
-- A field picker for the review queue's re-match list.
-- Orphan relink for users with manual links and no tag names configured.
+- ~~A field picker for the review queue's re-match list.~~ — dropped 2026-10-17.
+- ~~Orphan relink for users with manual links and no tag names configured.~~ — dropped 2026-10-17.
 - Collection value total + price snapshots.
 - Master details for albums the user does not own (decisions §15.31).
 - Menus for owned versions: the release link and release details for the

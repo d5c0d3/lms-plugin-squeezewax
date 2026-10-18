@@ -1458,6 +1458,11 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-17: opening re-match runs a full collection sync** (decisions
+      §15.16 part 6; inferred from the text, not run): ceil(items/100)+1 requests
+      per open, e.g. 4 for 203 items, about 51 for a 5,000-item collection. Not
+      urgent. Look at it with GitHub #2's single-release check, because it is the
+      same cost question.
 - [ ] **2026-10-17: single-release collection check.** Discogs lists a
       "Collection Items By Release" endpoint (docs navigation; body not read, so
       unverified; python3-discogs-client `collection_items(release_id)` is
@@ -3794,10 +3799,10 @@ Each names its sites so the work is mechanical rather than a search.
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.
 - Not planned: any write to the Discogs Collection.
-- Future: a field picker for the re-match list (decisions §15.16 part 6). v1
-  shows a fixed set.
-- Future: orphan relink for users with manual links and no tag names
-  (decisions §15.16 part 11).
+- ~~Future: a field picker for the re-match list~~ — dropped (owner,
+  2026-10-17). The fixed set (§15.16 part 6) stays.
+- ~~Future: orphan relink for users with manual links and no tag names~~ —
+  dropped (owner, 2026-10-17), with §15.16 part 13.
 - [x] **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
   ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
   promoted bytes are the ones hardware-checked. Consider for the next build.

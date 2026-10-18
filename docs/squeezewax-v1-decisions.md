@@ -4284,10 +4284,16 @@ not chosen by the user and are open.
     importer's `use` gate is unchanged (§15.8). Such a user loses their manual
     links when a folder moves. Accepted for now and recorded as a possible
     future feature.
+    **Dropped 2026-10-17 (owner):** not planned. Users with tags re-identify after
+    a move (§15.5). The affected user (token, no tag names, manual matches) is
+    outside the well-tagged premise (§14.4). The accepted gap stands as written.
 12. **DEFAULT — clear & rebuild (§10)** is decided, unbuilt, and not step 8's.
     It is recorded in `TODO.md` for a later step.
 13. **DEFAULT — an orphan that fits no current album can only be rejected.**
     Relinking it to an album of the user's choosing is future work.
+    **Dropped 2026-10-17 (owner):** not planned. Users with tags re-identify after
+    a move (§15.5). The affected user (token, no tag names, manual matches) is
+    outside the well-tagged premise (§14.4). The accepted gap stands as written.
 
 #### Where the evidence is thin
 
