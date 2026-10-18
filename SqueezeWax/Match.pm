@@ -464,8 +464,7 @@ sub backfillArtist {
 Move an orphaned match onto the album it now describes. Returns 1 on success,
 0 otherwise.
 
-An UPDATE of C<album_key> and C<lms_album_id>, clearing C<review_reason> where
-it was C<'orphan'>, and nothing else. A relink re-identifies which local album a
+An UPDATE of C<album_key> and C<lms_album_id>, and nothing else. A relink re-identifies which local album a
 match belongs to; it does not re-decide which release it is - so
 C<discogs_release_id>, C<discogs_master_id>, C<match_tier>, C<state>,
 C<matched_at>, C<source_timestamp> and the whole snapshot are carried forward
@@ -562,14 +561,12 @@ sub relinkOrphan {
 			undef, $newKey
 		);
 
-		# Then the move. review_reason is cleared only where it was 'orphan':
-		# the relink is exactly what resolves that reason, and naming the column
-		# unconditionally would blank a 'conflict' the importer owns (R3).
+		# Then the move. review_reason is not named: a 'conflict' is the
+		# importer's (R3), and the 'orphan' mark this used to clear is no longer
+		# written (§15.46 part 8; migration 8 cleared the existing ones).
 		my $sth = $dbh->prepare_cached(
 			q{UPDATE squeezewax.discogs_match
-			     SET album_key = ?, lms_album_id = ?,
-			         review_reason = CASE WHEN review_reason = 'orphan'
-			                              THEN NULL ELSE review_reason END
+			     SET album_key = ?, lms_album_id = ?
 			   WHERE album_key = ?}
 		);
 
@@ -772,7 +769,7 @@ sub _recordConflict {
 	#
 	# Written in both halves, so a conflict over a previously clean row marks it
 	# as well as a fresh one. It is cleared only by _recordMatch, by relinkOrphan
-	# where it was 'orphan', or by _recordNoMatch when the tags are removed
+	# or by _recordNoMatch when the tags are removed
 	# (§15.46 part 9): 'conflict' is sticky and the ownership pass never touches
 	# it (§15.16 part 3).
 	#

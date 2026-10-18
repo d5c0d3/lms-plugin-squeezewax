@@ -826,14 +826,10 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 
 	# --- review_reason across the relink (step 8, §15.16 parts 3 and 9) ----
 	#
-	# The relink is what resolves 'orphan', so it clears it. It must clear
-	# nothing else: 'conflict' belongs to the importer's identification path and
-	# a moved folder is not an answer to contradictory tags.
-	$seedOrphan->();
-	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'orphan'" );
-	is( $M->relinkOrphan( $old, $new, 42 ), 1, 'an orphan-marked row relinks' );
-	is( row($new)->{review_reason}, undef, "  ...and the relink clears 'orphan'" );
-
+	# The relink names no reason column. Until §15.46 it cleared 'orphan', which
+	# is no longer written (part 8). It must never clear 'conflict': that belongs
+	# to the importer's identification path, and a moved folder is not an answer
+	# to contradictory tags.
 	$seedOrphan->();
 	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'conflict'" );
 	is( $M->relinkOrphan( $old, $new, 42 ), 1, 'a conflict-marked row relinks too' );
