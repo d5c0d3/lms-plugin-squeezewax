@@ -872,21 +872,19 @@ sub _recordNoMatch {
 	my $dbh = Slim::Schema->dbh;
 	my $key = $album->{album_key};
 
-	# §2a invariant 2, and the FIRST of the three places a discogs_match row may
-	# be deleted (§15.16 part 7 adds user reject as the third). Unchanged by step
-	# 8. A fresh conflict row whose tags have since been removed would otherwise
+	# §2a invariant 2, and the place a discogs_match row may be deleted by the
+	# scanner (the ownership pass's regenerable-row sweep is the other). Unchanged
+	# by step 8 and by §15.46, which adds a second clause below. A fresh conflict row whose tags have since been removed would otherwise
 	# sit in the review queue forever advertising a conflict that no longer
 	# exists, and the queue cannot even render it - §3a stores no conflict_note
 	# and re-reads tags that are now gone.
 	#
-	# Note which conflict this reaches, because step 8's reject exists for the
-	# other one. A FRESH conflict has a NULL release id and no snapshot, so it
-	# matches every clause below and is deleted here, review_reason and all. An
-	# INCUMBENT conflict kept its release id (:659-661 below), so it fails the
-	# third clause, falls through to the 'kept' path, and keeps
-	# review_reason = 'conflict' until the user rejects it - TODO 2026-09-07's
-	# ground (a). review_reason is deliberately NOT named in the kept path's
-	# UPDATE: that path refreshes the cheap columns and decides nothing.
+	# Note which conflict this reaches. A FRESH conflict has a NULL release id
+	# and no snapshot, so it matches every clause below and is deleted here,
+	# review_reason and all. An INCUMBENT conflict kept its release id
+	# (_recordConflict), so it fails the third clause; the second statement below
+	# is what reaches it. review_reason is deliberately NOT named in the kept
+	# path's UPDATE: that path refreshes the cheap columns and decides nothing.
 	#
 	# The predicate IS the rule "never delete a row that carries a decision or a
 	# recovery snapshot", written out. Read it clause by clause, because since
@@ -908,6 +906,30 @@ sub _recordNoMatch {
 			   AND state = 'candidate'
 			   AND discogs_release_id IS NULL
 			   AND snapshot_track_count IS NULL
+		},
+		undef, $key
+	);
+
+	# The second permitted delete here, a separate named clause rather than a
+	# widening of the one above (§15.46 part 9; §2a invariant 2 as amended
+	# 2026-10-18). It reaches the INCUMBENT conflict - §3a's demotion, release id
+	# kept, tags now disagreeing - whose tags have since been removed. The clause
+	# above cannot reach it (it kept its id), so it fell to the 'kept' path below
+	# and stayed 'conflict' forever; reject was its only exit, and reject is gone.
+	#
+	# Invariant 2's test, applied: the row carries no decision - there are no
+	# user decisions after §15.46, and a conflict row's release id is read by
+	# neither the ownership pass (Ownership::_decide, §15.16 part 4) nor the menu
+	# (Menu::_entries) - and its snapshot serves only the relink optimisation.
+	# The no-match row is then written below as for any untagged album, so
+	# invariant 1 holds.
+	$dbh->do(
+		q{
+			DELETE FROM squeezewax.discogs_match
+			 WHERE album_key = ?
+			   AND match_tier = 'strict'
+			   AND state = 'candidate'
+			   AND review_reason = 'conflict'
 		},
 		undef, $key
 	);

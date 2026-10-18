@@ -493,16 +493,32 @@ like( $refusal->( 0, 1, 1 ), qr/not ready/,
 		'a clean identification clears review_reason' );
 	is( row($key)->{discogs_release_id}, 456, '  ...and records the new id' );
 
-	# Tags removed from an INCUMBENT conflict: the narrow delete does not reach
-	# it (it has a release id and a snapshot), so it takes the 'kept' path and
-	# keeps its mark until the user rejects it - TODO 2026-09-07 ground (a),
-	# §15.16 part 7. A FRESH conflict in the same situation is deleted outright,
-	# asserted above.
+	# Tags removed from an INCUMBENT conflict: the first narrow delete does not
+	# reach it (it has a release id and a snapshot), so until §15.46 it took the
+	# 'kept' path and stayed 'conflict' forever, with reject as its only exit.
+	# §15.46 part 9's second clause deletes it, and the no-match row is written
+	# as for any untagged album. A FRESH conflict in the same situation is
+	# deleted by the first clause, asserted above.
 	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'conflict'" );
+	ok( row($key)->{discogs_release_id} && row($key)->{snapshot_track_count},
+		'the incumbent conflict carries a release id and a snapshot' );
+	is( $M->recordStrict( { %$album, source_timestamp => 975 }, {}, $M->strictState($key) ),
+		'none', 'an incumbent conflict whose tags are gone becomes a no-match (§15.46 part 9)' );
+	is( row($key), undef, '  ...the row is deleted' );
+	ok( noMatchRow($key), '  ...and a strict no-match row replaces it' );
+	is( noMatchRow($key)->{source_timestamp}, 975, '  ...carrying the source timestamp' );
+	is( $M->strictState($key)->{src}, 'none',
+		'  ...so the album has exactly one strict state (invariant 1)' );
+
+	# The clause is named, not a widening: an identified row whose pass reason is
+	# set (not 'conflict') still takes the 'kept' path.
+	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
+	$M->recordStrict( $album, { id => 123 }, undef );
+	$dbh->do( "UPDATE squeezewax.discogs_match SET review_reason = 'artist-disagree'" );
 	is( $M->recordStrict( $album, {}, $M->strictState($key) ), 'kept',
-		'an incumbent conflict whose tags are gone is kept, not deleted' );
-	is( row($key)->{review_reason}, 'conflict',
-		"  ...and keeps 'conflict' - the kept path names no reason column" );
+		"an identified row with a pass reason whose tags are gone is still kept" );
+	is( row($key)->{discogs_release_id}, 123, '  ...with its release id' );
+	is( noMatchRow($key), undef, '  ...and no no-match row' );
 
 	# manual is outside all of it
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
