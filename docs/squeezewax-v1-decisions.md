@@ -173,6 +173,8 @@ same confidence bar Structural already auto-confirms on, applied to something
 the user personally confirmed). Ambiguous → review queue, pre-filled with the
 previous answer.
 
+**Superseded 2026-10-18 by §15.46 (settled), part 8.**
+
 This turns "reorganised my music folders, lost every match and every manual
 confirmation" into "reorganised my music folders, got a short review queue."
 
@@ -302,6 +304,9 @@ early is safe here and would not be for `discogs_match`.
    stores no `conflict_note` and re-reads tags that are now absent.
    Narrowing a never-delete rule does create a boundary someone can widen, so
    the test to apply is the reason above, never resemblance to this row shape.
+   **Amended 2026-10-18 (§15.46 part 9):** a second permitted delete,
+   `match_tier = 'strict' AND state = 'candidate' AND
+   review_reason = 'conflict'`, when the album's files carry no Discogs tag.
 3. The table is entirely regenerable. Orphan recovery must never read it,
    and design §9's "clear & rebuild matches" action must clear it.
 4. Rows orphaned by an `album_key` change are **not** swept in v1. Growth is
@@ -534,6 +539,8 @@ with no user-visible signal. Silent is the wrong failure direction here.
 A `match_tier = 'manual'` row is outside all of this, per the write path's first
 rule: it is never overwritten, and only its `source_timestamp` and
 `lms_album_id` are refreshed.
+
+**Superseded 2026-10-18 by §15.46 (settled), part 6.**
 
 ### `matched_at` is deliberately preserved on a demotion
 
@@ -1489,6 +1496,8 @@ ids that change, a mistake §2 and `TODO.md` cite as a precedent to avoid.
 
 **Superseded 2026-10-17 by §15.46** (no manual rows remain to preserve; GitHub #5 closed).
 
+**Superseded 2026-10-18 by §15.46 (settled), part 6.**
+
 **Decided 2026-09-07 (design chat).** Resolves the open question carried since
 step 3 and named as a precondition in
 `plans/build-order-step-4-structural-matching.md` §2.1.
@@ -1539,6 +1548,8 @@ Not affected:
 
 ### 10.3 Manual rows survive intact, including their cheap columns
 
+**Superseded 2026-10-18 by §15.46 (settled), part 6.**
+
 A manual row keeps its `discogs_release_id`, `source_timestamp` and
 `lms_album_id`. It is not NULLed, not re-examined, not rebuilt. There is nothing
 to rebuild: the answer came from the user, not from evidence that could have
@@ -1578,6 +1589,8 @@ derived is about to be rebuilt from scratch, so there is nothing for orphan
 recovery to recover *to*.
 
 ### 10.5 A wrong manual row is not fixable by this action
+
+**Superseded 2026-10-18 by §15.46 (settled), part 6.**
 
 That is the intended trade-off — manual is the user's own choice, and a bulk
 button should not destroy it — but the consequence must be recorded rather than
@@ -2617,6 +2630,9 @@ their document, per `docs/working-agreement.md` §2.
 **Decided: `match_tier` becomes nullable. NULL means "no identification was
 made". The CHECK narrows to `strict | manual`.**
 
+**Superseded 2026-10-18 by §15.46 (settled), part 10.** `'manual'` stays allowed by the CHECK and is never
+written.
+
 This settles §13.8's "Decide before migration 3" and `TODO.md`'s item of the
 same name.
 
@@ -3332,6 +3348,8 @@ as a phrase.
 2. **The fit predicate.** Exact equality on artist, album title and track
    count, with no normalisation. One fit relinks. Zero fits falls through to
    identification. Two or more goes to the review queue, pre-filled (§2).
+   **Superseded 2026-10-18 by §15.46 (settled), part 8.** (the queue branch: an ambiguous orphan stays
+   orphaned.)
 3. **Reach.** Recovery considers any orphaned row that has an identification
    and a snapshot — `match_tier IS NOT NULL AND snapshot_track_count IS NOT
    NULL` — not rows selected on `state`.
@@ -3340,6 +3358,8 @@ as a phrase.
    there; the ambiguous branch is an obligation on the review-queue step.
 
 #### Why: recovery exists for manual rows
+
+**Superseded 2026-10-18 by §15.46 (settled), part 8.**
 
 Design §3 states v1's premise: a well-tagged library and a maintained Discogs
 collection. Under that premise, **a well-tagged album does not need recovery at
@@ -4240,6 +4260,7 @@ not chosen by the user and are open.
    guarded `ADD COLUMN` and no backfill. Values: `conflict` (written by the
    importer), and `ambiguous`, `artist-disagree`, `artist-absent`,
    `various-gated`, `orphan` (written by the ownership pass).
+   **Superseded 2026-10-18 by §15.46 (settled), part 8.** (the `orphan` value: no longer written.)
 3. **`conflict` is sticky.** Only the importer writes or clears it; the pass
    never overwrites it. A clean identification clears it. The importer also
    clears `orphan` when it relinks a row.
@@ -4253,6 +4274,7 @@ not chosen by the user and are open.
    for the review queue. Manual orphans are included: the rule that a manual
    row carries no review reason applies to albums still in the library, and an
    orphan is not a verdict on a live album.
+   **Superseded 2026-10-18 by §15.46 (settled), part 8.**
 6. **Manual re-match chooses from the user's own Discogs collection, never from
    a Discogs search, and never offers a release the user does not own.**
    Premise, as in §14.4: a well-maintained collection and well-tagged rips.
@@ -4264,6 +4286,7 @@ not chosen by the user and are open.
    fields per entry, and nothing more. A release owned twice shows twice. The
    badge changes at the next sync, not at confirm. Amends design §3's
    "search-as-you-type against Discogs".
+   **Superseded 2026-10-18 by §15.46 (settled), part 7.**
 7. **Reject deletes the row**: a manual row, an incumbent conflict, a fresh
    conflict, or an orphan. It is the **third permitted deletion** in
    `discogs_match`, justified as §10.4 justifies clear & rebuild: §2a's
@@ -4272,6 +4295,7 @@ not chosen by the user and are open.
    unchanged. **There is no stored dismiss.** A computed item leaves the queue
    only through a manual link or a change in tags or collection, so the queue
    is not a recovery path for a wrong badge, which §14.4 rules out.
+   **Superseded 2026-10-18 by §15.46 (settled), part 9.**
 8. **§13.5's all-tags read is deferred past step 8, possibly for good.** v1's
    queue holds three contents: ambiguous matches, artist disagreement or
    absence, and Strict conflicts. Amends §13.5 and §13.10.5. §15.13 part 7's
@@ -4288,6 +4312,7 @@ not chosen by the user and are open.
     `scripts/queue-check.pl`, with honest transport and prefs stubs. This
     discharges the stub audit's build-order obligation (TODO 2026-09-24).
     Three seam defects are a pattern, not a law.
+    **Superseded 2026-10-18 by §15.46 (settled), part 7.** (the seam is now sync → pass → queue render.)
 11. **Relink for users with manual links and no tag names is not built.** The
     importer's `use` gate is unchanged (§15.8). Such a user loses their manual
     links when a folder moves. Accepted for now and recorded as a possible
@@ -4295,6 +4320,7 @@ not chosen by the user and are open.
     **Dropped 2026-10-17 (owner):** not planned. Users with tags re-identify after
     a move (§15.5). The affected user (token, no tag names, manual matches) is
     outside the well-tagged premise (§14.4). The accepted gap stands as written.
+    **Superseded 2026-10-18 by §15.46 (settled), part 8.**
 12. **DEFAULT — clear & rebuild (§10)** is decided, unbuilt, and not step 8's.
     It is recorded in `TODO.md` for a later step.
 13. **DEFAULT — an orphan that fits no current album can only be rejected.**
@@ -4302,6 +4328,7 @@ not chosen by the user and are open.
     **Dropped 2026-10-17 (owner):** not planned. Users with tags re-identify after
     a move (§15.5). The affected user (token, no tag names, manual matches) is
     outside the well-tagged premise (§14.4). The accepted gap stands as written.
+    **Superseded 2026-10-18 by §15.46 (settled), part 8.**
 
 #### Where the evidence is thin
 
@@ -4340,6 +4367,7 @@ not chosen by the user and are open.
    situation gives every album a row (report §2.2). §2a invariant 1 holds: the
    no-match row goes before the match row lands. Deleting a no-match row is
    within §2a invariant 3, since that table is regenerable.
+   **Superseded 2026-10-18 by §15.46 (settled), part 8.**
 3. **The page never says "no album fits" when one does.** It distinguishes "no
    album fits" from "albums fit, but their own tags already identify them".
 4. **The rejection pause is shown on the queue page as well as in Settings.**
@@ -7162,3 +7190,152 @@ GitHub #8.
    7, 11, 13; §15.5's reason for recovery, "recovery exists for manual rows";
    §10.3; design §3's manual link; README and user guide re-match text);
    whether orphan recovery is still needed at all.
+
+#### Settled 2026-10-18 (owner, design chat)
+
+**6. Existing manual rows become ownership-only rows** (migration 8, data only).
+- `match_tier = 'manual'` and `ownership = 'absent'` → row deleted (it would
+  assert nothing; §14.8 invariant 3).
+- Other manual rows keep `album_key`, `mb_album_id`, `lms_album_id`, `ownership`.
+  Every other column → NULL: `match_tier`, `state`, `discogs_release_id`,
+  `discogs_master_id`, `matched_at`, `snapshot_*`, `source_timestamp`,
+  `derived_master_id`, `derived_from_release_id`, `derived_at`, `review_reason`.
+- Why not delete: "Records I own" is rebuilt only after a sync
+  (`API/Async.pm` `_finish` → `View->rebuild`); the menu reads the row
+  (`Menu.pm` `_row`). Deleting would make the two disagree until the next sync.
+- What follows (inferred from reading): the menu keeps the ownership line, loses
+  the release and master links (`Menu.pm` `_entries` needs a release id;
+  `Ownership::_effectiveMaster` returns undef). The next scan re-examines the album
+  (no strict row and no no-match row: `Match.pm` `$STATE_SQL` filters
+  `match_tier IS NOT NULL`; `recordManual` had cleared the no-match row;
+  `Importer.pm` `_canSkip` returns 0 with no state). The next sync re-decides
+  ownership by tags or title (`Ownership.pm` `_decide`): owned, back in the queue,
+  or not owned. A gone album's converted row is deleted by the pass
+  (`Ownership.pm` `_apply`, gone-row loop, `_isOwnershipOnly`).
+- Reference server: the `artist-disagree` album matched by hand on 2026-10-17
+  16:36:03 is expected back in the queue as `artist-disagree` after the next sync,
+  and exact 152 → 151 (inferred).
+
+**7. Queue items and their "what to fix" text.** Reasons kept: `conflict`,
+`ambiguous`, `artist-disagree`, `artist-absent`, `various-gated`. Each item shows
+its reason and one fix line; nothing on the page writes. Text is in the build plan
+§4. Rules behind it:
+- Every fix is a tag edit or a collection edit, then a rescan or sync.
+- `artist-disagree` on a record that really is different stays in the queue for
+  good. Unchanged from §15.16 part 7 (no stored dismiss); its fix line says it can
+  be ignored.
+- "Show tags" stays: it reads two files and writes nothing (§15.17 part 1).
+- **GitHub #6 folded in.** `Tags::decide` also returns the unreadable values;
+  `Tags::examineCandidates` gives the in-file case two more kinds, `unreadable`
+  (no readable id) and `unreadable-mixed` (one readable id plus unreadable values).
+  Wording only: stored `review_reason` stays `conflict`, verdicts unchanged, so no
+  migration for it and no `LOGIC_VERSION` bump (inferred; the constant's own
+  comment excludes messages).
+- `PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED` said "The tags agree again. The next scan
+  will clear this." With part 9 that is true for removed tags too, but "agree" is
+  wrong for "no tags"; reworded.
+
+**8. `orphan` is gone from the queue; automatic relink stays.**
+- Kept: `Importer.pm` `_prePass` (one-to-one relink, artist backfill) and
+  `Match.pm` `relinkOrphan`, `_resolveRelinks`, `backfillArtist`. They are now an
+  optimisation only: a moved album keeps its derived master (no Discogs request)
+  and its files are not re-read (`relinkOrphan` carries `derived_*` and
+  `source_timestamp`).
+- Removed: the orphan list, the relink and remove buttons, and the pass's
+  `'orphan'` marking. Migration 8 clears existing `'orphan'` marks.
+- Unrelinked orphans sit, unseen. §2a invariant 4 already accepts no sweep. Escape
+  hatch: README "Starting over". A sweep was rejected: a scan with the music share
+  offline makes every album "gone" (§15.28), and today those rows come back for
+  free when the share returns (same `album_key`).
+- §15.5's rationale ("recovery exists for manual rows") is superseded: recovery is
+  the optimisation §15.5 already called it for tagged albums. Parts 1, 3, 4 stand;
+  part 2's "two or more goes to the queue" and part 4's queue obligation are
+  superseded (an ambiguous orphan stays orphaned).
+
+**9. New importer rule: tags removed from a conflict row delete the row.**
+- Problem: an incumbent conflict (§3a demotion: release id kept, tags now
+  disagree) whose tags are then removed falls to `_recordNoMatch`'s "kept" path
+  and stays `conflict` forever. Reject was its only exit (design §3, "The queue
+  must also offer reject").
+- Rule: `_recordNoMatch` also deletes the row when
+  `match_tier = 'strict' AND state = 'candidate' AND review_reason = 'conflict'`;
+  then the no-match row is written as usual (§2a invariant 1 holds).
+- §2a invariant 2's test, applied: the row carries no decision (no user decisions
+  exist after §15.46; a conflict row's id is used by neither ownership,
+  `Ownership.pm` `_decide` / §15.16 part 4, nor the menu, `Menu.pm` `_entries`),
+  and its snapshot serves only the relink optimisation. The existing narrow
+  predicate is unchanged; this is a second, named clause.
+- Existing stuck rows: migration 8 NULLs `source_timestamp` on
+  `review_reason = 'conflict'` rows, so the next scan re-examines them (2 file
+  reads each). No `LOGIC_VERSION` bump: that would re-read the whole library
+  (§15.24: 63.9 s over 578 albums).
+- Not changed, recorded: an identified (non-conflict) album whose tags are removed
+  keeps its identification (the "kept" path). Pre-existing; TODO.
+
+**10. Schema.** Migration 8, data only, no DDL: four guarded statements in one
+transaction (build plan §3). The CHECKs keep `'manual'` and `'orphan'`: narrowing
+needs a full rebuild of the one table that is not regenerable (as §14.1), for no
+gain. Nothing writes them; `scripts/syntax-check.sh` gets a guard. §15.37 part 5:
+`v1-buildout` is the newest line (no `v2-buildout`; verified `git branch -a`).
+§15.42: plain UPDATE/DELETE, nothing newer than 3.22.0. Downgrade: b5 refuses
+`user_version = 8` (`Schema::_migrate`); the README already says there is no way
+back except "Starting over".
+
+**11. The sync stops keeping re-match fields.** `API::entryFromRelease` drops
+`year`, `formats`, `labels` (kept only for the re-match list, §15.16 part 6);
+`_labelLabel` goes if unused (`_formatLabel` stays, `Details.pm` uses it).
+`API/Async.pm` `_finish` stops passing the entry list to callbacks (only
+`Queue.pm` read it; Claude Code verifies the other two callers). Less held in
+memory; §9.5 direction.
+
+**12. Superseded.** Decisions: §15.16 parts 5, 6, 7, 10 (seam now queue → render),
+11, 13, and part 2's `orphan` value (no longer written); §15.17 part 2; §15.5
+rationale and part 2's queue branch; §2 "Orphan recovery" ambiguous branch;
+§3a's manual-row sentence; §10 entire (with GitHub #5, B+C prompt part 6), incl.
+§10.3 and §10.5; §14.1's `'manual'` (allowed, never written). Design: §3
+"Confirmed … or the user linked the album by hand", "Manual re-match…",
+"Reject deletes…", "The queue must also offer reject…" (→ part 9), re-match
+trigger "manual re-match", the menu's "tag or manual link" and "Re-match… stays
+on the review-queue page"; §9 clear & rebuild "escape hatch … demoted candidate"
+(→ part 9); §10 `match_tier`/`review_reason` comments; §11 v1 list "manual
+re-match". Code comment: `Ownership.pm` `_decide` ("A manual link is not subject
+to the collection cross-check").
+
+**Interactions, not designed here.** #7 (§15.45): a formerly manual album owned
+by title may get its pressing link back from the owned release id; #7 must not
+re-introduce choosing. #10: none. #6: folded in (part 7).
+
+#### Where the evidence is thin
+- Nothing here was run. Migration 8 and part 9 rest on reading
+  `Match.pm`, `Ownership.pm`, `Importer.pm`, `Menu.pm`, `Schema.pm` @ `ec75033`.
+- "A tag edit changes the file's timestamp, so the next scan re-examines" is the
+  existing assumption (§3a), not re-checked for every tagger.
+- The reference server's expected counts after update are inferred.
+- Fix-text wording is untested with users.
+
+#### As built, 2026-10-18 (`137efda`..`0be60ba`, for 1.0.0b6)
+
+Built from `plans/build-order-gh8-queue-read-only.md`. Offline suites green on
+SQLite 3.46.1 and 3.22.0 after every commit; nothing here has run on a server.
+Deviations from the plan, each small:
+
+- **Steps 3 and 5 swapped.** Removing `recordManual` and `rejectRow` (step 3)
+  before the queue page stopped calling them (step 5) leaves `queue-check.pl`
+  red, so the queue page went first.
+- **Strings landed with their first user.** The new fix-line and streaming
+  strings came with the queue page (step 5) and the two unreadable-kind strings
+  with step 6; step 8 did the rewording and the removals (32 tokens).
+- **Migration 8's statement (d)** carries `AND source_timestamp IS NOT NULL`, so
+  its count in the info line is the rows it actually changed and a re-run
+  reports 0. Same effect.
+- **`relinkOrphan` no longer names `review_reason`** (step 4). Its `CASE` cleared
+  `'orphan'`, which nothing writes after part 8, and kept the literal in code
+  the step 8 guard forbids.
+- **The streaming note replaces the fix line** for an album with no local
+  tracks, rather than appearing beside it: every fix line asks for a tag edit
+  the user cannot make on such an album (part 3).
+- **Part 9 also fires when no candidate file could be read.** `_examine`
+  returns the same empty decision for "unreadable" as for "no tag", so an
+  incumbent conflict examined while its files are unreachable is deleted and
+  given a no-match row. Pre-existing for fresh conflicts; recorded in
+  `TODO.md`, not changed.

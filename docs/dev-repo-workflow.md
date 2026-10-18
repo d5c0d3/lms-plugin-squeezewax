@@ -126,7 +126,8 @@ through `raw.githubusercontent.com/.../<branch>/repo.xml` and `master`'s through
 the website. `_config.yml` is only an `exclude:` list, keeping internal files
 (`CLAUDE.md`, `TODO.md`, `plans/`, `scripts/`, `SqueezeWax/`, and `docs/` except
 `user-guide.md`) out of the site build, so a Liquid-like `{{` or `{%` in them
-cannot break it. The README is the home page and links to `docs/user-guide.md`.
+cannot break it. The home page is `index.html` (site work, PR #1,
+committed on `master` only); it links to the README and `docs/user-guide.md`.
 
 **Merges (§15.37 part 4).** Only promotion writes `master`. A fix lands on the
 **oldest line still receiving fixes**, then is merged forward into every newer
