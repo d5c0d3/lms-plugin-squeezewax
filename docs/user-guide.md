@@ -72,7 +72,7 @@ Settings.*
 - **Your own compilations and mixtapes.** Leave the release ID out of the tag
   name SqueezeWax reads. If you want to keep each track's ID, put it in another
   tag name.
-- **Master release (optional).** A `DISCOGS_MASTER_ID` tag lets "You own a
+- **Master release (optional).** A master-release tag (`DISCOGS_MASTER_RELEASE_ID`, as foobar2000's Discogs component writes it, or `DISCOGS_MASTER_ID` / `DISCOGS MASTER ID`) lets "You own a
   version" show right after the rescan, without waiting for the background
   master lookup.
 - **Artist names.** If the artist is spelled differently in your files and in

@@ -3859,14 +3859,15 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **GitHub #16 — tag-name defaults, after 1.0.0** (owner, 2026-10-19). The
   release-ID list is pre-filled with `DISCOGS_RELEASE_ID` for new installs;
   existing installs keep their saved list (no migration). Master-ID names become
-  a settings list, default `DISCOGS_MASTER_ID` (replaces the fixed `@MASTER_KEYS`
+  a settings list, default `DISCOGS_MASTER_RELEASE_ID` (replaces the fixed `@MASTER_KEYS`
   in `Tags.pm`). Both lists are removable, with a "Reset to default" button each.
   Underscore names only as defaults; users add spaced names (some MP3 taggers)
   themselves (`_lookup` is case-insensitive only; decisions §3). Existing
-  installs' master list also starts as `DISCOGS_MASTER_ID` only (owner accepted):
-  files tagged `DISCOGS MASTER ID` or `DISCOGS_MASTER_RELEASE_ID` stop counting
-  until the name is added. Release notes for that version must tell users to
-  review their tag settings and add those names if their files use them. Cost
+  installs' master list also starts as `DISCOGS_MASTER_RELEASE_ID` only (owner
+  accepted): files tagged `DISCOGS_MASTER_ID` or `DISCOGS MASTER ID` stop
+  counting until the name is added. Release notes for that version must tell
+  users to review their tag settings and add those names if their files use
+  them. Cost
   (inferred): first scan reads 2 files per album on untagged libraries; a
   tag-name change re-checks tagged albums (§3b).
 
