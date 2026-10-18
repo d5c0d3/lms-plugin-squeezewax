@@ -1219,7 +1219,7 @@ reflect their shelves is outside what this plugin can usefully do for them.
 **v2:**
 - Wantlist sync & wantlist badge.
 - ~~Triage / library-health page (problem releases only).~~ — dropped 2026-10-17, see decisions §5 note.
-- Completeness / misalignment detection ("you have 9 of 12 tracks").
+- ~~Completeness / misalignment detection ("you have 9 of 12 tracks").~~ — dropped 2026-10-17.
 - Flow 1 (streaming → Discogs pressings grid).
 - ~~A field picker for the review queue's re-match list.~~ — dropped 2026-10-17.
 - ~~Orphan relink for users with manual links and no tag names configured.~~ — dropped 2026-10-17.
@@ -1237,7 +1237,7 @@ advantage there and no way to see the physical object.
 
 **v3:**
 - Flow 2 (native Discogs grids, "Find on …" / "Find" fan-out).
-- Statistics dashboard (value trend chart, stat cuts, completeness view).
+- Statistics dashboard (value trend chart, stat cuts, ~~completeness view~~ — dropped 2026-10-17).
 - Artist-level badge (opt-in), currency conversion option.
 - A SqueezeWax app (`is_app`, the pattern of the Listen Later plugin) as a
   low-level forerunner of Flow 2's Discogs browse (decisions §15.25).

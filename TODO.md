@@ -3795,7 +3795,12 @@ Each names its sites so the work is mechanical rather than a search.
   shown: `Derive.pm`'s `not_found` branch records it as "no master", and telling
   the two apart needs a stored-value change. "List albums without a Discogs tag"
   is out of scope, because tagging is done outside LMS.
-- v2: completeness check ("you have 9 of 12 tracks").
+- ~~v2: completeness check ("you have 9 of 12 tracks").~~ — dropped (owner,
+  2026-10-17). It is a ripping question, solved outside LMS. Likely false alarms
+  (Discogs headings, sub-tracks and index tracks; vinyl side-splits; multi-disc
+  sets split across LMS albums; inferred). If ever revisited: the master job
+  already fetches each identified release (`Derive.pm`), so the tracklist is in
+  hand at no extra request; store a verdict only (§9.5).
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.
 - Not planned: any write to the Discogs Collection.

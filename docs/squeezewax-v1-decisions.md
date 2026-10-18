@@ -41,7 +41,7 @@ v9.2.0 — resolve by symbol, not line, on `public/9.1`.
   ownership; tagging is done elsewhere. Problem classes to show are listed in
   §5. — dropped 2026-10-17, see §5 note.
 - **Completeness / misalignment detection** ("you have 9 of 12 tracks") → v2.
-  Requires one release fetch per matched album; see §4.
+  Requires one release fetch per matched album; see §4. — dropped 2026-10-17 (owner).
 - **"Add to Wantlist" action** → v2, alongside Wantlist sync.
 - **Any write to the Discogs Collection** → **not planned.** Rationale in §5.
 
@@ -690,7 +690,7 @@ Consequences:
 | Strict match | **0 requests** — the tag names the release |
 | Owned badge | ~~~20 requests per collection sync~~ — **`ceil(items / 100)`; measured 2026-09-07: 3 requests for a 203-item collection** |
 | Structural match | 1 search **+ 1 release fetch per candidate pressing** |
-| Completeness check (v2) | 1 release fetch per matched album, cacheable forever |
+| Completeness check (v2) — dropped 2026-10-17 | 1 release fetch per matched album, cacheable forever |
 
 **§13's "1–2 search requests per album" is too low for Structural.** An album
 with eight pressings on Discogs costs nine requests, not two. A library with
