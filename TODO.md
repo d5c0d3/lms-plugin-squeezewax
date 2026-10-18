@@ -3795,12 +3795,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server (packaging)
 
-- [ ] **At b6 promotion, website on `master`:** `index.html` Review queue card:
+- [x] **At b6 promotion, website on `master`:** `index.html` Review queue card:
       "Albums it couldn't decide. Show tags, choose from your collection, or
       remove a match." → "Albums it couldn't decide, each with what to change in
       your tags or your Discogs collection." Commit on `master` after promotion,
       as `d30a91c`/`cd819fc` did; `site` is behind `master` and is not the
-      source.
+      source. Done 2026-10-19 on `master`.
 - [x] **The dev LMS's Additional Repositories entry still points at
       `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. Done
       2026-09-07: `v1-buildout` cut its first build
