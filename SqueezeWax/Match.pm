@@ -123,9 +123,9 @@ sub invalidateStrict {
 	# predicate applies at that point, in the importer, not here. The two
 	# mechanisms compose, and invalidation is never the thing that removes a row.
 	#
-	# match_tier = 'manual' falls outside the predicate entirely, so a user's
-	# own pressing choice is untouched - consistent with the write path's first
-	# rule in commit 5.
+	# An ownership-only row (match_tier NULL) falls outside the predicate: it
+	# carries no identification to re-examine, and the importer already examines
+	# its album, since $STATE_SQL does not see it.
 	my $nulled = $dbh->do(
 		q{UPDATE squeezewax.discogs_match SET source_timestamp = NULL
 		   WHERE match_tier = 'strict'}
@@ -147,8 +147,7 @@ sub invalidateStrict {
 
 # Both skip caches in one round trip. Two rows back is the invariant-1 violation
 # §2a says Match.pm enforces - an album in discogs_match and discogs_no_match for
-# the same tier - caught for free on the one code path that would ever notice,
-# and it returns match_tier for the manual guard at the same time.
+# the same tier - caught for free on the one code path that would ever notice.
 #
 # match_tier IS NOT NULL is what makes that invariant survive the ownership
 # pass (decisions §15.13 part 6). Since migration 3 the column is nullable, and
@@ -217,8 +216,7 @@ tags have ever produced anything, and tags are what C<discogs_release_id>
 records.
 
 A conflict row holding an incumbent id counts: tags did once name a release. A
-fresh conflict row, whose id is NULL, does not. A manual row does not either -
-the user chose it, and it says nothing about the tag names.
+fresh conflict row, whose id is NULL, does not.
 
 =cut
 
@@ -430,8 +428,7 @@ the normal write path would never fill them in either: without this, recovery
 would cover nothing that exists on the reference server today (§15.12 part 1).
 
 That column only. No state, no timestamp, no other snapshot column, and no file
-read - this is LMS's own data for the same C<album_key>. Manual rows are
-included, and they are the rows recovery exists for. Conflict rows are excluded
+read - this is LMS's own data for the same C<album_key>. Conflict rows are excluded
 for free, because they carry no C<snapshot_track_count> (§15.4).
 
 Idempotent: the C<IS NULL> guard is in the statement as well as in the caller's
@@ -467,8 +464,7 @@ sub backfillArtist {
 Move an orphaned match onto the album it now describes. Returns 1 on success,
 0 otherwise.
 
-An UPDATE of C<album_key> and C<lms_album_id>, clearing C<review_reason> where
-it was C<'orphan'>, and nothing else. A relink re-identifies which local album a
+An UPDATE of C<album_key> and C<lms_album_id>, and nothing else. A relink re-identifies which local album a
 match belongs to; it does not re-decide which release it is - so
 C<discogs_release_id>, C<discogs_master_id>, C<match_tier>, C<state>,
 C<matched_at>, C<source_timestamp> and the whole snapshot are carried forward
@@ -495,8 +491,9 @@ pass-written reason is re-derived too. The predicate is §15.13 part 5's, writte
 out here rather than borrowed, because this is a different caller with a
 different justification.
 
-Closes TODO 2026-09-19 "an ownership-only row blocks a later relink", for both
-callers: the scanner's pre-pass and the queue page's relink.
+Closes TODO 2026-09-19 "an ownership-only row blocks a later relink". One
+caller since §15.46, the scanner's pre-pass; the queue page's relink, the
+other, is gone.
 
 C<source_timestamp> riding along unchanged is what makes the main loop skip the
 album afterwards: its files moved but did not change, so there is nothing to
@@ -512,13 +509,14 @@ sub relinkOrphan {
 
 	my $dbh = Slim::Schema->dbh;
 
-	# The two statements must land together or not at all, and the two callers
-	# arrive with different transaction states. In the scanner the handle is
-	# AutoCommit = 0 with one long-lived transaction open for the whole scan
-	# (scanner.pl:295, quoted in Importer.pm's COMMIT_EVERY comment), so both
-	# statements already ride it and begin_work would die with "already in a
-	# transaction". In the server the handle is AutoCommit = 1
-	# (Slim/Schema.pm:274) and there is nothing to ride, so one is opened here.
+	# The statements must land together or not at all, and the handle's
+	# transaction state depends on the process. In the scanner - the only caller
+	# since §15.46 removed the queue page's relink - the handle is AutoCommit = 0
+	# with one long-lived transaction open for the whole scan (scanner.pl:295,
+	# quoted in Importer.pm's COMMIT_EVERY comment), so the statements already
+	# ride it and begin_work would die with "already in a transaction". In the
+	# server the handle is AutoCommit = 1 (Slim/Schema.pm:274) and there is
+	# nothing to ride, so one is opened here; the suites drive both.
 	#
 	# Hence the conditional rather than an unconditional begin_work: the
 	# guarantee is "one transaction", not "a transaction this sub opened".
@@ -555,24 +553,23 @@ sub relinkOrphan {
 		# case is one album re-read at the next scan. That is what puts it
 		# inside §2a invariant 3 rather than against it.
 		#
-		# The SCANNER never reaches this: _prePass excludes no-match albums from
-		# its key misses, so it offers no such target and its behaviour is
-		# unchanged. This clause exists for the queue page, which decides after
-		# the scan, when every current album already has a row of some kind.
+		# Unreached since §15.46. _prePass excludes no-match albums from its key
+		# misses, so the scanner offers no such target; this clause existed for
+		# the queue page's relink, which decided after the scan, when every
+		# current album already had a row of some kind. Kept rather than removed:
+		# it is the invariant-1 guard should a caller ever offer such a target.
 		$dbh->do(
 			q{DELETE FROM squeezewax.discogs_no_match
 			   WHERE album_key = ? AND tier = 'strict'},
 			undef, $newKey
 		);
 
-		# Then the move. review_reason is cleared only where it was 'orphan':
-		# the relink is exactly what resolves that reason, and naming the column
-		# unconditionally would blank a 'conflict' the importer owns (R3).
+		# Then the move. review_reason is not named: a 'conflict' is the
+		# importer's (R3), and the 'orphan' mark this used to clear is no longer
+		# written (§15.46 part 8; migration 8 cleared the existing ones).
 		my $sth = $dbh->prepare_cached(
 			q{UPDATE squeezewax.discogs_match
-			     SET album_key = ?, lms_album_id = ?,
-			         review_reason = CASE WHEN review_reason = 'orphan'
-			                              THEN NULL ELSE review_reason END
+			     SET album_key = ?, lms_album_id = ?
 			   WHERE album_key = ?}
 		);
 
@@ -615,8 +612,8 @@ Write the outcome of the Strict pass for one album. C<%decision> is what
 C<Plugins::SqueezeWax::Tags-E<gt>decide> returned; an empty hashref means no
 configured tag was present.
 
-Returns one of 'identified', 'candidate' (a conflict), 'none', 'kept',
-'manual' or undef.
+Returns one of 'identified', 'candidate' (a conflict), 'none', 'kept' or
+undef.
 
 =cut
 
@@ -624,31 +621,6 @@ sub recordStrict {
 	my ( $class, $album, $decision, $state ) = @_;
 
 	return undef unless $class->_writeOk;
-
-	my $dbh = Slim::Schema->dbh;
-	my $key = $album->{album_key};
-
-	# Rule one, checked before anything else. An in-place file change that has
-	# nothing to do with tags - artwork embedded, ReplayGain written - moves
-	# tracks.timestamp without moving album_key, so a manually re-matched album
-	# WILL be re-examined. An unguarded upsert would silently restore the file's
-	# original tag over the pressing the user chose: no log line, wrong badge, no
-	# way for them to tell.
-	#
-	# Not expressible as `ON CONFLICT ... DO UPDATE ... WHERE match_tier <>
-	# 'manual'`, though SQLite supports that: verified, it leaves the manual row
-	# COMPLETELY untouched, including source_timestamp - so the importer would
-	# re-examine it on every scan forever. We need to refresh the cheap columns
-	# and leave the decision alone, which is two different things.
-	if ( $state && $state->{src} eq 'match' && ( $state->{tier} || '' ) eq 'manual' ) {
-		$dbh->do(
-			'UPDATE squeezewax.discogs_match SET source_timestamp = ?, lms_album_id = ?
-			  WHERE album_key = ?',
-			undef, $album->{source_timestamp}, $album->{album_id}, $key
-		);
-
-		return 'manual';
-	}
 
 	if ( $decision->{conflict} ) {
 		return $class->_recordConflict( $album, $decision, $state );
@@ -800,8 +772,9 @@ sub _recordConflict {
 	#
 	# Written in both halves, so a conflict over a previously clean row marks it
 	# as well as a fresh one. It is cleared only by _recordMatch, by relinkOrphan
-	# where it was 'orphan', or by the user rejecting the row: 'conflict' is
-	# sticky and the ownership pass never touches it (§15.16 part 3).
+	# or by _recordNoMatch when the tags are removed
+	# (§15.46 part 9): 'conflict' is sticky and the ownership pass never touches
+	# it (§15.16 part 3).
 	#
 	# No snapshot columns here, by rule (§15.4): a snapshot on a conflict row
 	# would make _recordNoMatch's narrow delete unreachable and the row would
@@ -872,21 +845,19 @@ sub _recordNoMatch {
 	my $dbh = Slim::Schema->dbh;
 	my $key = $album->{album_key};
 
-	# §2a invariant 2, and the FIRST of the three places a discogs_match row may
-	# be deleted (§15.16 part 7 adds user reject as the third). Unchanged by step
-	# 8. A fresh conflict row whose tags have since been removed would otherwise
+	# §2a invariant 2, and the place a discogs_match row may be deleted by the
+	# scanner (the ownership pass's regenerable-row sweep is the other). Unchanged
+	# by step 8 and by §15.46, which adds a second clause below. A fresh conflict row whose tags have since been removed would otherwise
 	# sit in the review queue forever advertising a conflict that no longer
 	# exists, and the queue cannot even render it - §3a stores no conflict_note
 	# and re-reads tags that are now gone.
 	#
-	# Note which conflict this reaches, because step 8's reject exists for the
-	# other one. A FRESH conflict has a NULL release id and no snapshot, so it
-	# matches every clause below and is deleted here, review_reason and all. An
-	# INCUMBENT conflict kept its release id (:659-661 below), so it fails the
-	# third clause, falls through to the 'kept' path, and keeps
-	# review_reason = 'conflict' until the user rejects it - TODO 2026-09-07's
-	# ground (a). review_reason is deliberately NOT named in the kept path's
-	# UPDATE: that path refreshes the cheap columns and decides nothing.
+	# Note which conflict this reaches. A FRESH conflict has a NULL release id
+	# and no snapshot, so it matches every clause below and is deleted here,
+	# review_reason and all. An INCUMBENT conflict kept its release id
+	# (_recordConflict), so it fails the third clause; the second statement below
+	# is what reaches it. review_reason is deliberately NOT named in the kept
+	# path's UPDATE: that path refreshes the cheap columns and decides nothing.
 	#
 	# The predicate IS the rule "never delete a row that carries a decision or a
 	# recovery snapshot", written out. Read it clause by clause, because since
@@ -895,7 +866,7 @@ sub _recordNoMatch {
 	# identifications from conflicts. What protects an identification is the
 	# other two clauses - it has a release id AND a snapshot, and a fresh
 	# conflict row is the only thing with neither. 'strict' still excludes
-	# manual; 'candidate' still excludes a row the ownership pass promoted; a
+	# an ownership-only row; 'candidate' still excludes a row the ownership pass promoted; a
 	# NULL release id still excludes anything a tag or a user ever named; a NULL
 	# snapshot still excludes orphan recovery's index material. Anyone widening
 	# this must show their case passes that test, not that it resembles this
@@ -908,6 +879,30 @@ sub _recordNoMatch {
 			   AND state = 'candidate'
 			   AND discogs_release_id IS NULL
 			   AND snapshot_track_count IS NULL
+		},
+		undef, $key
+	);
+
+	# The second permitted delete here, a separate named clause rather than a
+	# widening of the one above (§15.46 part 9; §2a invariant 2 as amended
+	# 2026-10-18). It reaches the INCUMBENT conflict - §3a's demotion, release id
+	# kept, tags now disagreeing - whose tags have since been removed. The clause
+	# above cannot reach it (it kept its id), so it fell to the 'kept' path below
+	# and stayed 'conflict' forever; reject was its only exit, and reject is gone.
+	#
+	# Invariant 2's test, applied: the row carries no decision - there are no
+	# user decisions after §15.46, and a conflict row's release id is read by
+	# neither the ownership pass (Ownership::_decide, §15.16 part 4) nor the menu
+	# (Menu::_entries) - and its snapshot serves only the relink optimisation.
+	# The no-match row is then written below as for any untagged album, so
+	# invariant 1 holds.
+	$dbh->do(
+		q{
+			DELETE FROM squeezewax.discogs_match
+			 WHERE album_key = ?
+			   AND match_tier = 'strict'
+			   AND state = 'candidate'
+			   AND review_reason = 'conflict'
 		},
 		undef, $key
 	);
@@ -959,172 +954,6 @@ sub _recordNoMatch {
 	);
 
 	return 'none';
-}
-
-=head2 recordManual( \%album, $releaseId, $masterId )
-
-Record the user's own choice of release for one album. Returns 1 if a row was
-written, 0 otherwise.
-
-The queue page's confirm action, and the only writer of C<match_tier = 'manual'>
-(§15.16 part 6). It writes C<state = 'confirmed'> directly, which C<_recordMatch>
-may not: design §3 exempts a manual link from the collection cross-check that
-governs Strict, so there is nothing for the ownership pass to confirm and
-nothing for it to demote. C<Ownership::_decide> honours that by moving C<state>
-only on a C<'strict'> row.
-
-It captures the recovery snapshot, because a manual link IS an identification
-(§15.4) and manual rows are exactly what orphan recovery exists for: the user
-chose this pressing because the tags could not name it, so re-identification
-after a folder move would not reproduce the choice (§15.5). C<snapshot_artist> is
-C<< $album->{artist} >> as the iterator supplied it - bytes, never decoded, since
-recovery compares it against the same bytes (§11.4).
-
-It never names C<ownership>. The badge is the pass's to write and changes at the
-next sync, which is what the page tells the user (§15.16 part 6).
-
-C<review_reason> is written NULL: confirming is the answer to whatever put the
-album in the queue.
-
-=cut
-
-sub recordManual {
-	my ( $class, $album, $releaseId, $masterId ) = @_;
-
-	return 0 unless $class->_writeOk;
-
-	# Both ids come off a form, so both are validated here rather than trusted.
-	# A non-integer release id would be stored as text in an INTEGER column -
-	# SQLite's type affinity keeps a non-numeric string as-is - and would then
-	# never match the collection index, so the album would silently stop
-	# badging with nothing to show why.
-	return 0 unless defined $releaseId && $releaseId =~ /^[0-9]+$/ && $releaseId > 0;
-
-	# Both of Discogs' "no master" forms collapse to NULL, the same guard
-	# Ownership::_indexCollection applies to the same field (:271-275): a
-	# master_id of 0 taken at face value makes every masterless release collide
-	# on one key at node F.
-	$masterId = undef
-		unless defined $masterId && $masterId =~ /^[0-9]+$/ && $masterId > 0;
-
-	my $dbh = Slim::Schema->dbh;
-	my $key = $album->{album_key};
-
-	my $now = time();
-
-	_updateElseInsert(
-		$dbh,
-		q{
-			UPDATE squeezewax.discogs_match SET
-				lms_album_id         = ?,
-				discogs_release_id   = ?,
-				discogs_master_id    = ?,
-				match_tier           = 'manual',
-				state                = 'confirmed',
-				matched_at           = ?,
-				source_timestamp     = ?,
-				snapshot_album_title = ?,
-				snapshot_track_count = ?,
-				snapshot_artist      = ?,
-				review_reason        = NULL
-			 WHERE album_key = ?
-		},
-		[ $album->{album_id}, $releaseId, $masterId,
-		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
-		  $album->{artist}, $key ],
-		q{
-			INSERT INTO squeezewax.discogs_match
-				(album_key, lms_album_id, discogs_release_id, discogs_master_id,
-				 match_tier, state, matched_at, source_timestamp,
-				 snapshot_album_title, snapshot_track_count, snapshot_artist,
-				 review_reason)
-			VALUES (?,?,?,?,'manual','confirmed',?,?,?,?,?,NULL)
-		},
-		[ $key, $album->{album_id}, $releaseId, $masterId,
-		  $now, $album->{source_timestamp}, $album->{title}, $album->{local_tracks},
-		  $album->{artist} ]
-	);
-
-	_clearNoMatch( $dbh, $key );
-
-	return 1;
-}
-
-=head2 rejectRow( $albumKey )
-
-Delete one C<discogs_match> row at the user's explicit request. Returns the
-number of rows deleted: 1, or 0 if the row was not one this may delete.
-
-The THIRD permitted deletion in C<discogs_match> (§15.16 part 7), after
-C<_recordNoMatch>'s narrow predicate and the ownership pass's regenerable-row
-sweep. §2a's invariant 2 governs AUTOMATIC deletion - the table is the one thing
-here that is not regenerable, so nothing may quietly decide a decision has
-lapsed. This one is none of those things: it is user-invoked, confirmed on the
-page, and one row named by its key.
-
-The predicate is the whole of the rule, and it is narrower than "whatever the
-page asked for". Four shapes are rejectable, and each because there is something
-for the user to undo or be rid of:
-
-=over
-
-=item * a B<manual> row - their own earlier choice;
-
-=item * a row marked C<'conflict'> - the incumbent kind, which
-C<_recordNoMatch> cannot reach and which otherwise advertises a conflict
-forever (TODO 2026-09-07 ground (a));
-
-=item * a row marked C<'orphan'> - a match for an album that is gone, which
-nothing sweeps automatically (§2a invariant 4) and which may be a manual row
-the user no longer wants recovered (ground (b));
-
-=item * a fresh conflict by §3a's own predicate, C<'strict'> with a NULL
-release id, which is how a conflict written before migration 4 is found (D3).
-
-=back
-
-Everything else is refused, and the refusal is the point. A computed queue item
-- ambiguous, artist-disagree, artist-absent, various-gated - carries no user
-decision to undo: it is a conclusion the next sync will re-derive from the same
-inputs, so deleting the row would change nothing and the item would return. That
-is why there is no stored dismiss (§15.16 part 7), and why the queue cannot
-become the recovery path for a wrong badge that §14.4 rules out.
-
-=cut
-
-sub rejectRow {
-	my ( $class, $albumKey ) = @_;
-
-	return 0 unless $class->_writeOk;
-
-	return 0 unless defined $albumKey && length $albumKey == 32;
-
-	my $dbh = Slim::Schema->dbh;
-
-	my $sth = $dbh->prepare_cached(
-		q{DELETE FROM squeezewax.discogs_match
-		   WHERE album_key = ?
-		     AND ( match_tier = 'manual'
-		           OR review_reason IN ('conflict','orphan')
-		           OR ( match_tier = 'strict' AND discogs_release_id IS NULL ) )}
-	);
-
-	my $rows = $sth->execute($albumKey);
-	$sth->finish;
-
-	$rows = 0 unless $rows && $rows =~ /^[0-9]+$/;
-
-	# No discogs_no_match row is written to take its place. A no-match row means
-	# "this tier was attempted and produced nothing", which is a statement about
-	# the files; rejecting is a statement about our record of them. Writing one
-	# would also stop the album being re-examined, and a rejected album should
-	# be re-examined - that is how the user gets a different answer.
-	main::INFOLOG && $log->is_info && $log->info(
-		$rows ? "rejected the match row for $albumKey"
-		      : "refused to reject $albumKey: no row, or not a rejectable one"
-	);
-
-	return $rows;
 }
 
 # An album cannot be both matched and not-matched at the same tier (§2a

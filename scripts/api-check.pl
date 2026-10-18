@@ -499,7 +499,7 @@ sub load_fixture {
 	is_deeply(
 		$e,
 		{ instance_id => 70, id => 7, master_id => undef, title => undef,
-		  artists => [], year => undef, formats => [], labels => [] },
+		  artists => [] },
 		'  ...and a row with no basic_information is an entry with empty fields, not a die'
 	);
 }

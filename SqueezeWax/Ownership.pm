@@ -323,9 +323,11 @@ sub _loadRows {
 # there is nothing left to keep. Without it §14.8's invariant cannot hold: the
 # table would accumulate rows asserting nothing.
 #
-# Note what it excludes, clause by clause: a manual or strict row has a tier, a
-# conflict row has a tier, anything a tag or a user ever named has a release id,
-# and orphan recovery's index material has a snapshot.
+# Note what it excludes, clause by clause: a strict row has a tier, a conflict
+# row has a tier, anything a tag ever named has a release id, and orphan
+# recovery's index material has a snapshot. A former manual row that migration 8
+# converted (§15.46 part 6) passes, which is the point: it now holds an
+# ownership conclusion and nothing else.
 sub _isOwnershipOnly {
 	my ($row) = @_;
 
@@ -343,8 +345,8 @@ The master release id node F should compare, or undef when there is none.
 # Two sources, in this order, and the order is a decision rather than a
 # preference (decisions §15.22, build-order step 8c).
 #
-# 1. discogs_master_id, which is tag-only: written by Match::_recordMatch and
-#    recordManual from a DISCOGS_MASTER_ID-family tag (Tags.pm's _masterId). A
+# 1. discogs_master_id, which is tag-only: written by Match::_recordMatch from a
+#    DISCOGS_MASTER_ID-family tag (Tags.pm's _masterId). A
 #    tag is the user's assertion about their own files and OURS NEVER OVERRIDES
 #    IT. If it names a master they do not own, that is the answer - node F says
 #    no, and the title route gets its turn.
@@ -421,9 +423,9 @@ sub _decide {
 	my $tagged = $row && !$conflict
 		&& defined $row->{match_tier} && defined $row->{discogs_release_id};
 
-	# Only a strict row's state is the pass's to move. A manual link "is not
-	# subject to the collection cross-check that governs Strict" (design §3),
-	# so the user's choice survives a record leaving the collection.
+	# Only a strict row's state is the pass's to move. Since §15.46 the tier is
+	# 'strict' or NULL, so this is the same test as "identified"; it is kept as
+	# its own guard because state is written only on an identification row.
 	my $strict = $row && defined $row->{match_tier} && $row->{match_tier} eq 'strict';
 
 	if ($tagged) {
@@ -577,29 +579,25 @@ my %REASON = (
 # What review_reason should read on this album's row once the pass is done, or
 # the string 'keep' when the pass may not touch it at all.
 #
-# Three rules, in this order, and the order is what makes them rules rather than
+# Two rules, in this order, and the order is what makes them rules rather than
 # preferences:
 #
 # 1. 'conflict' is the importer's, and sticky (§15.16 part 3). The pass never
-#    writes it and never clears it. It is cleared by a clean identification, by
-#    a relink that resolves an 'orphan', or by the user rejecting the row - all
-#    things that happen because something CHANGED, which is exactly what a
-#    re-derivation from the same collection is not.
+#    writes it and never clears it. It is cleared by a clean identification, or
+#    by _recordNoMatch when the tags are removed (§15.46 part 9) - things that
+#    happen because something CHANGED, which is exactly what a re-derivation
+#    from the same collection is not.
 #
-# 2. A manual row on a live album carries no pass reason (D1). The user has
-#    already answered; re-asking every sync is not review, it is nagging. A
-#    manual link to a record whose title is shared would otherwise come back as
-#    'ambiguous' at every sync forever. NULL rather than 'keep', so that a stale
-#    'orphan' on an album that has come back is cleared rather than left to
-#    advertise a row nothing can relink.
+# 2. Otherwise the bucket decides, and NULL means "not in the queue".
 #
-# 3. Otherwise the bucket decides, and NULL means "not in the queue".
+# There was a rule between them until §15.46: a manual row carried no pass
+# reason, because the user had already answered. Manual rows are gone, and
+# migration 8 converted the ones that existed into ownership-only rows, which
+# the title route decides like any other untagged album.
 sub _reasonFor {
 	my ( $row, $bucket ) = @_;
 
 	return 'keep' if $row && ( $row->{review_reason} || '' ) eq 'conflict';
-
-	return undef if $row && ( $row->{match_tier} || '' ) eq 'manual';
 
 	return defined $bucket ? $REASON{$bucket} : undef;
 }
@@ -737,15 +735,15 @@ sub _apply {
 	# Rows whose album is gone. An orphan carrying an identification is orphan
 	# recovery's to deal with at the next scan and keeps its last ownership -
 	# it has no tile, so no badge can show either way. An ownership-only row
-	# has nothing to recover.
+	# has nothing to recover, and goes.
 	#
-	# Step 8 adds the marking. The pass is the only thing that sees the whole
-	# library and the whole table at once, so it is the only thing that can say
-	# "this row's album is gone" - the importer's pre-pass sees it too, but only
-	# when tag names are configured (§15.8, R11), and only from inside a scan.
-	# Nothing sweeps orphans automatically (§2a invariant 4), which is precisely
-	# why they have to be shown: TODO 2026-09-19 found three sitting on the
-	# reference server that nothing would ever have mentioned.
+	# Until §15.46 the pass also marked such an orphan 'orphan' for the queue's
+	# orphan list. That list is gone (part 8): the scanner's one-to-one relink
+	# recovers a moved album automatically, and an orphan it cannot recover sits
+	# unseen, which §2a invariant 4 already accepts. A sweep was rejected: a
+	# scan with the music share offline makes every album "gone" (§15.28), and
+	# those rows come back for free when the share returns. The count stays, for
+	# the log line.
 	for my $r (@$rows) {
 		next if $seen{ $r->{album_key} };
 
@@ -755,29 +753,8 @@ sub _apply {
 			next;
 		}
 
-		# §15.5 part 3's predicate: an identification AND a snapshot. Without a
-		# snapshot the row cannot be relinked to anything, so the orphan list
-		# could offer nothing but reject - and it is not the pass's place to
-		# invite a deletion it cannot justify. Such a row simply sits, as it did
-		# before.
-		next unless defined $r->{match_tier} && defined $r->{snapshot_track_count};
-
-		$count{orphans}++;
-
-		# Manual orphans included, deliberately. D1 keeps a pass reason off a
-		# manual row whose album is CURRENT, because the user has already
-		# answered the question the reason would re-ask. An orphan is not a
-		# verdict on a live album - it is the report that the album is gone -
-		# and a manual row is the one recovery exists for, so leaving it unmarked
-		# would hide exactly the row the user most wants back.
-		#
-		# 'conflict' still wins, because it is sticky and the importer's (R3).
-		next if ( $r->{review_reason} || '' ) eq 'conflict';
-		next if ( $r->{review_reason} || '' ) eq 'orphan';
-
-		push @update, { album_key => $r->{album_key}, reason => 'orphan' };
-
-		$reasonWritten{orphan}++;
+		# §15.5 part 3's predicate: an identification AND a snapshot.
+		$count{orphans}++ if defined $r->{match_tier} && defined $r->{snapshot_track_count};
 	}
 
 	_write( \@insert, \@update, \@delete, \%count );
@@ -896,10 +873,10 @@ sub _write {
 		# not name the column" is a stronger guarantee than "pass the old value".
 		#
 		# Until step 8 that was two hand-written statements, ownership and
-		# ownership+state. There are now three columns the pass may write and an
-		# orphan mark that writes only one of them, which is five combinations -
-		# five named statements and a five-way branch to pick between them, each
-		# a place to name one column too many. So the SET list is built from the
+		# ownership+state. There are now three columns the pass may write, and
+		# until §15.46 an orphan mark that wrote only one of them, which made five
+		# combinations - five named statements and a five-way branch to pick
+		# between them, each a place to name one column too many. So the SET list is built from the
 		# keys _apply actually put on the row, which makes the guarantee
 		# structural: a column that was not decided is not in the hash, so it
 		# cannot be in the SQL. The three names come from a fixed table below,

@@ -36,8 +36,9 @@ never plays audio and never changes your Discogs collection.
   Put the same release ID on every track of an album. SqueezeWax reads two
   files per album and compares them. If the two files name different releases,
   or one carries a Discogs tag and the other does not, the album is sent to the
-  review queue and is not identified from tags. A file that cannot be read is
-  ignored, not counted as a disagreement.
+  review queue and is not identified from tags. So is an album where a Discogs
+  tag holds a value that is not a release ID SqueezeWax can read. A file that
+  cannot be read is ignored, not counted as a disagreement.
 
   Optionally, a master release ID can be tagged as `DISCOGS_MASTER_ID`,
   `DISCOGS MASTER ID` or `DISCOGS_MASTER_RELEASE_ID`. These names are fixed
@@ -185,17 +186,13 @@ anything you have typed.
     again in N s" and asks nothing.
 - **Records I own.** A library view (and a My Music entry) that shows only the
   albums you own, in the normal album grid.
-- **Review queue** (Settings → Review queue). Lists albums with conflicting
-  tags, ambiguous or disagreeing artist matches, and matches whose album has
-  left your library. For each album you can:
-  - "Show tags" to see which files disagree;
-  - "Choose from my collection" and pick the record you own ("This one");
-  - "Remove this match" (asks for confirmation; the album is matched from
-    scratch at the next scan).
-
-  A match you choose by hand is kept, and changes ownership at the next sync.
-  A match with no album can be moved onto an album in your library that has the
-  same artist, title and track count.
+- **Review queue** (Settings → Review queue). Lists albums SqueezeWax could
+  not decide: Discogs tags that disagree or cannot be read, and title matches it
+  could not settle (several records with the same title and artist,
+  compilations, or a different or missing artist). Each album says why it is
+  there and what to change: the Discogs tag in your files, or your Discogs
+  collection. Then rescan, or press "Sync collection now". "Show tags" shows
+  which files disagree. Nothing on the page changes a match.
 - **Syncing.** Your collection is read automatically during each library scan,
   and again about a minute after a scan if that did not happen. There is no
   timer: a record you add to Discogs shows up after the next scan or after
@@ -217,8 +214,8 @@ anything you have typed.
 - **Stored in the SqueezeWax database** (`squeezewax.db`, in LMS's preferences
   directory): for each album a key made from its files, the release ID and
   master ID, whether you own it (and how), how it was matched, when, and the
-  artist, title, track count and total duration of the album *from your own LMS
-  library* (used to find an album again after files move); plus the master ID
+  artist, title and track count of the album *from your own LMS library* (used
+  to recognise an album after its files move, without reading them again); plus the master ID
   fetched from Discogs and the release it came from, a "checked, no tag" record
   per album, and the time and item count of the last sync.
   No titles, artists, tracklists or other Discogs release data are stored.
@@ -227,9 +224,9 @@ anything you have typed.
   to label prices), and the last sync error.
 - **Refresh:** see Syncing above. Nothing is fetched on a schedule. No
   expiry: nothing in the plugin deletes a stored match because of its age. A
-  match row is removed only by "Remove this match" in the review queue, or when
-  a scan finds that its tags no longer name a release and the row carries no
-  decision. Removing or changing the token, or uninstalling the plugin, deletes
+  match row is removed only when a scan or a sync finds it no longer records
+  anything, for example when the Discogs tags are removed from an album whose
+  tags disagreed. Removing or changing the token, or uninstalling the plugin, deletes
   nothing: `squeezewax.db` stays in LMS's preferences directory until you
   [delete it](#starting-over).
 - Requests are limited to stay within Discogs' limit of 60 requests a minute.
@@ -248,7 +245,10 @@ anything you have typed.
 - Ownership by title cannot decide between several collection entries with the
   same title and artist, or for compilations ("Various Artists"); those albums
   go to the review queue.
-- The review queue's "Choose from my collection" lists a fixed set of fields.
+- Albums with only streaming tracks cannot be tagged, so they can be owned
+  only by the title-and-artist rule. There is no way to link an album by hand.
+- Removing the Discogs tag from an identified album does not remove its
+  identification. Retag it with the right release ID instead.
 - This is a beta. Tested on one Linux and one Docker server. Untested: Windows,
   macOS, piCorePlayer.
 - Whether ownership results need a freshness limit is an open question with
@@ -260,9 +260,8 @@ anything you have typed.
 If SqueezeWax gets into a state its pages can't fix, delete its database.
 
 **You keep:** your token, Discogs username, currency and tag names.
-**You lose:** matches you chose by hand, choices made in the review queue, and
-the master releases fetched from Discogs (they are fetched again, slowly, in
-the background — one Discogs request per album with a release ID).
+**You lose:** the master releases fetched from Discogs (they are fetched again,
+slowly, in the background — one Discogs request per album with a release ID).
 
 1. Find LMS's preferences folder: LMS's Information page lists it as
    "Preferences Folder".

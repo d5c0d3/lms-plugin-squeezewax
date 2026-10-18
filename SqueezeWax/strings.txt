@@ -192,7 +192,7 @@ PLUGIN_SQUEEZEWAX_QUEUE
 	EN	Review queue
 
 PLUGIN_SQUEEZEWAX_QUEUE_DESC
-	EN	Albums SqueezeWax could not decide about on its own.
+	EN	Albums SqueezeWax could not decide on its own, and what to change in your files' tags or your Discogs collection to fix each one. Nothing on this page changes a match.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TOKEN_PAUSED
 	EN	Discogs rejected the access token, so automatic collection syncs are paused. Ownership of new albums will not be shown until you fix the token in Settings or press "Sync collection now".
@@ -219,7 +219,7 @@ PLUGIN_SQUEEZEWAX_REASON_CONFLICT
 	EN	The Discogs tags on this album's files disagree.
 
 PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS
-	EN	You own more than one record with this title, and nothing here can choose between them.
+	EN	You own more than one record with this title and artist.
 
 PLUGIN_SQUEEZEWAX_REASON_ARTIST_DISAGREE
 	EN	You own a record with this title, but by a different artist.
@@ -230,11 +230,35 @@ PLUGIN_SQUEEZEWAX_REASON_ARTIST_ABSENT
 PLUGIN_SQUEEZEWAX_REASON_VARIOUS_GATED
 	EN	Both sides say various artists, which is not evidence that this is the record you own.
 
-PLUGIN_SQUEEZEWAX_REASON_ORPHAN
-	EN	This match belongs to an album that is no longer in your library.
+PLUGIN_SQUEEZEWAX_QUEUE_FIX
+	EN	What to do
+
+PLUGIN_SQUEEZEWAX_FIX_CONFLICT
+	EN	Give every file of this album the same Discogs release ID, then rescan. "Show tags" shows which files differ.
+
+PLUGIN_SQUEEZEWAX_FIX_AMBIGUOUS
+	EN	Tag the files with the Discogs release ID of the record you own, then rescan.
+
+PLUGIN_SQUEEZEWAX_FIX_ARTIST_DISAGREE
+	EN	If this is that record, tag the files with its Discogs release ID or correct the album artist in the tags, then rescan. If it is a different record, you can ignore this.
+
+PLUGIN_SQUEEZEWAX_FIX_ARTIST_ABSENT
+	EN	Add the album artist to the files' tags, or tag them with the Discogs release ID, then rescan.
+
+PLUGIN_SQUEEZEWAX_FIX_VARIOUS_GATED
+	EN	Tag the files with the Discogs release ID, then rescan.
+
+PLUGIN_SQUEEZEWAX_QUEUE_STREAMING_NOTE
+	EN	Albums with only streaming tracks cannot be tagged. If their title or artist differs from your Discogs collection, they stay not owned.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE
 	EN	One file carries two tags naming different releases
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE
+	EN	A Discogs tag holds a value that is not a release ID SqueezeWax can read. Correct it to the release number or its Discogs address, or delete it, then rescan.
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED
+	EN	This file names a release, but another Discogs tag on it cannot be read. Delete or correct that value, then rescan.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS
 	EN	These files name different releases
@@ -249,7 +273,7 @@ PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
 	EN	Conflict recorded, tags no longer readable.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED
-	EN	The tags agree again. The next scan will clear this.
+	EN	The tags no longer disagree. The next scan will clear this.
 
 PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON
 	EN	Show tags
@@ -257,101 +281,8 @@ PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON
 PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON_RUNNING
 	EN	Reading tags...
 
-PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON
-	EN	Choose from my collection
-
-PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_BUTTON_RUNNING
-	EN	Fetching your collection...
-
-PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST
-	EN	Choosing fetches your collection from Discogs first; this takes a few seconds.
-
-PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE
-	EN	Choose the record you own
-
-PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_MATCHING
-	EN	In your collection under this title
-
-PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_ALL
-	EN	Everything else in your collection
-
-PLUGIN_SQUEEZEWAX_QUEUE_CHOOSE_NONE
-	EN	Your collection is empty, so there is nothing to choose from.
-
-PLUGIN_SQUEEZEWAX_QUEUE_FILTER
-	EN	Filter
-
-PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON
-	EN	This one
-
-PLUGIN_SQUEEZEWAX_QUEUE_LINK_BUTTON_RUNNING
-	EN	Linking...
-
-PLUGIN_SQUEEZEWAX_QUEUE_RELEASE_ID
-	EN	Release ID
-
-PLUGIN_SQUEEZEWAX_QUEUE_TRACKS
-	EN	Tracks
-
-PLUGIN_SQUEEZEWAX_QUEUE_ATTRIBUTION
-	EN	Data provided by Discogs
-
-PLUGIN_SQUEEZEWAX_QUEUE_VIEW_ON_DISCOGS
-	EN	View on Discogs
-
-PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER
-	EN	Ownership changes at the next collection sync, not now.
-
-PLUGIN_SQUEEZEWAX_QUEUE_LINKED
-	EN	Linked.
-
-PLUGIN_SQUEEZEWAX_QUEUE_REJECTED
-	EN	Removed.
-
-PLUGIN_SQUEEZEWAX_QUEUE_RELINKED
-	EN	Moved onto that album.
-
-PLUGIN_SQUEEZEWAX_QUEUE_FAILED
-	EN	That did not work. Check the server log.
-
 PLUGIN_SQUEEZEWAX_QUEUE_NOT_FOUND
 	EN	That album is no longer there. The page may be out of date; reload it.
-
-PLUGIN_SQUEEZEWAX_QUEUE_CONFIRM_REQUIRED
-	EN	Nothing was removed, because the confirmation was missing.
-
-PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON
-	EN	Remove this match
-
-PLUGIN_SQUEEZEWAX_QUEUE_REJECT_BUTTON_RUNNING
-	EN	Removing...
-
-PLUGIN_SQUEEZEWAX_QUEUE_REJECT_CONFIRM
-	EN	Remove this match? It cannot be undone, and the album will be matched from scratch at the next scan.
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS
-	EN	Matches with no album
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_DESC
-	EN	These matches belong to albums that are no longer in your library, usually because files moved. Nothing removes them on its own.
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHANS_EMPTY
-	EN	No matches are orphaned.
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_MOVE_TO
-	EN	Move it onto
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_NOFIT
-	EN	No album in your library has the same artist, title and track count, so this can only be removed.
-
-PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED
-	EN	These albums have the same artist, title and track count, but their own tags already identify them, so this match is not needed there. Remove it:
-
-PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON
-	EN	Move it here
-
-PLUGIN_SQUEEZEWAX_QUEUE_RELINK_BUTTON_RUNNING
-	EN	Moving...
 
 PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING
 	EN	You own a pressing

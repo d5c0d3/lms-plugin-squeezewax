@@ -1,6 +1,6 @@
 #!/usr/bin/env perl
 #
-# The SEAM suite: queue -> sync -> link -> pass, end to end.
+# The SEAM suite: sync -> pass -> queue render, end to end.
 #
 # Why this file exists, and why it is different from the others.
 #
@@ -13,11 +13,15 @@
 # made naming and testing one such join a build-order obligation for step 8, and
 # this is the discharge of it (decisions §15.16 part 10).
 #
-# So the point here is NOT to re-test Match.pm's predicates or Ownership.pm's
-# rules - match-check.pl and ownership-check.pl own those, at far greater depth.
-# The point is that a user pressing a button on the queue page ends up with the
-# right row in discogs_match and the right badge after the next sync, with every
-# module in that path REAL.
+# The join was queue -> sync -> link -> pass until §15.46 (GitHub #8) removed
+# manual matching. The queue now lists and never decides, so the seam runs the
+# other way: a real sync runs the real pass, the pass writes its reasons, and the
+# page renders each one with why and what to do - and nothing on the page writes,
+# whatever it is sent.
+#
+# So the point here is NOT to re-test Ownership.pm's rules - ownership-check.pl
+# owns those, at far greater depth. The point is that what the pass concluded is
+# what the user reads, with every module in that path REAL.
 #
 # Real, and driven for real: Queue.pm's handler (the actual dispatch chain, not
 # an extracted one), API/Async.pm's full pagination state machine, API.pm's
@@ -39,10 +43,6 @@
 # real browser. The transport and the timers are synchronous here and are not in
 # production, and no assertion below is about elapsed time. Same limitation
 # sync-check.pl states, for the same stubs.
-#
-# Caveat, carried from TODO 2026-09-24 and worth repeating rather than burying:
-# three seam defects are a pattern, not a law. This suite is aimed at step 8's
-# own joins. The fourth defect may be somewhere else entirely.
 #
 # Usage: scripts/queue-check.pl
 
@@ -406,6 +406,7 @@ BEGIN {
 require Plugins::SqueezeWax::Schema;
 require Plugins::SqueezeWax::Queue;
 require Plugins::SqueezeWax::Match;
+require Plugins::SqueezeWax::API::Async;
 
 Plugins::SqueezeWax::Schema->_migrate($dbh);
 
@@ -424,16 +425,19 @@ my $nextTrack = 0;
 
 # One album, with its album_key derived by the real iterator rather than
 # recomputed here, so the fixtures cannot drift from Library::_finish.
+# remote => 1 makes every track a streaming one, so the album has no local file.
 sub album {
 	my ( $id, $title, $artist, %opt ) = @_;
 
 	my $tracks = $opt{tracks} || 1;
+	my $remote = $opt{remote} ? 1 : 0;
 
 	for my $n ( 1 .. $tracks ) {
 		$nextTrack++;
+		my $url = $remote ? "spotify:track:a$id-t$n" : "file:///a$id-t$n";
 		$dbh->do( 'INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?,?,?)', undef,
-			$nextTrack, $id, md5_hex("file:///a$id-t$n"), "file:///a$id-t$n",
-			100, 1, $n, 0, 1, 'flc' );
+			$nextTrack, $id, md5_hex($url), $url,
+			100, 1, $n, $remote, 1, 'flc' );
 	}
 
 	$dbh->do( 'INSERT INTO albums (id, title) VALUES (?,?)', undef, $id, $title );
@@ -462,6 +466,11 @@ sub rowFor {
 sub matchCount {
 	my ($n) = $dbh->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 	return $n;
+}
+
+sub allRows {
+	return $dbh->selectall_arrayref(
+		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
 }
 
 # ---------------------------------------------------------------------------
@@ -546,15 +555,27 @@ sub press {
 	return \%params;
 }
 
+# One collection sync through the real Async state machine - the settings
+# page's "Sync collection now" and the post-scan fallback both arrive here - and
+# so through the real ownership pass. Returns the result hash.
+sub sync {
+	@REQUESTS = ();
+
+	my $result;
+
+	Plugins::SqueezeWax::API::Async->sync( $PREFS{discogsToken}, sub { $result = shift } );
+
+	return $result;
+}
+
 # ---------------------------------------------------------------------------
 # The fixture: one library, one collection.
 # ---------------------------------------------------------------------------
 
 my %K;
 
-# The album the user will re-match by hand. Its title is owned twice in the
-# collection, so the pass calls it ambiguous and it lands in the queue - which
-# is the realistic way to arrive at the re-match button.
+# Its title is owned twice in the collection, so the pass calls it ambiguous
+# and it lands in the queue.
 $K{ambiguous} = album( 1, 'Ciao Monkey', 'Someone' );
 
 # A conflict, written by the real importer path so the row is exactly what a
@@ -563,9 +584,6 @@ $K{conflict} = album( 2, 'Contested', 'Depeche Mode' );
 
 # An album nobody owns and nothing is tagged on: it must never appear.
 $K{quiet} = album( 3, 'Nothing Owned', 'Nobody' );
-
-# The relink target: a key miss, standing where an orphan's snapshot points.
-$K{target} = album( 4, 'Isolar', 'Amorph', tracks => 2 );
 
 # Both 'Ciao Monkey' entries are by the album's OWN artist. Since §15.17 part 5
 # the title route narrows by artist before calling a title ambiguous, so two
@@ -600,313 +618,117 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 	'the fixture conflict row was written by the real importer path' );
 
 # ===========================================================================
-# 1. rematch: the requests, the choices, and what it must not write
+# 1. THE SEAM. A real sync, the real pass, and the page renders what the pass
+#    concluded: why each album is there and what to do about it.
+#
+#    This is the assertion the whole file is for. Every module in the path is
+#    real, and nothing between the collection and the rendered item is asserted
+#    by proxy.
 # ===========================================================================
 {
 	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
 
-	my $before = matchCount();
+	my $result = sync();
 
-	my $params = press( rematch => 1, album_key => $K{ambiguous} );
+	ok( $result && $result->{ok}, 'the sync completes' ) or diag explain $result;
 
 	is( scalar @REQUESTS, 3,
-		'rematch issues the identity request, the profile request and one page request' );
-	like( $REQUESTS[0]{url}, qr{/oauth/identity},
-		'  ...identity first, as every sync does' );
-	like( $REQUESTS[1]{url}, qr{/users/deschman$},
-		'  ...then the profile, for the currency label' );
-	like( $REQUESTS[2]{url}, qr{/users/[^/]+/collection/folders/0/releases},
-		'  ...then the collection folder' );
+		'  ...with the identity request, the profile request and one page request' );
 
 	# API.pm built the request for real, so the token is where it belongs.
-	# A flat name-then-value list, as buildRequest returns it (API.pm:78-87).
+	# A flat name-then-value list, as buildRequest returns it.
 	my %h = @{ $REQUESTS[0]{headers} };
 	is( $h{Authorization}, 'Discogs token=token-abc',
 		'  ...with the token in an Authorization header, from the real API.pm' );
-	like( $h{'User-Agent'}, qr{^SqueezeWax/}, '  ...and §9.3\'s User-Agent' );
 
-	ok( $params->{choices}, 'the page has a re-match list to render' );
-
-	# The shortlist is the entries whose title key matches the album's, by
-	# Ownership's OWN rule - a different rule here would put the album's actual
-	# record outside the shortlist it was offered.
-	is( scalar @{ $params->{choices}{matching} }, 2,
-		'both entries sharing the album title come first' );
-	is( scalar @{ $params->{choices}{rest} }, 1,
-		'  ...and the rest of the collection follows' );
-	is( $params->{choices}{total}, 3, '  ...with nothing dropped between them' );
-
-	# R6's fixed field set, flattened by the sync and rendered by the page.
-	my ($first) = @{ $params->{choices}{matching} };
-	is( $first->{title},   'Ciao Monkey', 'a choice carries its title' );
-	is( $first->{artists}, 'Someone',     '  ...its artists' );
-	is( $first->{year},    1990,          '  ...its year' );
-	is( $first->{formats}, 'Vinyl, LP',   '  ...its format' );
-	is( $first->{labels},  'A Label (CAT-1001)', '  ...and its label with catalogue number' );
-	is( $first->{url}, 'https://www.discogs.com/release/1001',
-		'  ...and a discogs.com link built from the release id (§9.6)' );
-
-	# Nothing was written here BY THE PAGE. The pass ran, because a re-match is
-	# a normal sync and §15.2 says a completed sync derives ownership - so the
-	# table may have changed, but only in the pass's own columns.
-	ok( !rowFor( $K{quiet} ), 'an album owning nothing still has no row' );
-	is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
-		"the pass did not disturb the importer's conflict mark" );
-	is( rowFor( $K{ambiguous} )->{match_tier}, undef,
-		'the album being re-matched is still unidentified - re-match writes nothing' );
 	is( rowFor( $K{ambiguous} )->{review_reason}, 'ambiguous',
-		'  ...and the pass marked it ambiguous, which is why it is in the queue' );
+		'the pass marked the twice-owned title ambiguous' );
+	is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
+		"  ...and did not disturb the importer's conflict mark" );
+	ok( !rowFor( $K{quiet} ), '  ...and an album owning nothing has no row' );
 
-	cmp_ok( matchCount(), '>=', $before, 'the pass may add rows; nothing was deleted' );
+	my $before = allRows();
+
+	my $params = press();
+
+	is( scalar @REQUESTS, 0, 'rendering the page issues no Discogs request' );
+	is_deeply( allRows(), $before, '  ...and writes nothing' );
+
+	my %item = map { $_->{album_key} => $_ } @{ $params->{review} };
+
+	is( scalar @{ $params->{review} }, 2, 'the page lists the two albums the pass could not decide' );
+	ok( !$item{ $K{quiet} }, '  ...and not the album owning nothing' );
+
+	is( $item{ $K{ambiguous} }{reasonText}, 'PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS',
+		'THE SEAM: the ambiguous album says why it is there' );
+	is( $item{ $K{ambiguous} }{fixText}, 'PLUGIN_SQUEEZEWAX_FIX_AMBIGUOUS',
+		'  ...and what to do about it (§15.46 part 7)' );
+
+	is( $item{ $K{conflict} }{reasonText}, 'PLUGIN_SQUEEZEWAX_REASON_CONFLICT',
+		'the conflict says why it is there' );
+	is( $item{ $K{conflict} }{fixText}, 'PLUGIN_SQUEEZEWAX_FIX_CONFLICT',
+		'  ...and what to do about it' );
+	ok( $item{ $K{conflict} }{canShowTags}, '  ...and offers to show its tags' );
+	ok( !$item{ $K{ambiguous} }{canShowTags}, 'a computed item has no tags to show' );
+
+	is( $params->{openItems}, 2, 'the open-item count is the list length' );
+
+	ok( !exists $params->{orphans}, 'there is no orphan list any more (§15.46 part 8)' );
+	ok( !exists $params->{choices}, '  ...and no re-match list' );
 }
 
 # ===========================================================================
-# 2. link: what confirming actually writes
-# ===========================================================================
-{
-	my $params = press(
-		link       => 1,
-		album_key  => $K{ambiguous},
-		release_id => 1001,
-		master_id  => 9001,
-	);
-
-	is( scalar @REQUESTS, 0, 'confirming issues no Discogs request at all' );
-
-	my $row = rowFor( $K{ambiguous} );
-
-	is( $row->{match_tier},         'manual',    'link writes a manual row' );
-	is( $row->{state},              'confirmed', '  ...confirmed' );
-	is( $row->{discogs_release_id}, 1001,        '  ...with the chosen release' );
-	is( $row->{discogs_master_id},  9001,        '  ...and its master' );
-	is( $row->{review_reason},      undef,       '  ...and no review reason' );
-
-	# D5: a manual link is an identification, so it snapshots. This is the row
-	# orphan recovery will need if the folder ever moves.
-	is( $row->{snapshot_album_title}, 'Ciao Monkey', '  ...carrying the snapshot title' );
-	is( $row->{snapshot_artist},      'Someone',     '  ...artist' );
-	is( $row->{snapshot_track_count}, 1,             '  ...and track count' );
-
-	# The badge is the pass's, and the page says so rather than implying the
-	# link changed it.
-	is( $row->{ownership}, 'absent',
-		'ownership is untouched - the badge is the pass\'s to write' );
-	like( $params->{actionResult}, qr/PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER/,
-		'  ...and the page says the badge changes at the next sync' );
-}
-
-# ===========================================================================
-# 3. THE SEAM. A second sync, the same collection, the real pass - and the
-#    album the user linked by hand now badges and leaves the queue.
+# 2. Old action names write nothing and ask Discogs nothing
 #
-#    This is the assertion the whole file is for. Every module in the path is
-#    real, and nothing between the button press and the badge is asserted by
-#    proxy.
+#    rematch, link, reject and relink were removed with manual matching
+#    (§15.46). A page left open across the update can still send one, with
+#    every field the old buttons sent. Each must render the page and do nothing
+#    else: no row written or deleted, no request, no message pretending it
+#    worked.
 # ===========================================================================
 {
-	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
+	@RESPONSES = ();
 
-	my $params = press( rematch => 1, album_key => $K{conflict} );
+	my $before = allRows();
 
-	my $row = rowFor( $K{ambiguous} );
+	for my $case (
+		[ 'rematch', { rematch => 1, album_key => $K{ambiguous} } ],
+		[ 'link',    { link => 1, album_key => $K{ambiguous}, release_id => 1001,
+		               master_id => 9001 } ],
+		[ 'reject',  { reject => 1, album_key => $K{conflict}, confirm => 1 } ],
+		[ 'relink',  { relink => 1, album_key => $K{conflict}, target_key => $K{quiet} } ],
+		[ 'reject beside saveSettings',
+		             { saveSettings => 1, reject => 1, album_key => $K{conflict}, confirm => 1 } ],
+	) {
+		my ( $name, $fields ) = @$case;
 
-	is( $row->{ownership}, 'exact',
-		'THE SEAM: the hand-linked album badges exact after the next sync' );
-	is( $row->{match_tier}, 'manual', '  ...still manual' );
-	is( $row->{state}, 'confirmed',
-		'  ...and the pass did not move its state: a manual link is not cross-checked' );
-	is( $row->{review_reason}, undef, '  ...and it carries no reason' );
+		my $out = press(%$fields);
 
-	# And it is gone from the list the page renders.
-	ok( !( grep { $_->{album_key} eq $K{ambiguous} } @{ $params->{review} } ),
-		'  ...so it is no longer in the review queue' );
+		is( scalar @REQUESTS, 0, "an old '$name' request issues no Discogs request" );
+		is_deeply( allRows(), $before, "  ...writes nothing" );
+		ok( $CALLS{super_handler}, '  ...and still renders the page' );
+		ok( !$out->{warning} && !$out->{actionResult}, '  ...with no message about it' );
+		is( scalar @{ $out->{review} }, 2, '  ...listing the queue as before' );
+	}
 }
 
 # ===========================================================================
-# 4. A 401 on rematch: the unauthorized string, and no write
-# ===========================================================================
-{
-	@RESPONSES = ( { code => 401, headers => healthy_headers(), content => '{}' } );
-
-	my $before = $dbh->selectall_arrayref(
-		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
-
-	my $params = press( rematch => 1, album_key => $K{conflict} );
-
-	is( $params->{warning}, 'PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED',
-		'a 401 renders the settings page\'s own unauthorized string' );
-	# NOT $params->{rematch}: the button's own field is still in the hash, and
-	# a list written over it would leave a failed re-match indistinguishable
-	# from a successful one whose collection happened to be empty. Found by
-	# this suite.
-	ok( !$params->{choices}, '  ...and there is no list to choose from' );
-
-	is_deeply(
-		$dbh->selectall_arrayref(
-			'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } ),
-		$before,
-		'  ...and not one column of discogs_match changed'
-	);
-}
-
-# ===========================================================================
-# 5. Every action is refused while a scan is running
+# 3. The one action is refused while a scan is running
 # ===========================================================================
 {
 	local $main::SCANNING = 1;
 
-	my $before = $dbh->selectall_arrayref(
-		'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } );
+	my $before = allRows();
 
-	for my $case (
-		[ 'rematch', { rematch => 1, album_key => $K{conflict} } ],
-		[ 'link',    { link => 1, album_key => $K{conflict}, release_id => 4242 } ],
-		[ 'reject',  { reject => 1, album_key => $K{conflict}, confirm => 1 } ],
-		[ 'relink',  { relink => 1, album_key => $K{conflict}, target_key => $K{target} } ],
-	) {
-		my ( $name, $params ) = @$case;
+	my $out = press( showtags => 1, album_key => $K{conflict} );
 
-		my $out = press(%$params);
-
-		is( $out->{warning}, 'PLUGIN_SQUEEZEWAX_BUSY_SCANNING',
-			"$name is refused while scanning" );
-		is( scalar @REQUESTS, 0, "  ...$name issues no request either" );
-	}
-
-	is_deeply(
-		$dbh->selectall_arrayref(
-			'SELECT * FROM squeezewax.discogs_match ORDER BY album_key', { Slice => {} } ),
-		$before,
-		'  ...and nothing was written by any of them'
-	);
+	is( $out->{warning}, 'PLUGIN_SQUEEZEWAX_BUSY_SCANNING', 'showtags is refused while scanning' );
+	is( $READ_TAGS, 0, '  ...and reads no file' );
+	is_deeply( allRows(), $before, '  ...and nothing was written' );
 }
 
 # ===========================================================================
-# 6. saveSettings alongside an action does not swallow it
-#
-#    This is the 0.0.0.3 defect, re-asked on the new page. The settings form's
-#    hidden saveSettings reaches here too - the footer emits it whether or not
-#    nosubmit is set (settings/footer.html:38-39) - and on the settings page
-#    testing it before the named actions killed two buttons. Here it is not
-#    tested at all, which is the stronger position; this asserts that.
-# ===========================================================================
-{
-	my $params = press(
-		saveSettings => 1,
-		reject       => 1,
-		confirm      => 1,
-		album_key    => $K{conflict},
-	);
-
-	is( rowFor( $K{conflict} ), undef,
-		'a reject arriving beside saveSettings still runs (the 0.0.0.3 defect)' );
-	is( $params->{actionResult}, 'PLUGIN_SQUEEZEWAX_QUEUE_REJECTED',
-		'  ...and reports what it did' );
-	ok( $CALLS{super_handler}, '  ...having still reached the base handler to render' );
-}
-
-# ===========================================================================
-# 7. reject refuses what it must, and takes exactly one row when it acts
-# ===========================================================================
-{
-	# A computed item: the ambiguity is re-derived from the collection at every
-	# sync, so deleting the row would change nothing and the item would come
-	# straight back. There is no stored dismiss (§15.16 part 7).
-	$dbh->do('DELETE FROM squeezewax.discogs_match');
-	$dbh->do(
-		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
-		 VALUES (?, 1, 'absent', 'ambiguous')", undef, $K{ambiguous} );
-
-	my $params = press( reject => 1, confirm => 1, album_key => $K{ambiguous} );
-
-	ok( rowFor( $K{ambiguous} ), 'reject on a computed item deletes nothing' );
-	is( $params->{warning}, 'PLUGIN_SQUEEZEWAX_QUEUE_FAILED', '  ...and says so' );
-
-	# The confirm field is required at the handler, not only in the browser: a
-	# deletion from the one non-regenerable table must not be one press away
-	# from a mis-click.
-	$dbh->do('DELETE FROM squeezewax.discogs_match');
-	$dbh->do(
-		"INSERT INTO squeezewax.discogs_match
-		 (album_key, lms_album_id, discogs_release_id, match_tier, state,
-		  snapshot_album_title, snapshot_track_count, snapshot_artist, review_reason)
-		 VALUES (?, 4, 888888, 'manual', 'confirmed', 'Isolar', 2, 'Amorph', 'orphan')",
-		undef, 'ab' x 16 );
-
-	my $unconfirmed = press( reject => 1, album_key => 'ab' x 16 );
-
-	ok( rowFor( 'ab' x 16 ), 'reject without the confirm field deletes nothing' );
-	is( $unconfirmed->{warning}, 'PLUGIN_SQUEEZEWAX_QUEUE_CONFIRM_REQUIRED',
-		'  ...and names the missing confirmation' );
-
-	my $confirmed = press( reject => 1, confirm => 1, album_key => 'ab' x 16 );
-
-	is( rowFor( 'ab' x 16 ), undef, 'reject on a manual orphan deletes exactly that row' );
-	is( $confirmed->{actionResult}, 'PLUGIN_SQUEEZEWAX_QUEUE_REJECTED', '  ...and says so' );
-}
-
-# ===========================================================================
-# 8. relink from the orphan list, onto an album a regenerable row is sitting on
-#
-#    Both halves of TODO 2026-09-19 at once, through the page rather than
-#    through relinkOrphan directly: the target must be OFFERED (it would not
-#    have been, because a NULL-tier row made it look taken), and the relink must
-#    SUCCEED (it would not have, because album_key is the primary key).
-# ===========================================================================
-{
-	$dbh->do('DELETE FROM squeezewax.discogs_match');
-	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
-
-	my $orphanKey = 'ab' x 16;
-
-	# The orphan: snapshot 'Amorph' / 'Isolar' / 2 tracks, which is exactly what
-	# album 4 looks like to Match::_fitKey.
-	$dbh->do(
-		"INSERT INTO squeezewax.discogs_match
-		 (album_key, lms_album_id, discogs_release_id, match_tier, state, matched_at,
-		  source_timestamp, snapshot_album_title, snapshot_track_count, snapshot_artist,
-		  review_reason)
-		 VALUES (?, 99, 888888, 'manual', 'confirmed', 500, 900, 'Isolar', 2, 'Amorph', 'orphan')",
-		undef, $orphanKey );
-
-	# The blocker: a row the ownership pass wrote on the target key.
-	$dbh->do(
-		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
-		 VALUES (?, 4, 'absent', 'ambiguous')", undef, $K{target} );
-
-	# The page offers it, which before step 8 it could not have.
-	my $listed = press();
-
-	my ($orphan) = grep { $_->{album_key} eq $orphanKey } @{ $listed->{orphans} };
-
-	ok( $orphan, 'the orphan is listed' );
-	is( $orphan->{title}, 'Isolar', '  ...from its snapshot, since its album is gone' );
-	is( $orphan->{url}, 'https://www.discogs.com/release/888888',
-		'  ...with a discogs.com link' );
-	is( scalar @{ $orphan->{candidates} }, 1,
-		'  ...and the fitting album is offered, though a pass row sits on it' );
-	is( $orphan->{candidates}[0]{album_key}, $K{target}, '  ...and it is the right album' );
-
-	# And the move itself lands.
-	my $params = press( relink => 1, album_key => $orphanKey, target_key => $K{target} );
-
-	is( $params->{actionResult} && 1, 1, 'the relink reports success' ) or diag( $params->{warning} );
-
-	my $moved = rowFor( $K{target} );
-
-	is( $moved->{discogs_release_id}, 888888, 'the orphan moved onto the target album' );
-	is( $moved->{match_tier}, 'manual', '  ...still manual' );
-	is( $moved->{lms_album_id}, 4, '  ...with the current lms_album_id' );
-	is( $moved->{review_reason}, undef, "  ...with 'orphan' cleared by the relink" );
-	is( rowFor($orphanKey), undef, '  ...and nothing left under the old key' );
-
-	my ($onKey) = $dbh->selectrow_array(
-		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $K{target} );
-	is( $onKey, 1, '  ...one row on the key, not a primary-key collision' );
-}
-
-# ===========================================================================
-# 7a. The rejection pause is visible on the queue page (§15.17 part 4)
+# 4. The rejection pause is visible on the queue page (§15.17 part 4)
 #
 # Driven through the REAL Async state, set by a real 401 through the honest
 # transport - not a stubbed flag. That join is the point: §15.15 part 2 sets
@@ -917,15 +739,20 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 {
 	# Clean state first, so the notice's absence means something.
 	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
-	press( rematch => 1, album_key => $K{conflict} );
+	sync();
 
 	my $before = press();
 	ok( !$before->{tokenPaused}, 'no pause notice after a successful sync' );
 
-    # A real 401, through the transport that routes non-2xx to the error
-    # callback, which is what sets the flag at Async's single exit.
+	# A real 401, through the transport that routes non-2xx to the error
+	# callback, which is what sets the flag at Async's single exit.
 	@RESPONSES = ( { code => 401, headers => healthy_headers(), content => '{}' } );
-	press( rematch => 1, album_key => $K{conflict} );
+
+	my $rows = allRows();
+	my $failed = sync();
+
+	is( $failed->{error}, 'unauthorized', 'a 401 fails the sync as unauthorized' );
+	is_deeply( allRows(), $rows, '  ...and changes no row' );
 
 	ok( Plugins::SqueezeWax::API::Async->tokenRejected,
 		'a real 401 sets the rejection pause in Async (§15.15 part 2)' );
@@ -936,117 +763,10 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 
 	# It clears the way the settings page clears it: a sync that works.
 	@RESPONSES = ( identity_response(), profile_response(), page_response(@COLLECTION) );
-	press( rematch => 1, album_key => $K{conflict} );
+	sync();
 
 	my $after = press();
 	ok( !$after->{tokenPaused}, '  ...and it clears once a sync succeeds again' );
-}
-
-# ===========================================================================
-# 8a. Which albums an orphan may be moved onto (§15.17 part 2 and 3)
-#
-# Report §2.2's matrix, driven through the real page. The old rule - "a key
-# miss, no row in EITHER table" - was right for the scanner and wrong here,
-# because the page renders AFTER the scan that gives every album a row. Cases
-# B, C and D are the ones that used to offer nothing.
-# ===========================================================================
-{
-	$dbh->do('DELETE FROM squeezewax.discogs_match');
-	$dbh->do('DELETE FROM squeezewax.discogs_no_match');
-
-	my $orphanKey = 'ab' x 16;
-
-	# Two current albums that both fit the orphan's snapshot exactly.
-	my $fitA = album( 20, 'Relink Target', 'Testband', tracks => 2 );
-	my $fitB = album( 21, 'Relink Target', 'Testband', tracks => 2 );
-
-	my $seedOrphan = sub {
-		$dbh->do('DELETE FROM squeezewax.discogs_match');
-		$dbh->do('DELETE FROM squeezewax.discogs_no_match');
-		$dbh->do(
-			"INSERT INTO squeezewax.discogs_match
-			 (album_key, lms_album_id, discogs_release_id, match_tier, state, matched_at,
-			  source_timestamp, snapshot_album_title, snapshot_track_count, snapshot_artist,
-			  review_reason)
-			 VALUES (?, 99, 888888, 'manual', 'confirmed', 500, 900, 'Relink Target', 2, 'Testband', 'orphan')",
-			undef, $orphanKey );
-	};
-
-	my $offered = sub {
-		my $p = press();
-		my ($o) = grep { $_->{album_key} eq $orphanKey } @{ $p->{orphans} };
-		return ( $o, $p );
-	};
-
-	# --- A: two fresh copies, no rows at all -----------------------------
-	$seedOrphan->();
-	my ($oA) = $offered->();
-	is( scalar @{ $oA->{candidates} }, 2, 'A: two fresh copies are both offered' );
-	is( scalar @{ $oA->{identified} }, 0, '  ...and none is withheld as identified' );
-
-	# --- B: after a scan, both untagged -> strict no-match rows ----------
-	#
-	# THE case report §2.2 found. This offered nothing before.
-	$seedOrphan->();
-	$dbh->do("INSERT INTO squeezewax.discogs_no_match (album_key,tier,checked_at) VALUES (?,'strict',1)",
-		undef, $_ ) for $fitA, $fitB;
-	my ($oB) = $offered->();
-	is( scalar @{ $oB->{candidates} }, 2,
-		'B: untagged copies carrying no-match rows are offered (§15.17 part 2)' );
-
-	# --- C: after a scan, both tagged -> identification rows -------------
-	$seedOrphan->();
-	$dbh->do("INSERT INTO squeezewax.discogs_match (album_key,lms_album_id,discogs_release_id,match_tier,state)
-	          VALUES (?,?,4242,'strict','candidate')", undef, $_->[0], $_->[1] )
-		for [ $fitA, 20 ], [ $fitB, 21 ];
-	my ( $oC, $pC ) = $offered->();
-	is( scalar @{ $oC->{candidates} }, 0, 'C: albums that identify themselves are NOT targets' );
-	is( scalar @{ $oC->{identified} }, 2, '  ...but they are reported as fitting' );
-
-	# §15.17 part 3: the page must not claim nothing fits when something does.
-	my $html = $pC->{_html} // '';
-	ok( ( grep { $_ eq 'PLUGIN_SQUEEZEWAX_QUEUE_ORPHAN_FIT_IDENTIFIED' } @MISSING_STRINGS ) == 0,
-		'  ...and the identified-fit string exists' );
-
-	# --- D: a reason-only row (three NULLs) ------------------------------
-	$seedOrphan->();
-	$dbh->do("INSERT INTO squeezewax.discogs_match (album_key,lms_album_id,ownership,review_reason)
-	          VALUES (?,?,'absent','ambiguous')", undef, $_->[0], $_->[1] )
-		for [ $fitA, 20 ], [ $fitB, 21 ];
-	my ($oD) = $offered->();
-	is( scalar @{ $oD->{candidates} }, 2, 'D: reason-only rows are regenerable, so still targets' );
-
-	# --- no fit at all ----------------------------------------------------
-	$seedOrphan->();
-	$dbh->do( "UPDATE squeezewax.discogs_match SET snapshot_album_title='Nothing Fits This'" );
-	my ($oNone) = $offered->();
-	is( scalar @{ $oNone->{candidates} }, 0, 'an orphan fitting nothing offers no target' );
-	is( scalar @{ $oNone->{identified} }, 0, '  ...and reports no fitting-but-identified album either' );
-
-	# --- the relink from case B actually lands ---------------------------
-	$seedOrphan->();
-	$dbh->do("INSERT INTO squeezewax.discogs_no_match (album_key,tier,checked_at) VALUES (?,'strict',1)",
-		undef, $_ ) for $fitA, $fitB;
-
-	my $done = press( relink => 1, album_key => $orphanKey, target_key => $fitA );
-	like( $done->{actionResult}, qr/PLUGIN_SQUEEZEWAX_QUEUE_RELINKED/,
-		'a relink from case B succeeds end to end' );
-	like( $done->{actionResult}, qr/PLUGIN_SQUEEZEWAX_QUEUE_BADGE_LATER/,
-		'  ...and still says the badge waits for the next sync' );
-
-	my $moved = rowFor($fitA);
-	is( $moved->{discogs_release_id}, 888888, '  ...the orphan landed on the target' );
-	is( $moved->{review_reason}, undef, "  ...with 'orphan' cleared" );
-
-	my ($nm) = $dbh->selectrow_array(
-		'SELECT COUNT(*) FROM squeezewax.discogs_no_match WHERE album_key = ?', undef, $fitA );
-	is( $nm, 0, '  ...and no no-match row left on the key (invariant 1)' );
-
-	my ($cnt) = $dbh->selectrow_array(
-		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE album_key = ?', undef, $fitA );
-	is( $cnt, 1, '  ...exactly one match row there' );
-
-	is( rowFor($orphanKey), undef, '  ...and nothing under the old key' );
 }
 
 # ===========================================================================
@@ -1127,16 +847,16 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 	my ($other) = grep { $_->{album_key} ne $K{conflict} } @{ $shown->{review} };
 	ok( !$other->{tags}, 'showtags expands ONLY the album it was given' );
 
-	# Refused while scanning, like every other action - check 8 stays uniform.
+	# Refused while scanning.
 	{
 		local $main::SCANNING = 1;
 		my $busy = press( showtags => 1, album_key => $K{conflict} );
 		is( $busy->{warning}, 'PLUGIN_SQUEEZEWAX_BUSY_SCANNING',
-			'showtags is refused while scanning, like the other four' );
+			'showtags is refused while scanning' );
 		is( $READ_TAGS, 0, '  ...and reads nothing' );
 	}
 
-	# The 0.0.0.3 defect, asked of the fifth action too.
+	# The 0.0.0.3 defect: saveSettings beside the action must not swallow it.
 	my $both = press( saveSettings => 1, showtags => 1, album_key => $K{conflict} );
 	my ($still) = grep { $_->{album_key} eq $K{conflict} } @{ $both->{review} };
 	ok( $still->{tags}, 'a saveSettings beside showtags does not swallow it' );
@@ -1236,6 +956,38 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 			'  ...with the sentence that case always meant' );
 	}
 
+	# GitHub #6 (§15.46 part 7): a value that is not a release ID at all is not
+	# "two tags naming different releases", and the page says which it is.
+	{
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 'see the sleeve' },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'unreadable',
+			'an unreadable value with no readable id renders as unreadable' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE',
+			'  ...with its own sentence' );
+		like( $item->{tags}{conflict}[0], qr/see the sleeve/, '  ...naming the value' );
+	}
+
+	{
+		local $PREFS{discogsTagNames} = [ 'DISCOGS_RELEASE_ID', 'DISCOGS_RELEASE' ];
+		local %FILES = (
+			$ONE => { %$readable, DISCOGS_RELEASE_ID => 793593, DISCOGS_RELEASE => 'n/a' },
+			$TWO => { %$readable, DISCOGS_RELEASE_ID => 793593 },
+		);
+
+		my ($item) = @{ press( showtags => 1, album_key => $covers )->{review} };
+
+		is( $item->{tags}{kind}, 'unreadable-mixed',
+			'one readable id plus an unreadable value renders as unreadable-mixed' );
+		is( $item->{tags}{kindText}, 'PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED',
+			'  ...with its own sentence' );
+	}
+
 	# The tags agree again: still 'resolved', and the kind sentence is not shown.
 	# Only the importer clears 'conflict', and only on a scan (§15.16 part 3).
 	{
@@ -1314,22 +1066,48 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 		like( $item->{reasonText}, qr/^PLUGIN_SQUEEZEWAX_REASON_/,
 			"  ...and renders a sentence, not the internal word" );
 		isnt( $item->{reasonText}, $reason, "  ...which is not '$reason' itself" );
+
+		( my $fix = uc $reason ) =~ s/-/_/g;
+		is( $item->{fixText}, "PLUGIN_SQUEEZEWAX_FIX_$fix",
+			"  ...and says what to do, in its own line (§15.46 part 7)" );
 	}
 
-	# orphan is the other list, and must never appear in this one.
+	# A leftover 'orphan' mark - migration 8 clears them, so this is belt and
+	# braces - on a row whose album is gone. There is no orphan list to show it
+	# in, and the review list shows only albums that are in the library.
 	$dbh->do('DELETE FROM squeezewax.discogs_match');
 	$dbh->do(
 		"INSERT INTO squeezewax.discogs_match
 		 (album_key, lms_album_id, discogs_release_id, match_tier, state,
 		  snapshot_album_title, snapshot_track_count, snapshot_artist, review_reason)
-		 VALUES (?, 99, 888888, 'manual', 'confirmed', 'Isolar', 2, 'Amorph', 'orphan')",
+		 VALUES (?, 99, 888888, 'strict', 'candidate', 'Isolar', 2, 'Amorph', 'orphan')",
 		undef, 'cd' x 16 );
 
 	my $params = press();
 
-	is( scalar @{ $params->{review} }, 0, 'an orphan is not a review item' );
-	is( scalar @{ $params->{orphans} }, 1, '  ...it is in the orphan list' );
-	like( $params->{orphans}[0]{title}, qr/Isolar/, '  ...shown from its snapshot' );
+	is( scalar @{ $params->{review} }, 0, 'a gone album is not a review item' );
+	ok( !exists $params->{orphans}, '  ...and there is no orphan list to put it in' );
+	is( $params->{openItems}, 0, '  ...so nothing is counted as open' );
+
+	# An all-remote album cannot be tagged (§15.46 part 3), so its item says that
+	# instead of telling the user to edit files that do not exist.
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
+
+	my $stream = album( 60, 'Streamed Only', 'Someone Else', tracks => 2, remote => 1 );
+
+	$dbh->do(
+		"INSERT INTO squeezewax.discogs_match (album_key, lms_album_id, ownership, review_reason)
+		 VALUES (?, 60, 'absent', 'artist-disagree')", undef, $stream );
+
+	my ($streamed) = @{ press()->{review} };
+
+	ok( $streamed, 'an all-remote album in the queue is listed' );
+	is( $streamed->{reasonText}, 'PLUGIN_SQUEEZEWAX_REASON_ARTIST_DISAGREE',
+		'  ...with its reason' );
+	is( $streamed->{fixText}, 'PLUGIN_SQUEEZEWAX_QUEUE_STREAMING_NOTE',
+		'  ...and the streaming note in place of a fix it cannot follow' );
+
+	$dbh->do('DELETE FROM squeezewax.discogs_match');
 }
 
 # ===========================================================================
@@ -1408,8 +1186,9 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 		'an undecodable string is shown as stored, not dropped' );
 	is( Plugins::SqueezeWax::Queue::_display(undef), undef, '  ...and undef stays undef' );
 
-	# 4. The review queue's description no longer covers the orphan list.
-	#    Read from strings.txt, because string() here returns the token.
+	# 4. The review queue's description does not describe an orphan list,
+	#    which is gone (§15.46 part 8). Read from strings.txt, because string()
+	#    here returns the token.
 	{
 		open my $fh, '<', "$Bin/../SqueezeWax/strings.txt" or die $!;
 		local $/;
@@ -1420,11 +1199,22 @@ is( rowFor( $K{conflict} )->{review_reason}, 'conflict',
 
 		ok( $desc, 'PLUGIN_SQUEEZEWAX_QUEUE_DESC has EN text' );
 		unlike( $desc, qr/orphan|album has gone/i,
-			'  ...and it does not describe the orphan list as well' );
+			'  ...and it does not describe an orphan list' );
+	}
 
-		my ($hint) = $all =~ /^PLUGIN_SQUEEZEWAX_QUEUE_REMATCH_COST\n\tEN\t([^\n]*)/m;
-		like( $hint, qr/takes a few seconds/,
-			'the re-match hint reads as a warning, not a status line' );
+	# 5. The template carries no control for an action that is gone (§15.46).
+	{
+		open my $fh, '<', "$Bin/../SqueezeWax/HTML/EN/plugins/SqueezeWax/queue.html" or die $!;
+		local $/;
+		my $html = <$fh>;
+		close $fh;
+
+		for my $gone (qw(rematch link reject relink)) {
+			unlike( $html, qr/name="$gone"/, "queue.html has no '$gone' button" );
+		}
+
+		like( $html, qr/name="showtags"/, '  ...and keeps "Show tags"' );
+		unlike( $html, qr/\borphans\b|\bchoices\b/, '  ...and renders no orphan or re-match list' );
 	}
 }
 

@@ -14,20 +14,65 @@ Shared reminder list. Both I and Claude Code read and update this.
 
 ---
 
+report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
+reference server SQLite 3.46.1)
+
+`master` = 1.0.0b5 (promoted at `075f38a`, pushed 2026-10-17; the website's repo.xml
+names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
+matches it).
+
 ## v1 RELEASE CHECKLIST
 
+- [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
+      §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
+      rows, superseded decisions, docs, tests. Needs a real server: update from a
+      build with manual rows.
+      → 2026-10-18: settled (§15.46 parts 6–12); plan
+      `plans/build-order-gh8-queue-read-only.md`; built for 1.0.0b6
+      (`137efda`..`0be60ba`). Hardware checks: "1.0.0b6 / GitHub #8 checks" under
+      Waiting — needs a real server.
+- [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
+      Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
+      source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
+      registered, so `View::init` logs "could not register" and returns before
+      `registerNode`). Not seen on packaged b5 after two clean restarts in the
+      repro container ("Records I own" registered, no error). Likely cause,
+      *unverified*: `initPlugin` ran a second time in one process. Effect: the
+      first registration stands; not checked whether the view or node is affected.
+      Seen once, only with an unpackaged copy; not seen on packaged b5 (2 repro
+      container restarts, 1 reference-server restart). Not chased (owner, 2026-10-17).
+      If it recurs, check whether "Records I own" is missing until restart.
 - [ ] **Tester confirmation of 1.0.0b5 on piCorePlayer** (LMS 9.2.0, perl 5.32.1
       aarch64, DBD::SQLite 1.58 / SQLite 3.22.0; decisions §15.42): a scan
       completes and the scanner log has no SQL error.
-- [ ] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
+- [x] **Reference-server regression check of 1.0.0b5** (SQLite 3.46.1, so it
       cannot reproduce the bug): a rescan completes, and identified, conflict,
       manual and owned albums keep their `discogs_match` values (ownership,
       snapshots, release ids) across it.
+      **Done 2026-10-17 (B, share mounted first):** all 507 `discogs_match` rows
+      (and 100 `discogs_no_match`) dumped before and after: identical (ownership,
+      release/master ids, `review_reason`, snapshots, derived master). Updated
+      b4 -> b5 from the dev repo.xml (sha matched), restart clean, `user_version=7`,
+      "More Info" link shown. The ordinary rescan skipped all 765 albums
+      (`_canSkip`), so the UPDATE path ran only in the repro container (A4); the
+      view built 205 albums. The scan-time sync failed `unauthorized` (the Discogs
+      token is rejected; the same "Discogs rejected the token" at 14:16 predates
+      this session). Not touched. Repository switched back to the website URL.
+      Owner ruling 2026-10-17: the UPDATE path is covered where the bug was (the
+      3.22.0 container, a real scan) and by match-check on both drivers; the
+      reference run shows no regression on 3.46.1. No forced re-examination on the
+      NAS.
+      **Re-run with a refreshed token, 16:34:** scan-time sync fetched 205 items in
+      4 requests, ownership pass wrote nothing (exact=151, version=54, absent-with-row=302
+      = the before counts), the server-side fallback sync also completed, no SQL
+      error. All 507 rows identical except one `artist-disagree` queue row that
+      was manually matched in the review queue at 16:36:03, after the rescan's
+      pass (not by the rescan; ownership then 152 exact).
 - [ ] *Unverified, optional:* where piCorePlayer's DBD::SQLite 1.58 comes from
       (decisions §15.42). Not needed for the fix.
 - [ ] *Not pursued:* building DBD::SQLite 1.58 on the host (no system DBI there)
       as an alternative to the container pass; the container does it.
-- [ ] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
+- [x] **Re-run `scripts/docker-sqlite322` with 1.0.0b5** (decisions §15.42):
       scan completes, albums A/B/C give an identified row, a strict no-match row
       and a conflict row; no SQL error. 1.0.0b4 reproduced 2026-10-17: scan aborts
       on `near "ON": syntax error` at `Match.pm` `_recordMatch` (album A, the first
@@ -36,6 +81,15 @@ Shared reminder list. Both I and Claude Code read and update this.
       container, passes (A release 198756 strict, B strict no-match only, C
       `conflict`, rescan clean and unchanged); tick this only after b5 is
       installed from repo.xml.
+      **Done 2026-10-17 (A, 1.0.0b5 from the dev repo.xml):** update b4 -> b5 as a
+      user (no `?v=5` needed), DBD::SQLite 1.58 / sqlite 3.22.0, `user_version=7`,
+      no SQL error. A strict row (198756), B strict no-match only, C `conflict`.
+      The wipecache skipped all three (`_canSkip`, `Importer.pm:466`: equal
+      `source_timestamp`; our DB survives wipecache), so the UPDATE path was
+      exercised by touching the six files and rescanning: examined 3, no SQL error,
+      one row per album, `source_timestamp` refreshed, release ids, `review_reason`
+      and snapshots unchanged (`lms_album_id` 10/12 -> 13/15, as LMS reassigned
+      album ids; identity is `album_key`).
 - [x] **Live status on an idle settings page, and Material behaviour during a
       scan** (hand-off 76 check A4, reference server, 2026-10-13, 1.0.0b2).
       Owner decided to ship b2 as designed. Findings: (1) the poll starts only
@@ -1295,7 +1349,7 @@ Each names its sites so the work is mechanical rather than a search.
       rows stay orphaned: no loss, no automatic relink.
       → 2026-09-24: offered from the orphan list (step 8 plan R5, D4).
       Ticked in commit C1.
-- [ ] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
+- [x] **2026-09-19: the artist snapshot is order-dependent for mixed-artist
       albums with no album artist.** VERIFIED at slimserver `a670a38`:
       `Slim::Schema::_createOrUpdateAlbum` sets `albums.contributor` per
       track from `_postCheckAttributes`'s primary contributor (`ALBUMARTIST`,
@@ -1305,6 +1359,7 @@ Each names its sites so the work is mechanical rather than a search.
       (identification recovers it) and loses a manual row's choice. Same
       shape as the retagged-title hole. Recorded, not solved — revisit if
       seen on hardware.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [x] **2026-09-19, STEP 8: the review-queue marker.** Decisions §15.13
       part 4: step 7 stores none. An ambiguous or artist-disagreeing album
       is `ownership = 'absent'` if tagged and has NO ROW if untagged, and
@@ -1411,6 +1466,72 @@ Each names its sites so the work is mechanical rather than a search.
       is ever added, or drop the index by its own ruling.
 
 ## Open design questions
+
+- [ ] **2026-10-18, low: the settings page's queue count can exceed the queue
+      list.** It also counts conflict rows whose album left the library, which
+      the queue page does not list (`Settings.pm` `beforeRender` count vs
+      `Queue.pm` `beforeRender`). Pre-existing. Verified by reading, not run.
+- [ ] **2026-10-18, low: removing all Discogs tags from an identified album
+      keeps its identification and ownership** (`Match.pm` `_recordNoMatch`
+      "kept" path). Pre-existing; record only, post-1.0. Verified by reading, not
+      run.
+- [ ] **2026-10-18, low: `Derive.pm` fetches masters for conflict rows' release
+      ids** (`$IDENTIFIED`), which nothing reads (`Menu.pm` `_entries`,
+      `Ownership.pm` `_decide`); one request per such release. Pinned as it
+      stands in `derive-check.pl`. Verified by reading, not run.
+- [ ] **2026-10-18, low: §15.46 part 9 also fires when no candidate file could
+      be read.** `Tags::examineCandidates` returns `{ read => 0 }`, which
+      `Match::recordStrict` treats as "no tag", so an incumbent conflict
+      examined while its files are unreachable is deleted and gets a no-match
+      row; once the files return unchanged, `_canSkip` skips the album and the
+      conflict stays unseen until its files next change. Already true of fresh
+      conflicts and of every untagged album before §15.46. A guard on `read`
+      in `_recordNoMatch` would be the fix; not decided. Found while building;
+      verified by reading, not run.
+- [x] **2026-10-17: opening re-match runs a full collection sync** (decisions
+      §15.16 part 6; inferred from the text, not run): ceil(items/100)+1 requests
+      per open, e.g. 4 for 203 items, about 51 for a 5,000-item collection. Not
+      urgent. Look at it with GitHub #2's single-release check, because it is the
+      same cost question. → moot once #8 lands (re-match removed).
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
+- [ ] **GitHub #7:** unverified whether Discogs treats ids from a user's private
+      collection differently from other identifiers (§15.45 point 3).
+- [ ] **2026-10-17: single-release collection check.** Discogs lists a
+      "Collection Items By Release" endpoint (docs navigation; body not read, so
+      unverified; python3-discogs-client `collection_items(release_id)` is
+      third-party, thin evidence). Could cut sync cost when few albums changed.
+      It does not replace the full list: version and title ownership need it
+      (`Ownership.pm` `_indexCollection`). Revisit at GitHub #2's (A1) development.
+      Partly answers 2026-09-13 "per-release lookup of the caller's own
+      collection entry?".
+- [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
+      (decisions §15.43; feature split). Owner, 2026-10-17: (1) Stop today's
+      unconditional fallback sync after rescan album. Inferred: `_syncTick` does
+      not skip it, since no scan marker is written, so each album rescan costs a
+      full sync, about ceil(items/100)+1 requests (`API.pm` PER_PAGE): 4 for 203
+      items, about 51 for a 5,000-item collection. (2) No forum post to link;
+      the owner raised it in a forum reply. (3) Leading option D: re-read the
+      album's tags (0 requests). If the release id is new or changed, make one
+      per-release collection lookup: owned → exact, not owned → leave ownership
+      for the next scan or sync. Decide at development; a phase 0 check of the
+      endpoint comes first. Design note:
+      `claude/design-gh2-rescan-album.md` (claude.ai design project, not in this repo). It touches
+      §15.16 part 3 (who may write conflict) and §15.18 part 5.
+      Needs a real server: the album id arrives before `['rescan','done']`; an
+      album whose LMS id changes keeps its match (`album_key`); a rescan album
+      queued during a full scan; a manual-match album stays manual.
+- [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
+      setting off by default, More entries stay, switching off needs a
+      restart).**
+      Open: the minimum Material version for `lmsbrowse`.
+      Needs a real server: the item appears in LyrPlay, Squeeze-LX and a desktop
+      browser; whether the apps need reopening after the setting is switched on;
+      switching off works only after a restart; the page reads well at phone
+      width.
+- [ ] **2026-10-15: Discogs: may contributors share the registered app? Check
+      before inviting developers.** Whether contributors may share the registered
+      "SqueezeWax" application or must register their own. Unchecked (decisions
+      §15.43, Open).
 
 - [ ] **2026-10-14: limit master lookups to tagged albums that could plausibly
       match something in the collection.** Idea only, from a design session; not
@@ -1810,10 +1931,11 @@ Each names its sites so the work is mechanical rather than a search.
       inferred, not read.** It is decisions §15.18 part 1's stated motivation.
       Read `refs/lms-plugin-tidal`'s importer and confirm or correct it.
       → 2026-09-27: VERIFIED. TIDAL's importer calls its sync from startScan (refs/lms-plugin-tidal/Importer.pm:21, :24, :67, :90) over SimpleSyncHTTP with timeout => 15 (API/Sync.pm:104-105). Decisions §15.18's amendment to part 1 records it; our 15 s is the same figure.
-- [ ] **2026-09-26: a manual link on an all-remote album snapshots a track
+- [x] **2026-09-26: a manual link on an all-remote album snapshots a track
       count of 0.** Recorded, not changed (decisions §15.17). Its fit key
       (artist, title, 0) is shared by every all-remote copy of the album.
       Revisit if a relink ever pairs the wrong one.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [x] **2026-09-24, STEP 8 DEVIATION, not flagged in the Phase 2 report: the
       queue re-reads conflict tags on every list render, not when an entry is
       opened.** Plan §3.1 said "re-read … when opened" (§3a). `Queue.pm:562`
@@ -1869,13 +1991,17 @@ Each names its sites so the work is mechanical rather than a search.
       (`…/release/14590709-Depeche-Mode-Violator?redirected=true`), and
       corroborated by captured payloads' `uri`. NOT documented as a stable
       address. Revisit if it stops resolving; the fix is one format string.
-- [ ] **2026-09-24: may collection images be shown?** `basic_information`
+      → 2026-10-18: the re-match list part is moot (§15.46, GitHub #8); the
+      menus still build the same link, so the item stays open.
+- [x] **2026-09-24: may collection images be shown?** `basic_information`
       carries `thumb` and `cover_image`. Unverified against Discogs' terms, and
       decisions §9.9 already records that image URLs are withheld without
       authentication. The step 8 re-match list shows none. Not decided.
-- [ ] **2026-09-24: an orphan that fits no current album can only be
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
+- [x] **2026-09-24: an orphan that fits no current album can only be
       rejected.** DEFAULT (decisions §15.16 part 13). Relinking one to an album
       the user picks is future work. Revisit if a manual row is lost this way.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [ ] **2026-09-24: incumbent conflicts written before migration 4 cannot be
       found.** Nothing recorded them and `scanner.log` is rewritten each scan.
       They get `conflict` when their files next change. Fresh ones are found by
@@ -1912,13 +2038,14 @@ Each names its sites so the work is mechanical rather than a search.
       already unclear before decisions §13 and the reconciliation carried it
       verbatim rather than inventing a meaning for it. Either work out what it
       means and say so, or delete it.
-- [ ] **2026-09-13: what does a `version`-ownership context menu offer beyond
+- [x] **2026-09-13: what does a `version`-ownership context menu offer beyond
       stating the fact?** A version picker promoting the choice to a manual
       match is the candidate, recorded in the reject/dismiss item as
       "refinement, not rejection" and never decided. Design §4 states what
       the menu says and stops there, because design does not specify
       mechanisms only a `TODO.md` note proposes.
-- [ ] **2026-09-13, v2: should the sync retain the release id of the owned
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
+- [x] **2026-09-13, v2: should the sync retain the release id of the owned
       collection entry?** Decisions §14.10 rules NO for v1, so pressing
       details, credits and value are ABSENT from the context menu for an
       album owned by version alone — the majority case (87 of 96 auto-badged
@@ -1928,6 +2055,7 @@ Each names its sites so the work is mechanical rather than a search.
       that it would not work. **Revisit with wantlist**, which needs
       collection-entry data of its own and forces the same question about
       what a sync may keep. A later fix is a migration on `discogs_match`.
+      → 2026-10-17: decided §15.45; GitHub #7.
 - [x] **2026-09-13, RESOLVED: one badge state, not two.** Decisions §13.8 left
       exact-versus-version open as a UI question; both design §3's and §4's
       flowcharts terminate in a node that cannot be drawn without it. Version
@@ -2095,10 +2223,15 @@ Each names its sites so the work is mechanical rather than a search.
       exist (§13.8). `scalar @{discogsTagNames}` is correct for tag-driven
       identification and is left alone. Closed by the build-order rewrite,
       not implemented.
-- [ ] **v2 triage page must distinguish "unparseable tag" from "tags
-      disagree".** Both write `(strict, candidate, NULL)` in v1, which is
-      correct for v1 — neither is a match — but they are different user actions
-      (fix one file's tag vs. decide between two). Recorded, not designed.
+- [ ] **GitHub #6 (bug): the review queue reports an unreadable Discogs tag as
+      "tags disagree".** Verified by reading: `Tags::decide` puts present-but-
+      unparseable values in `conflict`, and `Tags::examineCandidates` then
+      returns kind `in-file`. So the queue shows `PLUGIN_SQUEEZEWAX_REASON_CONFLICT`
+      and `PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE` ("One file carries two tags naming
+      different releases"). The fix is wording at render time. The stored
+      `review_reason` stays 'conflict', so no migration and no `LOGIC_VERSION`
+      bump (inferred). Word the mixed case (one readable id + one unreadable
+      value) at development.
 - [ ] ~~**`discogs_collection` wantlist rekey (v2).** `instance_id` as
       primary key cannot hold wantlist rows — a Discogs want has no
       instance id. The table is entirely regenerable (design §10), so the
@@ -2184,7 +2317,7 @@ Each names its sites so the work is mechanical rather than a search.
       while sitting at `candidate`, and they are the rows whose tags can no
       longer reproduce their identification. §15.5 keys reach on having an
       identification instead.
-- [ ] **2026-09-15: a retagged album title defeats orphan recovery, and a
+- [x] **2026-09-15: a retagged album title defeats orphan recovery, and a
       manual row's work is lost.** Decisions §15.5's predicate is exact
       equality on artist, album title and track count. Change the title tag
       and nothing fits, so the row stays orphaned — for a tagged album
@@ -2192,6 +2325,7 @@ Each names its sites so the work is mechanical rather than a search.
       is gone with no notice. Recorded rather than solved: two-of-three
       matching and normalised comparison both trade a fail-safe predicate for
       a guess. Revisit if it happens on hardware.
+      → 2026-10-18: moot, manual matching removed (§15.46, GitHub #8)
 - [ ] **2026-09-18: `docs/implementation-plan.md` needs its own
       survey-then-reconcile session.** Same shape as the design
       reconciliation, and deliberately NOT done during the build-order
@@ -2215,14 +2349,30 @@ Each names its sites so the work is mechanical rather than a search.
       2026-10-14: Feature request drafted for Material (claude/material-feature-request.md in the design project), filed as a GitHub issue at CDrummond/lms-material: https://github.com/CDrummond/lms-material/issues/1288. Asks for a generic per-album plugin badge. Checked Material e85a897 and slimserver eb59bbf. Any badge is still blocked on the Discogs Restricted Data and attribution items.
 - [ ] **2026-09-29, future feature: a SqueezeWax app** (Listen Later's `is_app`
       pattern) as a low-level Discogs browse. Design §11 v3, beside Flow 2.
-- [ ] **2026-09-29, v2: master search for version albums**, so a version album
+- [x] **2026-09-29, v2: master search for version albums**, so a version album
       matched by title gets a master link. Belongs with the wantlist (decisions
       §14.10's revisit).
-- [ ] **2026-09-29: Re-match from the album menu** — not in v1. A version album
+      → 2026-10-17: folded into GitHub #7 (master link from the owned pressing,
+      §15.45 point 6).
+- [x] **2026-09-29: Re-match from the album menu** — not in v1. A version album
       with no tag cannot be given a pressing except by tagging. Revisit with the
       master search.
-- [ ] **2026-09-29: pressing details and credits in the menu** — cut from v1;
+      → 2026-10-17: moot, manual matching removed (§15.46, GitHub #8).
+- [x] **2026-09-29: pressing details and credits in the menu** — cut from v1;
       return only with "Data provided by Discogs" placed next to them.
+      → 2026-10-17: pressing details DONE by step 10 ("Release details":
+      label/catno, format, country, released, year, Have/Want, rating, for sale;
+      with "Data provided by Discogs"; `Details.pm` `_releaseDetails`, §15.31
+      ruling 1). Credits → GitHub #12, `undecided` (owner, 2026-10-17): release
+      credits in "Release details" only; track credits only in the track menu,
+      NEVER at album level (owner rule). Source: release `extraartists` and
+      `tracklist[].extraartists` in the same request (verified, fixtures
+      `scripts/fixtures/release-14590709.json`; phase 0 step 10 top-level keys).
+      Open: LMS track → Discogs position mapping (A1/B2/2-03, vinyl), long lists
+      on players, overlap with LMS's own tag credits. Related: Music & Artist
+      Information (`michaelherger/MusicArtistInfo` @ `a5ea399`: album/track
+      providers `moremusicinfo`/`moretrackinfo`; no online personnel credits;
+      local `credits.*` files, `LocalFile.pm:341`; client not reused, §9.10).
 - [x] **2026-09-29: Jivelite and service logos.** The owner reports seeing
       online-library logos on a player skin; Jivelite `d43a20b` has no such
       code. Needs a photo and the skin's name before anything rests on it.
@@ -2255,10 +2405,11 @@ Each names its sites so the work is mechanical rather than a search.
       → 2026-10-12: not reproduced on two install-and-restart rounds (0.0.0.15,
       0.0.0.16); `plugin.squeezewax` came up at its `log.conf` level both times.
       Left open, as one unexplained observation. Close it if it never recurs.
-- [ ] **2026-09-30, v2: link the release the user actually owns.** Owner's
+- [x] **2026-09-30, v2: link the release the user actually owns.** Owner's
       request 8. Needs the owned release id(s) per album stored, one-to-many
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
+      → 2026-10-17: decided §15.45; GitHub #7.
 
 - [x] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
       next sync.** → 2026-10-13: FIXED, decisions §15.32: `rateWait` counts down
@@ -2300,6 +2451,24 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
+      §6; offline suites green on both drivers, nothing run on a server):
+      1. Repro container (SQLite 3.22.0): on b5, insert a manual row with
+         `sqlite3`; update to b6 from the dev `repo.xml`; restart:
+         `user_version = 8`, migration 8's info line, no SQL error; the row is
+         ownership-only.
+      2. Reference server, before update: dump
+         `SELECT album_key, discogs_release_id, ownership, review_reason FROM
+         discogs_match WHERE match_tier = 'manual' OR review_reason IN
+         ('orphan','conflict');`.
+      3. Update to b6, restart: manual rows ownership-only (or gone if absent),
+         no `'orphan'`, conflict rows `source_timestamp` NULL.
+      4. Menu of the formerly manual album: ownership line, no Discogs links.
+      5. Queue page: no orphan list, no choose/remove/move buttons; each item has
+         why + what to do; Show tags works; settings count vs list length noted.
+      6. Rescan (share mounted): log shows the formerly manual and conflict
+         albums examined; after the scan's sync the reference album is back as
+         `artist-disagree`; exact back to 151 (inferred).
 - [ ] **2026-10-14: large collections against the scan-time sync cap.**
       `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
       `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
@@ -3204,6 +3373,18 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
+- [ ] **2026-10-17: before the first feature branch — `package-build.sh` must
+      refuse feature branches.** It only warns on a non-`vN-buildout` branch
+      (lines 37-38, 175-186), so a feature-branch build commits `repo.xml` and the
+      zip there and `--publish` pushes them, against §15.43 ruling 6. Refuse
+      `feature/*`, or refuse `--publish` off `v1-buildout`.
+
+- [ ] **2026-10-15: Issues replace TODO for feature items once filed (§15.43
+      ruling 9).** From the first 1.N release on, a feature item lives in its
+      GitHub issue and leaves this file; TODO.md keeps blocked items, items
+      needing a real server, and process items. Unverified: whether this owner's
+      Claude Code sessions can create issues (§15.43, "Claude Code on the web").
+
 - [x] **2026-10-14 (hand-off 83, owner observation): Test Token and Detect are
       greyed out during a scan; do they need to be?** For the design chat.
       §15.39 item 2 disables all three action buttons alike. Test Token makes one
@@ -3546,9 +3727,19 @@ Each names its sites so the work is mechanical rather than a search.
       there was no working copy to preserve at the old path.
 - [ ] After any commit under `docs/`, hit "Sync now" in the claude.ai project
       before the next design chat.
+- [ ] **2026-10-17: GitHub issue footer.** This session's GitHub connection
+      appends a "Generated by Claude Code" footer to every issue body write,
+      edits included (seen on #4, 2026-10-17). The owner removes it by hand.
+      Also added to issue comments (#5, 2026-10-17).
 
 ## Waiting — needs a real server (packaging)
 
+- [ ] **At b6 promotion, website on `master`:** `index.html` Review queue card:
+      "Albums it couldn't decide. Show tags, choose from your collection, or
+      remove a match." → "Albums it couldn't decide, each with what to change in
+      your tags or your Discogs collection." Commit on `master` after promotion,
+      as `d30a91c`/`cd819fc` did; `site` is behind `master` and is not the
+      source.
 - [x] **The dev LMS's Additional Repositories entry still points at
       `packaging-rewrite`'s `repo.xml`**, not `v1-buildout`'s. Done
       2026-09-07: `v1-buildout` cut its first build
@@ -3580,13 +3771,34 @@ Each names its sites so the work is mechanical rather than a search.
       The version scheme (`1.0.0bN`, `1.0.0`) replaces `0.0.0.N`.
       Still to do: bump the extension repo URL's `?v=` cache-buster, which reads
       `?v=0.0.0.8` on the reference server (stale; cheapest at the next build).
-- [ ] **Submit SqueezeWax to the official plugin list at v1:** an entry in
+- [ ] **Submit SqueezeWax to the official plugin list at v1 — only once
+      `repo.xml` carries 1.0.0 (§15.43 ruling 10):** an entry in
       `LMS-Community/lms-plugin-repository` `include.json`, using the website
       `repo.xml` URL (§15.37 part 3; raw and Pages URLs are both accepted there).
 - [ ] **§15.37 part 8: once the reference server runs a v2 dev build, v1 fixes
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **GitHub #9 — master link + "Master info" for tagged albums not owned.
+  Owner undecided (2026-10-17), label `undecided`.** Cheap: `Derive.pm` covers
+  every identified album, owned or not (`$IDENTIFIED = discogs_release_id IS NOT
+  NULL`), so the master id is stored; the submenu fetches on open, 1 request
+  (§15.31). Master only: the files' release link and "Release details" stay out
+  (§15.31 ruling 17). Trade-off: entries on most tagged albums, a busier More
+  menu.
+
+- [ ] **GitHub #10 — Discogs wantlist: album menu line + "Records I want" view**
+  (owner, 2026-10-17; open, `needs-design`). Investigate first, Listen Later's
+  Wish List (verified by reading `SimonArnold002/LMS-Listen-to-Later` @
+  `ecb3622`): a local list in `listenlater.db` (`albums.status='wishlist'`,
+  `ListenLater/DB.pm`), any source, no Discogs use, "Buy" opens Bandcamp only
+  (`_buyCommand`); CLI `listenlater add/move/remove/contextmenu` (`Plugin.pm`
+  269–274). Questions: naming apart from "Wish List", overlap display,
+  collaboration (ask the author first). Unverified: the wantlist list endpoint
+  and whether a private wantlist needs the token. Cost (inferred):
+  +ceil(wants/100) requests per sync; a migration (wanted ids per album, rebuilt
+  each sync, as §15.45).
 
 - [ ] **2026-10-14: add to wantlist from the album menu — v2.** Wantlist is v2
   (decisions §5, line 733; endpoint `PUT /users/{username}/wants/{release_id}`
@@ -3595,18 +3807,30 @@ Each names its sites so the work is mechanical rather than a search.
   supports a user-triggered write but does not itself say "only". **Open:** an unowned album usually
   has no Discogs id, so this needs a search plus a user pick, the problem §13.8
   moved away from. **Unchecked:** the wantlist write endpoint's terms.
+  → 2026-10-17 (owner): adding a specific pressing is dropped; done on Discogs
+  via the master link. Remaining idea, GitHub #11 (`undecided`): add the master
+  (optionally with a format) to the wantlist. First check: can the wantlist hold
+  a master or a format preference? The only endpoint on record takes a release
+  id (decisions §5, forum reports). Also unchecked: token write permission and
+  terms. If releases only, drop #11. Related to Listen Later's "Add to Wish
+  List" (#10).
 
-- [ ] **Settings-page button that starts a scan — v2 (§15.38).**
+- [x] **Settings-page button that starts a scan — not planned (owner, 2026-10-17; GitHub #4, closed as not planned).** The docs already name the LMS path in three places (README.md first-time setup, docs/user-guide.md step 6, PLUGIN_SQUEEZEWAX_FIRST_STEPS). Revisit if users ask. If built: LMS's own command is `Slim::Music::Import->getScanCommand('1rescan')` = `['rescan']` (`Slim/Music/Import.pm` `%scanTypes`, `Slim/Web/Settings/Server/Basic.pm` handler, slimserver `public/9.1` @ 582a1b2).
 
 - [ ] **Website design (beyond the README): later.**
 
 - [ ] **`beta.xml` and `promote-master.sh --channel beta`:** build at the first
   beta after 1.0.0 (§15.37 part 3).
 
-- [ ] **Clear & rebuild matches (decisions §10): v2** (§15.36 part 6). The
+- [x] **Clear & rebuild matches (decisions §10) — GitHub #5, open, unscheduled
+  (owner, 2026-10-17: build when a user needs it or beta reports show bad
+  states; §15.36 part 6's reasoning stands).** The
   manual reset in the README ("Starting over") covers a bad state; the cost
   accepted is that it loses hand-made matches. Unverified: whether old "no
   match" records still need clearing in today's code (item 2026-09-24).
+  - Open: whether review-queue choices other than manual matches can be kept.
+  → 2026-10-17: closed as superseded by #8 (owner). With no manual matches,
+  README "Starting over" loses only the master releases, which are re-fetched.
 
 - [x] ~~**Remove plugin data on uninstall.**~~ Won't do, 2026-10-12: LMS gives
   plugins no uninstall hook (decisions §15.30 part 2).
@@ -3679,15 +3903,25 @@ Each names its sites so the work is mechanical rather than a search.
   does not capture it. When v3 lands, do both in one migration — the parser
   already has `_parseEntityId`, so the capture is a few lines once the column
   exists.
-- v2: triage / library-health page (problem releases only).
-- v2: completeness check ("you have 9 of 12 tracks").
+- ~~Triage / library-health page~~ — dropped (owner, 2026-10-17); the review
+  queue covers it. Split: #6 (unreadable-tag wording). "Release deleted on
+  Discogs" is record-only; revisit if users meet it. It is detected but not
+  shown: `Derive.pm`'s `not_found` branch records it as "no master", and telling
+  the two apart needs a stored-value change. "List albums without a Discogs tag"
+  is out of scope, because tagging is done outside LMS.
+- ~~v2: completeness check ("you have 9 of 12 tracks").~~ — dropped (owner,
+  2026-10-17). It is a ripping question, solved outside LMS. Likely false alarms
+  (Discogs headings, sub-tracks and index tracks; vinyl side-splits; multi-disc
+  sets split across LMS albums; inferred). If ever revisited: the master job
+  already fetches each identified release (`Derive.pm`), so the tracklist is in
+  hand at no extra request; store a verdict only (§9.5).
 - v2: "Add to Wantlist" action, alongside Wantlist sync.
 - v3: FX-rate source for optional currency conversion — still unselected.
 - Not planned: any write to the Discogs Collection.
-- Future: a field picker for the re-match list (decisions §15.16 part 6). v1
-  shows a fixed set.
-- Future: orphan relink for users with manual links and no tag names
-  (decisions §15.16 part 11).
+- ~~Future: a field picker for the re-match list~~ — dropped (owner,
+  2026-10-17). The fixed set (§15.16 part 6) stays.
+- ~~Future: orphan relink for users with manual links and no tag names~~ —
+  dropped (owner, 2026-10-17), with §15.16 part 13.
 - [x] **2026-10-13: settings page poll interval (owner suggestion, report 78).** The
   ~10 s poll feels slow; 5 s would be friendlier. Not changed in 1.0.0b3 so the
   promoted bytes are the ones hardware-checked. Consider for the next build.

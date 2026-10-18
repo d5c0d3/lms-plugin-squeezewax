@@ -480,12 +480,10 @@ sub page_response {
 						title     => 'Album ' . ( $base + $_ ),
 						artists   => [ { name => 'Artist ' . ( $base + $_ ) } ],
 
-						# The three the re-match list reads, in the shape the
-						# captured fixture carries them (collection-page1.json):
-						# formats and labels are lists of hashes, and both
-						# carry fields the page drops - `text` is free-form
-						# seller prose, `qty` is "1" on every single-disc
-						# record, and resource_url is an API address.
+						# Three fields the captured fixture carries
+						# (collection-page1.json) and the entry no longer keeps
+						# (§15.46 part 11): their absence from the entry is
+						# asserted below.
 						year    => 1990 + ( ( $base + $_ ) % 30 ),
 						formats => [ {
 							name         => 'Vinyl',
@@ -531,9 +529,9 @@ sub reset_state {
 # Run one sync to completion and return its result. Safe because every stub is
 # synchronous: by the time sync() returns, the callback has fired.
 #
-# @CB_ARGS captures the callback's FULL argument list, because step 8 added a
-# second one and "the other callers read only the first" is a claim about this
-# list, not about $result (§15.16 part 6, plan §2.2).
+# @CB_ARGS captures the callback's FULL argument list. Step 8 added a second
+# argument for the re-match list; §15.46 part 11 removed it again, and "one
+# argument" is a claim about this list, not about $result.
 our @CB_ARGS;
 
 sub run_sync {
@@ -1095,37 +1093,23 @@ sub run_sync {
 	my $entries = $APPLIED[0];
 	is( scalar @$entries, 203, '  ...and is handed every collection entry' );
 
-	# The five fields the pass needs plus the three the re-match list needs, and
-	# no more. A ninth would be a mirrored collection by accretion, which is
-	# what §13.2 rules out - the bound is the point of asserting the whole key
-	# set rather than spot-checking.
+	# The five fields the pass needs, and no more. A sixth would be a mirrored
+	# collection by accretion, which is what §13.2 rules out - the bound is the
+	# point of asserting the whole key set rather than spot-checking. year,
+	# formats and labels were kept for the re-match list until §15.46 part 11.
 	my ($one) = grep { $_->{instance_id} == 2001 } @$entries;
 	is_deeply(
 		[ sort keys %$one ],
-		[ sort qw(instance_id id master_id title artists year formats labels) ],
-		'each entry carries exactly the five fields the pass reads, plus the page\'s three'
+		[ sort qw(instance_id id master_id title artists) ],
+		'each entry carries exactly the five fields the pass reads'
 	);
 	is( $one->{id},        1001,       '  ...the release id' );
 	is( $one->{master_id}, 9001,       '  ...the master id, from basic_information' );
 	is( $one->{title},     'Album 1',  '  ...the title' );
 	is_deeply( $one->{artists}, ['Artist 1'], '  ...and the artist names, flattened' );
 
-	# The page's three (§15.16 part 6). Flattened to plain strings here, so the
-	# template has no structure to walk and this list stays something is_deeply
-	# can compare.
-	is( $one->{year}, 1991, '  ...the year, for telling two pressings apart' );
-	is_deeply( $one->{formats}, ['Vinyl, LP, Album'],
-		'  ...the format as medium then descriptions' );
-	is_deeply( $one->{labels}, [ 'Label One (CAT-1)', 'Label Two' ],
-		'  ...and each label with its catalogue number, or bare when it has none' );
-
-	# What the flattening DROPS, asserted rather than assumed: `text` is
-	# free-form seller prose long enough to push the release id off a narrow
-	# row, `qty` is "1" on every single-disc record, and a resource_url is an
-	# API address that no user would follow.
-	unlike( $one->{formats}[0], qr/Gatefold|Splatter/, "  ...and drops the format's free text" );
-	unlike( $one->{formats}[0], qr/\b1\b/,             '  ...and its quantity' );
-	unlike( $one->{labels}[0],  qr/api\.discogs/,      '  ...and the label resource_url' );
+	ok( !exists $one->{$_}, "  ...and no $_ - the re-match list is gone (§15.46 part 11)" )
+		for qw(year formats labels);
 
 	# No image fields. Whether Discogs' terms permit showing thumb or
 	# cover_image is unverified (§9.9), so the sync does not carry them and the
@@ -1141,19 +1125,11 @@ sub run_sync {
 	ok( marker() && marker()->{last_synced}, 'the marker advances when the pass succeeded' );
 	is( marker()->{items}, 203, '  ...along with the item count' );
 
-	# --- the list reaches the caller (plan §2.2) --------------------------
+	# --- one argument to the caller (§15.46 part 11) -----------------------
 	#
-	# The queue page's re-match list has no other source: the collection is
-	# discarded when the sync ends (§13.2), and a second fetch would be a second
-	# set of requests against a rate-limited API for data we just had.
-	is( scalar @CB_ARGS, 2, 'a successful sync hands its callback two arguments' );
-
-	# The SAME list the pass got, not a copy and not a rebuild. A re-match list
-	# built separately could offer a release the pass could not see, and the
-	# album would then refuse to badge with nothing to say why.
-	is( $CB_ARGS[1], $APPLIED[0],
-		'  ...and the second is the very list the pass was handed, by reference' );
-	is( scalar @{ $CB_ARGS[1] }, 203, '  ...holding every entry' );
+	# Until §15.46 a successful sync also handed its caller the entry list, for
+	# the queue page's re-match list. Nothing reads it now, so nothing gets it.
+	is( scalar @CB_ARGS, 1, 'a successful sync hands its callback one argument' );
 }
 
 # --- the pass declines: the timestamp must not move ------------------------
@@ -1174,13 +1150,7 @@ for my $outcome (qw(refused failed)) {
 		'  ...but the marker does NOT advance - it means "ownership last derived"' );
 	is( $PREFS{discogsLastSyncError}, $outcome, '  ...and the error is recorded' );
 
-	# No list to the caller. The fetch worked, so there IS one in hand - but a
-	# page rendering a re-match list from a sync whose conclusions were never
-	# written would offer choices against a badge state that does not exist yet.
-	# The page gets the error instead, which the settings page already has a
-	# string for.
-	is( scalar @CB_ARGS, 1,
-		"  ...and a '$outcome' pass hands the caller no list, though the fetch succeeded" );
+	is( scalar @CB_ARGS, 1, "  ...and a '$outcome' pass hands the caller one argument" );
 }
 
 # --- completeness: the pass is never called on a list that cannot be shown

@@ -188,6 +188,21 @@ else
 	printf '  ok    no UPSERT syntax in SqueezeWax/\n'
 fi
 
+# Nothing writes match_tier 'manual' or review_reason 'orphan' any more
+# (decisions §15.46 parts 8 and 10). The CHECKs still allow both, because
+# narrowing them is a rebuild of the one table that is not regenerable, so the
+# database will not catch a regression; this does. Schema.pm is exempt: its
+# CHECKs and migration 8 name both values. Comment lines are skipped, as above.
+legacy=$(grep -rnE "'(manual|orphan)'" "$ROOT"/SqueezeWax --exclude=Schema.pm 2>/dev/null \
+	| grep -Ev '^[^:]+:[0-9]+:[[:space:]]*#' || true)
+if [ -n "$legacy" ]; then
+	printf "  FAIL  'manual' or 'orphan' outside Schema.pm (nothing writes them, decisions §15.46):\n"
+	printf '%s\n' "$legacy" | sed 's/^/          /'
+	STATUS=1
+else
+	printf "  ok    no 'manual' or 'orphan' value outside Schema.pm\n"
+fi
+
 MODULES="Schema Library Tags Match Ownership API API::Async API::Sync Derive Details Importer ScanSync Settings Queue Menu View Plugin"
 
 for scanner in 0 1; do

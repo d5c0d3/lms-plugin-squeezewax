@@ -480,10 +480,16 @@ $K{no_artist}  = album( 32, 'Greatest Hits', undef );
 # cannot rescue it either and 'absent' is the whole answer.
 $K{incumbent}  = album( 16, 'Contested Pressing', 'Depeche Mode' );
 
-# manual_ambig: a manual link on an album whose title is owned twice. Without
-# D1 this would re-enter the queue as 'ambiguous' at every sync forever, asking
-# the user to decide something they have already decided.
+# manual_ambig: a manual link on an album whose title is owned twice, as
+# migration 8 leaves it (§15.46 part 6) - ownership-only. Until §15.46, D1 kept
+# it out of the queue; with manual matching gone it is decided like any untagged
+# album, and the title route sends it back to the queue as 'ambiguous'.
 $K{manual_ambig} = album( 17, 'Ciao Monkey', 'Someone' );
+
+# converted_gone: a former manual link whose album's title matches nothing in the
+# collection. Ownership-only after migration 8, so the title route concludes
+# absent with no reason and the row goes (§14.8).
+$K{converted_gone} = album( 19, 'Hand Linked Only', 'Depeche Mode' );
 
 # lapsed: a row the previous pass wrote for a reason that has since gone away.
 # It owns nothing and reviews nothing, so §14.8 says it must not exist.
@@ -555,8 +561,9 @@ my @collection = (
 matchRow( album_key => $K{d_strict}, lms_album_id => 1, discogs_release_id => 111,
 	discogs_master_id => 9001, match_tier => 'strict', state => 'candidate',
 	snapshot_track_count => 1 );
-matchRow( album_key => $K{d_manual}, lms_album_id => 2, discogs_release_id => 222,
-	match_tier => 'manual', state => 'candidate', snapshot_track_count => 1 );
+# d_manual: a former manual link on an album whose title IS in the collection,
+# as migration 8 leaves it: ownership kept, everything else NULL (§15.46 part 6).
+matchRow( album_key => $K{d_manual}, lms_album_id => 2, ownership => 'exact' );
 matchRow( album_key => $K{f_version}, lms_album_id => 3, discogs_release_id => 3330,
 	discogs_master_id => 9003, match_tier => 'strict', state => 'confirmed',
 	snapshot_track_count => 1 );
@@ -619,11 +626,11 @@ matchRow( album_key => $K{incumbent}, lms_album_id => 16, discogs_release_id => 
 	snapshot_track_count => 1, snapshot_artist => 'Depeche Mode',
 	snapshot_album_title => 'Contested Pressing', review_reason => 'conflict' );
 
-# The manual row on an ambiguous title. Its release id is in no collection
-# entry, so node D and node F both miss and it reaches the title route, where
-# 'Ciao Monkey' is owned twice.
-matchRow( album_key => $K{manual_ambig}, lms_album_id => 17, discogs_release_id => 6660,
-	match_tier => 'manual', state => 'confirmed', snapshot_track_count => 1 );
+# The former manual row on an ambiguous title, ownership-only after migration 8.
+# It reaches the title route, where 'Ciao Monkey' is owned twice.
+matchRow( album_key => $K{manual_ambig}, lms_album_id => 17, ownership => 'exact' );
+
+matchRow( album_key => $K{converted_gone}, lms_album_id => 19, ownership => 'exact' );
 
 # The row whose reason has lapsed: nothing in the collection is called
 # 'No Longer Ambiguous', so this pass concludes absent with no reason at all.
@@ -632,18 +639,10 @@ matchRow( album_key => $K{lapsed}, lms_album_id => 18, ownership => 'absent',
 
 # --- orphans: rows whose album is not in the library -----------------------
 #
-# Three shapes, because the rule treats them differently. All three carry an
-# identification and a snapshot, which is §15.5 part 3's predicate.
-my $ORPHAN_MANUAL   = 'y' x 32;
+# Two shapes carrying an identification and a snapshot, which is §15.5 part 3's
+# predicate. Since §15.46 part 8 neither is marked: the orphan list is gone.
 my $ORPHAN_STRICT   = 'x' x 32;
 my $ORPHAN_CONFLICT = 'w' x 32;
-
-# A manual orphan - the shape TODO 2026-09-19 found on the reference server
-# (release 888888). D1 keeps a pass reason off a manual row whose album is
-# CURRENT; this one's album is gone, and it is the row recovery exists for.
-matchRow( album_key => $ORPHAN_MANUAL, lms_album_id => 888, discogs_release_id => 888888,
-	match_tier => 'manual', state => 'confirmed', snapshot_track_count => 18,
-	snapshot_artist => 'Amorph', snapshot_album_title => 'Isolar' );
 
 matchRow( album_key => $ORPHAN_STRICT, lms_album_id => 999, discogs_release_id => 999999,
 	match_tier => 'strict', state => 'candidate', snapshot_track_count => 12,
@@ -657,8 +656,8 @@ matchRow( album_key => $ORPHAN_CONFLICT, lms_album_id => 777, discogs_release_id
 	review_reason => 'conflict' );
 
 # An orphan with an identification but NO snapshot. It cannot be relinked to
-# anything, so the orphan list could offer it nothing but reject, and the pass
-# has no business inviting a deletion it cannot justify. It simply sits.
+# anything, and it carries an identification, so the pass may not delete it. It
+# simply sits.
 my $ORPHAN_NOSNAP = 'v' x 32;
 matchRow( album_key => $ORPHAN_NOSNAP, lms_album_id => 666, discogs_release_id => 666666,
 	match_tier => 'strict', state => 'candidate' );
@@ -673,10 +672,12 @@ is( rowFor( $K{d_strict} )->{ownership}, 'exact',
 is( rowFor( $K{d_strict} )->{state}, 'confirmed',
 	'  ...and a strict row is promoted to confirmed' );
 
-is( rowFor( $K{d_manual} )->{ownership}, 'exact',
-	'D: a manual row gets ownership written too' );
-is( rowFor( $K{d_manual} )->{state}, 'candidate',
-	"  ...but its state is NEVER touched - the user's choice is not cross-checked" );
+# A former manual row (§15.46 part 6) has no identification, so the title route
+# decides it: 'Music For Masses' by its own artist is in the collection.
+is( rowFor( $K{d_manual} )->{ownership}, 'version',
+	'a converted manual row is decided by the title route, as any untagged album' );
+is( rowFor( $K{d_manual} )->{state}, undef, '  ...and gains no state' );
+is( rowFor( $K{d_manual} )->{match_tier}, undef, '  ...nor a tier' );
 
 is( rowFor( $K{f_version} )->{ownership}, 'version',
 	'F: a tagged album whose MASTER is owned, at a different release, is version' );
@@ -839,20 +840,22 @@ like( summary(), qr/\bartist-disagree=1\b/,
 # "decided" is the verdict count over every album, including albums whose row
 # already said the same thing. "wrote" is the rows that changed, which is what
 # the queue grew by - and on a second pass over the same inputs it is empty.
-like( summary(), qr/queue decided .*\borphans=3\b/,
+like( summary(), qr/queue decided .*\borphans=2\b/,
 	'the summary counts orphans by §15.5 part 3: an identification AND a snapshot' );
-like( summary(), qr/reasons wrote .*\bambiguous=1\b/,
+like( summary(), qr/reasons wrote .*\bartist-disagree=1\b/,
 	'  ...and reports the reasons it actually wrote' );
 
-# The two figures disagree here, and the disagreement is D1 working: two albums
-# DECIDED ambiguous - h_ambig and the manual link on the same title - and only
-# one row was written, because the user has already answered for the other.
+# Until §15.46 these two figures disagreed here, by D1: the manual link on the
+# ambiguous title was decided ambiguous and not written. With manual matching
+# gone, both albums decided ambiguous are written.
 like( summary(), qr/queue decided .*\bambiguous=2\b/,
-	'two albums decided ambiguous, but only one reason was written (D1)' );
+	'two albums decided ambiguous' );
+like( summary(), qr/reasons wrote .*\bambiguous=2\b/,
+	'  ...and both reasons written - there is no manual row to spare (§15.46)' );
 like( summary(), qr/reasons wrote .*\bvarious-gated=3\b/,
 	'  ...in the queue\'s vocabulary, not the pass\'s buckets' );
-like( summary(), qr/reasons wrote .*\borphan=2\b/,
-	'  ...counting the two orphans it marked, not the one already marked conflict' );
+unlike( summary(), qr/reasons wrote .*\borphan=/,
+	"  ...and no 'orphan' reason is written (§15.46 part 8)" );
 
 is( rowFor( $K{h_disagree} )->{review_reason}, 'artist-disagree',
 	'H: a title match whose artist disagrees is filed as artist-disagree' );
@@ -898,40 +901,41 @@ is( rowFor( $K{d_strict} )->{ownership}, 'exact',
 	'  ...while the identical row WITHOUT the mark still badges exact' );
 is( rowFor( $K{d_strict} )->{state}, 'confirmed', '  ...and is still promoted' );
 
-# --- D1: a manual row on a live album carries no pass reason ---------------
+# --- a former manual row on an ambiguous title (§15.46 part 6) -------------
 #
-# 'Ciao Monkey' is owned twice, so the title route calls this ambiguous. The
-# user has already decided; re-asking every sync is not review.
+# Until §15.46, D1 kept a pass reason off a manual row. The row migration 8
+# leaves is ownership-only, so the title route decides it, and 'Ciao Monkey' is
+# owned twice: it is back in the queue, which is what the decision expects.
 my $manualAmbig = rowFor( $K{manual_ambig} );
-is( $manualAmbig->{review_reason}, undef,
-	'D1: a manual row on a current album gets no pass reason, however ambiguous' );
-is( $manualAmbig->{match_tier}, 'manual', '  ...and is still manual' );
-is( $manualAmbig->{state}, 'confirmed',
-	"  ...and its state is untouched - a manual link is not cross-checked" );
+is( $manualAmbig->{review_reason}, 'ambiguous',
+	'a converted manual row on an ambiguous title is back in the queue' );
+is( $manualAmbig->{ownership}, 'absent', "  ...and no longer owned" );
 
-# --- orphans (§15.16 part 5) -----------------------------------------------
+ok( !rowFor( $K{converted_gone} ),
+	'a converted manual row the title route calls absent, with no reason, is deleted' );
+
+# --- orphans (§15.46 part 8) -----------------------------------------------
 #
-# The pass is the only thing that sees the whole library and the whole table at
-# once. Nothing sweeps orphans (§2a invariant 4), which is exactly why they
-# must be shown: TODO 2026-09-19 found three sitting on the reference server
-# that nothing would ever have mentioned.
-is( rowFor($ORPHAN_STRICT)->{review_reason}, 'orphan',
-	'a strict orphan carrying an identification and a snapshot is marked' );
+# Nothing sweeps orphans (§2a invariant 4), and since §15.46 nothing marks them
+# either: the scanner relinks the unambiguous ones, the rest sit unseen.
+is( rowFor($ORPHAN_STRICT)->{review_reason}, undef,
+	"a strict orphan carrying an identification and a snapshot gets no 'orphan' mark" );
 is( rowFor($ORPHAN_STRICT)->{discogs_release_id}, 999999,
 	'  ...and keeps everything else' );
-
-# Manual orphans included. D1 is about a live album; an orphan is not a verdict
-# on one, and a manual row is the row recovery exists for.
-is( rowFor($ORPHAN_MANUAL)->{review_reason}, 'orphan',
-	'a MANUAL orphan is marked too - D1 is about live albums (§15.16 part 5)' );
-is( rowFor($ORPHAN_MANUAL)->{state}, 'confirmed', '  ...with its state untouched' );
+is( rowFor($ORPHAN_STRICT)->{state}, 'candidate', '  ...state included' );
 
 is( rowFor($ORPHAN_CONFLICT)->{review_reason}, 'conflict',
-	"an orphan already marked 'conflict' keeps it - sticky beats orphan (R3)" );
+	"an orphan marked 'conflict' keeps it - sticky (R3)" );
 
 is( rowFor($ORPHAN_NOSNAP)->{review_reason}, undef,
-	'an orphan with no snapshot is not marked: nothing could relink it' );
+	'an orphan with no snapshot is not marked' );
 ok( rowFor($ORPHAN_NOSNAP), '  ...and it is not deleted either' );
+
+{
+	my ($marks) = $dbh->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.discogs_match WHERE review_reason = 'orphan'} );
+	is( $marks, 0, "no row carries 'orphan' after the pass" );
+}
 
 # --- a reason that lapses is a row that goes --------------------------------
 #
@@ -947,7 +951,7 @@ ok( !rowFor( 'z' x 32 ),
 	'R5: an ownership-only row whose album left the library is deleted' );
 
 # and never anything else
-ok( rowFor( $K{d_manual} ),  'R5 never deletes a manual row' );
+ok( rowFor( $K{d_manual} ),  'R5 never deletes an ownership-only row that still owns' );
 ok( rowFor( $K{f_undef} ),   'R5 never deletes a strict row' );
 ok( rowFor( $K{conflict} ),  'R5 never deletes a conflict row' );
 
@@ -963,8 +967,10 @@ is_deeply(
 	\@finalKeys,
 	[ sort
 		# identifications, all carried forward
-		$K{d_strict}, $K{d_manual}, $K{f_version}, $K{f_zero}, $K{f_undef},
-		$K{conflict}, $K{incumbent}, $K{manual_ambig},
+		$K{d_strict}, $K{f_version}, $K{f_zero}, $K{f_undef},
+		$K{conflict}, $K{incumbent},
+		# former manual rows the title route still has a conclusion about
+		$K{d_manual}, $K{manual_ambig},
 		# step 8c's derived-master rows, all five carrying an identification
 		$K{f_derived}, $K{f_stale}, $K{f_tag_wins}, $K{f_derived_zero},
 		$K{f_derived_none},
@@ -976,7 +982,7 @@ is_deeply(
 		# generic-title album gets NO row at all and is asserted below.
 		$K{one_agrees}, $K{no_artist},
 		# orphans, which are never swept
-		$ORPHAN_MANUAL, $ORPHAN_STRICT, $ORPHAN_CONFLICT, $ORPHAN_NOSNAP,
+		$ORPHAN_STRICT, $ORPHAN_CONFLICT, $ORPHAN_NOSNAP,
 	],
 	'the table holds exactly the rows that are worth their existence, and no others'
 );
@@ -1070,7 +1076,9 @@ is_deeply(
 
 	my ($identified) = $dbh->selectrow_array(
 		'SELECT COUNT(*) FROM squeezewax.discogs_match WHERE match_tier IS NOT NULL' );
-	is( $identified, 17, '  ...while every identification survives' );
+	# 14: the three manual identifications this fixture used to carry are
+	# ownership-only since §15.46 and went with the rest.
+	is( $identified, 14, '  ...while every identification survives' );
 }
 
 # ===========================================================================

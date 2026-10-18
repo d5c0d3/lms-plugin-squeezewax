@@ -318,8 +318,8 @@ ok( !$insertMatch->( album_key => 'b' x 32, state => 'Confirmed' ),
 ok( !$insertMatch->( album_key => 'b' x 32, match_tier => 'Strict' ),
 	"match_tier CHECK rejects 'Strict'" );
 
-# 'manual' is the value the review queue will write in build-order step 8;
-# if the CHECK rejected it we would only find out then.
+# 'manual' is allowed by the CHECK and no longer written (§15.46 part 10);
+# narrowing it would mean rebuilding the one table that is not regenerable.
 ok( $insertMatch->( album_key => 'c' x 32, match_tier => 'manual' ),
 	"match_tier CHECK accepts 'manual'" );
 
@@ -517,6 +517,25 @@ sub version_2_dbh {
 	return $h;
 }
 
+# Runs the migrations a fixture is missing, up to and including $to, the way
+# _migrate does but stopping there. The blocks below each test one migration
+# against a populated file; since migration 8 rewrites manual rows (§15.46), a
+# block that ran _migrate to the current version would be asserting migration
+# 8's effect under another migration's name. _migrate itself, end to end over a
+# populated file, is the migration-8 block's.
+sub migrate_to {
+	my ( $h, $to ) = @_;
+
+	for my $n ( version_of($h) + 1 .. $to ) {
+		my $sub = Plugins::SqueezeWax::Schema->can("_migration_$n")
+			or die "no _migration_$n\n";
+		$sub->($h);
+		$h->do("PRAGMA squeezewax.user_version = $n");
+	}
+
+	return 1;
+}
+
 sub match_fingerprint {
 	my $h = shift;
 
@@ -538,10 +557,10 @@ sub match_fingerprint {
 	);
 	is( scalar @$beforeRows, 3, 'the version-2 fixture holds three rows' );
 
-	ok( eval { $S->_migrate($up); 1 },
-		"_migrate takes a populated version-2 file all the way to $target" )
+	ok( eval { migrate_to( $up, 3 ); 1 },
+		'migration 3 takes a populated version-2 file to 3' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( version_of($up), 3, '  ...and it reports version 3' );
 
 	my $afterRows = $up->selectall_arrayref(
 		q{SELECT album_key, match_tier, state, ownership FROM squeezewax.discogs_match
@@ -601,10 +620,10 @@ sub match_fingerprint {
 	is_deeply( match_fingerprint($up), $fingerprint, '  ...and changes nothing' );
 
 	$up->do('PRAGMA squeezewax.user_version = 2');
-	ok( eval { $S->_migrate($up); 1 },
-		'_migrate re-runs over a completed rebuild with user_version forced back to 2' )
+	ok( eval { migrate_to( $up, 3 ); 1 },
+		'migration 3 re-runs over a completed rebuild with user_version forced back to 2' )
 		or diag($@);
-	is( version_of($up), $target, '  ...and reaches the current version' );
+	is( version_of($up), 3, '  ...and reaches version 3' );
 	is_deeply( match_fingerprint($up), $fingerprint, '  ...and still changes nothing' );
 }
 
@@ -671,9 +690,9 @@ sub version_3_dbh {
 	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 	is( $beforeCount, 3, '  ...and holds three rows' );
 
-	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-3 file to $target" )
+	ok( eval { migrate_to( $up, 4 ); 1 }, 'migration 4 takes a populated version-3 file to 4' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( version_of($up), 4, '  ...and it reports version 4' );
 
 	my ($afterCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 	is( $afterCount, $beforeCount, 'the row count is unchanged - ADD COLUMN, not a rebuild' );
@@ -717,10 +736,10 @@ sub version_3_dbh {
 	is( $stillConflict, 'conflict', '  ...and does not blank a reason already written' );
 
 	$up->do('PRAGMA squeezewax.user_version = 3');
-	ok( eval { $S->_migrate($up); 1 },
-		'_migrate re-runs over a completed ADD COLUMN with user_version forced back to 3' )
+	ok( eval { migrate_to( $up, 4 ); 1 },
+		'migration 4 re-runs over a completed ADD COLUMN with user_version forced back to 3' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and reaches version $target" );
+	is( version_of($up), 4, '  ...and reaches version 4' );
 }
 
 # --- migration 5: discogs_sync_state -----------------------------------------
@@ -749,9 +768,9 @@ sub version_4_dbh {
 
 	my $fingerprint = match_fingerprint($up);
 
-	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-4 file to $target" )
+	ok( eval { migrate_to( $up, 5 ); 1 }, 'migration 5 takes a populated version-4 file to 5' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( version_of($up), 5, '  ...and it reports version 5' );
 
 	is_deeply( match_fingerprint($up), $fingerprint,
 		'every discogs_match row is untouched by migration 5' );
@@ -793,10 +812,10 @@ sub version_4_dbh {
 	is( $kept, 'server', '  ...and keeps the row already written' );
 
 	$up->do('PRAGMA squeezewax.user_version = 4');
-	ok( eval { $S->_migrate($up); 1 },
-		'_migrate re-runs over a completed migration 5 with user_version forced back to 4' )
+	ok( eval { migrate_to( $up, 5 ); 1 },
+		'migration 5 re-runs over a completed migration 5 with user_version forced back to 4' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and reaches version $target" );
+	is( version_of($up), 5, '  ...and reaches version 5' );
 
 	# A file from the NEXT schema version must refuse this plugin. _migrate's
 	# existing behaviour, re-asserted at whatever the current target is, because
@@ -840,9 +859,9 @@ my @DERIVED = qw(derived_master_id derived_from_release_id derived_at);
 	my $fingerprint   = match_fingerprint($up);
 	my ($beforeCount) = $up->selectrow_array('SELECT COUNT(*) FROM squeezewax.discogs_match');
 
-	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-5 file to $target" )
+	ok( eval { migrate_to( $up, 6 ); 1 }, 'migration 6 takes a populated version-5 file to 6' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( version_of($up), 6, '  ...and it reports version 6' );
 
 	my %after = map { $_->{name} => $_ } @{
 		$up->selectall_arrayref(
@@ -896,10 +915,10 @@ my @DERIVED = qw(derived_master_id derived_from_release_id derived_at);
 	is( $kept, 1884, '  ...and does not blank a master already derived' );
 
 	$up->do('PRAGMA squeezewax.user_version = 5');
-	ok( eval { $S->_migrate($up); 1 },
-		'_migrate re-runs over a completed migration 6 with user_version forced back to 5' )
+	ok( eval { migrate_to( $up, 6 ); 1 },
+		'migration 6 re-runs over a completed migration 6 with user_version forced back to 5' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and reaches version $target" );
+	is( version_of($up), 6, '  ...and reaches version 6' );
 }
 
 # --- migration 7: discogs_meta, and the two accessors (§15.23, §15.24) ------
@@ -938,9 +957,9 @@ BEGIN {
 
 	my $fingerprint = match_fingerprint($up);
 
-	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-6 file to $target" )
+	ok( eval { migrate_to( $up, 7 ); 1 }, 'migration 7 takes a populated version-6 file to 7' )
 		or diag($@);
-	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( version_of($up), 7, '  ...and it reports version 7' );
 
 	is_deeply( match_fingerprint($up), $fingerprint,
 		'every discogs_match row is untouched by migration 7' );
@@ -994,13 +1013,217 @@ BEGIN {
 	}
 
 	$up->do('PRAGMA squeezewax.user_version = 6');
+	ok( eval { migrate_to( $up, 7 ); 1 },
+		'migration 7 re-runs over a completed migration 7 with user_version forced back to 6' )
+		or diag($@);
+	is( version_of($up), 7, '  ...and reaches version 7' );
+}
+
+# --- migration 8: manual rows become ownership-only (§15.46, GitHub #8) -------
+#
+# Data only. A real upgrade meets version 7 holding every shape §15.46 parts 6,
+# 8 and 9 name, so the fixture holds each of them, and an identified strict row
+# that nothing may touch.
+my %M8 = (
+	manualExact    => '1' x 32,
+	manualAbsent   => '2' x 32,
+	manualOrphan   => '3' x 32,
+	strictOrphan   => '4' x 32,
+	freshConflict  => '5' x 32,
+	incumbent      => '6' x 32,
+	identified     => '7' x 32,
+);
+
+sub version_7_dbh {
+	my $h = version_6_dbh();
+
+	migrate_to( $h, 7 );
+
+	# The version-2 fixture's own rows would muddy the counts below.
+	$h->do('DELETE FROM squeezewax.discogs_match');
+
+	my $ins = sub {
+		my (%r) = @_;
+		my @cols = sort keys %r;
+		$h->do( 'INSERT INTO squeezewax.discogs_match (' . join( ',', @cols ) . ') VALUES ('
+			. join( ',', ('?') x @cols ) . ')', undef, @r{@cols} );
+	};
+
+	my %full = (
+		discogs_master_id => 900, matched_at => 1000, snapshot_artist => 'A',
+		snapshot_album_title => 'T', snapshot_track_count => 10, source_timestamp => 50,
+		derived_master_id => 901, derived_from_release_id => 100, derived_at => 2000,
+	);
+
+	$ins->( %full, album_key => $M8{manualExact}, mb_album_id => 'mb-x', lms_album_id => 1,
+		discogs_release_id => 100, match_tier => 'manual', state => 'confirmed',
+		ownership => 'exact' );
+	$ins->( %full, album_key => $M8{manualAbsent}, lms_album_id => 2,
+		discogs_release_id => 100, match_tier => 'manual', state => 'candidate',
+		ownership => 'absent' );
+	$ins->( %full, album_key => $M8{manualOrphan}, lms_album_id => 3,
+		discogs_release_id => 100, match_tier => 'manual', state => 'confirmed',
+		ownership => 'version', review_reason => 'orphan' );
+	$ins->( %full, album_key => $M8{strictOrphan}, lms_album_id => 4,
+		discogs_release_id => 100, match_tier => 'strict', state => 'confirmed',
+		ownership => 'exact', review_reason => 'orphan' );
+	$ins->( album_key => $M8{freshConflict}, lms_album_id => 5, match_tier => 'strict',
+		state => 'candidate', ownership => 'absent', review_reason => 'conflict',
+		matched_at => 1000, source_timestamp => 60 );
+	$ins->( %full, album_key => $M8{incumbent}, lms_album_id => 6,
+		discogs_release_id => 100, match_tier => 'strict', state => 'candidate',
+		ownership => 'absent', review_reason => 'conflict' );
+	$ins->( %full, album_key => $M8{identified}, lms_album_id => 7,
+		discogs_release_id => 100, match_tier => 'strict', state => 'confirmed',
+		ownership => 'exact' );
+
+	$h->do( q{INSERT INTO squeezewax.discogs_no_match (album_key, tier, source_timestamp, checked_at)
+		VALUES (?,'strict',?,?)}, undef, '8' x 32, 70, 80 );
+
+	return $h;
+}
+
+sub full_rows {
+	my $h = shift;
+
+	return { map { $_->{album_key} => $_ } @{
+		$h->selectall_arrayref( 'SELECT * FROM squeezewax.discogs_match', { Slice => {} } )
+	} };
+}
+
+{
+	my $up = version_7_dbh();
+
+	is( version_of($up), 7, 'the version-7 fixture reports user_version 7' );
+
+	my $before  = full_rows($up);
+	my $noMatch = $up->selectall_arrayref('SELECT * FROM squeezewax.discogs_no_match');
+
+	my @columns = map { $_->{name} } @{
+		$up->selectall_arrayref(
+			'SELECT name FROM pragma_table_info(?)', { Slice => {} }, 'discogs_match' )
+	};
+
+	ok( eval { $S->_migrate($up); 1 }, "_migrate takes a populated version-7 file to $target" )
+		or diag($@);
+	is( version_of($up), $target, "  ...and it reports version $target" );
+	is( $target, 8, '  ...which is 8' );
+
+	my $after = full_rows($up);
+
+	# a. manual and owning nothing: deleted.
+	ok( !$after->{ $M8{manualAbsent} }, "a manual row with ownership 'absent' is deleted (a)" );
+
+	# b. manual and owning something: four columns kept, the rest NULL. Every
+	# column of the table is named, so a column a later migration adds and this
+	# one forgets to clear fails here.
+	my %kept = map { $_ => 1 } qw(album_key mb_album_id lms_album_id ownership);
+
+	for my $which (qw(manualExact manualOrphan)) {
+		my $row = $after->{ $M8{$which} };
+		ok( $row, "the $which row survives (b)" ) or next;
+
+		for my $c (@columns) {
+			if ( $kept{$c} ) {
+				is( $row->{$c}, $before->{ $M8{$which} }{$c}, "  ...$which keeps $c" );
+			}
+			else {
+				is( $row->{$c}, undef, "  ...$which has $c NULL" );
+			}
+		}
+	}
+
+	is( $after->{ $M8{manualExact} }{ownership}, 'exact', "  ...and manualExact still owns 'exact'" );
+	is( $after->{ $M8{manualOrphan} }{ownership}, 'version',
+		"  ...and the gone manual row still owns 'version'" );
+
+	# c. a strict orphan mark is cleared, nothing else on the row moves.
+	{
+		my %want = %{ $before->{ $M8{strictOrphan} } };
+		$want{review_reason} = undef;
+		is_deeply( $after->{ $M8{strictOrphan} }, \%want,
+			"a strict 'orphan' mark is cleared and nothing else changes (c)" );
+	}
+
+	# d. both conflict rows lose source_timestamp, nothing else.
+	for my $which (qw(freshConflict incumbent)) {
+		my %want = %{ $before->{ $M8{$which} } };
+		$want{source_timestamp} = undef;
+		is_deeply( $after->{ $M8{$which} }, \%want,
+			"the $which row keeps 'conflict' and loses only source_timestamp (d)" );
+	}
+
+	is_deeply( $after->{ $M8{identified} }, $before->{ $M8{identified} },
+		'an identified strict row is untouched' );
+
+	is( scalar keys %$after, 6, 'six rows remain of seven' );
+
+	my ($marks) = $up->selectrow_array(
+		q{SELECT COUNT(*) FROM squeezewax.discogs_match
+		   WHERE match_tier = 'manual' OR review_reason = 'orphan'} );
+	is( $marks, 0, "no 'manual' tier and no 'orphan' reason remains" );
+
+	is_deeply( $up->selectall_arrayref('SELECT * FROM squeezewax.discogs_no_match'), $noMatch,
+		'discogs_no_match is untouched' );
+
+	# The CHECKs are not narrowed (§15.46 part 10).
+	ok( eval { $up->do( q{UPDATE squeezewax.discogs_match SET match_tier = 'manual'
+		WHERE album_key = ?}, undef, $M8{identified} ); 1 },
+		"the match_tier CHECK still accepts 'manual'" ) or diag($@);
+	ok( eval { $up->do( q{UPDATE squeezewax.discogs_match SET review_reason = 'orphan'
+		WHERE album_key = ?}, undef, $M8{identified} ); 1 },
+		"  ...and the review_reason CHECK still accepts 'orphan'" ) or diag($@);
+	$up->do( q{UPDATE squeezewax.discogs_match SET match_tier = 'strict', review_reason = NULL
+		WHERE album_key = ?}, undef, $M8{identified} );
+
+	# --- re-run safety ----------------------------------------------------
+	my $settled = full_rows($up);
+
+	ok( eval { Plugins::SqueezeWax::Schema::_migration_8($up); 1 },
+		'migration 8 runs a second time without dying' ) or diag($@);
+	is_deeply( full_rows($up), $settled, '  ...and changes nothing' );
+
+	$up->do('PRAGMA squeezewax.user_version = 7');
 	ok( eval { $S->_migrate($up); 1 },
-		'_migrate re-runs over a completed migration 7 with user_version forced back to 6' )
+		'_migrate re-runs over a completed migration 8 with user_version forced back to 7' )
 		or diag($@);
 	is( version_of($up), $target, "  ...and reaches version $target" );
+	is_deeply( full_rows($up), $settled, '  ...and still changes nothing' );
 
-	# A file from the NEXT schema version - version 8, now that the target is 7 -
-	# must refuse this plugin rather than be guessed at.
+	# A failure rolls the whole migration back and leaves the version alone.
+	{
+		my $bad = version_7_dbh();
+		my $was = full_rows($bad);
+
+		# A trigger that refuses the third statement, after the first two have
+		# run inside the transaction.
+		$bad->do(q{CREATE TRIGGER squeezewax.m8_refuse BEFORE UPDATE OF review_reason
+			ON discogs_match WHEN NEW.review_reason IS NULL AND OLD.review_reason = 'orphan'
+			AND OLD.match_tier = 'strict' BEGIN SELECT RAISE(ABORT, 'refused'); END});
+
+		ok( !eval { $S->_migrate($bad); 1 }, 'a migration 8 that fails partway dies' );
+		like( $@, qr/converting manual rows failed/, '  ...and says what failed' );
+		is( version_of($bad), 7, '  ...and leaves user_version at 7' );
+		is_deeply( full_rows($bad), $was, '  ...and rolls back the statements already run' );
+	}
+
+	# A populated version-2 file, end to end through _migrate: the fixture's
+	# manual row owns nothing ('absent' is migration 3's default), so it goes.
+	{
+		my $old = version_2_dbh();
+
+		ok( eval { $S->_migrate($old); 1 }, "_migrate takes a populated version-2 file to $target" )
+			or diag($@);
+		is( version_of($old), $target, "  ...and it reports version $target" );
+		is_deeply(
+			[ map { $_->[0] } @{ $old->selectall_arrayref(
+				'SELECT album_key FROM squeezewax.discogs_match ORDER BY album_key') } ],
+			[ 'a' x 32, 'b' x 32 ],
+			"  ...keeping the strict rows and deleting the manual row that owns nothing"
+		);
+	}
+
+	# A file from the NEXT schema version must refuse this plugin.
 	$up->do( 'PRAGMA squeezewax.user_version = ' . ( $target + 1 ) );
 	ok( !eval { $S->_migrate($up); 1 },
 		'a file one version ahead of ' . $target . ' refuses this plugin' );

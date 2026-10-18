@@ -235,7 +235,7 @@ sub startScan { if (main::SCANNER) {
 
 	my %count = (
 		examined => 0, identified => 0, candidate => 0, none => 0,
-		manual   => 0, kept       => 0, skipped   => 0,
+		kept     => 0, skipped    => 0,
 		relinked => $pre->{relinked}, orphaned => $pre->{orphaned},
 		backfilled => $pre->{backfilled},
 	);
@@ -287,7 +287,6 @@ sub startScan { if (main::SCANNER) {
 		$count{identified}++ if $outcome eq 'identified';
 		$count{candidate}++ if $outcome eq 'candidate';
 		$count{none}++      if $outcome eq 'none';
-		$count{manual}++    if $outcome eq 'manual';
 		$count{kept}++      if $outcome eq 'kept';
 
 		if ( ++$since >= COMMIT_EVERY ) {
@@ -302,7 +301,7 @@ sub startScan { if (main::SCANNER) {
 
 	my $summary = "Discogs matching finished: examined $count{examined}, "
 		. "identified $count{identified}, conflicts $count{candidate}, "
-		. "no tag $count{none}, manual $count{manual}, kept $count{kept}, "
+		. "no tag $count{none}, kept $count{kept}, "
 		. "skipped $count{skipped}, relinked $count{relinked}, "
 		. "unrelinked orphans $count{orphaned}, backfilled $count{backfilled}";
 
@@ -310,12 +309,12 @@ sub startScan { if (main::SCANNER) {
 	# report: a mistyped tag name produces "examined 4,800, identified 0" and
 	# nothing else, and at WARN our INFO summary would be invisible.
 	#
-	# 'decidable' excludes manual and kept, which are outcomes where a match was
-	# deliberately NOT established - a manual row is left alone by rule, and a
-	# kept row already carries a decision we may not overwrite. Counting them as
-	# failures made the warning fire on a run that examined one manual album and
-	# did exactly the right thing, telling the user to check tag names that were
-	# not the problem. Observed on a real server.
+	# 'decidable' excludes kept, an outcome where a match was deliberately NOT
+	# established - a kept row already carries a decision we may not overwrite.
+	# Counting such outcomes as failures made the warning fire on a run that
+	# examined one manually matched album (manual matching existed until
+	# §15.46) and did exactly the right thing, telling the user to check tag
+	# names that were not the problem. Observed on a real server.
 	#
 	# hasAnyStrictMatch is the second half of the same lesson, and the first fix
 	# was not enough on its own: a run that examines ONE untagged album in a
@@ -326,7 +325,7 @@ sub startScan { if (main::SCANNER) {
 	#
 	# Deliberately not a threshold on $decidable: any number would be arbitrary,
 	# and the question being asked is not "how many" but "has this ever worked".
-	my $decidable = $count{examined} - $count{manual} - $count{kept};
+	my $decidable = $count{examined} - $count{kept};
 
 	if ( $count{identified} == 0 && $decidable > 0
 		&& !Plugins::SqueezeWax::Match->hasAnyStrictMatch ) {

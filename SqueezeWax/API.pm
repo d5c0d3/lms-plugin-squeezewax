@@ -462,6 +462,7 @@ sub _collectionParams {
 
 # One format as a line the user can match against the object in their hand:
 # "Vinyl, LP, Album, Limited Edition" - the medium, then its descriptions.
+# Details.pm's release details read it; the sync no longer does (§15.46 part 11).
 #
 # `text` is deliberately dropped. On the fixture's first entry it reads
 # "Signed, Gatefold, Butterfly Effect Splatter", which is free-form seller prose
@@ -480,23 +481,6 @@ sub _formatLabel {
 		$format->{name}, @{ $format->{descriptions} || [] };
 }
 
-# One label as "Island Records (524 089-2)". The catalogue number is the thing
-# that actually separates two pressings on the same label, so it is never
-# dropped - but a release with no catno gets the bare name rather than an empty
-# bracket.
-sub _labelLabel {
-	my ($label) = @_;
-
-	return '' unless ref $label eq 'HASH';
-
-	my $name  = $label->{name};
-	my $catno = $label->{catno};
-
-	return '' unless defined $name && $name =~ /\S/;
-
-	return ( defined $catno && $catno =~ /\S/ ) ? "$name ($catno)" : $name;
-}
-
 =head2 entryFromRelease( \%release )
 
 One collection entry from one row of a collection page's C<releases>, or undef
@@ -507,10 +491,12 @@ with this, so the two lists cannot drift (decisions §15.18 part 15).
 
 # Nothing about a release reaches the database - §13.2: ownership is a column
 # on discogs_match, not a mirrored collection, and discogs_collection is not a
-# v1 table. The ownership pass needs the first five fields below and nothing
-# else (§15.13 part 1); the last three exist only for the queue page's re-match
-# list, which is handed this same list and has no other source for them
-# (§15.16 part 6). The lifetime is the caller's: one sync, then gone.
+# v1 table. The ownership pass needs the five fields below and nothing else
+# (§15.13 part 1). The lifetime is the caller's: one sync, then gone.
+#
+# There were three more - year, formats and labels - kept only for the queue
+# page's re-match list (§15.16 part 6). The list went with manual matching
+# (§15.46 part 11), and so did they: less held in memory, and §9.5's direction.
 #
 # The caller keys the list by instance_id, which is the collection ENTRY's
 # identity: the same release owned twice is two instances, and de-duplicating
@@ -534,29 +520,6 @@ sub entryFromRelease {
 		master_id   => $basic->{master_id},
 		title       => $basic->{title},
 		artists     => [ map { $_->{name} } @{ $basic->{artists} || [] } ],
-
-		# The three the RE-MATCH LIST needs and the pass ignores (§15.16 part
-		# 6). They are here because the page is handed this same list and there
-		# is no second fetch to get them from - the collection is discarded when
-		# the sync ends (§13.2), so a field not kept here is a field the page
-		# cannot show.
-		#
-		# Fixed set, not everything basic_information carries. A user choosing
-		# between two pressings of one record needs the year, the medium and
-		# the catalogue number, and each of those is on the sleeve in front of
-		# them. Nothing else earns its place, and a field picker is recorded as
-		# a future feature rather than built.
-		#
-		# Flattened to plain strings here rather than stored raw, so the
-		# template has no structure to walk and the entry list stays something a
-		# suite can compare with is_deeply.
-		#
-		# thumb and cover_image are deliberately NOT kept: whether Discogs'
-		# terms permit showing them is unverified (§9.9 already records that
-		# image URLs are withheld without authentication).
-		year    => $basic->{year},
-		formats => [ map { _formatLabel($_) } @{ $basic->{formats} || [] } ],
-		labels  => [ map { _labelLabel($_) }  @{ $basic->{labels}  || [] } ],
 	};
 }
 

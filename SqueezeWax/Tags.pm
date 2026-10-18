@@ -224,6 +224,8 @@ Returns a hashref:
   tag       the tag name the ID came from
   conflict  arrayref of "NAME=value" strings, when the tags disagree or a
             configured tag's value will not parse
+  unparsed  arrayref of the "NAME=value" strings in C<conflict> whose value
+            will not parse, when there are any (GitHub #6, §15.46 part 7)
 
 Exactly one of C<id> and C<conflict> is set. Neither is set when no configured
 tag is present at all, which is the "no tag found" case.
@@ -276,11 +278,17 @@ sub decide {
 		# Report the values as they appeared, not the parsed ids: the user has
 		# to find these strings in their files, and a bare id would not help
 		# them locate a URL-shaped tag.
+		#
+		# The unreadable values are returned on their own as well, so a caller
+		# can say "this value is not a release ID" rather than "these tags
+		# disagree" when that is what happened (GitHub #6). Wording only: the
+		# verdict is the same conflict either way.
 		return {
 			conflict => [
 				( map { "$found{$_}->{tag}=$found{$_}->{raw}" } @ids ),
 				@unparsed,
 			],
+			( @unparsed ? ( unparsed => [@unparsed] ) : () ),
 		};
 	}
 
@@ -393,7 +401,12 @@ same shape C<decide> does, plus:
 
   read      how many candidate files gave up any tags at all
   kind      which sort of conflict this is, when there is one:
-            'in-file'       two tags in ONE file disagree, or one will not parse
+            'in-file'       two tags in ONE file name different releases
+            'unreadable'    a tag in one file holds a value that will not
+                            parse, and no tag in that file names a release
+            'unreadable-mixed'
+                            one file names exactly one release, and another
+                            tag on it holds a value that will not parse
             'cross-ids'     two files name DIFFERENT releases
             'cross-partial' one file carries a Discogs tag and another does not
   untagged  the files that carried no configured tag, for 'cross-partial'
@@ -459,10 +472,23 @@ sub examineCandidates {
 		# says, and there is nothing a second opinion could settle. The file is
 		# named anyway, because with two candidates the user still has to know
 		# which one to open.
+		#
+		# Which in-file kind is wording only (GitHub #6, §15.46 part 7): the
+		# verdict is a conflict whichever it is, and the stored review_reason
+		# stays 'conflict'. An unreadable value beside two readable ids that
+		# disagree is still 'in-file' - the disagreement is the bigger problem.
 		if ( $decision->{conflict} ) {
+			my $unparsed = scalar @{ $decision->{unparsed} || [] };
+			my $ids      = scalar @{ $decision->{conflict} } - $unparsed;
+
+			my $kind = !$unparsed ? 'in-file'
+				: $ids == 0       ? 'unreadable'
+				: $ids == 1       ? 'unreadable-mixed'
+				:                   'in-file';
+
 			return {
 				read     => $read,
-				kind     => 'in-file',
+				kind     => $kind,
 				conflict => [ map { _fileLabel($url) . ': ' . $_ } @{ $decision->{conflict} } ],
 				untagged => [],
 			};

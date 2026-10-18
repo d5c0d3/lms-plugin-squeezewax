@@ -616,7 +616,11 @@ sub beforeRender {
 	# queue's own render - the page walks the library to build its lists, and
 	# doing that here would make every settings page load pay for a page the
 	# user may not open. The predicate is the queue's own, D3's second clause
-	# included, so the number and the list cannot disagree.
+	# included. The two can still differ: the page leaves out a row whose album
+	# is no longer in the library (no title to show), and this count does not -
+	# a conflict row for a removed album counts here and is not listed. Recorded
+	# in TODO.md (2026-10-18); since §15.46 no 'orphan' row is counted, because
+	# none is written.
 	if ( $params->{dbReady} ) {
 		my ($open) = Slim::Schema->dbh->selectrow_array(
 			q{SELECT COUNT(*) FROM squeezewax.discogs_match
