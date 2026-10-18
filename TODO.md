@@ -23,6 +23,10 @@ matches it).
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
+      §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
+      rows, superseded decisions, docs, tests. Needs a real server: update from a
+      build with manual rows.
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
       Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
       source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
@@ -1462,7 +1466,7 @@ Each names its sites so the work is mechanical rather than a search.
       §15.16 part 6; inferred from the text, not run): ceil(items/100)+1 requests
       per open, e.g. 4 for 203 items, about 51 for a 5,000-item collection. Not
       urgent. Look at it with GitHub #2's single-release check, because it is the
-      same cost question.
+      same cost question. → moot once #8 lands (re-match removed).
 - [ ] **GitHub #7:** unverified whether Discogs treats ids from a user's private
       collection differently from other identifiers (§15.45 point 3).
 - [ ] **2026-10-17: single-release collection check.** Discogs lists a

@@ -7130,3 +7130,31 @@ GitHub #7. Decided in the design chat.
    §15.46.
 7. Designed together with C4 (wantlist sync, GitHub #10), which shares the "what
    may a sync keep" question; each ships alone (§15.43).
+
+### 15.46 The review queue becomes a read-only "needs attention" list; manual matching is removed — before 1.0.0 — 2026-10-17 (owner)
+
+GitHub #8.
+
+1. **Ownership rules unchanged** (owner and design chat agreed, 2026-10-17;
+   matches `Ownership.pm` `_decide`): tagged + release in collection → `exact`,
+   the only "owned" in the strict sense; tagged but not in collection, while
+   another pressing is (same master, or title + artist) → `version`; untagged or
+   contested → title route, or the queue.
+2. **The queue lists, never decides.** Each item shows its reason and what to fix
+   outside SqueezeWax (tags or the Discogs collection). Removed: manual re-match
+   (§15.16 part 6), reject (§15.16 part 7), and every rule that exists only for
+   manual rows. Why: §14.4's premise (a wrong badge is fixed in the collection
+   or the tags, not in the plugin), less code, and no full collection sync per
+   re-match open (ceil(items/100)+1 requests, about 51 for 5,000 items).
+3. **Accepted cost:** all-remote albums (§13.10.1) cannot be tagged. If their
+   title or artist does not match the collection, they stay unowned. Manual
+   match was their only fix.
+4. **Before 1.0.0** (owner): after the release this removal would break existing
+   users and need `2.0.0` (§15.43 ruling 2). Ships as a 1.0.0 beta on
+   `v1-buildout`, not as a feature branch.
+5. **Open, for the build plan:** what happens to existing
+   `match_tier = 'manual'` rows on update (drop them, or treat them as
+   untagged); which decisions and docs are superseded (at least §15.16 parts 6,
+   7, 11, 13; §15.5's reason for recovery, "recovery exists for manual rows";
+   §10.3; design §3's manual link; README and user guide re-match text);
+   whether orphan recovery is still needed at all.
