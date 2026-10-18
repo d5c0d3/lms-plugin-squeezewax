@@ -1485,6 +1485,8 @@ ids that change, a mistake §2 and `TODO.md` cite as a precedent to avoid.
 
 ## 10. "Clear & rebuild matches" preserves manual rows and nothing else
 
+**Superseded 2026-10-17 by §15.46** (no manual rows remain to preserve; GitHub #5 closed).
+
 **Decided 2026-09-07 (design chat).** Resolves the open question carried since
 step 3 and named as a precondition in
 `plans/build-order-step-4-structural-matching.md` §2.1.
