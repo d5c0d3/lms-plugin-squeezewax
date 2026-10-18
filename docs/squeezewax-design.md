@@ -1227,7 +1227,7 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - Master details for albums the user does not own (decisions §15.31).
 - Menus for owned versions: the release link and release details for the
   pressing a `version` album's owner actually holds, which needs that release id
-  stored (§15.31 ruling 17).
+  stored (§15.31 ruling 17). — GitHub #7, decided §15.45.
 - "Add to Discogs wantlist" (§15.31). Unverified: whether a personal token may
   write to the user's wantlist.
 

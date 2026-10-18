@@ -1463,6 +1463,8 @@ Each names its sites so the work is mechanical rather than a search.
       per open, e.g. 4 for 203 items, about 51 for a 5,000-item collection. Not
       urgent. Look at it with GitHub #2's single-release check, because it is the
       same cost question.
+- [ ] **GitHub #7:** unverified whether Discogs treats ids from a user's private
+      collection differently from other identifiers (§15.45 point 3).
 - [ ] **2026-10-17: single-release collection check.** Discogs lists a
       "Collection Items By Release" endpoint (docs navigation; body not read, so
       unverified; python3-discogs-client `collection_items(release_id)` is
@@ -2006,7 +2008,7 @@ Each names its sites so the work is mechanical rather than a search.
       "refinement, not rejection" and never decided. Design §4 states what
       the menu says and stops there, because design does not specify
       mechanisms only a `TODO.md` note proposes.
-- [ ] **2026-09-13, v2: should the sync retain the release id of the owned
+- [x] **2026-09-13, v2: should the sync retain the release id of the owned
       collection entry?** Decisions §14.10 rules NO for v1, so pressing
       details, credits and value are ABSENT from the context menu for an
       album owned by version alone — the majority case (87 of 96 auto-badged
@@ -2016,6 +2018,7 @@ Each names its sites so the work is mechanical rather than a search.
       that it would not work. **Revisit with wantlist**, which needs
       collection-entry data of its own and forces the same question about
       what a sync may keep. A later fix is a migration on `discogs_match`.
+      → 2026-10-17: decided §15.45; GitHub #7.
 - [x] **2026-09-13, RESOLVED: one badge state, not two.** Decisions §13.8 left
       exact-versus-version open as a UI question; both design §3's and §4's
       flowcharts terminate in a node that cannot be drawn without it. Version
@@ -2348,10 +2351,11 @@ Each names its sites so the work is mechanical rather than a search.
       → 2026-10-12: not reproduced on two install-and-restart rounds (0.0.0.15,
       0.0.0.16); `plugin.squeezewax` came up at its `log.conf` level both times.
       Left open, as one unexplained observation. Close it if it never recurs.
-- [ ] **2026-09-30, v2: link the release the user actually owns.** Owner's
+- [x] **2026-09-30, v2: link the release the user actually owns.** Owner's
       request 8. Needs the owned release id(s) per album stored, one-to-many
       (several pressings of one record is normal), a migration, and §14.10
       reversed. Goes with the wantlist and the master search.
+      → 2026-10-17: decided §15.45; GitHub #7.
 
 - [x] **2026-10-13, decide before the beta: a submenu can stay "busy" until the
       next sync.** → 2026-10-13: FIXED, decisions §15.32: `rateWait` counts down

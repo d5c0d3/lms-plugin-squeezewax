@@ -2085,6 +2085,8 @@ it is not lost.
 
 ### 13.2 Match during the sync; store conclusions, not Content
 
+**Amended 2026-10-17 by §15.45** (owned release ids are kept).
+
 **Decided: the sync holds each collection page in memory, matches it against LMS
 albums there, writes only the conclusion, and discards the payload.**
 
@@ -2977,6 +2979,8 @@ is in the same settings page — so the wait is bounded by one click for anyone
 who reads the warning.
 
 ### 14.10 v1 does not retain the release id of the owned collection entry
+
+**Reversed 2026-10-17 by §15.45.**
 
 **Decided 2026-09-13 (design chat).**
 
@@ -7095,3 +7099,34 @@ reopening after it is switched on.
 
 Requested by forum user Dentaku (Material in LyrPlay and Squeeze-LX). Decided
 in the design chat "Top-level menu setting request".
+
+### 15.45 Owned pressings are stored — reverses §14.10 — 2026-10-17 (owner)
+
+GitHub #7. Decided in the design chat.
+
+1. The collection sync keeps, per album, the release id(s) of the collection
+   entries that made it owned (`basic_information.id`), one-to-many, rebuilt in
+   full at every completed sync. No extra request: the ids are in the sync reply
+   (§14.10, "The information exists and is deliberately discarded").
+2. The album menu shows each owned pressing as a link plus its "Release details"
+   submenu, for `version` albums and also for `exact` albums where further
+   pressings are owned. All owned pressings are listed.
+3. Storage rule: inferred to fit §9.5 ("store conclusions, not Content"): a bare
+   id plus our conclusion, the same class as `discogs_release_id`, refreshed each
+   sync. **Unverified:** whether Discogs treats ids taken from a user's private
+   collection differently; never examined.
+4. Answers §14.10's three grounds: (1) §9.5 examined as above; (2) amends §13.2,
+   which now reads "the sync stores conclusions and the owned release ids; the
+   rest of the payload is discarded"; (3) this is the separate examination
+   §14.10 asked for.
+5. Needs a migration. Shape (column vs a small table keyed by `album_key`) is
+   decided in the build plan; inferred: a table, because one album can have
+   several owned pressings (TODO 2026-09-30).
+6. **Master link from the owned pressing** (owner, 2026-10-17): the collection
+   entry's `master_id` (in the sync reply; `Ownership.pm` `_indexCollection`
+   reads `$entry->{master_id}`) gives a version album its master link with no
+   search. This replaces the separate "master search for version albums" item
+   (TODO 2026-09-29); its "re-match from the album menu" half is moot after
+   §15.46.
+7. Designed together with C4 (wantlist sync, GitHub #10), which shares the "what
+   may a sync keep" question; each ships alone (§15.43).
