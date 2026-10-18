@@ -550,7 +550,7 @@ diag('API/Sync.pm: the walk');
 	my ($one) = grep { $_->{instance_id} == 2001 } @{ $result->{entries} };
 	is_deeply(
 		[ sort keys %$one ],
-		[ sort qw(instance_id id master_id title artists year formats labels) ],
+		[ sort qw(instance_id id master_id title artists) ],
 		'each entry is API.pm\'s entryFromRelease shape - the one the async path builds'
 	);
 

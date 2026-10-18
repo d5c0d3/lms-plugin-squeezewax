@@ -671,18 +671,11 @@ sub _finish {
 	# marker advancing, not a second way out: the marker means "ownership last
 	# derived", so it may not move for a sync whose conclusions were never
 	# written.
-	# Hoisted out of the ->apply call it used to be built inside, because the
-	# page gets this same list and it must be the SAME one: a re-match list that
-	# offered a release the pass could not see would let the user link an album
-	# to a record that then refuses to badge, with nothing to say why.
-	my $entries;
-
 	if ( $result->{ok} ) {
 		require Plugins::SqueezeWax::Ownership;
 
-		$entries = [ values %{ $run->{entries} || {} } ];
-
-		my $applied = Plugins::SqueezeWax::Ownership->apply($entries);
+		my $applied = Plugins::SqueezeWax::Ownership->apply(
+			[ values %{ $run->{entries} || {} } ] );
 
 		if ( $applied ne 'ok' ) {
 			$result = { ok => 0, error => $applied };
@@ -734,22 +727,11 @@ sub _finish {
 		$prefs->set( 'discogsLastSyncError', $result->{error} );
 	}
 
-	# The second argument, and only here. The other three callback sites -
-	# no_token (:225), already_running (:233) and superseded (:680) - pass one
-	# argument, because none of them has a list and two of them never issued a
-	# request.
-	#
-	# Only when the FINAL result is ok, which means after the pass has also
-	# succeeded: a pass that declined rewrote $result above, and a page that
-	# rendered a re-match list from a sync whose conclusions were never written
-	# would be offering choices against a badge state that does not exist yet.
-	# A pass refusal reaches the page as its existing 'refused' error, which the
-	# settings page already has a string for.
-	#
-	# Nothing is stored and nothing is logged from it. It is dropped when the
-	# callback returns - the same lifetime §15.13 part 1 gives the pass, now
-	# shared with one render (§15.16 part 6).
-	$run->{cb}->( $result, $result->{ok} ? $entries : () );
+	# One argument, as at every other callback site. Until §15.46 a successful
+	# sync also handed its caller the entry list, for the queue page's re-match
+	# list; that page was the only reader (Plugin::_syncDone and the settings
+	# page's callback read the result alone), and it is gone (§15.46 part 11).
+	$run->{cb}->($result);
 
 	return;
 }
