@@ -37,6 +37,7 @@ my @MIGRATIONS = (
 	\&_migration_5,
 	\&_migration_6,
 	\&_migration_7,
+	\&_migration_8,
 );
 
 # A sub, not a `use constant`: constants are folded at BEGIN, before the
@@ -843,6 +844,88 @@ sub _migration_7 {
 			value TEXT NOT NULL
 		)
 	});
+
+	return 1;
+}
+
+# Migration 8: manual matching is removed. Decisions §15.46 parts 6, 8, 9 and
+# 10, GitHub #8. Data only; no DDL.
+#
+# Four statements, each guarded by its own WHERE, so a re-run finds nothing to
+# do:
+#
+#   a. a manual row that owns nothing is deleted. It would assert nothing
+#      (§14.8 invariant 3), and no no-match row needs writing in its place:
+#      recordManual cleared it, so the next scan examines the album afresh.
+#   b. every other manual row becomes ownership-only: album_key, mb_album_id,
+#      lms_album_id and ownership kept, the rest NULL. Not deleted, because
+#      "Records I own" is rebuilt only after a sync and the menu reads the row
+#      now - deleting would make the two disagree until then (part 6). The next
+#      scan re-examines the album (no tier, no no-match row) and the next sync
+#      re-decides its ownership by tags or title.
+#   c. 'orphan' is no longer written (part 8); existing marks are cleared.
+#   d. conflict rows get source_timestamp NULL, so the next scan re-examines
+#      each once and part 9's no-tag rule (Match.pm _recordNoMatch) reaches the
+#      rows already stuck. Not a LOGIC_VERSION bump: that re-reads the whole
+#      library (§15.24).
+#
+# The CHECKs keep 'manual' and 'orphan'. Narrowing them is a full rebuild of the
+# one table that is not regenerable (as migration 3), for no gain; nothing writes
+# either value, and scripts/syntax-check.sh guards that.
+#
+# Plain UPDATE and DELETE, nothing newer than SQLite 3.22.0 (§15.42). One
+# transaction: the server handle is AutoCommit => 1 (Slim/Schema.pm:274), so a
+# failure rolls back all four and _migrate refuses to bump user_version.
+sub _migration_8 {
+	my $dbh = shift;
+
+	my %count;
+
+	$dbh->begin_work;
+
+	eval {
+		$count{deleted} = $dbh->do(q{
+			DELETE FROM squeezewax.discogs_match
+			 WHERE match_tier = 'manual' AND ownership = 'absent'
+		}) + 0;
+
+		$count{converted} = $dbh->do(q{
+			UPDATE squeezewax.discogs_match SET
+			       match_tier = NULL, state = NULL,
+			       discogs_release_id = NULL, discogs_master_id = NULL, matched_at = NULL,
+			       snapshot_artist = NULL, snapshot_album_title = NULL,
+			       snapshot_track_count = NULL, source_timestamp = NULL,
+			       derived_master_id = NULL, derived_from_release_id = NULL, derived_at = NULL,
+			       review_reason = NULL
+			 WHERE match_tier = 'manual'
+		}) + 0;
+
+		$count{orphan} = $dbh->do(q{
+			UPDATE squeezewax.discogs_match SET review_reason = NULL
+			 WHERE review_reason = 'orphan'
+		}) + 0;
+
+		$count{conflict} = $dbh->do(q{
+			UPDATE squeezewax.discogs_match SET source_timestamp = NULL
+			 WHERE review_reason = 'conflict' AND source_timestamp IS NOT NULL
+		}) + 0;
+
+		$dbh->commit;
+
+		1;
+	} or do {
+		my $err = $@ || 'unknown error';
+
+		eval { $dbh->rollback; 1 } or $log->error("rollback after a failed migration 8 also failed: $@");
+
+		die "converting manual rows failed: $err";
+	};
+
+	main::INFOLOG && $log->is_info
+		&& $log->info( "migration 8: $count{deleted} manual row(s) owning nothing deleted, "
+			. "$count{converted} manual row(s) made ownership-only, "
+			. "$count{orphan} orphan mark(s) cleared, "
+			. "$count{conflict} conflict row(s) set to be re-examined" );
 
 	return 1;
 }
