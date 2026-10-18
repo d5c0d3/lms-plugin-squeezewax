@@ -2484,11 +2484,41 @@ Each names its sites so the work is mechanical rather than a search.
         skipped 1; A strict 198756 again, C still `conflict`; no SQL error.
         (Starting the container ran b5 once on the edited DB before the update;
         rows were untouched.)
-      - **B (reference server): NOT RUN.** The session's permission classifier
-        refused listing `/var/lib/squeezeboxserver/prefs/` and a `sudo -n` probe
-        (needed to stop LMS and copy `squeezewax.db`/`-wal`/`-shm`). The share
-        `/mnt/nas-music` is mounted (cifs, ro). Nothing on the reference server
-        was touched. Owner: run B, or allow the stop/copy.
+      - **B (reference server, SQLite 3.46.1, 2026-10-19): PASS with three
+        deviations from the plan's inferences** (owner stopped and restarted LMS
+        and set DEBUG; share mounted throughout). Copies in `tmp/checkb6/`
+        (`reference/squeezewax.db`; the `-wal`/`-shm` did not appear in the copy
+        directory, the live `-wal` was 0 bytes), before/after dumps
+        `ref-before-full.txt`, `ref-after-full.txt` (507 rows each).
+        Before: user_version 7; exact 152, version 54, absent 301; 2 manual
+        rows (`78b6b24a…` Depeche Mode, `4ecfede3…` Blood Sugar Sex Magik, both
+        `exact`), 0 orphan, 5 conflict; settings page "5 waiting".
+        After update: log clean, user_version 8, migration 8 "0 manual row(s)
+        owning nothing deleted, 2 … made ownership-only, 0 orphan mark(s)
+        cleared, 5 conflict row(s) set to be re-examined" = the dump. Album menu
+        of an owned, no-link album: "You own a pressing", no Discogs links
+        (album 4323; **inferred** to be `78b6…`, whose stored `lms_album_id`
+        3533 no longer exists). No track menu opened. Queue page: one list, 5
+        "Show tags" buttons (conflicts only), no choose/remove/move, no orphan
+        list, why + what to do on each row; Show tags on a conflict names the
+        file with a tag and the file without. Rescan: scanner log "examined 5,
+        identified 0, conflicts 5, skipped 760"; ownership pass exact=150
+        version=54 absent-with-row=303, updated=2, ambiguous=1,
+        artist-disagree=1; scan-time sync 205 items in 4 requests.
+        Diff before/after = 6 rows: four conflict rows changed `lms_album_id`
+        only (LMS reassigned ids: 3413→4203, 3416→4206, 3417→4207, 3421→4211);
+        `4ecfede3…` is now `absent`/`artist-disagree` (as expected);
+        `78b6b24a…` is now `absent`/**`ambiguous`**.
+        **Deviations to decide:** (1) the plan expected the formerly manual
+        album to be examined in the scan; the log's 5 examined are the
+        conflicts, the two ownership-only rows were not (skipped or untagged:
+        not distinguished). (2) exact is **150, not 151**: both ex-manual albums
+        left `exact`, because `78b6…` resolved to `ambiguous` (three Depeche
+        Mode "Songs of Faith and Devotion" albums, 3854, 3855, 4323), which
+        no manual pick can override now. (3) queue is 7, settings page says
+        "7 waiting", list has 7 rows (low item (a): count and list agree). The
+        repository list is back to the website URL.
+
 - [ ] **2026-10-14: large collections against the scan-time sync cap.**
       `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
       `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
