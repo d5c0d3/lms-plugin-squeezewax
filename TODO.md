@@ -3828,6 +3828,21 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **GitHub #13 — work out ownership again by itself when the master lookups
+  finish** (2026-10-19; enhancement, `needs-design`; 1.0.0 or 1.N.0 undecided).
+  Trigger: `Derive::_stop` with "every identified release now has an answer"
+  (`Derive.pm:594`) and at least one master found since the last completed sync
+  for an album not already 'exact'. Read that from `derived_at` against the sync
+  marker's time, with no counter; this relaxes the "nothing branches on
+  `derived_at`" rule (`Schema.pm` ~779). The extra sync writes a 'server' marker,
+  because `source` has a CHECK of 'server'/'scan' (`Schema.pm:734`) and only
+  'scan' suppresses the fallback. It stops by itself: the "nothing to derive"
+  path returns before any request (`Derive.pm` ~154-165). Cost:
+  ceil(items/100)+1 requests per chain, only when masters were found. Docs
+  stopgap done (setup step 6 is only needed without master tags). Related:
+  comment on #7 (storing collection master ids would allow a local re-check;
+  needs its own decision).
+
 - [ ] **GitHub #9 — master link + "Master info" for tagged albums not owned.
   Owner undecided (2026-10-17), label `undecided`.** Cheap: `Derive.pm` covers
   every identified album, owned or not (`$IDENTIFIED = discogs_release_id IS NOT

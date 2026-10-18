@@ -109,8 +109,9 @@ start, see [Starting over](#starting-over).
    and changed media files".
 5. Wait until the settings page no longer shows "Master releases". If it says
    "paused", press "Sync collection now".
-6. Press "Sync collection now" once. "You own a version" results appear after
-   this sync.
+6. Only if your files have no master-release tag: press "Sync collection now"
+   once after step 5. Albums whose files carry a master tag already show "You
+   own a version" after the rescan.
 
 Until the first collection sync has finished, the settings page shows a short
 version of these steps at the top.
