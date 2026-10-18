@@ -2324,8 +2324,21 @@ Each names its sites so the work is mechanical rather than a search.
       with no tag cannot be given a pressing except by tagging. Revisit with the
       master search.
       → 2026-10-17: moot, manual matching removed (§15.46, GitHub #8).
-- [ ] **2026-09-29: pressing details and credits in the menu** — cut from v1;
+- [x] **2026-09-29: pressing details and credits in the menu** — cut from v1;
       return only with "Data provided by Discogs" placed next to them.
+      → 2026-10-17: pressing details DONE by step 10 ("Release details":
+      label/catno, format, country, released, year, Have/Want, rating, for sale;
+      with "Data provided by Discogs"; `Details.pm` `_releaseDetails`, §15.31
+      ruling 1). Credits → GitHub #12, `undecided` (owner, 2026-10-17): release
+      credits in "Release details" only; track credits only in the track menu,
+      NEVER at album level (owner rule). Source: release `extraartists` and
+      `tracklist[].extraartists` in the same request (verified, fixtures
+      `scripts/fixtures/release-14590709.json`; phase 0 step 10 top-level keys).
+      Open: LMS track → Discogs position mapping (A1/B2/2-03, vinyl), long lists
+      on players, overlap with LMS's own tag credits. Related: Music & Artist
+      Information (`michaelherger/MusicArtistInfo` @ `a5ea399`: album/track
+      providers `moremusicinfo`/`moretrackinfo`; no online personnel credits;
+      local `credits.*` files, `LocalFile.pm:341`; client not reused, §9.10).
 - [x] **2026-09-29: Jivelite and service logos.** The owner reports seeing
       online-library logos on a player skin; Jivelite `d43a20b` has no such
       code. Needs a photo and the skin's name before anything rests on it.
