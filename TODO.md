@@ -3715,6 +3715,18 @@ Each names its sites so the work is mechanical rather than a search.
   (§15.31 ruling 17). Trade-off: entries on most tagged albums, a busier More
   menu.
 
+- [ ] **GitHub #10 — Discogs wantlist: album menu line + "Records I want" view**
+  (owner, 2026-10-17; open, `needs-design`). Investigate first, Listen Later's
+  Wish List (verified by reading `SimonArnold002/LMS-Listen-to-Later` @
+  `ecb3622`): a local list in `listenlater.db` (`albums.status='wishlist'`,
+  `ListenLater/DB.pm`), any source, no Discogs use, "Buy" opens Bandcamp only
+  (`_buyCommand`); CLI `listenlater add/move/remove/contextmenu` (`Plugin.pm`
+  269–274). Questions: naming apart from "Wish List", overlap display,
+  collaboration (ask the author first). Unverified: the wantlist list endpoint
+  and whether a private wantlist needs the token. Cost (inferred):
+  +ceil(wants/100) requests per sync; a migration (wanted ids per album, rebuilt
+  each sync, as §15.45).
+
 - [ ] **2026-10-14: add to wantlist from the album menu — v2.** Wantlist is v2
   (decisions §5, line 733; endpoint `PUT /users/{username}/wants/{release_id}`
   recorded there). Should be user-triggered only. Supporting rule, in decisions §9.5's

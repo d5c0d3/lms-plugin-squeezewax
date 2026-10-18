@@ -809,6 +809,8 @@ can be ambiguous too).
 - No marketplace-result hint (e.g. "you want this" annotation inside the
   on-demand marketplace lookup screen, §7) for now — out of scope unless
   revisited later.
+- **2026-10-17:** a cover badge is impossible (§15.25); shown as a menu line and
+  a "Records I want" view instead (GitHub #10).
 
 ---
 
@@ -1217,7 +1219,7 @@ reflect their shelves is outside what this plugin can usefully do for them.
 - On-demand marketplace lookup.
 
 **v2:**
-- Wantlist sync & wantlist badge.
+- Wantlist sync & wantlist badge. → GitHub #10 (menu line + 'Records I want' view; no cover badge, §15.25).
 - ~~Triage / library-health page (problem releases only).~~ — dropped 2026-10-17, see decisions §5 note.
 - ~~Completeness / misalignment detection ("you have 9 of 12 tracks").~~ — dropped 2026-10-17.
 - Flow 1 (streaming → Discogs pressings grid).
