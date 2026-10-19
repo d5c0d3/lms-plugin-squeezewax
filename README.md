@@ -111,7 +111,8 @@ start, see [Starting over](#starting-over).
    "paused", press "Sync collection now".
 6. Only if your files have no master-release tag: press "Sync collection now"
    once after step 5. Albums whose files carry a master tag already show "You
-   own a version" after the rescan.
+   own a version" after the rescan. The settings page tells you when this is
+   needed.
 
 Until the first collection sync has finished, the settings page shows a short
 version of these steps at the top.

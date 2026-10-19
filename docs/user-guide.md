@@ -32,7 +32,7 @@ release ID.
    itself during the scan. Only if your files have no master-release tag, press
    "Sync collection now" once after the "Master releases" work on the settings
    page has finished; albums whose files carry a master tag already show "You own
-   a version" after the rescan.
+   a version" after the rescan. The settings page tells you when this is needed.
 7. **Check.** Open the album's menu. It should say "You own a pressing" (or "You
    own a version") with the Discogs link or links, and the album should appear in
    "Records I own". If it doesn't, see section 4.
