@@ -1854,7 +1854,8 @@ Each names its sites so the work is mechanical rather than a search.
       change. Probably reachable only after a transient 401 — decisions §15.18's
       hardware addendum, correction 3.
 
-- [ ] **2026-09-27: should `ScanSync` check `hasSSL` itself?** On a platform
+- [x] **2026-09-27: should `ScanSync` check `hasSSL` itself?** (Yes, 2026-10-19;
+      see the 2026-10-14 item under Housekeeping.) On a platform
       whose system perl lacks `IO::Socket::SSL` and `Net::SSLeay`, LMS's
       `Slim/Networking/SimpleSyncHTTP.pm:22-41` only **warns**, so every
       scan-time sync would fail with nothing but a warning in the scanner log
@@ -3502,9 +3503,13 @@ Each names its sites so the work is mechanical rather than a search.
       perl; scan-time sync over HTTPS not observed on Docker. Source for wording:
       slimserver eb59bbf, `Slim/Networking/SimpleSyncHTTP.pm:79` warns under
       network.http, default ERROR (`Slim/Utils/Log.pm:897`).
-- [ ] 2026-10-14: open question strengthened: should ScanSync check hasSSL
+- [x] 2026-10-14: open question strengthened: should ScanSync check hasSSL
       itself and log at error, given LMS's own warning is hidden by default.
       Decide before 1.0 release.
+      → Decided 2026-10-19 (owner): yes. `ScanSync::_run` checks `hasSSL` before
+      the collection request, logs once at error and returns, so the fallback
+      syncs (decisions §15.18, 2026-10-19 note). Offline only; no scanner without
+      `IO::Socket::SSL` has been tried.
 
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README

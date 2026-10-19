@@ -4895,6 +4895,15 @@ open question: whether `ScanSync` should check `hasSSL` itself and log at error.
 > (`Slim/Utils/Log.pm:897`), so by default nothing is logged at all. README fixed
 > in fde4605.
 
+> Decided 2026-10-19 (owner): `ScanSync` checks it. Before the collection request
+> it calls `Slim::Networking::SimpleSyncHTTP->hasSSL` (`public/9.1` @ `a670a38`,
+> `Slim/Networking/SimpleSyncHTTP.pm:24`). If that is false it logs once at error,
+> "Scan-time collection sync skipped: this scanner cannot use HTTPS
+> (IO::Socket::SSL missing). The server will sync after the scan.", and returns 0
+> with no request, no progress row and no marker, so the fallback syncs after the
+> scan. Once per scan: the check runs once in each scanner process. Offline only
+> (`scan-sync-check.pl`); no scanner without `IO::Socket::SSL` has been tried.
+
 ### 15.19 Two findings from the title-route checks: rule 3 works, and node F cannot fire
 
 **Found 2026-09-28** on the reference server (0.0.0.11), from two checks aimed at
