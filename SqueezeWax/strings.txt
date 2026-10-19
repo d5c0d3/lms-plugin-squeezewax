@@ -362,6 +362,9 @@ PLUGIN_SQUEEZEWAX_DERIVE_WAITING
 PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
 	EN	paused — resumes after the next library scan or Sync collection now
 
+PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE
+	EN	New master releases found. Press 'Sync collection now' to update which records you own.
+
 PLUGIN_SQUEEZEWAX_ATTRIBUTION
 	EN	Discogs
 

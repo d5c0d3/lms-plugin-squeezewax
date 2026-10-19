@@ -1304,4 +1304,51 @@ diag('§15.38 item 7: the scheduled flag follows the re-arm timer');
 	is( $D->isResumeScheduled, 0, 'abort clears it' );
 }
 
+# ---------------------------------------------------------------------------
+# Decisions §15.47 (GitHub #14): masters found since the last sync
+# ---------------------------------------------------------------------------
+
+diag('§15.47: newMastersSince, the settings notice\'s query');
+
+{
+	reset_state();
+	wipe();
+
+	my $SYNC = 1_790_000_000;
+
+	is( $D->newMastersSince(undef), 0, 'no completed sync: no notice, whatever the rows say' );
+	is( $D->newMastersSince(0),     0, '  ...nor with a zero time' );
+
+	# A master found after the sync, for an album the sync left 'version'.
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111,
+		ownership => 'version', derived_master_id => 501,
+		derived_from_release_id => 111, derived_at => $SYNC + 60 );
+	is( $D->newMastersSince($SYNC), 1, 'a master found after the sync, album not exact: shown' );
+
+	is( $D->newMastersSince( $SYNC + 60 ), 0, '  ...hidden after a sync in the same second' );
+	is( $D->newMastersSince( $SYNC + 120 ), 0, '  ...and after a newer sync' );
+
+	# Only exact albums got masters.
+	$dbh->do(q{UPDATE squeezewax.discogs_match SET ownership = 'exact'});
+	is( $D->newMastersSince($SYNC), 0, 'only exact albums got masters: hidden' );
+
+	# A release looked up and found to have no master.
+	$dbh->do(q{UPDATE squeezewax.discogs_match
+	              SET ownership = 'absent', derived_master_id = NULL});
+	is( $D->newMastersSince($SYNC), 0, 'a lookup that found no master: hidden' );
+
+	# A master found before the sync: that sync already used it.
+	$dbh->do( q{UPDATE squeezewax.discogs_match
+	               SET derived_master_id = 501, derived_at = ?}, undef, $SYNC - 60 );
+	is( $D->newMastersSince($SYNC), 0, 'a master found before the sync: hidden' );
+
+	# One qualifying row among others is enough.
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222,
+		ownership => 'absent', derived_master_id => 502,
+		derived_from_release_id => 222, derived_at => $SYNC + 5 );
+	is( $D->newMastersSince($SYNC), 1, 'one qualifying album among settled ones: shown' );
+
+	is( scalar @REQUESTS, 0, 'no request at any point' );
+}
+
 done_testing();

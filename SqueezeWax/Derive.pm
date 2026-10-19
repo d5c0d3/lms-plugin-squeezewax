@@ -331,6 +331,42 @@ sub progress {
 	};
 }
 
+=head2 newMastersSince( $since )
+
+True when this job has found a master after C<$since> (the last completed sync's
+time) for an album that is not already C<'exact'>: ownership may change, and only
+a sync works it out again. False with no C<$since>, since there is then no sync to
+be newer than. The settings page's notice (decisions §15.47).
+
+One query and no request. Whether the job is running is the caller's to ask.
+
+=cut
+
+# derived_master_id, not derived_from_release_id: a release looked up and found
+# to have no master changes nothing node F could decide. 'exact' is left out
+# because a master cannot change it: node D decides it before node F is reached
+# (Ownership.pm _decide).
+#
+# The one reader of derived_at that branches. It compares, it does not fetch, so
+# §15.22's "no age-based re-fetch" stands (Schema.pm, migration 6 comment).
+# Plain SELECT ... LIMIT 1, which SQLite 3.22.0 accepts (§15.42).
+sub newMastersSince {
+	my ( $class, $since ) = @_;
+
+	return 0 unless $since;
+
+	my ($found) = Slim::Schema->dbh->selectrow_array( q{
+		SELECT 1
+		  FROM squeezewax.discogs_match
+		 WHERE derived_master_id IS NOT NULL
+		   AND derived_at > ?
+		   AND ownership <> 'exact'
+		 LIMIT 1
+	}, undef, $since );
+
+	return $found ? 1 : 0;
+}
+
 # ---------------------------------------------------------------------------
 # Pacing, and the three ways a run yields.
 # ---------------------------------------------------------------------------
