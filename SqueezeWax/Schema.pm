@@ -776,9 +776,11 @@ sub _migration_5 {
 # discogs_release_cache stays unwritten. scripts/derive-check.pl asserts that
 # rather than trusting it.
 #
-# derived_at is for the log and for a human reading the table. Nothing branches
+# derived_at is for the log and for a human reading the table. No fetch branches
 # on it, deliberately: an age-based re-fetch is exactly the "repeated to keep it
-# fresh" that §15.22 rules out.
+# fresh" that §15.22 rules out. One display does (decisions §15.47): the settings
+# page compares it with the last sync's time to say a sync is needed. That reads
+# two numbers and fetches nothing, so the rule above is not touched.
 #
 # No CHECK and no index. A master id is an opaque integer with no enumerable
 # domain, and the selection query below is a full scan of ~500 rows once per run.

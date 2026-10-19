@@ -23,6 +23,10 @@ matches it).
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+      Needs a real server: fresh install with tags but no master tags. The
+      notice appears after the master job finishes, is absent while it runs, and
+      is gone after 'Sync collection now'. Absent on a settled library.
 - [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
       Needs a real server: the queue page shows the link; an own compilation with
       its release-ID tag removed leaves the queue after a rescan (#8 part 9).
@@ -3842,7 +3846,8 @@ Each names its sites so the work is mechanical rather than a search.
 ## Deferred by decision — not forgotten
 
 - [ ] **GitHub #13 — work out ownership again by itself when the master lookups
-  finish** (2026-10-19; enhancement, `needs-design`; 1.0.0 or 1.N.0 undecided).
+  finish** (2026-10-19; enhancement, `needs-design`; **target 1.1.0** (owner, 2026-10-19;
+  §15.47); builds on #14's check).
   Trigger: `Derive::_stop` with "every identified release now has an answer"
   (`Derive.pm:594`) and at least one master found since the last completed sync
   for an album not already 'exact'. Read that from `derived_at` against the sync

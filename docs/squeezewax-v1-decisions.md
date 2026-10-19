@@ -7345,3 +7345,26 @@ Deviations from the plan, each small:
   incumbent conflict examined while its files are unreachable is deleted and
   given a no-match row. Pre-existing for fresh conflicts; recorded in
   `TODO.md`, not changed.
+
+### 15.47 New-masters notice in 1.0.0; automatic sync in 1.1.0 — 2026-10-19 (owner)
+
+GitHub #14 and #13.
+
+1. **Owner chose:** for 1.0.0, a notice on the settings page (GitHub #14). The
+   automatic sync after the master job (GitHub #13) follows in 1.1.0.
+2. **The notice** reads "New master releases found. Press 'Sync collection now'
+   to update which records you own." It shows when at least one `discogs_match`
+   row has `derived_master_id` not NULL and `derived_at` later than the last
+   completed sync's time (`Schema->syncState`), for an album whose `ownership`
+   is not `'exact'`. With no completed sync there is no notice: the first-steps
+   hint (§15.38 item 2) covers that case.
+3. **Hidden while the master job runs** (`Derive->isRunning`), and gone after
+   the next completed sync, whichever path writes the marker.
+4. **No Discogs request.** A read at page render only, like the derive count
+   (§15.38 item 3); it is part of the 5 s live refresh (§15.40).
+5. **Relaxes the `Schema.pm` note** "Nothing branches on [derived_at]" (migration
+   6 comment). That note guards against age-based re-fetching (§15.22); this is
+   a display comparison and fetches nothing. The comment is amended to say so.
+6. **Why #13 is not in 1.0.0:** it would be the first Discogs traffic that is not
+   directly caused by a user's action (a scan, the button), so it needs its own
+   beta round.
