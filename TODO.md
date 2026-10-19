@@ -2464,7 +2464,18 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
+- [ ] **2026-10-19: the new-masters notice shows in the gaps between derive
+      runs (GitHub #14, §15.47).** `Settings.pm:687` tests `!Derive->isRunning`
+      only. Between runs the job is "waiting" (`isRunning` 0, `isResumeScheduled`
+      1, 60 s `REARM`), so on a fresh install the notice flickers on and off for
+      the ~25 minutes the job takes, while the "Master releases" line is still
+      shown. The check and the comment at `Settings.pm:682-685` both say "not
+      while the job runs". Likely fix: also require `!isResumeScheduled`.
+      Seen on hardware 2026-10-19, fresh install, 16 runs; the offline suite
+      does not model the gap. Needs a code change and a decision (§15.47).
+
+
+- [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
       offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
       1. **#14** (decisions §15.47): fresh install with release-ID tags but no
          master tags. After the scan, while "Master releases" is running, no
@@ -2480,6 +2491,40 @@ Each names its sites so the work is mechanical rather than a search.
          servers, the scan-time sync still runs (its Info summary line, no
          "cannot use HTTPS" error). The skip path itself is offline-only unless a
          scanner without `IO::Socket::SSL` is found.
+      **2026-10-19 session results (reference server, LMS 9.1.1, SQLite 3.46.1,
+      share mounted throughout; owner present):**
+      - Preflight: b7 installed from the dev `repo.xml` (§4.1 method), log clean,
+        `user_version` 8. Backup of the b6-era DB in
+        `tmp/checkb7/backup-2026-10-19-2125/` (the `-wal`/`-shm` did not exist
+        after a clean stop). Log level of `plugin.squeezewax` was already DEBUG
+        and saved in `log.conf`; not changed, nothing to restore.
+      - **#14, settled library: PASS.** No `swxNewMasters` div; §15.47 query by
+        hand returned no row (marker 1792362773; newest `derived_at`
+        1792247803 of 442 derived).
+      - **HTTPS check: PASS.** Ordinary rescan: "scan-time collection sync: 205
+        items in 4 requests … ownership derived"; no "cannot use HTTPS"; no SQL
+        error; no notice afterwards (the derive job had nothing to do).
+      - **#15, tips link: PASS.** Queue page has "Tagging tips" (anchor works
+        only after promotion).
+      - **#15, own compilation: PASS**, on a copy, not the owner's library (the
+        NAS is read-only and the owner will not change it): the two Sparks
+        files copied to `~/Music/swxcheck-b7/`, album title retagged with
+        mutagen. Baseline: conflict (one file tagged, one not). Tag removed,
+        rescan: "conflicts 0, no tag 1", left the queue, row moved to
+        `discogs_no_match`. Tag restored, rescan: conflict again. The log
+        explains it only as the summary counts, with no per-album line.
+        Copy deleted afterwards.
+      - **#14, fresh install: PARTLY FAILED.** Data rebuilt from scratch
+        (old DB kept as `squeezewax.db.pre-fresh` in LMS's prefs dir and in
+        `tmp/checkb7/pre-fresh-2026-10-19/`); the owner kept the rebuilt data.
+        Rebuilt ownership matches the old data (exact 150, version 54, absent
+        303). Notice absent through the scan and before the first derive run.
+        When the job ended (run 16, 22:29:24, 474 releases, 437 with a
+        master) the notice appeared in the open tab without a reload, and
+        vanished after "Sync collection now" without a reload (owner
+        confirmed both). **But the notice also appeared during the job**, in
+        every 60 s gap between runs (seen at 22:07, 22:09, 22:10, 22:12, …):
+        see the next item.
 
 - [x] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
       §6; offline suites green on both drivers, nothing run on a server):
