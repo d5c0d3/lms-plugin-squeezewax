@@ -2464,6 +2464,23 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
+      offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
+      1. **#14** (decisions §15.47): fresh install with release-ID tags but no
+         master tags. After the scan, while "Master releases" is running, no
+         new-masters notice. When the job finishes, "New master releases found.
+         Press 'Sync collection now' …" appears under the last-sync line without a
+         reload (5 s refresh). After 'Sync collection now' completes it is gone,
+         again without a reload. On a settled library (reference server) it is
+         absent.
+      2. **#15**: the queue page shows the "Tagging tips" link; an own
+         compilation with its release-ID tag removed leaves the queue after a
+         rescan.
+      3. **HTTPS check** (decisions §15.18, 2026-10-19 note): on the usual
+         servers, the scan-time sync still runs (its Info summary line, no
+         "cannot use HTTPS" error). The skip path itself is offline-only unless a
+         scanner without `IO::Socket::SSL` is found.
+
 - [x] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
       §6; offline suites green on both drivers, nothing run on a server):
       1. Repro container (SQLite 3.22.0): on b5, insert a manual row with
