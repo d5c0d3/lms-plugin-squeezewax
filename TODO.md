@@ -2493,25 +2493,47 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **1.0.0b9 checks (GitHub #19, §15.50).** Time a cold derive run (all
-      identified releases reset, same method as the small reset in
-      `claude/prompt-check-b8.md`; 476 requests, owner decides); expect ~12 min
-      (reading A) to ~19 min (reading B). Zero 429 in the log. Open a details
-      menu several times during a run → never "Discogs is busy". "Sync collection
-      now" mid-run → served. The per-request debug lines show `Remaining` across
-      a run (confirms or refutes the moving-window reading). Settings shows
-      "waiting" in the 15 s gaps and the notice stays hidden then (§15.48).
+- [x] **1.0.0b9 checks (GitHub #19, §15.50).** **2026-10-20 session (reference
+      server, LMS 9.1.1, share mounted, owner present): all PASS.** Backup
+      `tmp/checkb9/backup-2026-10-20-1234/`; zip sha1 `026ba092…351c` as published;
+      b9 installed; `plugin.squeezewax` DEBUG (saved in `log.conf`), `network.*`
+      ERROR throughout.
+      - Settled library: no derive line, no `swxNewMasters`; rescan: scan-time sync
+        "205 items in 4 requests", no SQL error, no `master lookup:` line.
+      - Cold run (all 474 rows / 471 releases reset, `tmp/checkb9/reset-all.sql`;
+        owner pressed "Sync collection now"): 12:57:39 to 13:10:07, **12.5 min**
+        (reading A's 12 min), 471 requests (468 ok, 3 not_found), 18 runs. Stops:
+        15 "had its share" (resume 15 s), 1 "a collection sync is running"
+        (resume 15 s), 1 "the reserve is reached" (resume 60 s, right after the
+        mid-run sync's 5 requests), 1 finished. **0 x 429.** Lowest `Remaining` 9.
+        0 replies with `-` for Used/Remaining.
+      - Notice never present while running or waiting (poller every 2 min); present
+        after the job; gone after the second sync (~3 s), no reload. Ownership
+        after the job exact 150 / version 51 / absent 306 (3 albums "version"
+        only through lookups dip, as predicted); after the second sync 150 / 54 /
+        303, equal to before.
+      - Details menus during the run: 4 requests `-> ok` (releases 783895,
+        109450, 1494437; master 2658), repeats from the 2-minute hold; no "not
+        fetched, the rate budget is spent"; the owner never saw "Discogs is busy".
+      - Mid-run sync completed; the job stopped and resumed 15 s later.
+      - **Window rule: reading A** (Discogs counts the last 60 s). `Remaining`
+        rose across 14 of 15 ordinary 15 s gaps (+6 to +11, e.g. 19 to 27, 12 to 23);
+        the exception is 33 to 34 after the reserve stop; across the 60 s wait 9 to 55.
+        Reading B would not rise in a 15 s gap. Relevant to the deferred sliding
+        pause (§15.50).
+      - Owner's one note: the page says "waiting" in the gaps (expected, §15.48).
 
 - [ ] **Does a 429 reply carry `X-Discogs-Ratelimit*` headers?** (§15.50 "Where
-      the evidence is thin"). If not, `accountRequest`'s ladder takes one off the
-      last figure, so a menu or sync could fire straight into a second 429;
-      consider "a 429 marks the shared budget spent" for every consumer. Touches
-      the sync: outside #19. The b9 per-request debug line logs the headers of
-      every reply, a 429 included, so one 429 on hardware answers it.
+      the evidence is thin"). **Still open: the b9 cold run (471 requests) had
+      no 429**, so the debug line has nothing to show. If not, `accountRequest`'s
+      ladder takes one off the last figure, so a menu or sync could fire straight
+      into a second 429; consider "a 429 marks the shared budget spent" for every
+      consumer. Touches the sync: outside #19.
 
-- [ ] **LMS "clear library and rescan" keeps the master lookups** (§15.51 item 3,
-      inferred; GitHub #21). Check: count `derived_from_release_id IS NOT NULL`
-      before and after; no `/releases/` requests after the rescan.
+- [x] **LMS "clear library and rescan" keeps the master lookups** (§15.51 item 3;
+      GitHub #21). **Verified 2026-10-20 on b9:** `wipecache` full rescan (13:13 to
+      13:23): `derived_from_release_id IS NOT NULL` 474 before and 474 after, no
+      `master lookup:` line, ownership 150/54/303 unchanged.
 
 - [x] **2026-10-19: the new-masters notice shows in the gaps between derive
       runs (GitHub #14, §15.47).** **Decided by §15.48 part 1** (hidden while

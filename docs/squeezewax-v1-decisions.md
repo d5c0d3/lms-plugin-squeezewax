@@ -7568,6 +7568,10 @@ show how the window behaves.
 **Two points kept as the owner wrote them, noted:** "fewer than 10" keeps 9 free,
 not 10; "3 in a row" is two retries, where the sync allows three (`MAX_RETRIES`).
 
+**Build note (1.0.0b9, `a444995`).** `_next` looks for remaining work before it
+yields, so a finished job never re-arms and never shows "waiting" (§15.48). Hardware
+2026-10-20: the settings page showed "waiting" only in the 15 s gaps of a running job.
+
 ### 15.51 Master lookups survive database changes — 2026-10-20 (owner)
 
 GitHub #21.
