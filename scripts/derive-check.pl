@@ -860,10 +860,10 @@ diag('pacing: bounded, spaced, yielding, and re-armed only where work remains');
 	ok( !( grep { $_ != 1 } @SPACING ), '  ...one second apart' );
 
 	is( scalar @REARMS, 1, '  ...and is re-armed, because work provably remains' );
-	is( $REARMS[0], 60, '  ...a minute later' );
+	is( $REARMS[0], 15, '  ...REARM (15 s) later (§15.50 item 1)' );
 	is( $D->isResumeScheduled, 1,
 		'  ...and says a resume is scheduled, so the page reads "waiting" (§15.38 item 7)' );
-	ok( ( grep { /resuming in 60s/ } @LOG ), '  ...and says so' );
+	ok( ( grep { /resuming in 15s/ } @LOG ), '  ...and says so' );
 
 	# killTimers before setTimer, every time: Timers keys pending timers by
 	# (coderef, obj) and setTimer APPENDS, so arming without killing is how a
@@ -1255,6 +1255,208 @@ my @collection = ( {
 }
 
 # ---------------------------------------------------------------------------
+# Decisions §15.50 (GitHub #19): the reserve, the re-arm delay, and 429
+# ---------------------------------------------------------------------------
+
+diag('§15.50: a reserve of 10, re-arm after the window, a 429 waits one window');
+
+sub reply_left {
+	my ( $id, $left ) = @_;
+
+	return release_response( id => $id, master => $id + 1, headers => {
+		'X-Discogs-Ratelimit'           => 60,
+		'X-Discogs-Ratelimit-Used'      => 60 - $left,
+		'X-Discogs-Ratelimit-Remaining' => $left,
+	} );
+}
+
+# The policy, directly: the reserve is a fifth condition.
+{
+	my $why = \&Plugins::SqueezeWax::Derive::_yieldReason;
+
+	like( $why->( 0, 0, 0, 0, 1 ), qr/reserve is reached/, 'the reserve yields' );
+	like( $why->( 0, 0, 0, 30, 1 ), qr/reserve is reached/,
+		'  ...ahead of the cap, so a run stopped by both waits out the window' );
+	like( $why->( 0, 0, 1, 0, 1 ), qr/budget is spent/, '  ...behind a spent budget' );
+	like( $why->( 0, 1, 0, 0, 1 ), qr/sync is running/, '  ...and behind a sync' );
+	is( $why->( 0, 0, 0, 0, 0 ), undef, 'no reserve, nothing else: no reason to yield' );
+}
+
+# The re-arm delay, directly (§15.50 item 3).
+{
+	my $delay = \&Plugins::SqueezeWax::Derive::_rearmDelay;
+
+	is( $delay->( 'the rate budget is spent', 60 ), 60, 'budget spent: what is left of the window' );
+	is( $delay->( 'the rate budget is spent', 5 ), 15, '  ...but never less than REARM' );
+	is( $delay->( 'the reserve is reached', 42 ), 42, 'reserve: what is left of the window' );
+	is( $delay->( 'the reserve is reached', 0 ), 15, '  ...or REARM' );
+	is( $delay->( 'this run has had its share', 50 ), 15, 'per-run cap: REARM, whatever the window' );
+	is( $delay->( 'a collection sync is running', 50 ), 15, 'sync running: REARM' );
+	is( $delay->( 'Discogs answered 429', 0 ), 60, '429: one whole window' );
+	is( $delay->( 'Discogs answered 429 too often', 60 ), undef, 'the third 429: no re-arm' );
+	is( $delay->( 'a scan is running', 60 ), undef, 'a scan: no re-arm' );
+	is( $delay->( 'the last request failed (server_error)', 60 ), undef, 'an error: no re-arm' );
+}
+
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222 );
+
+	local $NOW = CORE::time();
+
+	# The job's own reply leaves 9: the next request is held back.
+	@RESPONSES = ( reply_left( 111, 9 ) );
+
+	$D->arm;
+
+	is( scalar @REQUESTS, 1, 'Remaining 9 after a reply: the job sends nothing more' );
+	is( rowFor($K1)->{derived_master_id}, 112, '  ...keeping the answer it had' );
+	ok( ( grep { /the reserve is reached/ } @LOG ), '  ...saying why' );
+	is_deeply( [@REARMS], [60], '  ...and re-arms when the window that reply opened ends' );
+	is( $D->isResumeScheduled, 1, '  ...so the page reads "waiting"' );
+	is( $API->rateWait, 0, '  ...while the menus and the sync are not held back at all' );
+
+	# Half a window on, with no reply between: still held, for what is left.
+	$NOW += 30;
+	@REARMS = ();
+	is( $D->arm, 1, 'half a window later a run starts' );
+	is( scalar @REQUESTS, 1, '  ...and still sends nothing' );
+	is_deeply( [@REARMS], [30], '  ...re-arming for the 30 s left' );
+
+	# A window on: the reply no longer binds.
+	$NOW += 30;
+	@RESPONSES = ( release_response( id => 222, master => 223 ) );
+	is( $D->arm, 1, 'a window after the reply, a run starts' );
+	is( scalar @REQUESTS, 2, '  ...and sends: a reserve a window old no longer binds' );
+	is( rowFor($K2)->{derived_master_id}, 223, '  ...and records the answer' );
+}
+
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222 );
+
+	local $NOW = CORE::time();
+
+	@RESPONSES = ( reply_left( 111, 10 ), reply_left( 222, 9 ) );
+
+	$D->arm;
+
+	is( scalar @REQUESTS, 2, 'Remaining 10: the job sends the next request' );
+	is( scalar( grep { /the reserve is reached/ } @LOG ), 0,
+		'  ...and finishing on a 9 is not a reserve stop: nothing was left to send' );
+}
+
+# 429: two re-arms after a window, the third stops (§15.50 item 4).
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+
+	local $NOW = CORE::time();
+
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+
+	is( scalar @REQUESTS, 1, 'a 429 stops the run' );
+	is_deeply( [@REARMS], [60], '  ...and re-arms after one window' );
+	is( $D->isResumeScheduled, 1, '  ...so the job is waiting, not paused' );
+	is( rowFor($K1)->{derived_from_release_id}, undef, '  ...and records nothing: not "no master"' );
+	is( scalar @WARNINGS, 0, '  ...a pacing answer, not a warning' );
+
+	@RESPONSES = ( error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is_deeply( [@REARMS], [ 60, 60 ], 'the second 429 in a row re-arms after a window too' );
+
+	@RESPONSES = ( error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( scalar @REQUESTS, 3, 'the third 429 in a row' );
+	is_deeply( [@REARMS], [ 60, 60 ], '  ...stops without a re-arm' );
+	is( $D->isResumeScheduled, 0, '  ...so the page reads "paused" until the next sync' );
+	ok( ( grep { /429 3 times in a row/ } @WARNINGS ), '  ...and says so at warn' );
+	is( rowFor($K1)->{derived_from_release_id}, undef, '  ...still recording nothing' );
+
+	# The next completed sync arms it with a fresh count.
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+	is_deeply( [@REARMS], [ 60, 60, 60 ], 'a trigger arm after the third starts a fresh count' );
+}
+
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222 );
+
+	local $NOW = CORE::time();
+
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+	@RESPONSES = ( error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+
+	# Two in a row; a 200 resets the count, so the next 429 is the first again.
+	@RESPONSES = ( release_response( id => 111, master => 1 ), error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( rowFor($K1)->{derived_master_id}, 1, 'after two 429s a 200 is recorded' );
+	is( scalar @REARMS, 3, '  ...and the 429 after it re-arms: the 200 reset the count' );
+
+	@RESPONSES = ( error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( scalar @REARMS, 4, '  ...as does the one after that: two in a row again, not four' );
+	is( scalar @WARNINGS, 0, '  ...with no warning' );
+}
+
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+
+	local $NOW = CORE::time();
+
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+	@RESPONSES = ( error_response(429) );
+	Plugins::SqueezeWax::Derive::_rearm();
+
+	# A trigger, not the timer: the count starts again.
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+	is( scalar @REARMS, 3, 'a trigger arm after two 429s starts a fresh count: the next re-arms' );
+}
+
+{
+	reset_state();
+	wipe();
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111 );
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222 );
+
+	local $NOW = CORE::time();
+
+	# After a 429, the other outcomes are unchanged: a 404 is recorded and the run
+	# goes on; a 500 stops it without a re-arm.
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+
+	@RESPONSES = ( error_response(404), error_response(500) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( rowFor($K1)->{derived_from_release_id}, 111, 'after a 429, a 404 is still "no master"' );
+	is( scalar @REARMS, 1, '  ...and a 500 still stops without a re-arm' );
+	ok( ( grep { /server_error/ } @WARNINGS ), '  ...at warn, as before' );
+
+	reset_state();
+	@RESPONSES = ( error_response(429) );
+	$D->arm;
+	@RESPONSES = ( error_response(401) );
+	Plugins::SqueezeWax::Derive::_rearm();
+	is( scalar @REARMS, 1, 'after a 429, a 401 still stops without a re-arm' );
+	is( $D->isResumeScheduled, 0, '  ...and nothing is scheduled' );
+}
+
+# ---------------------------------------------------------------------------
 # Decisions §15.38 item 7: whether a resume is scheduled
 # ---------------------------------------------------------------------------
 
@@ -1302,6 +1504,53 @@ diag('§15.38 item 7: the scheduled flag follows the re-arm timer');
 	is( $D->isResumeScheduled, 1, '(set again)' );
 	$D->abort;
 	is( $D->isResumeScheduled, 0, 'abort clears it' );
+}
+
+# ---------------------------------------------------------------------------
+# Decisions §15.47 (GitHub #14): masters found since the last sync
+# ---------------------------------------------------------------------------
+
+diag('§15.47: newMastersSince, the settings notice\'s query');
+
+{
+	reset_state();
+	wipe();
+
+	my $SYNC = 1_790_000_000;
+
+	is( $D->newMastersSince(undef), 0, 'no completed sync: no notice, whatever the rows say' );
+	is( $D->newMastersSince(0),     0, '  ...nor with a zero time' );
+
+	# A master found after the sync, for an album the sync left 'version'.
+	matchRow( album_key => $K1, match_tier => 'strict', discogs_release_id => 111,
+		ownership => 'version', derived_master_id => 501,
+		derived_from_release_id => 111, derived_at => $SYNC + 60 );
+	is( $D->newMastersSince($SYNC), 1, 'a master found after the sync, album not exact: shown' );
+
+	is( $D->newMastersSince( $SYNC + 60 ), 0, '  ...hidden after a sync in the same second' );
+	is( $D->newMastersSince( $SYNC + 120 ), 0, '  ...and after a newer sync' );
+
+	# Only exact albums got masters.
+	$dbh->do(q{UPDATE squeezewax.discogs_match SET ownership = 'exact'});
+	is( $D->newMastersSince($SYNC), 0, 'only exact albums got masters: hidden' );
+
+	# A release looked up and found to have no master.
+	$dbh->do(q{UPDATE squeezewax.discogs_match
+	              SET ownership = 'absent', derived_master_id = NULL});
+	is( $D->newMastersSince($SYNC), 0, 'a lookup that found no master: hidden' );
+
+	# A master found before the sync: that sync already used it.
+	$dbh->do( q{UPDATE squeezewax.discogs_match
+	               SET derived_master_id = 501, derived_at = ?}, undef, $SYNC - 60 );
+	is( $D->newMastersSince($SYNC), 0, 'a master found before the sync: hidden' );
+
+	# One qualifying row among others is enough.
+	matchRow( album_key => $K2, match_tier => 'strict', discogs_release_id => 222,
+		ownership => 'absent', derived_master_id => 502,
+		derived_from_release_id => 222, derived_at => $SYNC + 5 );
+	is( $D->newMastersSince($SYNC), 1, 'one qualifying album among settled ones: shown' );
+
+	is( scalar @REQUESTS, 0, 'no request at any point' );
 }
 
 done_testing();

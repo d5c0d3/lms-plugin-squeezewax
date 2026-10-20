@@ -238,8 +238,10 @@ sub accountRequest {
 # sync-check.pl holds unedited. What is new is the stateful wrapper below.
 #
 # Per-process, not per-token: a token change does not reset it, and must not.
-# The budget Discogs is enforcing is attached to an IP as much as to a token, and
-# a freshly-pasted token is no reason to believe the window is empty.
+# Whether Discogs counts the budget per IP or per token is UNVERIFIED (decisions
+# §15.50): its developer page names neither, and only a third-party listing says
+# "source IP". Either way the headers are the only truth, and a freshly-pasted
+# token is no reason to believe the window is empty.
 
 my $rateState;
 
@@ -300,6 +302,37 @@ sub _waitLeft {
 	my ( $state, $now ) = @_;
 
 	return 0 unless $state && defined $state->{remaining} && $state->{remaining} <= 0;
+
+	my $left = ceil( ( $state->{checked_at} || 0 ) + WINDOW_SECONDS - $now );
+
+	return $left > 0 ? $left : 0;
+}
+
+=head2 reserveWait( $reserve, $now )
+
+The master job's reserve (decisions §15.50 item 2): how many seconds are left of
+the window opened by the last counted reply, when that reply said fewer than
+C<$reserve> requests were left; 0 otherwise, and 0 once the window has passed.
+C<$now> defaults to time().
+
+Counts down for rateWait's reason (§15.32): the job makes no request while it
+holds back, so a stored figure would never clear. rateWait is the same question
+with a reserve of 1, and is left as it is - the sync and the menus are not held
+to a reserve.
+
+=cut
+
+sub reserveWait {
+	my ( $class, $reserve, $now ) = @_;
+
+	return _reserveLeft( $rateState, $reserve, defined $now ? $now : time() );
+}
+
+# _waitLeft's shape, with the threshold an argument. Pure.
+sub _reserveLeft {
+	my ( $state, $reserve, $now ) = @_;
+
+	return 0 unless $state && defined $state->{remaining} && $state->{remaining} < $reserve;
 
 	my $left = ceil( ( $state->{checked_at} || 0 ) + WINDOW_SECONDS - $now );
 

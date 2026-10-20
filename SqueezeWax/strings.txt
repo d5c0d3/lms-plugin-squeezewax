@@ -234,7 +234,7 @@ PLUGIN_SQUEEZEWAX_QUEUE_FIX
 	EN	What to do
 
 PLUGIN_SQUEEZEWAX_FIX_CONFLICT
-	EN	Give every file of this album the same Discogs release ID, then rescan. "Show tags" shows which files differ.
+	EN	Give every file of this album the same Discogs release ID, then rescan. "Show tags" shows which files differ. If this is your own compilation (tracks from different records), remove the Discogs release ID from its files, or keep it in a tag name SqueezeWax doesn't read.
 
 PLUGIN_SQUEEZEWAX_FIX_AMBIGUOUS
 	EN	Tag the files with the Discogs release ID of the record you own, then rescan.
@@ -362,6 +362,9 @@ PLUGIN_SQUEEZEWAX_DERIVE_WAITING
 PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
 	EN	paused — resumes after the next library scan or Sync collection now
 
+PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE
+	EN	New master releases found. Press 'Sync collection now' to update which records you own.
+
 PLUGIN_SQUEEZEWAX_ATTRIBUTION
 	EN	Discogs
 
@@ -373,3 +376,6 @@ PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE
 	EN	discogs.com
+
+PLUGIN_SQUEEZEWAX_QUEUE_TAGGING_TIPS
+	EN	Tagging tips

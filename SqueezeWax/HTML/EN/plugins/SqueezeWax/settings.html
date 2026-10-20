@@ -79,6 +79,13 @@
 	[% IF sync.lastError %]
 		<div>[% "PLUGIN_SQUEEZEWAX_SYNC_FAIL" | string | replace('%s', sync.lastError) | html %]</div>
 	[% END %]
+
+	[%# Decisions §15.47 (GitHub #14): masters found since the last sync. Inside
+	    swxSyncLast, so the live refresh brings it in when the master job ends
+	    and takes it away after the sync it asks for. %]
+	[% IF newMasters %]
+		<div id="swxNewMasters" class="swxNotice">[% "PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE" | string %]</div>
+	[% END %]
 	</div>
 
 	[%# A sync already running disables the button too: _syncNow would only

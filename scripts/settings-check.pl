@@ -390,7 +390,7 @@ BEGIN {
 # by beforeRender and is stubbed for the reason Async is: the real module pulls
 # in the transport and the timers, and its own behaviour is derive-check.pl's.
 # What is under test here is what the PAGE says about its three states.
-our %DERIVE = ( progress => undef, running => 0, scheduled => 0 );
+our %DERIVE = ( progress => undef, running => 0, scheduled => 0, newMasters => 0, asked => [] );
 
 BEGIN {
 	$INC{'Plugins/SqueezeWax/Derive.pm'} = 1;
@@ -399,6 +399,10 @@ BEGIN {
 	*{'Plugins::SqueezeWax::Derive::progress'}          = sub { $main::DERIVE{progress} };
 	*{'Plugins::SqueezeWax::Derive::isRunning'}         = sub { $main::DERIVE{running} };
 	*{'Plugins::SqueezeWax::Derive::isResumeScheduled'} = sub { $main::DERIVE{scheduled} };
+	*{'Plugins::SqueezeWax::Derive::newMastersSince'}   = sub {
+		push @{ $main::DERIVE{asked} }, $_[1];
+		return $main::DERIVE{newMasters} ? 1 : 0;
+	};
 
 	# The button's trigger (§15.38 item 6). Plugin.pm is not loaded here - it is
 	# loaded first in the real server, and Settings.pm only exists under it - so
@@ -1424,6 +1428,51 @@ diag('§15.38 item 7: the derive line says running, waiting or paused');
 	like( $strings, qr/^PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
 	EN	paused \x{e2}\x{80}\x{94} resumes after the next library scan or Sync collection now$/m,
 		'the paused label is in the decided words' );
+}
+
+diag('§15.47 (GitHub #14), §15.48: the new-masters notice');
+
+{
+	local $STATUS = { running => 0, lastSynced => 1_790_085_746, lastItems => 203, lastError => '' };
+	local %DERIVE = ( progress => undef, running => 0, scheduled => 0, newMasters => 1, asked => [] );
+
+	is( render()->{newMasters}, 1, 'masters found since the last sync, job idle: the notice shows' );
+	is_deeply( $DERIVE{asked}, [1_790_085_746], '  ...asking with the last completed sync\'s time' );
+
+	$DERIVE{running} = 1;
+	$DERIVE{progress} = { done => 3, total => 471, pending => 468 };
+	is( render()->{newMasters}, 0, 'hidden while the master job runs' );
+
+	# §15.48 part 1: between runs the job is waiting (a 60 s re-arm), neither
+	# running nor done. The 1.0.0b7 hardware check saw the notice in those gaps.
+	$DERIVE{running} = 0;
+	$DERIVE{scheduled} = 1;
+	is( render()->{newMasters}, 0, 'hidden while the master job waits (resume scheduled, not running)' );
+
+	$DERIVE{scheduled} = 0;
+	is( render()->{newMasters}, 1, 'shown while the job is paused (neither running nor scheduled)' );
+
+	$DERIVE{newMasters} = 0;
+	is( render()->{newMasters}, 0, 'hidden when the query finds nothing (a newer sync, or only exact albums)' );
+
+	$DERIVE{newMasters} = 1;
+	$DERIVE{asked} = [];
+	$STATUS = { running => 0, lastSynced => 0, lastItems => undef, lastError => '' };
+	render();
+	is_deeply( $DERIVE{asked}, [0], 'no sync yet: the query is asked with no time, and says no (derive-check.pl)' );
+
+	local $DB_READY = 0;
+	ok( !render()->{newMasters}, 'a broken database: no notice' );
+
+	like( $tpl, qr/<div id="swxSyncLast">(?:(?!<div id="swx).)*?\[% IF newMasters %\]\s*<div id="swxNewMasters" class="swxNotice">\[% "PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE" \| string %\]<\/div>\s*\[% END %\]\s*<\/div>/s,
+		'the template renders it inside swxSyncLast, which the live refresh replaces' );
+
+	my $count = () = $tpl =~ /\bid="swxNewMasters"/g;
+	is( $count, 1, '  ...under one id' );
+
+	like( $strings, qr/^PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE
+	EN	New master releases found\. Press 'Sync collection now' to update which records you own\.$/m,
+		'  ...in the decided words' );
 }
 
 diag('§15.38 item 3: the status regions carry stable ids');

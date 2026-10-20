@@ -28,8 +28,11 @@ release ID.
    during the scan.* LMS removes library entries for files it cannot reach, and
    it cannot tell a share that is offline from files that were deleted.
 6. **Run an ordinary library rescan** (Basic Settings → Rescan Media Library →
-   "Look for new and changed media files"). You do not need "Sync collection
-   now": SqueezeWax reads your collection itself during the scan.
+   "Look for new and changed media files"). SqueezeWax reads your collection
+   itself during the scan. Only if your files have no master-release tag, press
+   "Sync collection now" once after the "Master releases" work on the settings
+   page has finished; albums whose files carry a master tag already show "You own
+   a version" after the rescan. The settings page tells you when this is needed.
 7. **Check.** Open the album's menu. It should say "You own a pressing" (or "You
    own a version") with the Discogs link or links, and the album should appear in
    "Records I own". If it doesn't, see section 4.
@@ -58,7 +61,27 @@ A various-artists record is the awkward case for matching by title, but it did
 not matter here: SqueezeWax checks the tagged release against your collection
 first, and only looks at artist names if that fails.
 
-### Optional tagging tips
+### Tagging for SqueezeWax
+
+*These tags are what SqueezeWax reads. Set the tag name for the release ID under
+Settings.*
+
+- **One album, one release ID.** Every file of an album carries the same Discogs
+  release ID, in the tag name set in SqueezeWax's settings.
+- **Multi-disc sets.** Put the same release ID on every disc.
+- **Your own compilations and mixtapes.** Leave the release ID out of the tag
+  name SqueezeWax reads. If you want to keep each track's ID, put it in another
+  tag name.
+- **Master release (optional).** A master-release tag (`DISCOGS_MASTER_RELEASE_ID`, as foobar2000's Discogs component writes it, or `DISCOGS_MASTER_ID` / `DISCOGS MASTER ID`) lets "You own a
+  version" show right after the rescan, without waiting for the background
+  master lookup.
+- **Artist names.** If the artist is spelled differently in your files and in
+  your Discogs collection, change one so they match.
+- **Streaming albums** can't be tagged. SqueezeWax matches them by title and
+  artist only.
+- **After tagging,** rescan with "Look for new and changed media files".
+
+### Other tagging tips (good for LMS, not needed by SqueezeWax)
 
 *These are good practice for LMS and are **not needed by SqueezeWax**.*
 

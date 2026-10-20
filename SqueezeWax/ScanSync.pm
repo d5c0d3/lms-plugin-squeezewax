@@ -114,6 +114,24 @@ sub _run {
 		return 0;
 	}
 
+	# HTTPS, before any request (decisions §15.18, 2026-10-19 note). Without
+	# IO::Socket::SSL the transport only warns, under network.http
+	# (Slim/Networking/SimpleSyncHTTP.pm:78-79), a category hidden at its
+	# default level, and every request then fails. hasSSL is the transport's own
+	# test (SimpleSyncHTTP.pm:24-41), cached for the process. Said at error, once
+	# per scan - a scan is one scanner process and this runs once in it - and then
+	# the same return as a failed fetch: no marker, so the server syncs after the
+	# scan. Required here, as API/Sync.pm does, so the class is loaded only
+	# where it is used.
+	require Slim::Networking::SimpleSyncHTTP;
+
+	if ( !Slim::Networking::SimpleSyncHTTP->hasSSL ) {
+		$log->error( 'Scan-time collection sync skipped: this scanner cannot use HTTPS '
+			. '(IO::Socket::SSL missing). The server will sync after the scan.' );
+
+		return 0;
+	}
+
 	# 3. One progress row for both halves (§15.18 part 12): the fetch ticks per
 	# request, the pass per album. The fetch is the slow part - 2.72 s measured
 	# against the pass's 40-48 ms - so a row for the pass alone would show a

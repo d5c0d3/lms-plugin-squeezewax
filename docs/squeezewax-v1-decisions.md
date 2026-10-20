@@ -4895,6 +4895,15 @@ open question: whether `ScanSync` should check `hasSSL` itself and log at error.
 > (`Slim/Utils/Log.pm:897`), so by default nothing is logged at all. README fixed
 > in fde4605.
 
+> Decided 2026-10-19 (owner): `ScanSync` checks it. Before the collection request
+> it calls `Slim::Networking::SimpleSyncHTTP->hasSSL` (`public/9.1` @ `a670a38`,
+> `Slim/Networking/SimpleSyncHTTP.pm:24`). If that is false it logs once at error,
+> "Scan-time collection sync skipped: this scanner cannot use HTTPS
+> (IO::Socket::SSL missing). The server will sync after the scan.", and returns 0
+> with no request, no progress row and no marker, so the fallback syncs after the
+> scan. Once per scan: the check runs once in each scanner process. Offline only
+> (`scan-sync-check.pl`); no scanner without `IO::Socket::SSL` has been tried.
+
 ### 15.19 Two findings from the title-route checks: rule 3 works, and node F cannot fire
 
 **Found 2026-09-28** on the reference server (0.0.0.11), from two checks aimed at
@@ -5268,6 +5277,8 @@ client and the ownership pass must stay request-free.
 - **At most 30 requests per run**, one a second, re-armed a minute later while
   work remains — half Discogs' documented 60 a minute, leaving room for a manual
   sync.
+  **Forward note (2026-10-20): amended by §15.50.** The pause between runs is
+  15 s, the job keeps a reserve of 10, and a 429 waits one window.
 - **It yields**: it never starts while a sync is running, and stops when the
   shared rate accounting reports nothing left.
 - **Triggered from `_syncDone` on success and from nothing else.** No startup run
@@ -5379,6 +5390,10 @@ while work remains". As built it re-arms only when the run stopped for **pacing*
 and not during a scan. A persistent 500 would otherwise become a one-a-minute
 timer against a third party, which §15.15 part 1 forbids in spirit. A scan ends
 in `['rescan','done']`, which reaches a sync, which arms the job.
+**Forward note (2026-10-20): amended by §15.50.** A 429 is now a pacing stop
+too: it re-arms after one window, at most twice in a row (§15.50 item 4). The
+reserve is a pacing stop, and a spent budget or the reserve re-arms after the
+rest of the window rather than after a fixed pause (§15.50 items 2, 3).
 
 **Three decisions the plan left open:**
 
@@ -7208,7 +7223,13 @@ GitHub #8.
   `Ownership::_effectiveMaster` returns undef). The next scan re-examines the album
   (no strict row and no no-match row: `Match.pm` `$STATE_SQL` filters
   `match_tier IS NOT NULL`; `recordManual` had cleared the no-match row;
-  `Importer.pm` `_canSkip` returns 0 with no state). The next sync re-decides
+  `Importer.pm` `_canSkip` returns 0 with no state). — Corrected 2026-10-19 (b6
+  check B): not an album with only streaming tracks; the importer skips those
+  (`Importer.pm` `local_tracks` gate). Its ownership is decided by title and
+  artist at the next sync. On the reference server one such album went back to
+  `artist-disagree` and one became `ambiguous` (two or more owned pressings with
+  that title and artist). Exact 152 → 150, queue 5 → 7, as the rules give
+  (part 3). The next sync re-decides
   ownership by tags or title (`Ownership.pm` `_decide`): owned, back in the queue,
   or not owned. A gone album's converted row is deleted by the pass
   (`Ownership.pm` `_apply`, gone-row loop, `_isOwnershipOnly`).
@@ -7339,3 +7360,239 @@ Deviations from the plan, each small:
   incumbent conflict examined while its files are unreachable is deleted and
   given a no-match row. Pre-existing for fresh conflicts; recorded in
   `TODO.md`, not changed.
+
+### 15.47 New-masters notice in 1.0.0; automatic sync in 1.1.0 — 2026-10-19 (owner)
+
+GitHub #14 and #13.
+
+1. **Owner chose:** for 1.0.0, a notice on the settings page (GitHub #14). The
+   automatic sync after the master job (GitHub #13) follows in 1.1.0.
+2. **The notice** reads "New master releases found. Press 'Sync collection now'
+   to update which records you own." It shows when at least one `discogs_match`
+   row has `derived_master_id` not NULL and `derived_at` later than the last
+   completed sync's time (`Schema->syncState`), for an album whose `ownership`
+   is not `'exact'`. With no completed sync there is no notice: the first-steps
+   hint (§15.38 item 2) covers that case.
+3. **Hidden while the master job runs** (`Derive->isRunning`), and gone after
+   the next completed sync, whichever path writes the marker.
+   **Forward note (2026-10-19): amended by §15.48 part 1.** "Runs" was read as
+   `isRunning` alone, which is false in the 60 s gaps between runs; the notice
+   must also be hidden while the job waits.
+4. **No Discogs request.** A read at page render only, like the derive count
+   (§15.38 item 3); it is part of the 5 s live refresh (§15.40).
+5. **Relaxes the `Schema.pm` note** "Nothing branches on [derived_at]" (migration
+   6 comment). That note guards against age-based re-fetching (§15.22); this is
+   a display comparison and fetches nothing. The comment is amended to say so.
+6. **Why #13 is not in 1.0.0:** it would be the first Discogs traffic that is not
+   directly caused by a user's action (a scan, the button), so it needs its own
+   beta round.
+
+### 15.48 The notice is hidden while the master job waits; settings page redesign later — 2026-10-19 (owner)
+
+GitHub #14 (the fix) and #17 (the redesign). Found by the 1.0.0b7 hardware check
+(`TODO.md`, 2026-10-19): on a fresh install the notice showed in each 60 s gap
+between derive runs. **Verified** on hardware: 16 runs, the notice present in the
+gaps and absent during runs.
+
+1. **Hidden while the master job runs or waits, shown when it is paused or has
+   finished.** Cause: "waiting" is a pacing stop with a re-arm (`Derive.pm`
+   `%REARM_ON`, `isResumeScheduled`, `REARM` 60 s, `PER_RUN` 30). `isRunning` is
+   false then, and `Settings.pm` tested only `!isRunning`, as §15.47 part 3
+   specified. The condition becomes `!( isRunning || isResumeScheduled )`.
+   **Amends §15.47 part 3** (forward note added there). Paused shows the notice
+   on purpose: the button then resumes the job and updates ownership in one
+   press.
+2. **"Sync collection now" stays enabled during the master job, by design.** The
+   job yields to a sync (`Derive.pm` `_yieldReason`) and re-arms (`%REARM_ON`),
+   so a press never collides with it.
+3. **The settings page is redesigned after 1.0.0, as its own release** (GitHub
+   #17; §15.43, one feature per release). 1.0.0 ships the current page with the
+   part 1 fix. Whether the redesign comes before #13 or together with it (1.1.0)
+   is decided at design time, and so are its details. The owner has more changes
+   in mind, not yet listed. The redesign must keep the 5 s live refresh (§15.40)
+   and the buttons disabled while a scan runs.
+4. **Owner ideas, recorded and not designed, folded into #17:** (a) keep the
+   master count on screen after the job ends (the row is hidden today,
+   `settings.html` `[% IF derive %]`); (b) a hint why the job is slow; (c) move
+   the notice into the Master releases row (needs (a)).
+
+### 15.49 The new-masters notice can ask for a second press — kept for 1.0.0 — 2026-10-20 (owner)
+
+GitHub #14 and #17. Seen in the 1.0.0b8 hardware check (`TODO.md`).
+
+1. **What happens.** The new-masters notice can ask for a second press of "Sync
+   collection now": that press's sync works out ownership before the master job
+   it starts has run (§15.38 item 7). Real case: README setup step 5 (job paused
+   → press → job runs → notice).
+2. **1.0.0 keeps the notice and its wording** (§15.47, §15.48). Rewording alone
+   would not remove the second press, and #17 redesigns the page.
+3. **The second press goes away with #13** (automatic sync). Where the notice
+   lives, or whether it is still needed after #13, is decided in #17 (comment
+   2026-10-20 on GitHub #17).
+4. **Not pursued: storing "this master is new"** to suppress the notice. In
+   normal use a lookup only runs for a new or retagged album (`Derive.pm`
+   `$UNSETTLED`; the only other reset is a migration, `Schema.pm:900`), so the
+   notice is almost always accurate. Inferred from reading, not measured.
+
+### 15.50 Master job: 15 s pause, a reserve of 10, a 429 waits one window — 1.0.0b9 — 2026-10-20 (owner)
+
+GitHub #19. Amends §15.22 (pacing bullets; "Re-arming is narrowed to pacing
+stops"); forward notes added there. Owner's proposal; the design chat settled the
+details.
+
+1. **Pause between runs** (`REARM`) 60 s → 15 s. `PER_RUN` 30 and `SPACING` 1
+   unchanged. `PER_RUN` stays the bound on a run's length, not a rate (`Derive.pm`
+   comment at `PER_RUN`).
+2. **Reserve.** The job sends nothing while the last counted reply said
+   `Remaining` < 10 **and** that reply is less than one window (60 s) old. It
+   counts down like `rateWait` (§15.32): the job makes no request while it yields,
+   so a stored figure would never clear. It leaves at least 9 for menus and the
+   sync. Job only: `API::rateWait`, `Details.pm`, the sync are unchanged.
+3. **Re-arm delay.** Budget spent or reserve reached: the larger of `REARM` and
+   the time left in the window. Sync running or per-run cap: `REARM`. Without this
+   a spent budget would re-arm four times a window and log a stop each time.
+4. **429.** The job stops and re-arms after one window (`WINDOW_SECONDS`, 60 s).
+   The third 429 in a row stops it without re-arm; the next completed sync arms it
+   with a fresh count. Any other reply resets the count. 401, 5xx, dropped
+   connection, bad body: unchanged (stop, no re-arm). A 429 is still not recorded
+   as "no master".
+5. **Unchanged:** one shared rate state per process (§15.22); nothing keyed by
+   token.
+6. **Not in b9: skipping albums that carry a master tag** (owner, 2026-10-20).
+   Deferred to the #16 release (master-tag names as a list). §15.28 stays: the job
+   still looks them up. Why deferred: the stored answer is the fallback when #16
+   stops reading `DISCOGS_MASTER_ID` / `DISCOGS MASTER ID` on existing installs;
+   skipping first would leave those albums not owned until looked up and synced.
+   Inferred from reading. Recorded on GitHub #16 (comment 2026-10-20).
+
+**Arithmetic (inferred, not measured).** §15.22 measured 476 requests, 18 runs,
+25 min 18 s → (1518 − 17 × 60) / 476 = **1.05 s per request**, latency included.
+Model: Discogs counts requests in the last 60 s (docs: "moving average over a 60
+second window"; the exact rule is unverified). 476 releases, 16 full-speed runs:
+
+| s/request | pause | total | avg/min | peak in any 60 s | left |
+|---|---|---|---|---|---|
+| 1.05 | 60 s (today) | 23.3 min | 20 | 30 | 30 |
+| 1.05 | 15 s | 12.1 min | 39 | 43 | 17 |
+| 0.8 | 15 s | 10.1 min | 47 | 57 | 3 → reserve stops it |
+| 1.5 | 15 s | 15.7 min | 30 | 30 | 30 |
+
+At the measured speed the job alone never reaches the reserve. On a faster link it
+does, and the reserve is what keeps the headroom. Under a stricter reading of the
+docs (the window only resets after 60 idle seconds) the reserve's full-window wait
+is that idle minute, so the job cannot run the budget down under either reading.
+15 s and 10 kept.
+
+**Sizing: two reference cases** (owner, 2026-10-20). Every pacing decision is
+checked against both, not only the reference library:
+
+- *Reference library:* 764 albums, 479 identified (476 distinct releases),
+  203-item collection.
+- *Large library (forum user):* 5,000+ CDs (GitHub #20). Assumed worst case:
+  ~5,000 identified distinct releases, and a ~5,000-item collection (the user's
+  real figures are unverified). Collection sync ≈ 51 requests (`ceil(items/100)` +
+  profile); scan-time sync near its 120 s cap (`TODO.md` "large collections
+  against the scan-time sync cap").
+
+Simulated one-time master lookups (same 1.05 s/request; reading A = Discogs counts
+the last 60 s; reading B = the window clears only after 60 idle seconds; both
+unverified):
+
+| design | 476, A | 476, B | 5,000, A | 5,000, B | lowest left |
+|---|---|---|---|---|---|
+| today (60 s pause) | 23 min | 23 min | 4.2 h | 4.2 h | 30 |
+| **b9 (15 s + reserve 10)** | **12 min** | **19 min** | **2.2 h** | **3.5 h** | 17 (A) / 9 (B) |
+| sliding pause above reserve, no fixed pause | 12 min | 21 min | 2.1 h | 3.8 h | 13 / 9 |
+
+b9 roughly halves the large case's time under A and stays safe under B. The best
+sliding curve tried saves ~5 minutes in 2 hours under A and is slower under B. At
+5,000 the conclusion is clearer, not weaker: b9 first. Model script: design chat
+2026-10-20 (not in the repo).
+
+**The bigger lever at 5,000 is not looking up again:** §15.51 (lookups survive
+database changes). Each lookup is done once per release, ever (§15.22). Skipping
+master-tagged albums is the other lever, deferred (item 6).
+
+**Does the reserve protect the menus and syncs?** By reading `30628e3`:
+
+- Details menu: one request per open, blocked only when `rateWait` > 0, i.e.
+  `Remaining` reached 0 (`Details.pm` `rateWait` check before the fetch; `API.pm`
+  `_waitLeft`). The reserve keeps ≥ 9 → protected from the job's own spend. Not
+  from other users of the same address or token.
+- Server sync: the job yields while it runs (`Derive.pm` `_yieldReason`); the sync
+  waits on `rateWait` and retries a 429 up to `MAX_RETRIES` (`API/Async.pm`
+  `_get`, `_handle`). 203 items cost 4 requests (§13.8).
+- Scanner: own process, own rate state (`API/Sync.pm` header; `TODO.md`
+  cross-process item). The job yields during a scan (`Match.pm` `_writeOk`,
+  `stillScanning`). A scan-time 429 fails once and the server retries after the
+  scan (§15.18 part 11). Exposure falls from "30 vs 4" to "≥ 9 vs 4". Inferred;
+  stays a `TODO.md` item.
+
+**Per token or per address.** Discogs' developer page (fetched 2026-10-20) gives
+60/min, the moving 60 s window and the three headers; it names neither IP nor
+token. Only a third-party listing (publicapis.dev, undated) quotes "throttled by
+source IP"; archived official docs were not reachable. **Unverified.** The design
+holds either way: the headers are the only truth, and the state is not keyed by
+token. `API.pm`'s comment above `my $rateState` stated the IP link as fact; it is
+reworded as unverified.
+
+**§15.15 part 1 and Discogs' terms.** The job's timers are already accepted
+(§15.22) as pacing re-arms, bounded by pending work and started by a sync. A 429
+is a pacing answer, not a fault, and the cap allows at most two extra re-arms per
+sync, so §15.22's objection (a persistent error becoming a one-a-minute timer)
+does not apply. Discogs' docs ask apps to throttle locally and warn that
+circumventing the limit may get an app banned; the API Terms of Use (updated
+2025-05-27) forbid circumventing rate limits and interfering with others' use, and
+say nothing about retries. Waiting a full window after a 429 honours the limit.
+Argued from the text; Discogs has not been asked.
+
+**Ship:** 1.0.0b9 (owner, 2026-10-20). b8 is not promoted. No migration; no
+`LOGIC_VERSION` change (that versions the tag rule, `Plugin.pm` comment at
+`LOGIC_VERSION_KEY`). Inferred from reading.
+
+**Where the evidence is thin:** one library, one server, one network; 1.05 s is a
+derived average; the window rule is one sentence of the docs; per-IP unverified;
+whether a 429 carries the rate headers unverified (if not, `accountRequest`'s
+ladder takes one off the last figure, so a menu or sync could fire straight into a
+second 429); the 12-minute figure is unmeasured.
+
+**Considered, deferred (owner question, 2026-10-20): a sliding pause from
+`Remaining`** (e.g. 20 left → none, 10 → 5 s, 5 → 10 s, 1 → 15 s). Sound only if
+Discogs frees requests gradually (unverified); if the window clears only after 60
+idle seconds, a trickle keeps it from clearing and runs the budget to 0. A ladder
+below 10 also spends the menus' headroom: any sliding pause sits above the
+reserve, which stays. Small gain even at 5,000 (table above: ~5 min in 2 h under
+reading A, slower under B). Revisit after the b9 per-request `Remaining` lines
+show how the window behaves.
+
+**Two points kept as the owner wrote them, noted:** "fewer than 10" keeps 9 free,
+not 10; "3 in a row" is two retries, where the sync allows three (`MAX_RETRIES`).
+
+**Build note (1.0.0b9, `a444995`).** `_next` looks for remaining work before it
+yields, so a finished job never re-arms and never shows "waiting" (§15.48). Hardware
+2026-10-20: the settings page showed "waiting" only in the 15 s gaps of a running job.
+
+### 15.51 Master lookups survive database changes — 2026-10-20 (owner)
+
+GitHub #21.
+
+1. **Rule:** any future migration that rebuilds or copies `discogs_match` carries
+   `derived_master_id`, `derived_from_release_id` and `derived_at`. A migration
+   that clears them states why in its decision, and the release notes give the
+   cost: one Discogs request per identified release, roughly 2–3½ hours for 5,000
+   (§15.50 sizing).
+2. **Why:** the plugin is in beta and its database will change. A large library
+   should not pay hours of lookups again for a change that did not need it. §9.5
+   allows keeping the bare ids indefinitely.
+3. **Evidence, by reading `30628e3`:** the columns are written only by `Derive.pm`
+   `_record` and migration 8 (`Schema.pm:900`, manual rows only). `squeezewax.db`
+   is a separate file attached to LMS's connection, keyed by `album_key`
+   (urlmd5-based), which survives a `library.db` wipe (`Schema.pm` comment above
+   the `discogs_match` definition). So an LMS "clear library and rescan" should not
+   cause lookups again — **inferred, not tested** (`TODO.md`).
+4. **Hazard:** `Schema.pm` `@MATCH_COLUMNS` is migration 3's fixed list of 12
+   columns and omits the three lookup columns (they arrived in migration 6).
+   `_rebuildMatchTable` must not be reused for a later rebuild as it stands. A
+   one-line warning comment sits above `@MATCH_COLUMNS`.
+
+Next free decision number: §15.52.

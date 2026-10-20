@@ -21,8 +21,28 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
+Next free decision number: **§15.52** (2026-10-20).
+
 ## v1 RELEASE CHECKLIST
 
+- [ ] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+      b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
+      #21 (lookups survive database changes, §15.51), and is promoted instead of
+      b8 after its own checks ("1.0.0b9 checks" under Waiting — needs a real
+      server).
+
+- [ ] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+      Needs a real server: fresh install with tags but no master tags. The
+      notice appears after the master job finishes, is absent while it runs, and
+      is gone after 'Sync collection now'. Absent on a settled library.
+- [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+      Needs a real server: the queue page shows the link; an own compilation with
+      its release-ID tag removed leaves the queue after a rescan (#8 part 9).
+      After the next promotion to master: the queue page's "Tagging tips" link
+      opens the website user guide at the "Tagging for SqueezeWax" section
+      (anchor `#tagging-for-squeezewax`, inferred from the site's heading-id
+      pattern, unverified until published). Before that promotion it lands at the
+      top of the page, because the website serves master.
 - [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a
@@ -1467,6 +1487,17 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-20: is the Discogs rate limit per IP or per token?** Unverified
+      (§15.50): the developer page names neither; only a third-party listing says
+      "source IP". The design holds either way (headers are the only truth; the
+      state is not keyed by token). Revisit if Discogs answers or a header test
+      can tell.
+
+- [ ] **2026-10-19, low, no target: an album leaving the queue is logged only as
+      summary counts.** Seen in the 1.0.0b7 check (own compilation, tag removed):
+      "conflicts 0, no tag 1" and no per-album line, so the log does not say which
+      album left or why. A per-album Info or Debug line at the point the conflict
+      row is replaced would do.
 - [ ] **2026-10-18, low: the settings page's queue count can exceed the queue
       list.** It also counts conflict rows whose album left the library, which
       the queue page does not list (`Settings.pm` `beforeRender` count vs
@@ -1842,7 +1873,8 @@ Each names its sites so the work is mechanical rather than a search.
       change. Probably reachable only after a transient 401 — decisions §15.18's
       hardware addendum, correction 3.
 
-- [ ] **2026-09-27: should `ScanSync` check `hasSSL` itself?** On a platform
+- [x] **2026-09-27: should `ScanSync` check `hasSSL` itself?** (Yes, 2026-10-19;
+      see the 2026-10-14 item under Housekeeping.) On a platform
       whose system perl lacks `IO::Socket::SSL` and `Net::SSLeay`, LMS's
       `Slim/Networking/SimpleSyncHTTP.pm:22-41` only **warns**, so every
       scan-time sync would fail with nothing but a warning in the scanner log
@@ -1909,6 +1941,9 @@ Each names its sites so the work is mechanical rather than a search.
       state - so the exposure is now "a scan-time sync's four requests against a
       derive run's thirty", still against 60 a minute, and still inferred rather
       than observed. Plan §6 check 2 watches for a 429.
+      → 2026-10-20 (§15.50, 1.0.0b9): the derive job now spends up to ~43 a
+      minute at the measured speed (15 s pause), but never sends below a reserve
+      of 9 left. Exposure: "≥ 9 vs 4" rather than "30 vs 4". Still inferred.
 
 - [x] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
       Strict identification (steps 3/4) calls buildRequest and
@@ -2443,6 +2478,13 @@ Each names its sites so the work is mechanical rather than a search.
       **Revisit trigger:** master-tagged rows exceed ~10% of identified rows (3 of
       507 on 2026-10-12). Then add "and no master tag" to `$UNSETTLED`, which also
       changes the settings page's derive count.
+      → 2026-10-20: **decided to revisit in the #16 release** (master-tag names
+      as a list), not by the ~10% trigger alone (§15.50 item 6; GitHub #16
+      comment 2026-10-20). At 5,000 CDs the lookups cost 2–3½ hours once
+      (§15.50 sizing), so skipping tagged albums is a real lever there. But the
+      stored answer is the fallback when #16 stops reading `DISCOGS_MASTER_ID` /
+      `DISCOGS MASTER ID` on existing installs: skipping first would leave those
+      albums not owned until looked up and synced.
 - [ ] **2026-10-12: the "release tag, no master tag" ownership delay is still
       unobserved.** Such an album, if the owner holds a different pressing, should
       show unowned after its first scan and become a version only at the next sync,
@@ -2451,7 +2493,142 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
+- [x] **1.0.0b9 checks (GitHub #19, §15.50).** **2026-10-20 session (reference
+      server, LMS 9.1.1, share mounted, owner present): all PASS.** Backup
+      `tmp/checkb9/backup-2026-10-20-1234/`; zip sha1 `026ba092…351c` as published;
+      b9 installed; `plugin.squeezewax` DEBUG (saved in `log.conf`), `network.*`
+      ERROR throughout.
+      - Settled library: no derive line, no `swxNewMasters`; rescan: scan-time sync
+        "205 items in 4 requests", no SQL error, no `master lookup:` line.
+      - Cold run (all 474 rows / 471 releases reset, `tmp/checkb9/reset-all.sql`;
+        owner pressed "Sync collection now"): 12:57:39 to 13:10:07, **12.5 min**
+        (reading A's 12 min), 471 requests (468 ok, 3 not_found), 18 runs. Stops:
+        15 "had its share" (resume 15 s), 1 "a collection sync is running"
+        (resume 15 s), 1 "the reserve is reached" (resume 60 s, right after the
+        mid-run sync's 5 requests), 1 finished. **0 x 429.** Lowest `Remaining` 9.
+        0 replies with `-` for Used/Remaining.
+      - Notice never present while running or waiting (poller every 2 min); present
+        after the job; gone after the second sync (~3 s), no reload. Ownership
+        after the job exact 150 / version 51 / absent 306 (3 albums "version"
+        only through lookups dip, as predicted); after the second sync 150 / 54 /
+        303, equal to before.
+      - Details menus during the run: 4 requests `-> ok` (releases 783895,
+        109450, 1494437; master 2658), repeats from the 2-minute hold; no "not
+        fetched, the rate budget is spent"; the owner never saw "Discogs is busy".
+      - Mid-run sync completed; the job stopped and resumed 15 s later.
+      - **Window rule: reading A** (Discogs counts the last 60 s). `Remaining`
+        rose across 14 of 15 ordinary 15 s gaps (+6 to +11, e.g. 19 to 27, 12 to 23);
+        the exception is 33 to 34 after the reserve stop; across the 60 s wait 9 to 55.
+        Reading B would not rise in a 15 s gap. Relevant to the deferred sliding
+        pause (§15.50).
+      - Owner's one note: the page says "waiting" in the gaps (expected, §15.48).
+
+- [ ] **Does a 429 reply carry `X-Discogs-Ratelimit*` headers?** (§15.50 "Where
+      the evidence is thin"). **Still open: the b9 cold run (471 requests) had
+      no 429**, so the debug line has nothing to show. If not, `accountRequest`'s
+      ladder takes one off the last figure, so a menu or sync could fire straight
+      into a second 429; consider "a 429 marks the shared budget spent" for every
+      consumer. Touches the sync: outside #19.
+
+- [x] **LMS "clear library and rescan" keeps the master lookups** (§15.51 item 3;
+      GitHub #21). **Verified 2026-10-20 on b9:** `wipecache` full rescan (13:13 to
+      13:23): `derived_from_release_id IS NOT NULL` 474 before and 474 after, no
+      `master lookup:` line, ownership 150/54/303 unchanged.
+
+- [x] **2026-10-19: the new-masters notice shows in the gaps between derive
+      runs (GitHub #14, §15.47).** **Decided by §15.48 part 1** (hidden while
+      the job runs or waits, shown when paused or finished); fixed in 1.0.0b8.
+      **Verified on hardware 2026-10-20 on b8** (see "1.0.0b8 checks"). `Settings.pm` tested `!Derive->isRunning`
+      only; between runs the job is "waiting" (`isRunning` 0,
+      `isResumeScheduled` 1, 60 s `REARM`). Seen on hardware 2026-10-19, fresh
+      install, 16 runs.
+
+- [x] **1.0.0b8 checks** (§15.48 part 1; offline suites green on SQLite 3.46.1
+      and 3.22.0). Prompt: `claude/prompt-check-b8.md`.
+      **2026-10-20 session results (reference server, LMS 9.1.1, share mounted,
+      owner present): all PASS.**
+      - Preflight: HEAD `645f020`; backup `tmp/checkb8/backup-2026-10-20-0823/`
+        (no `-wal`/`-shm` after a clean stop); b8 installed from the dev
+        `repo.xml`, downloaded zip sha1 `678cbe3e…` as built; plugins page and
+        `install.xml` say 1.0.0b8; log clean, `user_version` 8. Log level was
+        DEBUG (saved) before and after; not changed.
+      - **Settled library: PASS.** No `swxNewMasters`; rescan: "scan-time
+        collection sync: 205 items in 4 requests … ownership derived", no
+        "cannot use HTTPS", no SQL error, no notice afterwards.
+      - **Small reset: PASS.** 40 lowest distinct releases (158 to 31636; 3
+        `version`, 37 `absent`, 40 rows) got `derived_from_release_id = NULL`
+        (`tmp/checkb8/reset40.sql`, run by the owner with sudo: the DB file is
+        `squeezeboxserver`'s, mode 644; `sudo` has no `sqlite3` on its PATH, the
+        owner's is `/home/denny/android/platform-tools/sqlite3`). After the
+        owner pressed "Sync collection now": run 1 (30 requests), a 60 s gap,
+        run 2 (10 requests). Poller every 15 s: notice absent while "running"
+        and in all four "waiting" samples (08:36:14, :29, :44, :59); present
+        from 08:37:14 once the job ended (the owner saw it appear without a
+        reload); gone after the second "Sync collection now" (08:41:28),
+        without a reload (owner confirmed). Ownership before and after:
+        exact 150, version 54, absent 303; the second sync's ownership pass
+        wrote `updated=0`.
+      - Observation, not a defect (§15.47 part 2): the notice appeared after
+        the job although no ownership changed, because re-asking a release
+        rewrites `derived_at` (`Derive.pm:598-602`). The notice means "might
+        change", and a second press is needed until GitHub #13 (1.1.0).
+        Candidate for the #17 redesign if the wording or behaviour should
+        change.
+        → 2026-10-20: **decided by §15.49** (notice and wording kept for
+        1.0.0; the second press goes with #13; placement decided in #17).
+
+- [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
+      offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
+      1. **#14** (decisions §15.47): fresh install with release-ID tags but no
+         master tags. After the scan, while "Master releases" is running, no
+         new-masters notice. When the job finishes, "New master releases found.
+         Press 'Sync collection now' …" appears under the last-sync line without a
+         reload (5 s refresh). After 'Sync collection now' completes it is gone,
+         again without a reload. On a settled library (reference server) it is
+         absent.
+      2. **#15**: the queue page shows the "Tagging tips" link; an own
+         compilation with its release-ID tag removed leaves the queue after a
+         rescan.
+      3. **HTTPS check** (decisions §15.18, 2026-10-19 note): on the usual
+         servers, the scan-time sync still runs (its Info summary line, no
+         "cannot use HTTPS" error). The skip path itself is offline-only unless a
+         scanner without `IO::Socket::SSL` is found.
+      **2026-10-19 session results (reference server, LMS 9.1.1, SQLite 3.46.1,
+      share mounted throughout; owner present):**
+      - Preflight: b7 installed from the dev `repo.xml` (§4.1 method), log clean,
+        `user_version` 8. Backup of the b6-era DB in
+        `tmp/checkb7/backup-2026-10-19-2125/` (the `-wal`/`-shm` did not exist
+        after a clean stop). Log level of `plugin.squeezewax` was already DEBUG
+        and saved in `log.conf`; not changed, nothing to restore.
+      - **#14, settled library: PASS.** No `swxNewMasters` div; §15.47 query by
+        hand returned no row (marker 1792362773; newest `derived_at`
+        1792247803 of 442 derived).
+      - **HTTPS check: PASS.** Ordinary rescan: "scan-time collection sync: 205
+        items in 4 requests … ownership derived"; no "cannot use HTTPS"; no SQL
+        error; no notice afterwards (the derive job had nothing to do).
+      - **#15, tips link: PASS.** Queue page has "Tagging tips" (anchor works
+        only after promotion).
+      - **#15, own compilation: PASS**, on a copy, not the owner's library (the
+        NAS is read-only and the owner will not change it): the two Sparks
+        files copied to `~/Music/swxcheck-b7/`, album title retagged with
+        mutagen. Baseline: conflict (one file tagged, one not). Tag removed,
+        rescan: "conflicts 0, no tag 1", left the queue, row moved to
+        `discogs_no_match`. Tag restored, rescan: conflict again. The log
+        explains it only as the summary counts, with no per-album line.
+        Copy deleted afterwards.
+      - **#14, fresh install: PARTLY FAILED.** Data rebuilt from scratch
+        (old DB kept as `squeezewax.db.pre-fresh` in LMS's prefs dir and in
+        `tmp/checkb7/pre-fresh-2026-10-19/`); the owner kept the rebuilt data.
+        Rebuilt ownership matches the old data (exact 150, version 54, absent
+        303). Notice absent through the scan and before the first derive run.
+        When the job ended (run 16, 22:29:24, 474 releases, 437 with a
+        master) the notice appeared in the open tab without a reload, and
+        vanished after "Sync collection now" without a reload (owner
+        confirmed both). **But the notice also appeared during the job**, in
+        every 60 s gap between runs (seen at 22:07, 22:09, 22:10, 22:12, …):
+        see the next item.
+
+- [x] **1.0.0b6 / GitHub #8 checks** (plan `plans/build-order-gh8-queue-read-only.md`
       §6; offline suites green on both drivers, nothing run on a server):
       1. Repro container (SQLite 3.22.0): on b5, insert a manual row with
          `sqlite3`; update to b6 from the dev `repo.xml`; restart:
@@ -2469,6 +2646,61 @@ Each names its sites so the work is mechanical rather than a search.
       6. Rescan (share mounted): log shows the formerly manual and conflict
          albums examined; after the scan's sync the reference album is back as
          `artist-disagree`; exact back to 151 (inferred).
+      **2026-10-19 session results (`tmp/check-1.0.0b6.md`):**
+      - Scope: `git diff 3206ba2 5194fe3 --stat -- SqueezeWax` is exactly the
+        12 files of `137efda`..`0be60ba`. Pass.
+      - **A (repro container, SQLite 3.22.0): PASS.** b5 DB with a `manual`
+        `exact` row on album A's key (original strict row saved in
+        `tmp/checkb6/`, git-ignored) and a `manual` `absent` row on
+        `0123456789abcdef0123456789abcdef`; dev `repo.xml`, update to 1.0.0b6,
+        restart: `user_version = 8`; "migration 8: 1 manual row(s) owning
+        nothing deleted, 1 manual row(s) made ownership-only, 0 orphan mark(s)
+        cleared, 1 conflict row(s) set to be re-examined"; no SQL error; A
+        ownership-only (`exact` kept, all else NULL), absent row gone, C
+        `source_timestamp` NULL. Rescan: examined 2, identified 1, conflicts 1,
+        skipped 1; A strict 198756 again, C still `conflict`; no SQL error.
+        (Starting the container ran b5 once on the edited DB before the update;
+        rows were untouched.)
+      - **B (reference server, SQLite 3.46.1, 2026-10-19): PASS with three
+        deviations from the plan's inferences** (owner stopped and restarted LMS
+        and set DEBUG; share mounted throughout). Copies in `tmp/checkb6/`
+        (`reference/squeezewax.db`; the `-wal`/`-shm` did not appear in the copy
+        directory, the live `-wal` was 0 bytes), before/after dumps
+        `ref-before-full.txt`, `ref-after-full.txt` (507 rows each).
+        Before: user_version 7; exact 152, version 54, absent 301; 2 manual
+        rows (`78b6b24a…` Depeche Mode, `4ecfede3…` Blood Sugar Sex Magik, both
+        `exact`), 0 orphan, 5 conflict; settings page "5 waiting".
+        After update: log clean, user_version 8, migration 8 "0 manual row(s)
+        owning nothing deleted, 2 … made ownership-only, 0 orphan mark(s)
+        cleared, 5 conflict row(s) set to be re-examined" = the dump. Album menu
+        of an owned, no-link album: "You own a pressing", no Discogs links
+        (album 4323; **inferred** to be `78b6…`, whose stored `lms_album_id`
+        3533 no longer exists). No track menu opened. Queue page: one list, 5
+        "Show tags" buttons (conflicts only), no choose/remove/move, no orphan
+        list, why + what to do on each row; Show tags on a conflict names the
+        file with a tag and the file without. Rescan: scanner log "examined 5,
+        identified 0, conflicts 5, skipped 760"; ownership pass exact=150
+        version=54 absent-with-row=303, updated=2, ambiguous=1,
+        artist-disagree=1; scan-time sync 205 items in 4 requests.
+        Diff before/after = 6 rows: four conflict rows changed `lms_album_id`
+        only (LMS reassigned ids: 3413→4203, 3416→4206, 3417→4207, 3421→4211);
+        `4ecfede3…` is now `absent`/`artist-disagree` (as expected);
+        `78b6b24a…` is now `absent`/**`ambiguous`**.
+        **Deviations: explained, see §15.46 part 6 correction; no code change.**
+        *(Check on 2026-10-19: the two ex-manual albums, `78b6b24a…` = album 4323
+        and `4ecfede3…` = album 4298, have 0 local and 18 / 19 remote tracks in
+        LMS; `snapshot_track_count` 0 in the before-dump. The importer's
+        `local_tracks` gate skips them.)*
+        Original wording: (1) the plan expected the formerly manual
+        album to be examined in the scan; the log's 5 examined are the
+        conflicts, the two ownership-only rows were not (skipped or untagged:
+        not distinguished). (2) exact is **150, not 151**: both ex-manual albums
+        left `exact`, because `78b6…` resolved to `ambiguous` (three Depeche
+        Mode "Songs of Faith and Devotion" albums, 3854, 3855, 4323), which
+        no manual pick can override now. (3) queue is 7, settings page says
+        "7 waiting", list has 7 rows (low item (a): count and list agree). The
+        repository list is back to the website URL.
+
 - [ ] **2026-10-14: large collections against the scan-time sync cap.**
       `API/Sync.pm` `FETCH_BUDGET` = 120 s (abandons at `:228`, returning
       `timeout_budget`). 10,000 items is 100+ requests (`PER_PAGE` = 100,
@@ -2478,6 +2710,10 @@ Each names its sites so the work is mechanical rather than a search.
       completes it; (c) the ownership pass's in-memory cost at that size (the
       only reference is 203 items / 765 albums). Needs a large real or simulated
       collection. Source: forum feedback on 1.0.0b3.
+      → 2026-10-20: §15.50's "large library" reference case (5,000+ CDs,
+      GitHub #20) assumes a ~5,000-item collection, ≈ 51 requests, near this cap.
+      The user's real figures: "the forum user's real figures" under Waiting —
+      external.
 
 - [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
       skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
@@ -3318,6 +3554,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
+      identified albums, how many carry a master tag, collection items. §15.50's
+      large case assumes the worst (~5,000 identified releases, ~5,000-item
+      collection). See also "large collections against the scan-time sync cap"
+      under Waiting — needs a real server.
+
 - [ ] **2026-10-14: forum user (Paul Webster) asked for configurable filters,
       e.g. title = ISIHAC\*,** to avoid "unnecessary Discogs calls" for
       recordings never on Discogs (old radio shows). Waiting for his answer: did
@@ -3435,9 +3677,13 @@ Each names its sites so the work is mechanical rather than a search.
       perl; scan-time sync over HTTPS not observed on Docker. Source for wording:
       slimserver eb59bbf, `Slim/Networking/SimpleSyncHTTP.pm:79` warns under
       network.http, default ERROR (`Slim/Utils/Log.pm:897`).
-- [ ] 2026-10-14: open question strengthened: should ScanSync check hasSSL
+- [x] 2026-10-14: open question strengthened: should ScanSync check hasSSL
       itself and log at error, given LMS's own warning is hidden by default.
       Decide before 1.0 release.
+      → Decided 2026-10-19 (owner): yes. `ScanSync::_run` checks `hasSSL` before
+      the collection request, logs once at error and returns, so the fallback
+      syncs (decisions §15.18, 2026-10-19 note). Offline only; no scanner without
+      `IO::Socket::SSL` has been tried.
 
 - [ ] **2026-10-13: project site redesign (branch `site`).** `index.html` and
       `worked-example.html` replace the README as the Pages entry page; the README
@@ -3779,6 +4025,50 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **2026-10-20: sliding pause from `Remaining`, above the reserve** (§15.50
+      "Considered, deferred"). Needs the b9 per-request `Remaining` lines first:
+      does the count recover during 15 s gaps, or only after 60 idle seconds?
+
+- [ ] **GitHub #13 — work out ownership again by itself when the master lookups
+  finish** (2026-10-19; enhancement, `needs-design`; **target 1.1.0** (owner, 2026-10-19;
+  §15.47); builds on #14's check).
+  Trigger: `Derive::_stop` with "every identified release now has an answer"
+  (`Derive.pm:594`) and at least one master found since the last completed sync
+  for an album not already 'exact'. Read that from `derived_at` against the sync
+  marker's time, with no counter; this relaxes the "nothing branches on
+  `derived_at`" rule (`Schema.pm` ~779). The extra sync writes a 'server' marker,
+  because `source` has a CHECK of 'server'/'scan' (`Schema.pm:734`) and only
+  'scan' suppresses the fallback. It stops by itself: the "nothing to derive"
+  path returns before any request (`Derive.pm` ~154-165). Cost:
+  ceil(items/100)+1 requests per chain, only when masters were found. Docs
+  stopgap done (setup step 6 is only needed without master tags). Related:
+  comment on #7 (storing collection master ids would allow a local re-check;
+  needs its own decision).
+
+- [ ] **GitHub #17: settings page redesign (after 1.0.0, §15.48 items 3–4).**
+  Its own release (§15.43); before #13 or with it (1.1.0) is decided at design
+  time, details too. The owner has more changes in mind, not yet listed. Ideas
+  so far: (a) keep the master count on screen after the job ends (the row is
+  hidden today, `settings.html` `[% IF derive %]`); (b) a hint why the job is
+  slow; (c) move the new-masters notice into the Master releases row (needs
+  (a)). The redesign must keep the 5 s live refresh (§15.40) and the buttons
+  disabled while a scan is running.
+
+- [ ] **GitHub #16 — tag-name defaults, after 1.0.0** (owner, 2026-10-19). The
+  release-ID list is pre-filled with `DISCOGS_RELEASE_ID` for new installs;
+  existing installs keep their saved list (no migration). Master-ID names become
+  a settings list, default `DISCOGS_MASTER_RELEASE_ID` (replaces the fixed `@MASTER_KEYS`
+  in `Tags.pm`). Both lists are removable, with a "Reset to default" button each.
+  Underscore names only as defaults; users add spaced names (some MP3 taggers)
+  themselves (`_lookup` is case-insensitive only; decisions §3). Existing
+  installs' master list also starts as `DISCOGS_MASTER_RELEASE_ID` only (owner
+  accepted): files tagged `DISCOGS_MASTER_ID` or `DISCOGS MASTER ID` stop
+  counting until the name is added. Release notes for that version must tell
+  users to review their tag settings and add those names if their files use
+  them. Cost
+  (inferred): first scan reads 2 files per album on untagged libraries; a
+  tag-name change re-checks tagged albums (§3b).
 
 - [ ] **GitHub #9 — master link + "Master info" for tagged albums not owned.
   Owner undecided (2026-10-17), label `undecided`.** Cheap: `Derive.pm` covers

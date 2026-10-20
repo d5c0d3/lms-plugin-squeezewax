@@ -678,6 +678,17 @@ sub beforeRender {
 					Plugins::SqueezeWax::Derive->isResumeScheduled ) ),
 			};
 		}
+
+		# Decisions §15.47 (GitHub #14), as amended by §15.48 part 1: the job found
+		# masters after the last completed sync, and only a sync turns them into
+		# ownership. Not while the job runs OR WAITS - it may find more, the derive
+		# line says it is busy, and between its runs (60 s re-arm) it is not
+		# running but is not done either - and not before any sync, which the
+		# first-steps hint covers. Shown when it is paused or finished: the button
+		# then resumes the job and updates ownership in one press. One more read,
+		# no request.
+		$params->{newMasters} = ( !( Plugins::SqueezeWax::Derive->isRunning || Plugins::SqueezeWax::Derive->isResumeScheduled )
+			&& Plugins::SqueezeWax::Derive->newMastersSince( $params->{sync}->{lastSynced} ) ) ? 1 : 0;
 	}
 
 	# The currency label the price lines use (decisions §15.33). Read from the

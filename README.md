@@ -108,9 +108,14 @@ start, see [Starting over](#starting-over).
 4. Run a library rescan: Basic Settings → Rescan Media Library → "Look for new
    and changed media files".
 5. Wait until the settings page no longer shows "Master releases". If it says
-   "paused", press "Sync collection now".
-6. Press "Sync collection now" once. "You own a version" results appear after
-   this sync.
+   "paused", press "Sync collection now". This happens once, in the background,
+   and pauses while LMS scans: roughly 15–20 minutes for 500 albums tagged with
+   a Discogs release ID, 2–3½ hours for 5,000. Later scans only look up new or
+   retagged albums.
+6. Only if your files have no master-release tag: press "Sync collection now"
+   once after step 5. Albums whose files carry a master tag already show "You
+   own a version" after the rescan. The settings page tells you when this is
+   needed.
 
 Until the first collection sync has finished, the settings page shows a short
 version of these steps at the top.
@@ -158,7 +163,7 @@ anything you have typed.
 
 ## Using it
 
-- **New to it?** [docs/user-guide.md](docs/user-guide.md) walks through the everyday workflow, from a new record to "You own a pressing".
+- **New to it?** [docs/user-guide.md](docs/user-guide.md) walks through the everyday workflow, from a new record to "You own a pressing". Its [Tagging for SqueezeWax](docs/user-guide.md#tagging-for-squeezewax) section lists what to tag.
 - **Album and track menus.** Only albums you own get entries.
   - **Your exact pressing**, in apps and web pages that can open links:
     "Discogs: Browse your pressing" (a link to it on Discogs), "Discogs: Show

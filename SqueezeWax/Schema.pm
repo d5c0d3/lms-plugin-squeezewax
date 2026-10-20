@@ -776,9 +776,11 @@ sub _migration_5 {
 # discogs_release_cache stays unwritten. scripts/derive-check.pl asserts that
 # rather than trusting it.
 #
-# derived_at is for the log and for a human reading the table. Nothing branches
+# derived_at is for the log and for a human reading the table. No fetch branches
 # on it, deliberately: an age-based re-fetch is exactly the "repeated to keep it
-# fresh" that §15.22 rules out.
+# fresh" that §15.22 rules out. One display does (decisions §15.47): the settings
+# page compares it with the last sync's time to say a sync is needed. That reads
+# two numbers and fetches nothing, so the rule above is not touched.
 #
 # No CHECK and no index. A master id is an opaque integer with no enumerable
 # domain, and the selection query below is a full scan of ~500 rows once per run.
@@ -933,6 +935,7 @@ sub _migration_8 {
 # The 12 columns migration 3 carries forward, named explicitly in both halves
 # of the copy so a column-order slip cannot pass. snapshot_total_duration is
 # deliberately absent: that is obligation (f).
+# WARNING: no derived_* columns (migration 6) - never reuse for a later rebuild (§15.51).
 my @MATCH_COLUMNS = qw(
 	album_key
 	mb_album_id

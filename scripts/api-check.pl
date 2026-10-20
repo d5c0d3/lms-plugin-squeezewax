@@ -370,6 +370,38 @@ for my $headers ( undef, {}, { limit => 60 }, { limit => 'sixty', used => 12, re
 	is( $A->rateWait, 0, '_resetRate forgets the budget, for the suites only' );
 }
 
+# The master job's reserve (decisions §15.50 item 2): the same countdown with the
+# threshold an argument. rateWait is untouched by it - the sync and the menus are
+# not held to a reserve.
+{
+	$A->_resetRate;
+
+	is( $A->reserveWait( 10, 1000 ), 0, 'reserve: nothing counted yet, nothing held back' );
+
+	$A->noteResponse( { limit => 60, used => 50, remaining => 10 }, 1000 );
+	is( $A->reserveWait( 10, 1000 ), 0, 'reserve: 10 left is not fewer than 10' );
+
+	$A->noteResponse( { limit => 60, used => 51, remaining => 9 }, 1000 );
+	is( $A->reserveWait( 10, 1000 ), 60, 'reserve: 9 left holds back for the whole window' );
+	is( $A->rateWait(1000), 0, '  ...while rateWait still says go to everyone else' );
+	is( $A->reserveWait( 10, 1030 ), 30, '  ...counting down like rateWait' );
+	is( $A->reserveWait( 10, 1059.5 ), 1, '  ...rounded up' );
+	is( $A->reserveWait( 10, 1060 ), 0, '  ...and a reply a window old no longer binds' );
+	is( $A->reserveWait( 10, 9000 ), 0, '  ...never negative' );
+
+	$A->noteResponse( { limit => 60, used => 60, remaining => 0 }, 2000 );
+	is( $A->reserveWait( 10, 2010 ), $A->rateWait(2010),
+		'reserve: on a spent budget it is the same wait as rateWait' );
+
+	my $left = \&Plugins::SqueezeWax::API::_reserveLeft;
+	is( $left->( undef, 10, 0 ), 0, '_reserveLeft: no state, no wait' );
+	is( $left->( { remaining => 9, checked_at => 100 }, 10, 100 ), 60, '_reserveLeft: pure' );
+	is( $left->( { remaining => 9, checked_at => 100 }, 9, 100 ), 0,
+		'  ...with the threshold an argument' );
+
+	$A->_resetRate;
+}
+
 # ---------------------------------------------------------------------------
 # backoffFor - 429 retry bound
 # ---------------------------------------------------------------------------

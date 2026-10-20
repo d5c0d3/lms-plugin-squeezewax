@@ -82,6 +82,7 @@ our @REQUESTS;    # every stubbed request, as { url, headers, params }
 our @EVENTS;      # ScanSync's observable steps, in order
 our @IMPORTERS;   # every addImporter call, as [ class, params ]
 our $DB_READY = 1;
+our $HAS_SSL  = 1;   # SimpleSyncHTTP->hasSSL, stubbed below
 
 # scanner.pl's own mode flags (scanner.pl:112, :129-130), which ScanSync reads.
 our ( $playlists, $onlineLibrary );
@@ -233,6 +234,10 @@ BEGIN {
 	sub code    { $_[0]->{code} }
 	sub headers { $_[0]->{headers} }
 	sub content { defined $_[0]->{content} ? $_[0]->{content} : '' }
+
+	# SimpleSyncHTTP.pm:24: whether IO::Socket::SSL loads. Called as a class
+	# method by ScanSync; the real sub ignores its arguments.
+	sub hasSSL { $main::HAS_SSL }
 }
 
 use JSON::XS qw(encode_json);
@@ -891,6 +896,26 @@ diag('ScanSync: the gates, each returning 0 with endImporter once');
 	is( scalar @REQUESTS, 0, '  ...before spending a request' );
 	ok( ( grep { /skipping the scan-time collection sync: db broken/ } @ERRORS ),
 		'  ...logged at error, with the reason' );
+	is( count_events(qr/^endImporter:/), 1, '  ...with endImporter called once' );
+}
+
+{
+	reset_state();
+	reset_db();
+	$PREFS{discogsToken} = 'token-abc';
+
+	local $HAS_SSL = 0;
+
+	my ( $rc, $err ) = run_scan( identity_response(), page_response( 3, 1, 1, 3 ) );
+
+	is( $rc, 0, 'no HTTPS in this scanner: returns 0 (§15.18, 2026-10-19 note)' );
+	is( $err, '', '  ...without dying' );
+	is( scalar @REQUESTS, 0, '  ...before any request' );
+	ok( !committed_marker(), '  ...writing no marker, so the server syncs after the scan' );
+	is( scalar( grep { $_ eq 'Scan-time collection sync skipped: this scanner cannot use HTTPS '
+			. '(IO::Socket::SSL missing). The server will sync after the scan.' } @ERRORS ), 1,
+		'  ...logged at error, once, in the decided words' );
+	is( count_events(qr/^progress:new/), 0, '  ...creating no progress row' );
 	is( count_events(qr/^endImporter:/), 1, '  ...with endImporter called once' );
 }
 
