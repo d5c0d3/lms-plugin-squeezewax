@@ -2469,22 +2469,45 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **2026-10-19: the new-masters notice shows in the gaps between derive
+- [x] **2026-10-19: the new-masters notice shows in the gaps between derive
       runs (GitHub #14, §15.47).** **Decided by §15.48 part 1** (hidden while
       the job runs or waits, shown when paused or finished); fixed in 1.0.0b8.
-      Tick when the b8 checks pass. `Settings.pm` tested `!Derive->isRunning`
+      **Verified on hardware 2026-10-20 on b8** (see "1.0.0b8 checks"). `Settings.pm` tested `!Derive->isRunning`
       only; between runs the job is "waiting" (`isRunning` 0,
       `isResumeScheduled` 1, 60 s `REARM`). Seen on hardware 2026-10-19, fresh
       install, 16 runs.
 
-- [ ] **1.0.0b8 checks** (§15.48 part 1; offline suites green on SQLite 3.46.1
-      and 3.22.0, nothing run on a server). Prompt: `claude/prompt-check-b8.md`.
-      1. Settled library: no notice; scan-time sync line, no "cannot use HTTPS".
-      2. Small reset (a few release-tagged albums, no master tags, so the job
-         takes several runs): **no notice while the job is "waiting"** between
-         runs; the notice after the job ends, without a reload; gone after
-         "Sync collection now", without a reload.
-      3. Tick the "notice shows in the gaps between derive runs" item above.
+- [x] **1.0.0b8 checks** (§15.48 part 1; offline suites green on SQLite 3.46.1
+      and 3.22.0). Prompt: `claude/prompt-check-b8.md`.
+      **2026-10-20 session results (reference server, LMS 9.1.1, share mounted,
+      owner present): all PASS.**
+      - Preflight: HEAD `645f020`; backup `tmp/checkb8/backup-2026-10-20-0823/`
+        (no `-wal`/`-shm` after a clean stop); b8 installed from the dev
+        `repo.xml`, downloaded zip sha1 `678cbe3e…` as built; plugins page and
+        `install.xml` say 1.0.0b8; log clean, `user_version` 8. Log level was
+        DEBUG (saved) before and after; not changed.
+      - **Settled library: PASS.** No `swxNewMasters`; rescan: "scan-time
+        collection sync: 205 items in 4 requests … ownership derived", no
+        "cannot use HTTPS", no SQL error, no notice afterwards.
+      - **Small reset: PASS.** 40 lowest distinct releases (158 to 31636; 3
+        `version`, 37 `absent`, 40 rows) got `derived_from_release_id = NULL`
+        (`tmp/checkb8/reset40.sql`, run by the owner with sudo: the DB file is
+        `squeezeboxserver`'s, mode 644; `sudo` has no `sqlite3` on its PATH, the
+        owner's is `/home/denny/android/platform-tools/sqlite3`). After the
+        owner pressed "Sync collection now": run 1 (30 requests), a 60 s gap,
+        run 2 (10 requests). Poller every 15 s: notice absent while "running"
+        and in all four "waiting" samples (08:36:14, :29, :44, :59); present
+        from 08:37:14 once the job ended (the owner saw it appear without a
+        reload); gone after the second "Sync collection now" (08:41:28),
+        without a reload (owner confirmed). Ownership before and after:
+        exact 150, version 54, absent 303; the second sync's ownership pass
+        wrote `updated=0`.
+      - Observation, not a defect (§15.47 part 2): the notice appeared after
+        the job although no ownership changed, because re-asking a release
+        rewrites `derived_at` (`Derive.pm:598-602`). The notice means "might
+        change", and a second press is needed until GitHub #13 (1.1.0).
+        Candidate for the #17 redesign if the wording or behaviour should
+        change.
 
 - [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
       offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
