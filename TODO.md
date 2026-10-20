@@ -1479,6 +1479,11 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-19, low, no target: an album leaving the queue is logged only as
+      summary counts.** Seen in the 1.0.0b7 check (own compilation, tag removed):
+      "conflicts 0, no tag 1" and no per-album line, so the log does not say which
+      album left or why. A per-album Info or Debug line at the point the conflict
+      row is replaced would do.
 - [ ] **2026-10-18, low: the settings page's queue count can exceed the queue
       list.** It also counts conflict rows whose album left the library, which
       the queue page does not list (`Settings.pm` `beforeRender` count vs
@@ -2465,15 +2470,12 @@ Each names its sites so the work is mechanical rather than a search.
 ## Waiting — needs a real server
 
 - [ ] **2026-10-19: the new-masters notice shows in the gaps between derive
-      runs (GitHub #14, §15.47).** `Settings.pm:687` tests `!Derive->isRunning`
-      only. Between runs the job is "waiting" (`isRunning` 0, `isResumeScheduled`
-      1, 60 s `REARM`), so on a fresh install the notice flickers on and off for
-      the ~25 minutes the job takes, while the "Master releases" line is still
-      shown. The check and the comment at `Settings.pm:682-685` both say "not
-      while the job runs". Likely fix: also require `!isResumeScheduled`.
-      Seen on hardware 2026-10-19, fresh install, 16 runs; the offline suite
-      does not model the gap. Needs a code change and a decision (§15.47).
-
+      runs (GitHub #14, §15.47).** **Decided by §15.48 part 1** (hidden while
+      the job runs or waits, shown when paused or finished); fixed in 1.0.0b8.
+      Tick when the b8 checks pass. `Settings.pm` tested `!Derive->isRunning`
+      only; between runs the job is "waiting" (`isRunning` 0,
+      `isResumeScheduled` 1, 60 s `REARM`). Seen on hardware 2026-10-19, fresh
+      install, 16 runs.
 
 - [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
       offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
@@ -3927,6 +3929,15 @@ Each names its sites so the work is mechanical rather than a search.
   stopgap done (setup step 6 is only needed without master tags). Related:
   comment on #7 (storing collection master ids would allow a local re-check;
   needs its own decision).
+
+- [ ] **GitHub #17: settings page redesign (after 1.0.0, §15.48 items 3–4).**
+  Its own release (§15.43); before #13 or with it (1.1.0) is decided at design
+  time, details too. The owner has more changes in mind, not yet listed. Ideas
+  so far: (a) keep the master count on screen after the job ends (the row is
+  hidden today, `settings.html` `[% IF derive %]`); (b) a hint why the job is
+  slow; (c) move the new-masters notice into the Master releases row (needs
+  (a)). The redesign must keep the 5 s live refresh (§15.40) and the buttons
+  disabled while a scan is running.
 
 - [ ] **GitHub #16 — tag-name defaults, after 1.0.0** (owner, 2026-10-19). The
   release-ID list is pre-filled with `DISCOGS_RELEASE_ID` for new installs;

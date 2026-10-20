@@ -7369,6 +7369,9 @@ GitHub #14 and #13.
    hint (§15.38 item 2) covers that case.
 3. **Hidden while the master job runs** (`Derive->isRunning`), and gone after
    the next completed sync, whichever path writes the marker.
+   **Forward note (2026-10-19): amended by §15.48 part 1.** "Runs" was read as
+   `isRunning` alone, which is false in the 60 s gaps between runs; the notice
+   must also be hidden while the job waits.
 4. **No Discogs request.** A read at page render only, like the derive count
    (§15.38 item 3); it is part of the 5 s live refresh (§15.40).
 5. **Relaxes the `Schema.pm` note** "Nothing branches on [derived_at]" (migration
@@ -7377,3 +7380,34 @@ GitHub #14 and #13.
 6. **Why #13 is not in 1.0.0:** it would be the first Discogs traffic that is not
    directly caused by a user's action (a scan, the button), so it needs its own
    beta round.
+
+### 15.48 The notice is hidden while the master job waits; settings page redesign later — 2026-10-19 (owner)
+
+GitHub #14 (the fix) and #17 (the redesign). Found by the 1.0.0b7 hardware check
+(`TODO.md`, 2026-10-19): on a fresh install the notice showed in each 60 s gap
+between derive runs. **Verified** on hardware: 16 runs, the notice present in the
+gaps and absent during runs.
+
+1. **Hidden while the master job runs or waits, shown when it is paused or has
+   finished.** Cause: "waiting" is a pacing stop with a re-arm (`Derive.pm`
+   `%REARM_ON`, `isResumeScheduled`, `REARM` 60 s, `PER_RUN` 30). `isRunning` is
+   false then, and `Settings.pm` tested only `!isRunning`, as §15.47 part 3
+   specified. The condition becomes `!( isRunning || isResumeScheduled )`.
+   **Amends §15.47 part 3** (forward note added there). Paused shows the notice
+   on purpose: the button then resumes the job and updates ownership in one
+   press.
+2. **"Sync collection now" stays enabled during the master job, by design.** The
+   job yields to a sync (`Derive.pm` `_yieldReason`) and re-arms (`%REARM_ON`),
+   so a press never collides with it.
+3. **The settings page is redesigned after 1.0.0, as its own release** (GitHub
+   #17; §15.43, one feature per release). 1.0.0 ships the current page with the
+   part 1 fix. Whether the redesign comes before #13 or together with it (1.1.0)
+   is decided at design time, and so are its details. The owner has more changes
+   in mind, not yet listed. The redesign must keep the 5 s live refresh (§15.40)
+   and the buttons disabled while a scan runs.
+4. **Owner ideas, recorded and not designed, folded into #17:** (a) keep the
+   master count on screen after the job ends (the row is hidden today,
+   `settings.html` `[% IF derive %]`); (b) a hint why the job is slow; (c) move
+   the notice into the Master releases row (needs (a)).
+
+Next free decision number: §15.49.
