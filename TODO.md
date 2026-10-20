@@ -21,10 +21,13 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
-Next free decision number: **§15.52** (2026-10-20).
+Next free decision number: **§15.53** (2026-10-20).
 
 ## v1 RELEASE CHECKLIST
 
+- [ ] **1.0.0 = 1.0.0b9's code** (§15.52). Waiting for: no blocking forum
+      report on b9 (owner calls it). Then a release-step session: version 1.0.0,
+      README 'This is a beta' line, release `repo.xml`, official listing.
 - [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
       → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
@@ -1548,7 +1551,8 @@ Each names its sites so the work is mechanical rather than a search.
       Partly answers 2026-09-13 "per-release lookup of the caller's own
       collection entry?".
 - [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
-      (decisions §15.43; feature split). Owner, 2026-10-17: (1) Stop today's
+      (decisions §15.43; feature split). After 1.0.0, no milestone yet (§15.52
+      item 3); README known limitation. Owner, 2026-10-17: (1) Stop today's
       unconditional fallback sync after rescan album. Inferred: `_syncTick` does
       not skip it, since no scan marker is written, so each album rescan costs a
       full sync, about ceil(items/100)+1 requests (`API.pm` PER_PAGE): 4 for 203

@@ -7595,4 +7595,28 @@ GitHub #21.
    `_rebuildMatchTable` must not be reused for a later rebuild as it stands. A
    one-line warning comment sits above `@MATCH_COLUMNS`.
 
-Next free decision number: §15.52.
+### 15.52 1.0.0 is 1.0.0b9's code; #2 is a known limitation — 2026-10-20 (owner)
+
+1. **1.0.0 adds no feature.** It is 1.0.0b9's code (master `6281b9b`, hardware
+   report 91) with its version and wording changed for release. Every open
+   feature issue ships after 1.0.0, one per release (§15.43).
+2. **When:** after 1.0.0b9 has run on the forum without a blocking report. The
+   owner calls it; no fixed period. Wanted, not required: piCorePlayer and
+   large-library reports (TODO items). A blocking report gets a fix as 1.0.0b10
+   with its own hardware check first.
+3. **GitHub #2 ("Rescan album") is after 1.0.0**, as its design note already
+   placed it (`claude/design-gh2-rescan-album.md`, "Order of work"; TODO "A1
+   (GitHub #2)", owner 2026-10-17). Not ready: Discogs' "Collection Items By
+   Release" endpoint is unverified, and the order of LMS's rescan notifications
+   needs a real server. It becomes a README known limitation. **Cost accepted
+   until then (inferred):** each "Rescan album" starts a full collection sync,
+   about 4 requests on the reference collection, about 51 on a 5,000-item one
+   (§15.50 sizing), during which details menus may say "busy".
+4. **Milestones.** `1.1.0` = #13, #16, #17 together (owner, 2026-10-19). #2 and
+   the other open issues get no milestone yet; their order is decided after
+   1.0.0. A milestone is one release (§15.43 ruling 1).
+5. **The release step itself** (version 1.0.0, README "This is a beta" line,
+   release `repo.xml`, official plugin listing) is planned in its own session
+   when the owner calls 1.0.0.
+
+Next free decision number: §15.53.
