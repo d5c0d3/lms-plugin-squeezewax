@@ -21,7 +21,7 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
-Next free decision number: **§15.53** (2026-10-20).
+Next free decision number: **§15.54** (2026-10-20).
 
 ## v1 RELEASE CHECKLIST
 
@@ -1551,8 +1551,9 @@ Each names its sites so the work is mechanical rather than a search.
       Partly answers 2026-09-13 "per-release lookup of the caller's own
       collection entry?".
 - [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
-      (decisions §15.43; feature split). After 1.0.0, no milestone yet (§15.52
-      item 3); README known limitation. Owner, 2026-10-17: (1) Stop today's
+      (decisions §15.43; feature split). After 1.0.0, milestone 1.3.0 (§15.53);
+      README known limitation. Part (1) moved to GitHub #22, 1.0.1 (§15.53; item
+      below). Owner, 2026-10-17: (1) Stop today's
       unconditional fallback sync after rescan album. Inferred: `_syncTick` does
       not skip it, since no scan marker is written, so each album rescan costs a
       full sync, about ceil(items/100)+1 requests (`API.pm` PER_PAGE): 4 for 203
@@ -1567,9 +1568,16 @@ Each names its sites so the work is mechanical rather than a search.
       Needs a real server: the album id arrives before `['rescan','done']`; an
       album whose LMS id changes keeps its match (`album_key`); a rescan album
       queued during a full scan; a manual-match album stays manual.
+- [ ] **2026-10-20: GitHub #22 — no collection sync after "Rescan album"; milestone
+      1.0.1 (§15.53).** Split from #2: a fix to the released version (§15.43 ruling
+      5), branch from the last promoted commit, no migration, merged forward. The
+      1.0.1 build drops the "also starts a full collection sync" sentence from
+      README's "Rescan album" known limitation (not edited now). Blocked on
+      "how to tell an album rescan from a full scan" under Waiting — needs a real
+      server.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
-      restart).**
+      restart); milestone 1.2.0 (§15.53).**
       Open: the minimum Material version for `lmsbrowse`.
       Needs a real server: the item appears in LyrPlay, Squeeze-LX and a desktop
       browser; whether the apps need reopening after the setting is switched on;
@@ -2509,6 +2517,10 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
+      Does a subscriber see `rescan album <id>` before `['rescan','done']`, and
+      with which arguments. Both end in `['rescan','done']`. One check serves both
+      issues; do it once.
 - [x] **1.0.0b9 checks (GitHub #19, §15.50).** **2026-10-20 session (reference
       server, LMS 9.1.1, share mounted, owner present): all PASS.** Backup
       `tmp/checkb9/backup-2026-10-20-1234/`; zip sha1 `026ba092…351c` as published;
@@ -4093,7 +4105,7 @@ Each names its sites so the work is mechanical rather than a search.
   menu.
 
 - [ ] **GitHub #10 — Discogs wantlist: album menu line + "Records I want" view**
-  (owner, 2026-10-17; open, `needs-design`). Investigate first, Listen Later's
+  (owner, 2026-10-17; open, `needs-design`; milestone 1.5.0, §15.53). Investigate first, Listen Later's
   Wish List (verified by reading `SimonArnold002/LMS-Listen-to-Later` @
   `ecb3622`): a local list in `listenlater.db` (`albums.status='wishlist'`,
   `ListenLater/DB.pm`), any source, no Discogs use, "Buy" opens Bandcamp only

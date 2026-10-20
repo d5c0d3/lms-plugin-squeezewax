@@ -7619,4 +7619,33 @@ GitHub #21.
    release `repo.xml`, official plugin listing) is planned in its own session
    when the owner calls 1.0.0.
 
-Next free decision number: §15.53.
+### 15.53 Release order after 1.0.0 — 2026-10-20 (owner)
+
+Amends §15.52 item 4 ("order decided after 1.0.0"). One feature per release (§15.43); each
+milestone is one release on GitHub.
+
+| Release | Issue | Why there |
+|---|---|---|
+| 1.0.1 | #22 no collection sync after "Rescan album" | Fix, no migration; split from #2. |
+| 1.1.0 | #13, #16, #17 | One release (owner, 2026-10-19). |
+| 1.2.0 | #3 Material "Discogs" item | Decided (§15.44), user-requested, no migration. Open: minimum Material version. |
+| 1.3.0 | #2 Rescan album (tag re-read, one lookup) | Phase 0 first: Discogs "Collection Items By Release" endpoint (unverified). |
+| 1.4.0 | #7 owned pressings | Decided (§15.45); migration. Designed with #10, ships alone (§15.45 item 7). |
+| 1.5.0 | #10 wantlist | Builds on #7; Listen Later and Discogs questions first. |
+| none | #18 multi-language | Translations only (owner, 2026-10-20); ships when a translator is found. |
+| none | #9, #11, #12 | Undecided; no milestone. |
+
+- **Split (owner, 2026-10-20):** stopping the full collection sync after "Rescan album" leaves
+  #2 (which decided it 2026-10-17 as part of #2) and ships first as **1.0.1**, GitHub #22. A fix
+  to the released version per §15.43 ruling 5: branch from the last promoted commit, no
+  migration, merged forward. Why: that sync re-checks ownership with the old tags (inferred from
+  `Plugin.pm` `_rescanDone` / `_syncTick`), and costs ~51 requests per album rescan at 5,000
+  items. Trade-off (inferred): a Discogs collection change is then noticed at the next scan or
+  "Sync collection now", not after an album rescan.
+- **Before 1.0.1 is built:** how to tell an album rescan from a full scan. Both end in
+  `['rescan','done']`; whether the `rescan album` command is visible first, and in what order, is
+  unverified (#2 design note) and needs a real server. Same check #2 needs; do it once.
+- Considered: fixing it in 1.0.0 instead (as b10). Not chosen: 1.0.0 stays b9's code (§15.52).
+- The order may change by a later dated decision; the milestone follows the decision.
+
+Next free decision number: §15.54.
