@@ -40,9 +40,12 @@ Next free decision number: **§15.52** (2026-10-20).
       Needs a real server: fresh install with tags but no master tags. The
       notice appears after the master job finishes, is absent while it runs, and
       is gone after 'Sync collection now'. Absent on a settled library.
-- [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+- [x] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
       → 2026-10-20: queue-page link and own-compilation parts ticked ("1.0.0b7
       checks"). Still open: the live-site anchor, below (owner checks in a browser).
+      → 2026-10-20: done. Owner checked in a browser after the b9 promotion
+      (`6281b9b`): the "Tagging tips" link opens the user guide at "Tagging for
+      SqueezeWax". Released in 1.0.0b9.
       Needs a real server: the queue page shows the link; an own compilation with
       its release-ID tag removed leaves the queue after a rescan (#8 part 9).
       After the next promotion to master: the queue page's "Tagging tips" link
