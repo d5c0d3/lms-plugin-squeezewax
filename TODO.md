@@ -25,17 +25,24 @@ Next free decision number: **§15.52** (2026-10-20).
 
 ## v1 RELEASE CHECKLIST
 
-- [ ] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+- [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+      → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
       #21 (lookups survive database changes, §15.51), and is promoted instead of
       b8 after its own checks ("1.0.0b9 checks" under Waiting — needs a real
       server).
 
-- [ ] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+- [x] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+      → 2026-10-20: done. The fresh-install case failed in b7 (notice showed in
+      the gaps between derive runs), was fixed in b8 (§15.48), and checked again
+      in b9 (hidden while running/waiting, shown after, gone after the sync). See
+      "1.0.0b7 checks", "1.0.0b8 checks", "1.0.0b9 checks". Released in 1.0.0b9.
       Needs a real server: fresh install with tags but no master tags. The
       notice appears after the master job finishes, is absent while it runs, and
       is gone after 'Sync collection now'. Absent on a settled library.
 - [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+      → 2026-10-20: queue-page link and own-compilation parts ticked ("1.0.0b7
+      checks"). Still open: the live-site anchor, below (owner checks in a browser).
       Needs a real server: the queue page shows the link; an own compilation with
       its release-ID tag removed leaves the queue after a rescan (#8 part 9).
       After the next promotion to master: the queue page's "Tagging tips" link
@@ -43,7 +50,7 @@ Next free decision number: **§15.52** (2026-10-20).
       (anchor `#tagging-for-squeezewax`, inferred from the site's heading-id
       pattern, unverified until published). Before that promotion it lands at the
       top of the page, because the website serves master.
-- [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
+- [x] **GitHub #8 — review queue read-only, manual matching removed (decisions
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a
       build with manual rows.
@@ -51,6 +58,8 @@ Next free decision number: **§15.52** (2026-10-20).
       `plans/build-order-gh8-queue-read-only.md`; built for 1.0.0b6
       (`137efda`..`0be60ba`). Hardware checks: "1.0.0b6 / GitHub #8 checks" under
       Waiting — needs a real server.
+      → 2026-10-20: done. Built for 1.0.0b6, checks passed ("1.0.0b6 / GitHub #8
+      checks"), issue closed.
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
       Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
       source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
