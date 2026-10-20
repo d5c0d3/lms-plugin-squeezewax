@@ -1430,7 +1430,7 @@ diag('§15.38 item 7: the derive line says running, waiting or paused');
 		'the paused label is in the decided words' );
 }
 
-diag('§15.47 (GitHub #14): the new-masters notice');
+diag('§15.47 (GitHub #14), §15.48: the new-masters notice');
 
 {
 	local $STATUS = { running => 0, lastSynced => 1_790_085_746, lastItems => 203, lastError => '' };
@@ -1443,7 +1443,15 @@ diag('§15.47 (GitHub #14): the new-masters notice');
 	$DERIVE{progress} = { done => 3, total => 471, pending => 468 };
 	is( render()->{newMasters}, 0, 'hidden while the master job runs' );
 
+	# §15.48 part 1: between runs the job is waiting (a 60 s re-arm), neither
+	# running nor done. The 1.0.0b7 hardware check saw the notice in those gaps.
 	$DERIVE{running} = 0;
+	$DERIVE{scheduled} = 1;
+	is( render()->{newMasters}, 0, 'hidden while the master job waits (resume scheduled, not running)' );
+
+	$DERIVE{scheduled} = 0;
+	is( render()->{newMasters}, 1, 'shown while the job is paused (neither running nor scheduled)' );
+
 	$DERIVE{newMasters} = 0;
 	is( render()->{newMasters}, 0, 'hidden when the query finds nothing (a newer sync, or only exact albums)' );
 
