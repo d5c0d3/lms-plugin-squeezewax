@@ -108,7 +108,10 @@ start, see [Starting over](#starting-over).
 4. Run a library rescan: Basic Settings → Rescan Media Library → "Look for new
    and changed media files".
 5. Wait until the settings page no longer shows "Master releases". If it says
-   "paused", press "Sync collection now".
+   "paused", press "Sync collection now". This happens once, in the background,
+   and pauses while LMS scans: roughly 15–20 minutes for 500 albums tagged with
+   a Discogs release ID, 2–3½ hours for 5,000. Later scans only look up new or
+   retagged albums.
 6. Only if your files have no master-release tag: press "Sync collection now"
    once after step 5. Albums whose files carry a master tag already show "You
    own a version" after the rescan. The settings page tells you when this is

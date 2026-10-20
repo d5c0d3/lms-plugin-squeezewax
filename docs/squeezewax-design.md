@@ -284,9 +284,14 @@ So a **bounded background job** (`SqueezeWax/Derive.pm`) fetches
 `GET /releases/{id}` once per identified release and stores the master id in
 `derived_master_id`, with `derived_from_release_id` recording which release it
 came from and `derived_at` when. It is **not part of this pass**: it runs in the
-server after a completed sync, at most 30 requests a run one a second, yields to
-a scan, to a running sync and to a spent rate budget, and on a settled library
-issues no request at all. A 404 is an ordinary answer — the release is gone,
+server after a completed sync, at most 30 requests a run one a second with a
+15 s pause between runs, yields to a scan, to a running sync and to a spent rate
+budget, and on a settled library issues no request at all. It keeps a
+**reserve**: it sends nothing while the last reply said fewer than 10 requests
+were left, until that reply is a minute old, so the menus and a sync always have
+some left. A **429** makes it wait one window (60 s) and ask again; the third in
+a row stops it until the next completed sync (`squeezewax-v1-decisions.md`
+§15.50). A 404 is an ordinary answer — the release is gone,
 there is no master, and there is no reason to ask again until the tags change.
 
 Node F prefers the **tag** and falls back to the derived value **only while
@@ -1310,6 +1315,22 @@ implementation, rather than open design questions:
   This scales with the **collection**, not the library. A library of 765
   albums and a library of 20,000 cost the same three requests, because
   nothing is fetched per album.
+
+  **Once per identified release, ever** — the master lookups (§3 node F,
+  `Derive.pm`): one request per distinct release, never repeated unless the
+  tags change, and kept across database changes (`squeezewax-v1-decisions.md`
+  §15.51).
+
+  **Sizes are checked against two reference cases** (`squeezewax-v1-decisions.md`
+  §15.50; figures for the second are assumed, not the user's own):
+
+  | | Reference library | Large library (GitHub #20) |
+  |---|---|---|
+  | Library | 764 albums, 479 identified | 5,000+ CDs |
+  | Distinct identified releases | 476 | ~5,000 (assumed) |
+  | Collection | 203 items | ~5,000 items (assumed) |
+  | Collection sync | 3 requests + profile | ≈ 51 requests, near the scan-time sync's 120 s cap |
+  | Master lookups, once | ~12–19 min (inferred) | ~2–3½ h (inferred) |
 
   **Per user action** — deliberately not budgeted, under the rule that a
   request count bounded by user actions goes live rather than being

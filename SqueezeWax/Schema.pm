@@ -935,6 +935,7 @@ sub _migration_8 {
 # The 12 columns migration 3 carries forward, named explicitly in both halves
 # of the copy so a column-order slip cannot pass. snapshot_total_duration is
 # deliberately absent: that is obligation (f).
+# WARNING: no derived_* columns (migration 6) - never reuse for a later rebuild (§15.51).
 my @MATCH_COLUMNS = qw(
 	album_key
 	mb_album_id

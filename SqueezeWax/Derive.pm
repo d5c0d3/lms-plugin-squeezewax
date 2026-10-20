@@ -35,9 +35,10 @@ package Plugins::SqueezeWax::Derive;
 # identifier, so it is never re-fetched to stay fresh; and it buys what
 # collection-first cannot - the collection names the masters the user owns, and
 # nothing in it gives the master of a release they do NOT own, which is exactly
-# node F's question. Cold library of this size: 475 requests, but 25 min 18 s over
-# 18 runs on hardware (the shape is runs x ~90 s, because of the 60 s re-arm
-# between runs); zero requests on a settled one.
+# node F's question. Cold library of this size: 475 requests, which took 25 min
+# 18 s over 18 runs on hardware with the 60 s pause between runs of the time;
+# with the 15 s pause of §15.50 about 12 to 19 minutes (inferred, not measured).
+# Zero requests on a settled one.
 #
 # WHY IT IS A MODULE OF ITS OWN. Not API/Async.pm, which is the collection client
 # and long enough already. Not the ownership pass, which must stay request-free
@@ -66,17 +67,29 @@ use Plugins::SqueezeWax::Schema;
 my $log   = logger('plugin.squeezewax');
 my $prefs = preferences('plugin.squeezewax');
 
-# Half Discogs' documented 60 a minute (§9.2), which leaves the other half for a
-# manual sync pressed while this is running. One request a second, thirty of
-# them, then the run ends and a fresh one is armed a minute later if work remains
-# (§15.22). 475 releases is about sixteen runs.
+# One request a second, thirty of them, then the run ends and a fresh one is
+# armed REARM seconds later if work remains (§15.22, §15.50 item 1). 475 releases
+# is about sixteen runs. At the measured ~1.05 s a request that is up to ~43
+# requests in any minute of Discogs' documented 60 (§9.2); what keeps the rest
+# free for the menus and a sync is RESERVE, not the pause.
 #
 # The per-run cap is not a rate limit - SPACING is. It exists so that a run has a
 # bounded end: every stop condition below is checked once per request, and a run
 # that could last for hours would be a run that checked them stale.
 use constant PER_RUN => 30;
 use constant SPACING => 1;
-use constant REARM   => 60;
+use constant REARM   => 15;
+
+# The job sends nothing while the last counted reply said fewer than this many
+# requests were left, until that reply is a window old (§15.50 item 2). "Fewer
+# than 10" leaves at least 9 for the details menus and a sync. The job's own
+# rule: API::rateWait, the sync and Details.pm are not held to it.
+use constant RESERVE => 10;
+
+# A 429 re-arms after one window, and the third in a row stops the job until the
+# next completed sync (§15.50 item 4) - two retries, where the sync allows three
+# (API.pm MAX_RETRIES).
+use constant MAX_429 => 3;
 
 # A run that has not finished in this long is treated as dead, so a wedged run
 # cannot block every future trigger for the life of the server. The same
@@ -102,6 +115,10 @@ my $runId = 0;
 # §15.38 item 7). Production sat at "0 of 471 - waiting" with nothing scheduled.
 my $resumeScheduled = 0;
 
+# 429s in a row, across runs: a re-arm keeps the count, a trigger starts a fresh
+# one, and any other reply resets it (§15.50 item 4).
+my $rateLimited = 0;
+
 # ---------------------------------------------------------------------------
 # The one public entry point.
 # ---------------------------------------------------------------------------
@@ -116,10 +133,22 @@ Called from C<Plugins::SqueezeWax::Plugin> when a collection sync has completed 
 see that file's C<_deriveMasters> for the three triggers. Never from a timer of
 its own making except to continue or resume a run this one started.
 
+A trigger starts a fresh count of 429s in a row; the re-arm timer does not
+(decisions §15.50 item 4).
+
 =cut
 
 sub arm {
 	my ($class) = @_;
+
+	$rateLimited = 0;
+
+	return _begin();
+}
+
+# arm's body, shared with the re-arm timer, which must keep the 429 count.
+sub _begin {
+	my $class = __PACKAGE__;
 
 	# Whatever happens below, the pending resume is no longer what decides: either
 	# this call starts a run, or one is in flight, or there is nothing to do.
@@ -203,8 +232,9 @@ sub isRunning {
 
 =head2 isResumeScheduled( )
 
-Is a re-arm timer set, so that a run will start by itself about a minute from
-now? True only after a pacing stop (C<%REARM_ON>). False after a scan stop, an
+Is a re-arm timer set, so that a run will start by itself shortly - REARM
+seconds from now, or what is left of the rate window (decisions §15.50 item 3)?
+True only after a pacing stop (C<%REARM_ON>). False after a scan stop, an
 error stop, a finished run, or before any run at all - the job then waits for
 the next completed sync (decisions §15.38 item 7).
 
@@ -231,6 +261,7 @@ sub abort {
 	Slim::Utils::Timers::killTimers( undef, \&_rearm );
 
 	$resumeScheduled = 0;
+	$rateLimited     = 0;
 
 	%run = ( running => 0, finished => time(), id => $run{id} );
 
@@ -269,6 +300,7 @@ sub abort {
 # in 506 on the reference library, so the saving is nothing and the query is
 # simpler for it. A row whose tags name a master AND whose release id changes
 # would otherwise also have to be reasoned about twice.
+# Revisited 2026-10-20: kept until the #16 release (§15.50 item 6).
 # The predicate above, named once. _pending selects with it and the settings
 # page counts with it (build-order step 9 §4.2); a second copy of it on the page
 # would be a status line that could disagree with the job it describes - saying
@@ -382,12 +414,18 @@ sub newMastersSince {
 # request would be refused anyway (Match::_writeOk) - and paying a Discogs
 # request to then throw the answer away is the one outcome worth ordering the
 # checks to avoid.
+#
+# The reserve (§15.50 item 2) comes after the spent budget, which is the same
+# wait seen from further down, and before the cap, so a run stopped by both
+# re-arms after the window rather than after the short pause. $reserve is the
+# fifth argument so the four-argument calls of the policy keep their meaning.
 sub _yieldReason {
-	my ( $scanning, $syncing, $rateWait, $requests ) = @_;
+	my ( $scanning, $syncing, $rateWait, $requests, $reserve ) = @_;
 
 	return 'a scan is running'          if $scanning;
 	return 'a collection sync is running' if $syncing;
 	return 'the rate budget is spent'   if $rateWait;
+	return 'the reserve is reached'     if $reserve;
 	return 'this run has had its share' if $requests >= PER_RUN;
 
 	return undef;
@@ -403,26 +441,54 @@ sub _yieldNow {
 		Plugins::SqueezeWax::API::Async->isRunning ? 1 : 0,
 		Plugins::SqueezeWax::API->rateWait ? 1 : 0,
 		$run{requests} || 0,
+		Plugins::SqueezeWax::API->reserveWait(RESERVE) ? 1 : 0,
 	);
 }
 
-# Should this run be continued a minute from now?
+# Should this run be continued shortly, and how it waits - see _rearmDelay.
 #
-# Only for a PACING stop - the per-run cap, a sync in flight, a spent budget.
-# Those are stops where work provably remains and the cause is a minute old at
-# most, so re-arming is how the run resumes.
+# Only for a PACING stop - the per-run cap, a sync in flight, a spent budget, the
+# reserve, a 429 (§15.50 item 4: a pacing answer, not a fault). Those are stops
+# where work provably remains and the cause passes within a window, so re-arming
+# is how the run resumes.
 #
 # NOT for a scan, and NOT for an error. A scan ends in ['rescan','done'], which
 # brings a sync, which triggers this job again; re-arming through a two-hour scan
 # would be a timer loop that achieves nothing. An error - a 401, a 500, a
 # connection that dropped - waits for the next completed sync too, because a
 # minute is not long enough for anything to have changed and this plugin does not
-# poll a third party on a schedule of its own (§15.15 part 1).
-my %REARM_ON = map { $_ => 1 } (
-	'a collection sync is running',
-	'the rate budget is spent',
-	'this run has had its share',
+# poll a third party on a schedule of its own (§15.15 part 1). Nor for the third
+# 429 in a row, which has the same answer for the same reason.
+#
+# 'pause': REARM. 'window': the larger of REARM and what is left of the rate
+# window, so a spent budget re-arms once a window rather than four times
+# (§15.50 item 3). '429': a whole window, since a 429 says the count we hold is
+# wrong and what is left of it means nothing.
+my %REARM_ON = (
+	'a collection sync is running'  => 'pause',
+	'this run has had its share'    => 'pause',
+	'the rate budget is spent'      => 'window',
+	'the reserve is reached'        => 'window',
+	'Discogs answered 429'          => '429',
 );
+
+# The re-arm delay in seconds for a stop, or undef for a stop that does not
+# re-arm. Pure: $windowLeft is what is left of the rate window, read by the caller.
+sub _rearmDelay {
+	my ( $why, $windowLeft ) = @_;
+
+	my $kind = $REARM_ON{$why} or return undef;
+
+	return Plugins::SqueezeWax::API::WINDOW_SECONDS if $kind eq '429';
+
+	if ( $kind eq 'window' ) {
+		$windowLeft ||= 0;
+
+		return $windowLeft > REARM ? $windowLeft : REARM;
+	}
+
+	return REARM;
+}
 
 # ---------------------------------------------------------------------------
 # One release.
@@ -501,10 +567,36 @@ sub _handle {
 	my $result = Plugins::SqueezeWax::API->classifyResponse( $code, $content );
 
 	# The shared budget (§15.22), for every response whatever it returned.
-	Plugins::SqueezeWax::API->noteResponse(
-		Plugins::SqueezeWax::API::_parseRateHeaders($headers), time() );
+	my $rate = Plugins::SqueezeWax::API::_parseRateHeaders($headers);
+
+	Plugins::SqueezeWax::API->noteResponse( $rate, time() );
 
 	my $error = $result->{ok} ? '' : ( $result->{error} || 'unknown' );
+
+	# One line per request, the reply's own figures as Discogs sent them: across
+	# a run they show how the window recovers (§15.50 "Considered, deferred"), and
+	# on a 429 whether the reply carried the headers at all (TODO.md).
+	main::DEBUGLOG && $log->is_debug
+		&& $log->debug( "master lookup: release $release, " . ( $error || 'ok' )
+			. ', Used ' . ( defined $rate->{used} ? $rate->{used} : '-' )
+			. ', Remaining ' . ( defined $rate->{remaining} ? $rate->{remaining} : '-' ) );
+
+	# A 429 is a pacing answer (§15.50 item 4): wait one window and ask again,
+	# twice; the third in a row waits for the next completed sync. Not recorded
+	# as "no master" - it is not an answer about the release. Any other reply
+	# resets the count.
+	if ( $error eq 'rate_limited' ) {
+		if ( ++$rateLimited >= MAX_429 ) {
+			$log->warn("could not derive the master of release $release: "
+				. "Discogs answered 429 $rateLimited times in a row; waiting for the next sync");
+
+			return _stop( $id, 'Discogs answered 429 too often' );
+		}
+
+		return _stop( $id, 'Discogs answered 429' );
+	}
+
+	$rateLimited = 0;
 
 	# 404: THE RELEASE IS GONE, and that is an ordinary answer (§15.21, measured
 	# on 3 of 479 identified albums). Info, not error, and recorded as "looked,
@@ -526,10 +618,10 @@ sub _handle {
 		return _stop( $id, 'Discogs rejected the token' );
 	}
 
-	# Anything else - a 429 that outlived the throttle, a 500, a dropped
-	# connection, a body that will not parse. The row is left UNTOUCHED, so the
-	# next run selects it again and retries; nothing is recorded, because "we
-	# looked and there is no master" is a conclusion and this is not one.
+	# Anything else - a 500, a dropped connection, a body that will not parse.
+	# The row is left UNTOUCHED, so the next run selects it again and retries;
+	# nothing is recorded, because "we looked and there is no master" is a
+	# conclusion and this is not one.
 	if ($error) {
 		$log->warn("could not derive the master of release $release: $error");
 
@@ -621,14 +713,17 @@ sub _next {
 
 	$run{$outcome}++;
 
-	if ( my $why = _yieldNow() ) {
-		return _stop( $id, $why );
-	}
-
+	# Finished before yielding: a last reply that leaves the reserve or the budget
+	# behind must not re-arm a job with nothing left, which would read "waiting"
+	# for a window and hide the new-masters notice (§15.48) for nothing.
 	my $release = _pending();
 
 	return _stop( $id, 'every identified release now has an answer' )
 		unless defined $release;
+
+	if ( my $why = _yieldNow() ) {
+		return _stop( $id, $why );
+	}
 
 	# SPACING between requests, as a timer and never a sleep: LMS is
 	# single-threaded and the server process must not block (CLAUDE.md).
@@ -645,12 +740,15 @@ sub _stop {
 
 	return unless ( $run{id} || 0 ) == $id;
 
-	my $rearm = $REARM_ON{$why} ? 1 : 0;
+	# Read before the run is forgotten; only a 'window' stop uses it. The reserve
+	# covers a spent budget too (0 left is fewer than RESERVE), so one figure
+	# serves both.
+	my $rearm = _rearmDelay( $why, Plugins::SqueezeWax::API->reserveWait(RESERVE) );
 
 	main::INFOLOG && $log->is_info
 		&& $log->info( "master derive run $id ended: $why"
 			. " (derived $run{derived}, no master $run{none}, $run{requests} requests)"
-			. ( $rearm ? ', resuming in ' . REARM . 's' : '' ) );
+			. ( $rearm ? ", resuming in ${rearm}s" : '' ) );
 
 	%run = ( running => 0, finished => time(), id => $id );
 
@@ -661,7 +759,7 @@ sub _stop {
 		# self-rescheduling timer silently doubles its own frequency. The idiom is
 		# Plugin::_scheduleSync's, for the same reason.
 		Slim::Utils::Timers::killTimers( undef, \&_rearm );
-		Slim::Utils::Timers::setTimer( undef, time() + REARM, \&_rearm );
+		Slim::Utils::Timers::setTimer( undef, time() + $rearm, \&_rearm );
 
 		$resumeScheduled = 1;
 	}
@@ -669,10 +767,11 @@ sub _stop {
 	return;
 }
 
+# The timer keeps the 429 count; arm, a trigger, would reset it.
 sub _rearm {
 	$resumeScheduled = 0;
 
-	__PACKAGE__->arm;
+	_begin();
 
 	return;
 }
