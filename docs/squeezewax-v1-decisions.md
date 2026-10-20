@@ -7648,4 +7648,33 @@ milestone is one release on GitHub.
 - Considered: fixing it in 1.0.0 instead (as b10). Not chosen: 1.0.0 stays b9's code (§15.52).
 - The order may change by a later dated decision; the milestone follows the decision.
 
-Next free decision number: §15.54.
+### 15.54 Database changes after 1.0.0 must not cost users a rebuild — 2026-10-20 (owner)
+
+Raised by the owner: a user who installs 1.0.0 should not soon have to rebuild the database.
+
+1. **Rule.** After 1.0.0, a database change must:
+   1. run by itself when LMS starts after the update (`Schema.pm` `_migrate`, verified by reading);
+   2. add, not destroy: master lookups are kept (§15.51) and no existing data is lost;
+   3. never require "Starting over";
+   4. not bump `LOGIC_VERSION` (the next scan re-reads every file, §15.24) without its own dated
+      decision;
+   5. state its cost in the release notes: Discogs requests at the next sync, and scan time if any.
+
+   A change that cannot meet these is a `2.0.0` (§15.43 ruling 2).
+2. **Why 1.0.0 still ships without #7** (amends nothing in §15.52). Planned changes, inferred from
+   the records, none built:
+   - #7 (1.4.0) adds storage for owned-pressing ids, filled by the next normal sync (§15.45 items 1
+     and 5). No rescan or master lookup expected.
+   - #10 (1.5.0): shape not designed (unverified).
+   - #13, #16, #22, #2: no database change (#13's design avoids a table rebuild; #16 is settings
+     only; §15.53).
+
+   Before 1.0.0, changes went in because they broke existing users (#8, §15.46 item 4). #7 only
+   adds. Pulling it into 1.0.0 would delay 1.0.0 by a feature-sized beta and would not end
+   migrations (#10 likely adds one).
+3. **Unchanged:** an update still cannot be undone without "Starting over" (`Schema.pm` `_migrate`
+   refuses a newer database). README already says so.
+4. **Not planned:** narrowing the CHECKs that still allow 'manual' and 'orphan' (a full table
+   rebuild "for no gain", `Schema.pm` comment above `_migration_8`).
+
+Next free decision number: §15.55.

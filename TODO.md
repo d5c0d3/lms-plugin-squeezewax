@@ -21,7 +21,7 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
-Next free decision number: **§15.54** (2026-10-20).
+Next free decision number: **§15.55** (2026-10-20).
 
 ## v1 RELEASE CHECKLIST
 
@@ -4051,6 +4051,8 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- Every database change after 1.0.0 meets §15.54 (GitHub #7, #10 comments 2026-10-20).
 
 - [ ] **2026-10-20: sliding pause from `Remaining`, above the reserve** (§15.50
       "Considered, deferred"). Needs the b9 per-request `Remaining` lines first:
