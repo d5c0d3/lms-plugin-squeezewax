@@ -4269,3 +4269,14 @@ Each names its sites so the work is mechanical rather than a search.
       line) is untested (report 83/84).
 - [x] Report 83/84 recorded: 1.0.0b4 promoted (abe3323), website and zip sha
       verified, production Docker updated, log level Info saved.
+- [ ] **2026-10-20: "Records I want" icon drawn, not wired.** `wanted.svg`
+      (24×24, Material, `stroke="#000"` so Material recolours it, decisions
+      §15.27) and `wanted_svg.png` (512 px on the `owned_svg.png` tile) sit
+      next to the owned icon in `SqueezeWax/HTML/EN/plugins/SqueezeWax/html/images/`.
+      Glyph: a shopping cart holding three record spines. Nothing references
+      them yet; they ship unused in the zip until a wantlist view exists (v2).
+      When that view registers its node, use the §15.27 pattern
+      (`icon` = `jiveIcon` = `.../wanted_svg.png`) and repeat §15.28's hardware
+      checks for it. Not yet seen on any skin: rendered only in headless
+      Chromium, where the PNG pipeline reproduced `owned_svg.png` to a mean
+      difference under 1/255.
