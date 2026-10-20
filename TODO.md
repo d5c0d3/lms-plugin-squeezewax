@@ -21,7 +21,15 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
+Next free decision number: **§15.52** (2026-10-20).
+
 ## v1 RELEASE CHECKLIST
+
+- [ ] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+      b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
+      #21 (lookups survive database changes, §15.51), and is promoted instead of
+      b8 after its own checks ("1.0.0b9 checks" under Waiting — needs a real
+      server).
 
 - [ ] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
       Needs a real server: fresh install with tags but no master tags. The
@@ -1479,6 +1487,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-20: is the Discogs rate limit per IP or per token?** Unverified
+      (§15.50): the developer page names neither; only a third-party listing says
+      "source IP". The design holds either way (headers are the only truth; the
+      state is not keyed by token). Revisit if Discogs answers or a header test
+      can tell.
+
 - [ ] **2026-10-19, low, no target: an album leaving the queue is logged only as
       summary counts.** Seen in the 1.0.0b7 check (own compilation, tag removed):
       "conflicts 0, no tag 1" and no per-album line, so the log does not say which
@@ -1927,6 +1941,9 @@ Each names its sites so the work is mechanical rather than a search.
       state - so the exposure is now "a scan-time sync's four requests against a
       derive run's thirty", still against 60 a minute, and still inferred rather
       than observed. Plan §6 check 2 watches for a 429.
+      → 2026-10-20 (§15.50, 1.0.0b9): the derive job now spends up to ~43 a
+      minute at the measured speed (15 s pause), but never sends below a reserve
+      of 9 left. Exposure: "≥ 9 vs 4" rather than "30 vs 4". Still inferred.
 
 - [x] **2026-09-27: `API.pm`'s file header is stale.** It says "the scanner's
       Strict identification (steps 3/4) calls buildRequest and
@@ -2461,6 +2478,13 @@ Each names its sites so the work is mechanical rather than a search.
       **Revisit trigger:** master-tagged rows exceed ~10% of identified rows (3 of
       507 on 2026-10-12). Then add "and no master tag" to `$UNSETTLED`, which also
       changes the settings page's derive count.
+      → 2026-10-20: **decided to revisit in the #16 release** (master-tag names
+      as a list), not by the ~10% trigger alone (§15.50 item 6; GitHub #16
+      comment 2026-10-20). At 5,000 CDs the lookups cost 2–3½ hours once
+      (§15.50 sizing), so skipping tagged albums is a real lever there. But the
+      stored answer is the fallback when #16 stops reading `DISCOGS_MASTER_ID` /
+      `DISCOGS MASTER ID` on existing installs: skipping first would leave those
+      albums not owned until looked up and synced.
 - [ ] **2026-10-12: the "release tag, no master tag" ownership delay is still
       unobserved.** Such an album, if the owner holds a different pressing, should
       show unowned after its first scan and become a version only at the next sync,
@@ -2468,6 +2492,26 @@ Each names its sites so the work is mechanical rather than a search.
       not yet seen on hardware.
 
 ## Waiting — needs a real server
+
+- [ ] **1.0.0b9 checks (GitHub #19, §15.50).** Time a cold derive run (all
+      identified releases reset, same method as the small reset in
+      `claude/prompt-check-b8.md`; 476 requests, owner decides); expect ~12 min
+      (reading A) to ~19 min (reading B). Zero 429 in the log. Open a details
+      menu several times during a run → never "Discogs is busy". "Sync collection
+      now" mid-run → served. The per-request debug lines show `Remaining` across
+      a run (confirms or refutes the moving-window reading). Settings shows
+      "waiting" in the 15 s gaps and the notice stays hidden then (§15.48).
+
+- [ ] **Does a 429 reply carry `X-Discogs-Ratelimit*` headers?** (§15.50 "Where
+      the evidence is thin"). If not, `accountRequest`'s ladder takes one off the
+      last figure, so a menu or sync could fire straight into a second 429;
+      consider "a 429 marks the shared budget spent" for every consumer. Touches
+      the sync: outside #19. The b9 per-request debug line logs the headers of
+      every reply, a 429 included, so one 429 on hardware answers it.
+
+- [ ] **LMS "clear library and rescan" keeps the master lookups** (§15.51 item 3,
+      inferred; GitHub #21). Check: count `derived_from_release_id IS NOT NULL`
+      before and after; no `/releases/` requests after the rescan.
 
 - [x] **2026-10-19: the new-masters notice shows in the gaps between derive
       runs (GitHub #14, §15.47).** **Decided by §15.48 part 1** (hidden while
@@ -2508,6 +2552,8 @@ Each names its sites so the work is mechanical rather than a search.
         change", and a second press is needed until GitHub #13 (1.1.0).
         Candidate for the #17 redesign if the wording or behaviour should
         change.
+        → 2026-10-20: **decided by §15.49** (notice and wording kept for
+        1.0.0; the second press goes with #13; placement decided in #17).
 
 - [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
       offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
@@ -2642,6 +2688,10 @@ Each names its sites so the work is mechanical rather than a search.
       completes it; (c) the ownership pass's in-memory cost at that size (the
       only reference is 203 items / 765 albums). Needs a large real or simulated
       collection. Source: forum feedback on 1.0.0b3.
+      → 2026-10-20: §15.50's "large library" reference case (5,000+ CDs,
+      GitHub #20) assumes a ~5,000-item collection, ≈ 51 requests, near this cap.
+      The user's real figures: "the forum user's real figures" under Waiting —
+      external.
 
 - [ ] **2026-10-13: 1.0.0b3's hardware checks (decisions §15.39), in the Default
       skin AND in Material.** Replaces item 2 of the b2 list below; items 1, 3
@@ -3482,6 +3532,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
+      identified albums, how many carry a master tag, collection items. §15.50's
+      large case assumes the worst (~5,000 identified releases, ~5,000-item
+      collection). See also "large collections against the scan-time sync cap"
+      under Waiting — needs a real server.
+
 - [ ] **2026-10-14: forum user (Paul Webster) asked for configurable filters,
       e.g. title = ISIHAC\*,** to avoid "unnecessary Discogs calls" for
       recordings never on Discogs (old radio shows). Waiting for his answer: did
@@ -3945,6 +4001,10 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **2026-10-20: sliding pause from `Remaining`, above the reserve** (§15.50
+      "Considered, deferred"). Needs the b9 per-request `Remaining` lines first:
+      does the count recover during 15 s gaps, or only after 60 idle seconds?
 
 - [ ] **GitHub #13 — work out ownership again by itself when the master lookups
   finish** (2026-10-19; enhancement, `needs-design`; **target 1.1.0** (owner, 2026-10-19;
