@@ -2477,6 +2477,15 @@ Each names its sites so the work is mechanical rather than a search.
       `isResumeScheduled` 1, 60 s `REARM`). Seen on hardware 2026-10-19, fresh
       install, 16 runs.
 
+- [ ] **1.0.0b8 checks** (§15.48 part 1; offline suites green on SQLite 3.46.1
+      and 3.22.0, nothing run on a server). Prompt: `claude/prompt-check-b8.md`.
+      1. Settled library: no notice; scan-time sync line, no "cannot use HTTPS".
+      2. Small reset (a few release-tagged albums, no master tags, so the job
+         takes several runs): **no notice while the job is "waiting"** between
+         runs; the notice after the job ends, without a reload; gone after
+         "Sync collection now", without a reload.
+      3. Tick the "notice shows in the gaps between derive runs" item above.
+
 - [x] **1.0.0b7 checks** (GitHub #14, #15 and the scan-time HTTPS check;
       offline suites green on SQLite 3.46.1 and 3.22.0, nothing run on a server):
       1. **#14** (decisions §15.47): fresh install with release-ID tags but no
