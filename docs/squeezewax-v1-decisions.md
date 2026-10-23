@@ -7677,4 +7677,31 @@ Raised by the owner: a user who installs 1.0.0 should not soon have to rebuild t
 4. **Not planned:** narrowing the CHECKs that still allow 'manual' and 'orphan' (a full table
    rebuild "for no gain", `Schema.pm` comment above `_migration_8`).
 
-Next free decision number: §15.55.
+### 15.55 German translation (GitHub #23): review rules — 2026-10-24 (owner)
+
+Amends the #18 row of §15.53 only in that a translator now exists. Which release carries German is
+NOT decided here.
+
+1. **Contribution.** Dentaku242 (GitHub #23, 2026-10-21): DE for all 127 string IDs, matching
+   1.0.0b9's EN (checked at 5b53aa8). One EN difference: "→" was lost as "?" in FIRST_STEPS.
+2. **The three Discogs notices stay English, with no DE line:** ATTRIBUTION_NOTAFFILIATED,
+   ATTRIBUTION_DATA, DETAILS_NOTICE. Why: the Discogs API Terms of Use (updated 2025-05-27) give the
+   exact English wording, and the German version of the terms keeps it English. Translation is not
+   addressed (unverified whether allowed).
+3. **Review covers real issues only:** the notices, labels a user must find (buttons, views, LMS
+   menus, Discogs pages), broken characters, wrong meaning. Wording and style otherwise stay as the
+   translator wrote them.
+4. **Changes requested in #23:**
+   - FIRST_STEPS: LMS labels SETUP_RESCAN "Medienbibliothek erneut durchsuchen" and
+     SETUP_STANDARDRESCAN "Nach neuen und veränderten Mediendateien suchen" (slimserver public/9.1
+     @ e9430b4); restore "→".
+   - CURRENCY_UNKNOWN: "Sammlung jetzt synchronisieren".
+   - TOKEN_DESC: "Tonträger im Besitz".
+   - DETAILS_HAVE "Haben %s", DETAILS_WANT "Suchen %s" (Discogs German site, owner screenshots
+     2026-10-24).
+5. **Discogs German labels are checked manually by the owner only.** No automated fetching or
+   browsing of discogs.com: the Discogs Terms of Service (updated 2026-02-23) exclude robots,
+   scraping and similar tools.
+6. **Server language only.** Per-app language stays in #18, not designed.
+
+Next free decision number: §15.56.

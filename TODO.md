@@ -21,7 +21,7 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
-Next free decision number: **§15.55** (2026-10-20).
+Next free decision number: **§15.56** (2026-10-24).
 
 ## v1 RELEASE CHECKLIST
 
@@ -3581,6 +3581,14 @@ Each names its sites so the work is mechanical rather than a search.
       "prove the `discogsMaxTier` removal on a real prefs file" above.
 
 ## Waiting — external
+
+- [ ] **2026-10-24: GitHub #23: translator's answer** on GPL-2.0 inclusion, credit
+      name, and the review (§15.55).
+- [ ] **2026-10-24: GitHub #23: German checked on a real server** by the translator,
+      in a beta of the release that carries it.
+- [ ] **2026-10-24: GitHub #23: decide which release carries German.** Proposal:
+      translations are not features and ride with the next release of any kind,
+      likely 1.0.1. Owner to rule.
 
 - [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
       identified albums, how many carry a master tag, collection items. §15.50's
