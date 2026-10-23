@@ -7149,6 +7149,8 @@ in the design chat "Top-level menu setting request".
 
 ### 15.45 Owned pressings are stored — reverses §14.10 — 2026-10-17 (owner)
 
+Amended 2026-10-22 by §15.56.
+
 GitHub #7. Decided in the design chat.
 
 1. The collection sync keeps, per album, the release id(s) of the collection
@@ -7704,4 +7706,35 @@ NOT decided here.
    scraping and similar tools.
 6. **Server language only.** Per-app language stays in #18, not designed.
 
-Next free decision number: §15.56.
+### 15.56 Multiple pressings: other owned pressings, linked by master — amends §15.45 — 2026-10-22 (owner)
+
+GitHub #7.
+
+1. **What is shown.** For exact and version albums: a submenu listing the user's other owned
+   pressings of the same master. Each entry has:
+   - its link;
+   - "Release details" (fetched on open, as today, §15.31);
+   - "Play this version" when an LMS album is tagged with that release.
+
+   This amends §15.45 item 2: "Play this version" is new. If only one pressing is ripped, there is
+   no "Play".
+2. **Linked by master id only.** The album's master is `Ownership.pm` `_effectiveMaster` (tag,
+   else lookup). The other pressings' masters come from the stored collection entries (§15.45
+   items 1 and 6). No title and artist fallback: the same title and artist is not the same record
+   (e.g. Peter Gabriel I-IV).
+3. **`version` stays an ownership state** (§15.46 item 1 unchanged). Under §15.22, a single wrongly
+   tagged file in a correct album is not a version but a conflict (`Tags.pm` `examineCandidates`).
+4. **Accepted gaps** (inferred from reading, not run):
+   1. the list is empty until the master lookup has run for a new tag (`Derive.pm`);
+   2. a version album found by title and artist with no matching master gets no list;
+   3. a release without a master gets no list.
+5. **Not planned.** An untagged album matching two owned pressings stays ambiguous (outside the
+   well-tagged premise, §14.4). Two rips of the same pressing: recorded, not designed.
+6. **Open for #7's design.**
+   1. LMS merges same-title, same-artist rips across folders when disc tags exist and there is no
+      differing MusicBrainz album id (verified by reading slimserver public/9.1 @ 05968ee,
+      `Slim/Schema.pm` `_createOrUpdateAlbum`; not run). The README must say how to keep pressings
+      apart.
+   2. Unverified: how a menu item opens another album in Material, the web UI and SqueezePlay.
+
+Next free decision number: §15.57.

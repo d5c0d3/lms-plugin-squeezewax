@@ -21,7 +21,7 @@ reference server SQLite 3.46.1)
 names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
 matches it).
 
-Next free decision number: **§15.56** (2026-10-24).
+Next free decision number: **§15.57** (2026-10-24).
 
 ## v1 RELEASE CHECKLIST
 
@@ -1501,6 +1501,16 @@ Each names its sites so the work is mechanical rather than a search.
       is ever added, or drop the index by its own ruling.
 
 ## Open design questions
+
+- [ ] **2026-10-22, #7 (§15.56), needs a real server: does LMS merge two rips of
+      different pressings of one album?** Read in slimserver public/9.1 @ 05968ee,
+      `Slim/Schema.pm` `_createOrUpdateAlbum`: same title and artist merge across
+      folders when disc tags exist and no differing MusicBrainz album id. Not run.
+      The README must say how to keep pressings apart.
+- [ ] **2026-10-22, #7 (§15.56): how does a menu item open another album** in
+      Material, the web UI and SqueezePlay? Unverified.
+- 2026-10-22, #7: decided §15.56 (2a keep version, 2b version albums get the list,
+  master only).
 
 - [ ] **2026-10-20: is the Discogs rate limit per IP or per token?** Unverified
       (§15.50): the developer page names neither; only a third-party listing says
