@@ -4273,7 +4273,8 @@ Each names its sites so the work is mechanical rather than a search.
       (24×24, Material, `stroke="#000"` so Material recolours it, decisions
       §15.27) and `wanted_svg.png` (512 px on the `owned_svg.png` tile) sit
       next to the owned icon in `SqueezeWax/HTML/EN/plugins/SqueezeWax/html/images/`.
-      Glyph: a shopping cart holding three record spines. Nothing references
+      Glyph: the owned icon's three upright spines, with a four-point star
+      where the leaning record stands (the record wished for). Nothing references
       them yet; they ship unused in the zip until a wantlist view exists (v2).
       When that view registers its node, use the §15.27 pattern
       (`icon` = `jiveIcon` = `.../wanted_svg.png`) and repeat §15.28's hardware
