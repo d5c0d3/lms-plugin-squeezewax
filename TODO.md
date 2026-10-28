@@ -20,7 +20,7 @@ reference server SQLite 3.46.1)
 `master` = 1.0.0 (promoted at `500ef4f`, 2026-10-28; `origin/master` repo.xml
 names version 1.0.0, sha 155145b3071b9e4b8869a69527c6fb19d621b131).
 
-Next free decision number: **§15.59** (2026-10-28).
+Next free decision number: **§15.60** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 

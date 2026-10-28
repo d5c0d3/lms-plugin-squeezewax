@@ -7772,4 +7772,14 @@ Amends §15.52 item 1 and closes the timing question left open in §15.55.
 5. **Database:** no change from 1.0.0b9; no Discogs requests or rescan caused by the update
    (§15.54 item 5).
 
-Next free decision number: §15.59.
+### 15.59 Website review at every promotion to master — 2026-10-28 (owner)
+
+1. **Every promotion to master includes a review of the pages the website serves**, against the
+   promoted version and the README. The owner reviews before pushing master.
+2. **Why:** website pages live only on master and are edited by hand ("Website: ..." commits), so
+   promotion never touches them. 1.0.0 went live with "A beta, with no way back" on `index.html`
+   (fixed in `2a572a1`).
+3. **`promote-master.sh` runs `scripts/site-check.sh` and warns, but does not stop,** when a release
+   still mentions beta/alpha (exit 2, run continues). The word scan does not replace the review.
+
+Next free decision number: §15.60.

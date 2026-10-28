@@ -372,6 +372,12 @@ on the beta until the next release. The listing is rebuilt every 6 hours.
   rebuilds.** `package-build.sh` bumps the version on every run, so a rebuild
   would ship a version nobody hardware-checked. The zip is carried byte for
   byte; version and `<sha>` survive because both describe those bytes.
+- **Every promotion includes a website review** (decisions §15.59). The pages the
+  website serves live only on master and are edited by hand, so promotion never
+  touches them; the owner reviews them against the promoted version and the
+  README before pushing master. `promote-master.sh` runs `scripts/site-check.sh`
+  on the merge result and warns, without stopping, when a release still mentions
+  beta/alpha. The word scan does not replace the review.
 - **Run `scripts/promote-master.sh <version> <report-no>`** on `v1-buildout`
   (never for an `a` build: dev builds are not promoted), after the hardware report for that build passes. `--dry-run` shows the diff
   and the new `repo.xml` and changes nothing. `--merge-head` merges
