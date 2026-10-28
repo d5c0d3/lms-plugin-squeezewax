@@ -132,7 +132,7 @@ PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN
 
 PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN
 	EN	Not known yet. Press Sync collection now.
-	DE	Noch nicht bekannt. Klicke jetzt auf "Sammlung jetzt synchronisieren".
+	DE	Noch nicht bekannt. Klicke auf "Sammlung jetzt synchronisieren".
 
 PLUGIN_SQUEEZEWAX_ACTIONS_HINT
 	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
