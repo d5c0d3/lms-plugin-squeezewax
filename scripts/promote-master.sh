@@ -33,8 +33,13 @@
 #   6. Fixes the two paths whose policy differs from the branch: dist/ keeps
 #      the zips already on master plus this build's; repo.xml is the package
 #      commit's with only the <url>'s /v1-buildout/ changed to /master/.
-#   7. Shows the staged diff stat and the new repo.xml. --dry-run stops here and
-#      aborts the merge.
+#   7. Shows the staged diff stat and the new repo.xml.
+#   7b. Runs scripts/site-check.sh on the merge result (decisions §15.59), in
+#      --dry-run and real runs both. The ref is the tree of the worktree's index
+#      (`git write-tree` there): it holds the merged, staged state, needs no
+#      commit, stash or checkout, and `git show <tree>:<path>` reads it. Exit 2
+#      (a release that still mentions beta/alpha) prints its warning and the run
+#      continues: the owner decides. --dry-run stops here and aborts the merge.
 #   8. Commits "Promote SqueezeWax <version> to master (hardware report <n>)".
 #
 # It never pushes; it prints the command for the owner. A commit made here moves
@@ -259,6 +264,17 @@ W diff --cached --stat | tail -40
 echo
 echo "==> repo.xml as it will be on master:"
 cat "$WT/repo.xml"
+
+echo
+echo "==> Website check on the merge result (decisions §15.59):"
+MERGED_TREE="$(W write-tree)"
+SITE_RC=0
+"$REPO_ROOT/scripts/site-check.sh" "$MERGED_TREE" "$VERSION" || SITE_RC=$?
+case "$SITE_RC" in
+	0) ;;
+	2) echo "warning: continuing; review the website pages before pushing master." >&2 ;;
+	*) W merge --abort || true; die "site-check.sh failed (exit $SITE_RC); merge aborted" ;;
+esac
 
 if [ "$DRY_RUN" -eq 1 ]; then
 	W merge --abort
