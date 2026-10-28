@@ -375,9 +375,15 @@ diag('§15.15 part 1: the only automatic trigger is a finished scan');
 
 	Plugins::SqueezeWax::Plugin::_initSync();
 
-	is( scalar @SUBSCRIBED, 1, 'init subscribes exactly one request listener' );
+	is( scalar @SUBSCRIBED, 2, 'init subscribes exactly two request listeners' );
 	is_deeply( $SUBSCRIBED[0]{filter}, [ ['rescan'], ['done'] ],
-		'  ...to [[rescan],[done]] - scan FINISH, not scan start (§15.2)' );
+		'  ...the trigger to [[rescan],[done]] - scan FINISH, not scan start (§15.2)' );
+	is( $SUBSCRIBED[0]{cb}, \&Plugins::SqueezeWax::Plugin::_rescanDone,
+		'  ...as _rescanDone' );
+	is_deeply( $SUBSCRIBED[1]{filter}, [ ['rescan'] ],
+		'  ...and every rescan notice, to tell an album rescan from a full scan (§15.60)' );
+	is( $SUBSCRIBED[1]{cb}, \&Plugins::SqueezeWax::Plugin::_rescanNotice,
+		'  ...as _rescanNotice, a separate named sub' );
 
 	is( scalar @TIMERS, 0,
 		'init arms NO timer: there is no startup sync and no interval (§15.15)' );
@@ -518,6 +524,141 @@ diag('the one remaining automatic trigger');
 	is( scalar @TIMERS, 3, '  ...and arm three times' );
 	is( $TIMERS[0]{cb}, $TIMERS[2]{cb},
 		'  ...always the same coderef, so only the last one survives' );
+}
+
+# ---------------------------------------------------------------------------
+# An album rescan schedules no sync (decisions §15.60 item 3, GitHub #22)
+# ---------------------------------------------------------------------------
+#
+# Notices are delivered the way Request::notify does it
+# (refs/slimserver/Slim/Control/Request.pm:2005-2061): to every subscribed
+# listener whose filter matches the notice's verbs. The verbs are what the
+# dispatch tree matched (Request.pm:1003-1010), so `rescan album 4900` is verbs
+# [rescan] with _mode/_target as params (Request.pm:607), and `rescan done` is
+# verbs [rescan, done] (Request.pm:651). %listeners is a hash, so the order two
+# listeners see one notice in is unspecified: every sequence runs both ways.
+
+{
+	package Test::StubRequest;
+
+	sub new {
+		my ( $class, @line ) = @_;
+
+		my ( $verbs, $params ) = ( $line[1] // '' ) eq 'done'
+			? ( [ 'rescan', 'done' ], {} )
+			: ( ['rescan'], { _mode => $line[1], _target => $line[2] } );
+
+		return bless { verbs => $verbs, params => $params }, $class;
+	}
+
+	# Request.pm:1758-1760 and its __matchingRequest (:2381-2395); every notice
+	# here is a command.
+	sub isCommand {
+		my ( $self, $names ) = @_;
+		my $i = 0;
+		for my $n (@$names) {
+			my $v = $self->{verbs}[ $i++ ];
+			return 0 if !$v || !grep { $_ eq $v } @$n;
+		}
+		return 1;
+	}
+
+	sub getParam { $_[0]->{params}{ $_[1] } }
+}
+
+sub deliver {
+	my ( $reverse, @lines ) = @_;
+
+	my @listeners = $reverse ? reverse @SUBSCRIBED : @SUBSCRIBED;
+
+	for my $line (@lines) {
+		my $request = Test::StubRequest->new( split ' ', $line );
+
+		# A filter is a regexp over the verbs (Request.pm:2398-2415); for the
+		# filters subscribed here that is exactly a prefix match.
+		for my $l (@listeners) {
+			$l->{cb}->($request) if $request->isCommand( $l->{filter} );
+		}
+	}
+}
+
+diag('§15.60: an album rescan schedules no collection sync (GitHub #22)');
+
+for my $reverse ( 0, 1 ) {
+	my $order = $reverse ? ' (listeners reversed)' : '';
+
+	# Test A: a plain "Rescan album".
+	{
+		reset_state();
+		Plugins::SqueezeWax::Plugin::_initSync();
+
+		deliver( $reverse, 'rescan album 4900', 'rescan done' );
+
+		is( scalar @TIMERS, 0, "A: album rescan alone arms no sync$order" );
+		is( scalar @KILLS,  0, '  ...and kills none' );
+		is( scalar @REBUILDS, 1, '  ...but still rebuilds the owned view' );
+		is( scalar( grep { /album rescan finished; no collection sync scheduled \(GitHub #22\)/ } @LOG ), 1,
+			'  ...and says so once at info' );
+		ok( !grep( { /scheduling a fallback collection sync/ } @LOG ),
+			'  ...without the fallback-sync line' );
+	}
+
+	# Test B: a full scan with "Rescan album" during it, as the owner's server
+	# sent it (§15.60 item 2).
+	{
+		reset_state();
+		Plugins::SqueezeWax::Plugin::_initSync();
+
+		deliver( $reverse, 'rescan', 'rescan', 'rescan album 4900', 'rescan done', 'rescan done' );
+
+		is( scalar @TIMERS, 2, "B: the full scan's two dones arm the sync$order" );
+		is( scalar @KILLS,  2, '  ...killing before each, as before' );
+
+		my $armed = $TIMERS[-1];
+
+		deliver( $reverse, 'rescan album 4900', 'rescan done' );
+
+		is( scalar @TIMERS, 2, '  ...and the album rescan after it arms nothing more' );
+		is( scalar @KILLS,  2, '  ...and kills nothing: the armed tick is not cancelled or delayed' );
+		is( $TIMERS[-1], $armed, '  ...so the full scan\'s tick is still the one armed' );
+		is( scalar @REBUILDS, 3, '  ...while every done rebuilds the view' );
+		is( scalar( grep { /scheduling a fallback collection sync/ } @LOG ), 2,
+			'  ...and the fallback line is logged for the full scan\'s dones only' );
+	}
+
+	# A done with nothing pending keeps today's path (§15.60 item 3.5).
+	{
+		reset_state();
+		Plugins::SqueezeWax::Plugin::_initSync();
+
+		deliver( $reverse, 'rescan done' );
+
+		is( scalar @TIMERS, 1, "a done with nothing pending arms the sync$order" );
+		is( scalar @KILLS,  1, '  ...killing first, as before' );
+	}
+
+	# An album rescan with no target never runs and sends no done
+	# (Slim/Control/Commands.pm:2690-2694), so it must not leave a flag that
+	# turns the next unrelated done into an album-only one.
+	{
+		reset_state();
+		Plugins::SqueezeWax::Plugin::_initSync();
+
+		deliver( $reverse, 'rescan album', 'rescan done' );
+
+		is( scalar @TIMERS, 1, "an album rescan with no id leaves nothing pending$order" );
+	}
+
+	# The flags are cleared by each done: an album-only done does not leak into
+	# the next scan.
+	{
+		reset_state();
+		Plugins::SqueezeWax::Plugin::_initSync();
+
+		deliver( $reverse, 'rescan album 4900', 'rescan done', 'rescan done' );
+
+		is( scalar @TIMERS, 1, "a second done after an album-only one is today's path$order" );
+	}
 }
 
 # ---------------------------------------------------------------------------

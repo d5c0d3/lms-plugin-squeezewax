@@ -170,6 +170,14 @@ my $lastRescanDone;
 my $prevRescanDone;
 my $windowOpen = 0;
 
+# What the next ['rescan','done'] finishes (decisions §15.60 item 3, GitHub
+# #22). Set by _rescanNotice, read and cleared by _rescanDone. Server process
+# only, in memory. Neither set means "unknown", which keeps today's path
+# (§15.60 item 3.5): the startup scan, the auto-rescan, a wipe and anything
+# else that sends no `rescan` notice we saw.
+my $fullScanPending    = 0;
+my $albumRescanPending = 0;
+
 sub initPlugin {
 	my $class = shift;
 
@@ -333,6 +341,9 @@ sub _initSync {
 	$prevRescanDone = $lastRescanDone;
 	$windowOpen     = 0;
 
+	$fullScanPending    = 0;
+	$albumRescanPending = 0;
+
 	# Keyed by the stringified coderef (refs/slimserver/Slim/Control/Request.pm:
 	# 788-809, %listeners), so subscribing the same named sub twice replaces its
 	# own entry rather than adding a second. A re-initPlugin cannot double this
@@ -344,6 +355,59 @@ sub _initSync {
 	# corrects §13.7 on this - there is nothing to compare a collection against
 	# until the library scan has finished writing it.
 	Slim::Control::Request::subscribe( \&_rescanDone, [ ['rescan'], ['done'] ] );
+
+	# Every `rescan` notice, to tell an album rescan from a full scan (§15.60).
+	# A second named sub, so a second %listeners entry, with the same
+	# re-initPlugin reasoning as above. The filter is matched as a regexp on the
+	# notice's verbs (Request.pm:2398-2415 __requestRE, applied at :2021), so
+	# [['rescan']] also delivers `rescan done`; _rescanNotice ignores that one.
+	# Two listeners see the same `done` in %listeners hash order, which is
+	# unspecified - so only _rescanDone acts on it, and the order cannot matter.
+	Slim::Control::Request::subscribe( \&_rescanNotice, [ ['rescan'] ] );
+
+	return;
+}
+
+# Records what kind of scan the next ['rescan','done'] will finish (decisions
+# §15.60 item 3, GitHub #22). Nothing else: no timer, no request, no write.
+#
+# `rescan album <id>` is executeRequest(undef, ['rescan','album',$id])
+# (Slim/Menu/AlbumInfo.pm:590), dispatched as ['rescan','_mode','_target']
+# (Request.pm:607), so the verb list is just ['rescan'] and the mode is a
+# param - read as rescanCommand and queueScanTask read it
+# (Slim/Control/Commands.pm:2686, Slim/Music/Import.pm:834).
+#
+# Why an album notice is ignored while a full scan is pending - test B of
+# §15.60 item 2, "Look for new and changed media files" then "Rescan album"
+# during it, as the owner's server showed it:
+#
+#   rescan, rescan, rescan album 4900, rescan done, rescan done,
+#   rescan album 4900, rescan done
+#
+# The album rescan is queued while the scan runs, and a queued request is
+# notified at once and again when it runs (§15.60 item 1). Its FIRST notice
+# arrives right before the FULL scan's done; taken as "album pending" it would
+# make that done album-only and the full scan would get no fallback sync. The
+# second notice, after the full scan's dones, is the one that counts.
+sub _rescanNotice {
+	my ($request) = @_;
+
+	return if !$request || !$request->isCommand( [ ['rescan'] ] );
+	return if $request->isCommand( [ ['rescan'], ['done'] ] );
+
+	my $mode = $request->getParam('_mode') || '';
+
+	if ( $mode eq 'album' ) {
+		# rescanCommand refuses an album rescan with no target and sends no
+		# done for it (Commands.pm:2690-2694); a pending flag left by one would
+		# make some later, unrelated done album-only.
+		return if !$request->getParam('_target');
+
+		$albumRescanPending = 1 unless $fullScanPending;
+	}
+	else {
+		$fullScanPending = 1;
+	}
 
 	return;
 }
@@ -358,7 +422,28 @@ sub _initSync {
 #
 # It also records the skip rule's window - see $windowOpen above for why a
 # duplicate notification moves only the upper bound.
+#
+# An album-only done (§15.60 item 3.3) returns before all of that: no sync, and
+# the window and the armed tick left exactly as they were. A tick already armed
+# by a full scan must fire as before - never cancelled, delayed or re-armed
+# (§15.60 item 3.4) - and _scheduleSync's killTimers would do all three. The
+# view is still rebuilt: local SQL, no Discogs request, and an album rescan can
+# give the album a new LMS id.
 sub _rescanDone {
+	my $albumOnly = $albumRescanPending && !$fullScanPending;
+
+	$fullScanPending    = 0;
+	$albumRescanPending = 0;
+
+	if ($albumOnly) {
+		main::INFOLOG && $log->is_info
+			&& $log->info('album rescan finished; no collection sync scheduled (GitHub #22)');
+
+		_rebuildView();
+
+		return;
+	}
+
 	$prevRescanDone = $lastRescanDone unless $windowOpen;
 	$lastRescanDone = time();
 	$windowOpen     = 1;
