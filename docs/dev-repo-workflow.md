@@ -74,8 +74,9 @@ symbol has moved on `public/9.1` — the current one is
 One package, `SqueezeWax`. No renamed duplicate, no separate dev name. One
 manifest, `repo.xml`, always at the repo root:
 
-- **A feature branch's `repo.xml`** has a `<url>` on
-  `raw.githubusercontent.com` pointing at that branch's own `dist/*.zip`.
+- **`v1-buildout`'s `repo.xml`** has a `<url>` on `raw.githubusercontent.com`
+  pointing at its own `dist/*.zip` (the dev channel, §5). Feature and fix
+  branches are never built (§15.61).
 - **Master's `repo.xml`** names the hardware-checked build users install. It
   is served by the website (GitHub Pages from `master`) at
   `https://d5c0d3.github.io/lms-plugin-squeezewax/repo.xml`; its zip `<url>`

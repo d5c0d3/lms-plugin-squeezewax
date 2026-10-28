@@ -258,8 +258,8 @@ and the Discogs notices stay as Discogs provides them.
 - Removing the Discogs tag from an identified album does not remove its
   identification. Retag it with the right release ID instead.
 - After "Rescan album" in an album's menu, SqueezeWax does not re-read that
-  album's Discogs tags; a new or fixed tag shows after the next full scan. The
-  rescan also starts a full collection sync. (GitHub #2, planned after 1.0.0.)
+  album's Discogs tags; a new or fixed tag shows after the next full scan.
+  (GitHub #2, planned after 1.0.0.)
 - Tested on one Linux and one Docker server. Untested: Windows,
   macOS, piCorePlayer.
 - Whether ownership results need a freshness limit is an open question with

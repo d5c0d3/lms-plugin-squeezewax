@@ -1596,7 +1596,9 @@ Each names its sites so the work is mechanical rather than a search.
       README's "Rescan album" known limitation (not edited now). Unblocked
       2026-10-28: rule §15.60 item 3 (ignore an album notice while a full scan is
       pending; never cancel a sync a full scan armed). Hardware check: §15.60
-      item 4.
+      item 4. → 2026-10-28: built on `fix/22-rescan-album-sync`, merged; 1.0.1
+      package commit: the "Package build SqueezeWax 1.0.1" commit on
+      `v1-buildout`. Waiting for the 1.0.1 server check.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
       restart); milestone 1.2.0 (§15.53).**
@@ -2539,6 +2541,13 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **1.0.1 checks (GitHub #22, §15.60 item 4).** Install 1.0.1 from the dev
+      repo.xml. `plugin.squeezewax` at INFO; CLI `subscribe rescan` open.
+      (A) plain 'Rescan album': no 'scheduling a fallback collection sync' line,
+      the new #22 info line, no Discogs request. (B) 'Look for new and changed
+      media files' + 'Rescan album' during it: one fallback sync (or the
+      scan-time sync skip) for the full scan, none added by the album rescan.
+      (C) full scan alone: unchanged from 1.0.0. Promote only after all pass.
 - [x] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
       Does a subscriber see `rescan album <id>` before `['rescan','done']`, and
       with which arguments. Both end in `['rescan','done']`. One check serves both
