@@ -1597,7 +1597,14 @@ Each names its sites so the work is mechanical rather than a search.
       2026-10-28: rule §15.60 item 3 (ignore an album notice while a full scan is
       pending; never cancel a sync a full scan armed). Hardware check: §15.60
       item 4. → 2026-10-28: built on `fix/22-rescan-album-sync`, merged; 1.0.1
-      package commit `fa57527`. Waiting for the 1.0.1 server check.
+      package commit `fa57527`. 1.0.1 server check passed
+      2026-10-29.
+
+      **Follow-up (low impact, from the 2026-10-29 check):** an album rescan with no
+      track files sends no `['rescan','done']`, so the "album pending" flag stays
+      set; the next scan that arrives without a `rescan` notice (startup,
+      auto-rescan, wipe) is then treated as album-only and skips its fallback
+      sync. Fix idea: expire the flag after ~60 s.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
       restart); milestone 1.2.0 (§15.53).**
@@ -2540,13 +2547,41 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **1.0.1 checks (GitHub #22, §15.60 item 4).** Install 1.0.1 from the dev
-      repo.xml. `plugin.squeezewax` at INFO; CLI `subscribe rescan` open.
-      (A) plain 'Rescan album': no 'scheduling a fallback collection sync' line,
-      the new #22 info line, no Discogs request. (B) 'Look for new and changed
-      media files' + 'Rescan album' during it: one fallback sync (or the
-      scan-time sync skip) for the full scan, none added by the album rescan.
-      (C) full scan alone: unchanged from 1.0.0. Promote only after all pass.
+- [x] **1.0.1 checks (GitHub #22, §15.60 item 4).** **2026-10-29 session
+      (`owner-2026-10-29`, reference server, LMS 9.1.1, share mounted, owner
+      present): A, B, C all PASS.** Zip sha1 `c8c77f67…a26fa` as published and
+      equal to `<sha>`; 1.0.1 installed over 1.0.0; log clean after restart;
+      `plugin.squeezewax` DEBUG (was already, saved for the restart, restored to
+      unsaved), `network.*` ERROR throughout. Backup
+      `tmp/check101/backup-2026-10-29-0017/` (no `-wal`/`-shm`: clean stop).
+      Notices in `tmp/check101/notices.log` (git-ignored).
+      - **A** plain Rescan album (album 4900): `00:22:05 rescan album 4900`,
+        `rescan done`, nothing else. #22 line once; no "scheduling" line; no tick
+        outcome; no Discogs request in 120 s.
+      - **B** Rescan album during a full scan: `00:29:44 rescan`; `00:30:03
+        rescan album 4900` x5; `00:31:42 rescan done`, `rescan done`, `rescan
+        album 4900`, `rescan done`. "Scheduling" x2, #22 line once, for the last
+        (album) done. One tick, `00:32:42.0008`, "the scan already synced ...
+        skipping". **Timing does not discriminate**: all three dones fell in
+        second 00:31:42 and `_scheduleSync` arms at integer `time() + 60`, so a
+        re-armed tick would fire at the same instant. The pass rests on the log
+        lines (two "scheduling", one #22 line), not on the tick time. Shape
+        differs from §15.60 item 2 (one `rescan` start, five album notices).
+      - **C** full scan alone: `00:37:17 rescan`; `00:38:54 rescan done` x2.
+        "Scheduling" x2, no #22 line, one tick `00:39:54.0009` ("already synced,
+        skipping"), 60 s after the last done. As 1.0.0.
+      - Unplanned full scan at 00:28 (dones 00:28:16, :24 x2): tick 00:29:24, full
+        sync 00:29:26 (205 items, 5 requests). Same behaviour as C.
+      - Unexpected, not investigated: one Rescan-album press dispatched
+        `rescanCommand` twice ~20 ms apart in A (second failed `database table is
+        locked`; `Slim::Menu::AlbumInfo::cliQuery` threw `Can't call method
+        "string"`, core code) and our `_rebuildView` then logged "could not rebuild
+        the owned view ... table is locked" (00:22:06; non-fatal, rebuilt at the
+        next sync/scan). B showed five album notices for one press. Whether the
+        core dispatch repeats is open.
+      - Not promoted. Optional: repeat B with the album press landing in a
+        different second from the dones, to separate re-arm from no re-arm by
+        time.
 - [x] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
       Does a subscriber see `rescan album <id>` before `['rescan','done']`, and
       with which arguments. Both end in `['rescan','done']`. One check serves both
