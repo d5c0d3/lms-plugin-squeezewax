@@ -109,13 +109,13 @@ built it and (later) whether that build is a release, and that is exactly
 the kind of thing that goes stale silently if a person is expected to
 remember to edit it.
 
-### Branches and the website — decided 2026-10-13 (§15.37), amended 2026-10-15 (§15.43)
+### Branches and the website — decided 2026-10-13 (§15.37), amended 2026-10-15 (§15.43), amended 2026-10-28 (§15.61)
 
 | Branch | Holds | Written by | Versions |
 |---|---|---|---|
 | `master` | what users install; the website | `scripts/promote-master.sh` only | copies of checked builds |
 | `v1-buildout` | the one development line: betas, 1.0.0, then every feature release and fix | `package-build.sh` | `1.0.0bN` → `1.0.0` → `1.1.0bN` → `1.1.0` → `1.1.1` … |
-| `feature/<issue#>-<slug>` | one feature, from an issue | hand | none published; merged into `v1-buildout` when ready for beta |
+| `feature/<issue#>-<slug>`, `fix/<issue#>-<slug>` | one feature or fix, from an issue (workspace only) | hand | none built or published; merged into `v1-buildout` when ready |
 
 There is no `v2-buildout`: `2.0.0` is reserved for a change that breaks existing
 users, and would be decided then (§15.43 rulings 2, 3).
@@ -131,20 +131,19 @@ committed on `master` only); it links to the README and `docs/user-guide.md`.
 
 **Merges (§15.37 part 4).** Only promotion writes `master`. A fix lands on the
 **oldest line still receiving fixes**, then is merged forward into every newer
-line the same day. Never backward; `master` is never merged into a build line.
+line the same day. Never backward; `master` is never merged into a build line. With one line (§15.61) there is nothing to merge forward into.
 
 **Feature branches (§15.43 rulings 4, 7).** Each feature lives on
 `feature/<issue#>-<slug>` and is merged into `v1-buildout` only when it is ready
 for beta, so a fix to the released version never ships half-finished work. At
-most one feature is in beta at a time (through `beta.xml`). Feature-branch builds
-are never published to `repo.xml` or `beta.xml`; a server that installed one
-needs "Starting over" afterwards.
+most one feature is in beta at a time (through `beta.xml`). Feature and fix
+branches are never built (`package-build.sh` refuses them, §15.61).
 Issue numbers share GitHub's counter with pull requests; #1 is the closed site PR, so the first feature issue is #2.
 
-**Fixes to a released version (§15.43 ruling 5).** While a newer feature is in
-beta, a fix is a branch from the last promoted commit, numbered `1.N.M`, with no
-migration, and merged forward into `v1-buildout` (§15.37 part 4, applied to
-releases).
+**Fixes (§15.61).** Development is linear. A fix is merged into `v1-buildout` and
+built there like any other build; while a beta runs, it ships with the beta's
+code. Escape: revert the unfinished feature, ship the fix, re-apply (§15.61
+item 4).
 
 **Migrations (§15.43 ruling 6, replacing §15.37 part 5).** A database or prefs
 migration number (`Schema` `@MIGRATIONS`, `$prefs->migrate`) is taken **at

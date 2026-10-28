@@ -7805,4 +7805,17 @@ Answers the blocker in §15.53 ("Before 1.0.1 is built"). Evidence: source read,
 5. **LMS behaviour noted, no action.** Two *different* album rescans queued during one scan collapse into one: the queue key `rescan|<mode>|<_singledir>` ignores the album id (`_target`), and a repeat within 5 s is skipped (`queueScanTask`, `recentlyScanned` `EXPIRES => 5`).
 6. **Where evidence is thin.** One server, one run per test; the server's LMS version was not re-read that day (LMS 9.1.1 on 2026-10-20). Source read on `public/9.1` HEAD, not that build. Docker server not checked. Scans that send no `rescan` notice (item 3.5) not observed.
 
-Next free decision number: §15.61.
+### 15.61 One linear line: every build on v1-buildout — 2026-10-28 (owner)
+
+Owner: development is linear; every higher build contains everything before it (fix, feature, beta, release). At most one development/beta line.
+
+1. **`v1-buildout` is the only line that builds.** Fixes, betas, feature releases are built, hardware-checked and promoted from it, in order, as 1.0.0 was. `package-build.sh` refuses every branch that is not `vN-buildout` (commit 2); master stays refused.
+2. **`fix/<issue#>-<slug>` and `feature/<issue#>-<slug>` are workspaces only.** Never built, never published. Merged into `v1-buildout` when ready (a feature: when nearly done, for its beta).
+3. **Withdrawn:** §15.43 ruling 5 (a fix while a feature is in beta branches from the last promoted commit) and §15.53's "branch from the last promoted commit, … merged forward" for 1.0.1. 1.0.1 (#22) is built on `v1-buildout`; `v1-buildout`'s `SqueezeWax/` and `LICENSE` equal the 1.0.0 package commit `35d2194` (verified 2026-10-28, `git diff --stat`, empty).
+4. **Accepted cost (inferred).** A bug in the release found while a beta runs cannot ship alone: it ships with the beta's code (next beta, then release). Escape when too slow: revert the unfinished feature on `v1-buildout`, ship the fix, re-apply. Not tried on this repo. To keep the cost small: merge a feature only when nearly done; keep betas short.
+5. **Considered, not chosen (2026-10-28):** (A) scripts that build and promote from any branch; (B) a second fixed line `v1-release` for fixes beside `v1-buildout`; milestone branches (`v1.1`, `v1.2`). Each needs script work to promote from a second source (`promote-master.sh` hard-codes `DEV_BRANCH="v1-buildout"`, line 53, and its URL rewrite, ~239-242) and parallel lines the owner does not expect. Milestone branches also reverse §15.43 ruling 3 and break when the release order changes (§15.53).
+6. **Unchanged:** §15.43 ruling 6 (migration number taken at merge into `v1-buildout`), ruling 7 (at most one feature in beta; betas via `beta.xml`).
+7. **Before 1.1.0b1:** `beta.xml` (TODO item), or a dated decision "no public betas" (owner tests alone, then releases). Otherwise the beta reaches every user through the website `repo.xml` (§15.58 item 2).
+8. **v2 (recorded, not designed):** likely `v2-buildout` (+ whatever 1.x fixes need then); decided at 2.0.0 (§15.43 rulings 2, 3).
+
+Next free decision number: §15.62.

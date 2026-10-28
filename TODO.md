@@ -20,7 +20,7 @@ reference server SQLite 3.46.1)
 `master` = 1.0.0 (promoted at `500ef4f`, 2026-10-28; `origin/master` repo.xml
 names version 1.0.0, sha 155145b3071b9e4b8869a69527c6fb19d621b131).
 
-Next free decision number: **§15.61** (2026-10-28).
+Next free decision number: **§15.62** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 
@@ -1590,8 +1590,8 @@ Each names its sites so the work is mechanical rather than a search.
       queued during a full scan; a manual-match album stays manual.
       Rescan-order question answered for #2 too (§15.60).
 - [ ] **2026-10-20: GitHub #22 — no collection sync after "Rescan album"; milestone
-      1.0.1 (§15.53).** Split from #2: a fix to the released version (§15.43 ruling
-      5), branch from the last promoted commit, no migration, merged forward. The
+      1.0.1 (§15.53).** Split from #2: a fix to the released version, built on
+      `v1-buildout` (§15.61), no migration. The
       1.0.1 build drops the "also starts a full collection sync" sentence from
       README's "Rescan album" known limitation (not edited now). Unblocked
       2026-10-28: rule §15.60 item 3 (ignore an album notice while a full scan is
@@ -3679,11 +3679,12 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Housekeeping
 
-- [ ] **2026-10-17: before the first feature branch — `package-build.sh` must
+- [x] **2026-10-17: before the first feature branch — `package-build.sh` must
       refuse feature branches.** It only warns on a non-`vN-buildout` branch
       (lines 37-38, 175-186), so a feature-branch build commits `repo.xml` and the
       zip there and `--publish` pushes them, against §15.43 ruling 6. Refuse
       `feature/*`, or refuse `--publish` off `v1-buildout`.
+      → 2026-10-28: refuses every branch but `vN-buildout` (§15.61; commit 2).
 
 - [ ] **2026-10-15: Issues replace TODO for feature items once filed (§15.43
       ruling 9).** From the first 1.N release on, a feature item lives in its
@@ -4181,7 +4182,9 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **Website design (beyond the README): later.**
 
 - [ ] **`beta.xml` and `promote-master.sh --channel beta`:** build at the first
-  beta after 1.0.0 (§15.37 part 3).
+  beta after 1.0.0 (§15.37 part 3). Deadline: before 1.1.0b1, or decide "no
+  public betas" (§15.61 item 7).
+- [ ] **Revert escape for a fix during a beta:** not tried (§15.61 item 4).
 
 - [x] **Clear & rebuild matches (decisions §10) — GitHub #5, open, unscheduled
   (owner, 2026-10-17: build when a user needs it or beta reports show bad
