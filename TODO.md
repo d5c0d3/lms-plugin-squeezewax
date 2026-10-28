@@ -1597,8 +1597,7 @@ Each names its sites so the work is mechanical rather than a search.
       2026-10-28: rule §15.60 item 3 (ignore an album notice while a full scan is
       pending; never cancel a sync a full scan armed). Hardware check: §15.60
       item 4. → 2026-10-28: built on `fix/22-rescan-album-sync`, merged; 1.0.1
-      package commit: the "Package build SqueezeWax 1.0.1" commit on
-      `v1-buildout`. Waiting for the 1.0.1 server check.
+      package commit `fa57527`. Waiting for the 1.0.1 server check.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
       restart); milestone 1.2.0 (§15.53).**
