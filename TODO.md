@@ -17,14 +17,14 @@ Shared reminder list. Both I and Claude Code read and update this.
 report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
 reference server SQLite 3.46.1)
 
-`master` = 1.0.0b9 (promoted at `6281b9b`, 2026-10-20; `origin/master` repo.xml
-names version 1.0.0b9, sha 026ba09218bc094869a0926ca1870307d5e9351c).
+`master` = 1.0.0 (promoted at `500ef4f`, 2026-10-28; `origin/master` repo.xml
+names version 1.0.0, sha 155145b3071b9e4b8869a69527c6fb19d621b131).
 
 Next free decision number: **§15.59** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 
-- [ ] **1.0.0 = 1.0.0b9's code** (§15.52). Waiting for: no blocking forum
+- [x] **1.0.0 = 1.0.0b9's code** (§15.52). Waiting for: no blocking forum
       report on b9 (owner calls it). Then a release-step session: version 1.0.0,
       README 'This is a beta' line, release `repo.xml`, official listing.
       Release step also: owner checks German menus and settings page on a real
@@ -36,6 +36,8 @@ Next free decision number: **§15.59** (2026-10-28).
       menu, release details, review queue and 'Tonträger im Besitz' in German;
       Discogs notices in English. Album menu shows 'Release' wording: expected,
       §15.55 item 3.
+      → 2026-10-28: released. Promoted `500ef4f`; GitHub release v1.0.0 (tag on
+      500ef4f, zip sha1 155145b3…, checked via API); #23 closed; forum post.
 - [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
       → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
@@ -3611,6 +3613,7 @@ Each names its sites so the work is mechanical rather than a search.
 - [x] **GitHub #23: plugin licence is GPL-2.0-or-later (README); translator agreed
       to "GPL-2.0".** Owner asked to confirm "or later".
       → 2026-10-28: owner inference, not confirmed in writing (§15.58 item 4).
+      GitHub #23 closed 2026-10-28.
 
 - [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
       identified albums, how many carry a master tag, collection items. §15.50's
