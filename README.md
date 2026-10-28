@@ -161,6 +161,9 @@ While a scan is running or "Master releases" is shown, the page updates those
 lines by itself every 5 seconds, without reloading and without touching
 anything you have typed.
 
+Screen text follows the LMS server language. German is available. Discogs data
+and the Discogs notices stay as Discogs provides them.
+
 ## Using it
 
 - **New to it?** [docs/user-guide.md](docs/user-guide.md) walks through the everyday workflow, from a new record to "You own a pressing". Its [Tagging for SqueezeWax](docs/user-guide.md#tagging-for-squeezewax) section lists what to tag.
@@ -315,3 +318,4 @@ API Terms of Use.
 - SqueezeWax by d5c0d3.
 - Collection data from [Discogs](https://www.discogs.com/).
 - Built for Lyrion Music Server.
+- German translation by Dentaku.
