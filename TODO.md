@@ -30,6 +30,12 @@ Next free decision number: **§15.59** (2026-10-28).
       Release step also: owner checks German menus and settings page on a real
       server before promotion (§15.57).
       → 2026-10-28: release step started (§15.58).
+      → 2026-10-28: **1.0.0 check passed** (owner, real server; label
+      `owner-2026-10-28`). Updated 1.0.0b9 → 1.0.0 from the dev repo.xml, restart
+      clean, no strings parse error. Server language German: settings page, album
+      menu, release details, review queue and 'Tonträger im Besitz' in German;
+      Discogs notices in English. Album menu shows 'Release' wording: expected,
+      §15.55 item 3.
 - [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
       → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
@@ -3597,8 +3603,9 @@ Each names its sites so the work is mechanical rather than a search.
 - [x] **2026-10-24: GitHub #23: translator's answer** on GPL-2.0 inclusion, credit
       name, and the review (§15.55). Done 2026-10-24: agreed to all, GPL-2.0,
       credit "Dentaku".
-- [ ] **1.0.0 release step: owner checks German menus and settings page on a real
-      server before promotion (§15.57).**
+- [x] **1.0.0 release step: owner checks German menus and settings page on a real
+      server before promotion (§15.57).** → 2026-10-28: passed (owner,
+      `owner-2026-10-28`).
 - [x] **2026-10-24: GitHub #23: decide which release carries German.** → §15.57
       (1.0.0, 2026-10-28).
 - [x] **GitHub #23: plugin licence is GPL-2.0-or-later (README); translator agreed
@@ -4078,6 +4085,9 @@ Each names its sites so the work is mechanical rather than a search.
 - [ ] **Official listing in `LMS-Community/lms-plugin-repository` `include.json`**
   (§15.58 item 2). When done: §15.43 ruling 10 applies (betas only in `beta.xml`),
   README Install line changes after the listing is live.
+- [ ] **German 'Veröffentlichung' vs 'Release' in menus** (Discogs German uses
+  'Veröffentlichung' for a release). Kept as translated (§15.55 item 3); ask
+  Dentaku, next release if wanted.
 
 - Every database change after 1.0.0 meets §15.54 (GitHub #7, #10 comments 2026-10-20).
 
