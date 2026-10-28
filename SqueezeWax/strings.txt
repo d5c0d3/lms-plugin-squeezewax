@@ -1,372 +1,493 @@
 PLUGIN_SQUEEZEWAX_NAME
 	EN	SqueezeWax
+	DE	SqueezeWax
 
 PLUGIN_SQUEEZEWAX_DESC
 	EN	Links your physical record collection to your LMS library.
+	DE	Verknüpfen der physischen Discogs-Sammlung mit der LMS-Bibliothek.
 
 PLUGIN_SQUEEZEWAX_TAGNAMES
 	EN	Discogs release ID tags
+	DE	Discogs-Release-ID-Tags
 
 PLUGIN_SQUEEZEWAX_TAGNAMES_DESC
 	EN	Tag names in your files that hold a Discogs release ID. There is no standard name, and it differs between formats, so more than one may be needed. Leave blank to disable tag matching.
+	DE	Tag-Namen in den Audiodateien, die eine Discogs-Release-ID enthalten. Da es keinen einheitlichen Standard gibt und sich die Bezeichnungen je nach Format unterscheiden, können hier mehrere Namen angegeben werden. Zum Deaktivieren des Tag-Abgleichs einfach leer lassen
 
 PLUGIN_SQUEEZEWAX_TAGNAMES_ORDER
 	EN	Order matters only for reporting which tag a match came from. If two tags name different releases, the album goes to the review queue rather than one winning.
+	DE	Die Reihenfolge dient nur zur Dokumentation, von welchem Tag ein Treffer stammt. Wenn zwei Tags auf unterschiedliche Releases verweisen, wird keines priorisiert - das Album landet stattdessen in der Überprüfungswarteschlange.
 
 PLUGIN_SQUEEZEWAX_DETECT
 	EN	Detect tag names
+	DE	Tag-Namen erkennen
 
 PLUGIN_SQUEEZEWAX_DETECT_DESC
 	EN	Reads a sample of albums and reports which tags hold something that looks like a Discogs release ID.
+	DE	Liest eine Stichprobe von Veröffentlichungen ein und zeigt an, welche Tags Einträge enthalten, die wie eine Discogs-Release-ID aussehen.
 
 PLUGIN_SQUEEZEWAX_DETECT_BUTTON
 	EN	Detect
+	DE	Erkennen
 
 PLUGIN_SQUEEZEWAX_DETECT_BUTTON_RUNNING
 	EN	Reading files...
+	DE	Lese Dateien...
 
 PLUGIN_SQUEEZEWAX_DETECT_RUNNING
 	EN	Reading files...
+	DE	Lese Dateien...
 
 PLUGIN_SQUEEZEWAX_DETECT_SAMPLED
 	EN	Albums sampled
+	DE	Geprüfte Stichproben
 
 PLUGIN_SQUEEZEWAX_DETECT_FORMATS
 	EN	Formats sampled
+	DE	Geprüfte Formate
 
 PLUGIN_SQUEEZEWAX_DETECT_TAG
 	EN	Tag name
+	DE	Tag-Name
 
 PLUGIN_SQUEEZEWAX_DETECT_COUNT
 	EN	Albums
+	DE	Veröffentlichungen
 
 PLUGIN_SQUEEZEWAX_DETECT_EXAMPLE
 	EN	Example value
+	DE	Beispielwert
 
 PLUGIN_SQUEEZEWAX_DETECT_COPY
 	EN	Copy the tag names you want into the boxes above, then save.
+	DE	Kopiere die gewünschten Tag-Namen in die obigen Felder und speichere sie ab.
 
 PLUGIN_SQUEEZEWAX_DETECT_NONE
 	EN	No tags holding a Discogs release ID were found in the sample.
+	DE	In der Stichprobe wurden keine Tags gefunden, die eine Discogs-Release-ID enthalten.
 
 PLUGIN_SQUEEZEWAX_DETECT_OTHER
 	EN	Other tags holding a number, shown in case one of them is your release ID. These were not confirmed, because a bare number on its own is not evidence.
+	DE	Andere Tags mit Zahlenwerten, für den Fall, dass eine davon die gesuchte Release-ID ist. Da eine reine Nummer allein nicht ausreicht, wurden diese Einträge nicht automatisch übernommen.
 
 PLUGIN_SQUEEZEWAX_BUSY_SCANNING
 	EN	A scan is running. Settings that touch the match database cannot be changed until it finishes.
+	DE	Ein Scan läuft. Einstellungen bezüglich der Abgleich-Datenbank können erst nach dessen Abschluss geändert werden.
 
 PLUGIN_SQUEEZEWAX_DB_UNUSABLE
 	EN	The SqueezeWax database is not usable, so matching is inactive.
+	DE	Die SqueezeWax-Datenbank ist derzeit nicht nutzbar, weshalb der Abgleich inaktiv ist.
 
 PLUGIN_SQUEEZEWAX_NO_TAG_NAMES
 	EN	No tag names are set, so SqueezeWax matches albums only by title and artist and cannot find the exact pressing you own. Enter the name of the tag that holds the Discogs release ID below, or press Detect.
+	DE	Es sind keine Tag-Namen festgelegt. SqueezeWax gleicht Veröffentlichungen daher nur nach Titel und Interpret ab, wodurch die exakte Ausgabe nicht ermittelt werden kann. Trage unten den Namen des Tags ein, das die Discogs-Release-ID enthält, oder klicke auf "Erkennen".
 
 PLUGIN_SQUEEZEWAX_FIRST_STEPS
 	EN	To start: enter your token and tag names and save. Then run a library rescan once: Basic Settings → Rescan Media Library → "Look for new and changed media files". SqueezeWax reads your collection during the scan.
+	DE	Erste Schritte: Token und Tag-Namen eingeben und speichern. Führe danach einmal einen Scan der Medienbibliothek aus: Grundeinstellungen → Medienbibliothek erneut durchsuchen → "Nach neuen und veränderten Mediendateien suchen". SqueezeWax liest die Discogs-Sammlung während dieses Scans ein.
 
 PLUGIN_SQUEEZEWAX_MATCH_PROGRESS
 	EN	SqueezeWax: Discogs matching
+	DE	SqueezeWax: Discogs-Abgleich
 
 PLUGIN_SQUEEZEWAX_OWNERSHIP_PROGRESS
 	EN	SqueezeWax: Discogs collection sync
+	DE	SqueezeWax: Discogs-Sammlungs-Synchronisation
 
 PLUGIN_SQUEEZEWAX_DETECT_UNREADABLE
 	EN	could not be read
+	DE	konnte nicht gelesen werden
 
 PLUGIN_SQUEEZEWAX_TOKEN
 	EN	Discogs personal access token
+	DE	Discogs Personal Access Token
 
 PLUGIN_SQUEEZEWAX_TOKEN_DESC
 	EN	Required for collection sync, which decides the ownership shown in album menus and the "Records I own" view. Generate one at your Discogs Developer Settings and paste it here. This token is an unscoped credential for your whole Discogs account: whoever has it can do anything you can do on Discogs, including creating Marketplace listings and editing orders, not just read your collection. It is stored in this server's preferences file in plain text, not encrypted. If you revoke it, generate a new one and paste it in again.
+	DE	Erforderlich für die Discogs-Sammlung-Synchronisation, die den Besitzstatus in Albummenüs und der Ansicht "Tonträger im Besitz" steuert. Ein Token kann in den Discogs-Entwicklereinstellungen generiert und hier eingefügt werden. Achtung: Dieses Token ist ein unbeschränkter Schlüssel für das gesamte Discogs-Konto. Personen mit Zugriff darauf können sämtliche Aktionen im Konto ausführen (darunter das Erstellen von Marketplace-Angeboten und das Bearbeiten von Bestellungen) - nicht nur das Lesen der Sammlung. Das Token wird in der Einstellungsdatei dieses Servers im Klartext (unverschlüsselt) gespeichert. Nach einem Widerruf muss ein neues Token generiert und hier eingetragen werden.
 
 PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS
 	EN	https://www.discogs.com/settings/developers
+	DE	https://www.discogs.com/settings/developers
 
 PLUGIN_SQUEEZEWAX_TOKEN_DEVSETTINGS_LABEL
 	EN	Discogs Developer Settings (generate or revoke a token here)
+	DE	Discogs-Entwicklereinstellungen (Token hier generieren oder widerrufen)
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON
 	EN	Test token
+	DE	Token testen
 
 PLUGIN_SQUEEZEWAX_CURRENCY
 	EN	Prices
+	DE	Preise
 
 PLUGIN_SQUEEZEWAX_CURRENCY_DESC
 	EN	Prices in the album menus are in your Discogs account's currency. SqueezeWax learns which currency that is when a collection sync runs, so press Sync collection now after entering your token.
+	DE	Preise in den Veröffentlichungs-Menüs werden in der Währung des Discogs-Kontos angezeigt. SqueezeWax ermittelt diese Währung automatisch beim nächsten Synchronisationslauf. Daher sollte nach der Eingabe des Tokens einmalig auf "Sammlung jetzt synchronisieren" geklickt werden.
 
 PLUGIN_SQUEEZEWAX_CURRENCY_KNOWN
 	EN	Currency: %s
+	DE	Währung: %s
 
 PLUGIN_SQUEEZEWAX_CURRENCY_UNKNOWN
 	EN	Not known yet. Press Sync collection now.
+	DE	Noch nicht bekannt. Klicke auf "Sammlung jetzt synchronisieren".
 
 PLUGIN_SQUEEZEWAX_ACTIONS_HINT
 	EN	Both buttons use the token in the box above, and save it along with everything else on this page.
+	DE	Beide Schaltflächen verwenden den Token im obigen Feld und speichern ihn zusammen mit allen anderen Einstellungen auf dieser Seite.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_BUTTON_RUNNING
 	EN	Testing...
+	DE	Teste Token...
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_MISSING
 	EN	Enter a token before testing it.
+	DE	Bitte vor dem Testen einen Token eingeben.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK
 	EN	Token is valid, authenticated as Discogs user "%s".
+	DE	Token ist gültig, authentifiziert als Discogs-Benutzer "%s".
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_OK_NOUSER
 	EN	Token is valid.
+	DE	Token ist gültig.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNAUTHORIZED
 	EN	Discogs rejected this token. Check that it was copied correctly and has not been revoked.
+	DE	Discogs hat diesen Token abgelehnt. Bitte überprüfen, ob der Token korrekt kopiert und nicht widerrufen wurde.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NOT_FOUND
 	EN	Discogs returned "not found" for the identity check, which is unexpected. Try again, or check for a SqueezeWax update.
+	DE	Discogs hat bei der Identitätsprüfung unerwartet "nicht gefunden" zurückgegeben. Bitte noch einmal versuchen oder auf ein SqueezeWax-Update prüfen.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_RATE_LIMITED
 	EN	Discogs is rate-limiting this connection right now. Wait a minute and try again.
+	DE	Discogs begrenzt derzeit die Anfragerate für diese Verbindung. Bitte eine Minute warten und dann erneut versuchen.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_SERVER_ERROR
 	EN	Discogs returned a server error. Try again later.
+	DE	Discogs hat einen Serverfehler zurückgegeben. Bitte später noch einmal versuchen.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_NO_RESPONSE
 	EN	Got no response from Discogs. Check this server's network connection.
+	DE	Keine Antwort von Discogs erhalten. Die Netzwerkverbindung des Servers ist zu überprüfen.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_EMPTY_BODY
 	EN	Discogs returned an empty response.
+	DE	Discogs hat eine leere Antwort zurückgegeben.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_MALFORMED_JSON
 	EN	Discogs returned a response SqueezeWax could not understand.
+	DE	Discogs hat eine Antwort zurückgegeben, die von SqueezeWax nicht verstanden wurde.
 
 PLUGIN_SQUEEZEWAX_TOKEN_TEST_FAIL_UNKNOWN
 	EN	Token test failed (HTTP %s).
-
+	DE	Token-Test fehlgeschlagen (HTTP %s).
 
 PLUGIN_SQUEEZEWAX_SYNC
 	EN	Discogs collection
+	DE	Discogs-Sammlung
 
 PLUGIN_SQUEEZEWAX_SYNC_DESC
 	EN	SqueezeWax reads your Discogs collection to work out which albums in this library you own on record. It only counts what is there, and your library is not changed. Your collection itself is not stored: SqueezeWax keeps only its own conclusions about your albums, the time of the last sync and how many items it found. This happens automatically during each library rescan, and you can run it now with the button.
+	DE	SqueezeWax liest die Discogs-Sammlung ein, um abzugleichen, welche Veröffentlichungen in dieser Bibliothek als Tonträger im Besitz sind. Dabei wird ausschließlich der aktuelle Bestand gezählt; die Bibliothek selbst bleibt unverändert. Die eigentliche Sammlung wird nicht lokal gespeichert – SqueezeWax sichert lediglich die daraus abgeleiteten Auswertungen, den Zeitpunkt der letzten Synchronisation sowie die Anzahl der gefundenen Einträge. Dieser Vorgang läuft automatisch bei jedem Mediathek-Scan ab und kann über die Schaltfläche auch manuell angestoßen werden.
 
 PLUGIN_SQUEEZEWAX_SYNC_BUTTON
 	EN	Sync collection now
+	DE	Sammlung jetzt synchronisieren
 
 PLUGIN_SQUEEZEWAX_SYNC_BUTTON_RUNNING
 	EN	Syncing...
+	DE	Synchronisiere...
 
 PLUGIN_SQUEEZEWAX_SYNC_LAST
 	EN	Last synced
+	DE	Zuletzt synchronisiert
 
 PLUGIN_SQUEEZEWAX_SYNC_NEVER
 	EN	Never
+	DE	Nie
 
 PLUGIN_SQUEEZEWAX_SYNC_ITEMS
 	EN	items
+	DE	Einträge
 
 PLUGIN_SQUEEZEWAX_SYNC_RUNNING
 	EN	A collection sync is running.
+	DE	Eine Sammlungs-Synchronisation läuft.
 
 PLUGIN_SQUEEZEWAX_SYNC_OK
 	EN	Synced %s items in %s requests.
+	DE	%s Einträge in %s Anfragen synchronisiert.
 
 PLUGIN_SQUEEZEWAX_SYNC_NO_TOKEN
 	EN	Add a Discogs personal access token above, and save it, before syncing.
+	DE	Vor der Synchronisation muss oben ein persönliches Discogs-Zugriffstoken eingetragen und gespeichert werden.
 
 PLUGIN_SQUEEZEWAX_SYNC_ALREADY_RUNNING
 	EN	A collection sync is already running. Its result will appear here when it finishes.
+	DE	Eine Sammlungs-Synchronisation läuft bereits. Das Ergebnis wird hier angezeigt, wenn sie abgeschlossen ist.
 
 PLUGIN_SQUEEZEWAX_SYNC_FAIL_UNAUTHORIZED
 	EN	Discogs rejected the token, so the collection could not be read. Generate a new one and paste it in above.
+	DE	Discogs hat das Token abgelehnt, weshalb die Sammlung nicht eingelesen werden konnte. Bitte oben ein neues Token generieren und eintragen.
 
 PLUGIN_SQUEEZEWAX_SYNC_FAIL
 	EN	Collection sync failed (%s) - see the server log. Previous results are unchanged.
+	DE	Sammlungs-Synchronisation fehlgeschlagen (%s) – siehe Server-Protokoll. Bisherige Ergebnisse bleiben unverändert.
 
 PLUGIN_SQUEEZEWAX_SYNC_REFUSED
 	EN	The collection was read, but ownership could not be updated while a library scan is running. It will be updated automatically when the scan finishes.
+	DE	Die Discogs-Sammlung wurde gelesen, aber der Besitz konnte während eines laufenden Mediathek-Scans nicht aktualisiert werden. Er wird automatisch aktualisiert, wenn der Scan beendet ist.
 
 PLUGIN_SQUEEZEWAX_SYNC_COUNT_MISMATCH
 	EN	The collection changed while it was being read, so ownership was not updated. Nothing was changed. Try again in a moment.
+	DE	Die Discogs-Sammlung wurde während des Einlesens verändert, weshalb der Besitzstatus nicht aktualisiert wurde. Es wurden keine Änderungen vorgenommen. Bitte in Kürze erneut versuchen.
 
 PLUGIN_SQUEEZEWAX_SYNC_COUNT_UNKNOWN
 	EN	Discogs did not report how many items your collection holds, so it could not be shown to be complete. Ownership was not updated and nothing was changed.
+	DE	Discogs hat keine Angabe zur Anzahl der Einträge in der Sammlung übermittelt, weshalb die Vollständigkeit nicht überprüft werden konnte. Der Besitzstatus wurde nicht aktualisiert und es wurden keine Änderungen vorgenommen.
 
 PLUGIN_SQUEEZEWAX_QUEUE
 	EN	Review queue
+	DE	Überprüfungswarteschlange
 
 PLUGIN_SQUEEZEWAX_QUEUE_DESC
 	EN	Albums SqueezeWax could not decide on its own, and what to change in your files' tags or your Discogs collection to fix each one. Nothing on this page changes a match.
+	DE	Veröffentlichungen, bei denen sich SqueezeWax nicht sicher war, sowie Hinweise zur Anpassung in den Datei-Tags oder der Discogs-Sammlung zur Behebung des jeweiligen Problems. Auf dieser Seite werden keine Abgleiche automatisch geändert.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TOKEN_PAUSED
 	EN	Discogs rejected the access token, so automatic collection syncs are paused. Ownership of new albums will not be shown until you fix the token in Settings or press "Sync collection now".
+	DE	Discogs hat das Zugriffstoken abgelehnt, weshalb automatische Sammlungs-Synchronisationen pausiert sind. Der Besitzstatus neuer Veröffentlichungen wird erst wieder angezeigt, nachdem das Token in den Einstellungen korrigiert oder auf "Sammlung jetzt synchronisieren" geklickt wurde.
 
 PLUGIN_SQUEEZEWAX_QUEUE_OPEN
 	EN	Open the review queue
+	DE	Überprüfungswarteschlange öffnen
 
 PLUGIN_SQUEEZEWAX_QUEUE_OPEN_ITEMS
 	EN	%s waiting
+	DE	%s ausstehend
 
 PLUGIN_SQUEEZEWAX_QUEUE_EMPTY
 	EN	Nothing to review. Every album is either matched, owned, or neither.
+	DE	Nichts zu überprüfen. Jede Veröffentlichung ist entweder abgeglichen, im Besitz oder keines von beidem.
 
 PLUGIN_SQUEEZEWAX_QUEUE_ALBUM
 	EN	Album
+	DE	Veröffentlichung
 
 PLUGIN_SQUEEZEWAX_QUEUE_ARTIST
 	EN	Artist
+	DE	Interpret
 
 PLUGIN_SQUEEZEWAX_QUEUE_REASON
 	EN	Why
+	DE	Grund
 
 PLUGIN_SQUEEZEWAX_REASON_CONFLICT
 	EN	The Discogs tags on this album's files disagree.
+	DE	Die Discogs-Tags in den Dateien dieser Veröffentlichung widersprechen sich.
 
 PLUGIN_SQUEEZEWAX_REASON_AMBIGUOUS
 	EN	You own more than one record with this title and artist.
+	DE	Es existiert mehr als eine Veröffentlichung mit diesem Titel und Interpreten in der Discogs-Sammlung.
 
 PLUGIN_SQUEEZEWAX_REASON_ARTIST_DISAGREE
 	EN	You own a record with this title, but by a different artist.
+	DE	In der Discogs-Sammlung existiert eine Veröffentlichung mit diesem Titel, jedoch von einem anderen Interpreten.
 
 PLUGIN_SQUEEZEWAX_REASON_ARTIST_ABSENT
 	EN	You own a record with this title, but one side has no artist to compare.
+	DE	In der Sammlung existiert eine Veröffentlichung mit diesem Titel, allerdings ist auf einer Seite kein Interpret für den Abgleich angegeben.
 
 PLUGIN_SQUEEZEWAX_REASON_VARIOUS_GATED
 	EN	Both sides say various artists, which is not evidence that this is the record you own.
+	DE	Da auf beiden Seiten "Various Artists" angegeben ist, kann nicht eindeutig verifiziert werden, ob es sich um den entsprechenden Tonträger handelt.
 
 PLUGIN_SQUEEZEWAX_QUEUE_FIX
 	EN	What to do
+	DE	Was zu tun ist
 
 PLUGIN_SQUEEZEWAX_FIX_CONFLICT
 	EN	Give every file of this album the same Discogs release ID, then rescan. "Show tags" shows which files differ. If this is your own compilation (tracks from different records), remove the Discogs release ID from its files, or keep it in a tag name SqueezeWax doesn't read.
+	DE	Allen Dateien dieses Albums dieselbe Discogs-Release-ID zuweisen und anschließend neu scannen. "Tags anzeigen" zeigt an, welche Dateien voneinander abweichen. Bei einer selbst zusammengestellten Compilation (Titel aus verschiedenen Veröffentlichungen) sollte die Discogs-Release-ID aus den Dateitags entfernt oder in einem von SqueezeWax nicht berücksichtigten Tag gespeichert werden.
 
 PLUGIN_SQUEEZEWAX_FIX_AMBIGUOUS
 	EN	Tag the files with the Discogs release ID of the record you own, then rescan.
+	DE	Die Dateien mit der Discogs-Release-ID der entsprechenden Veröffentlichung versehen und anschließend neu scannen.
 
 PLUGIN_SQUEEZEWAX_FIX_ARTIST_DISAGREE
 	EN	If this is that record, tag the files with its Discogs release ID or correct the album artist in the tags, then rescan. If it is a different record, you can ignore this.
+	DE	Falls es sich um diese Veröffentlichung handelt, die Dateien mit der entsprechenden Discogs-Release-ID versehen oder den Albuminterpreten in den Tags korrigieren und anschließend neu scannen. Bei einer anderen Veröffentlichung kann dieser Hinweis ignoriert werden.
 
 PLUGIN_SQUEEZEWAX_FIX_ARTIST_ABSENT
 	EN	Add the album artist to the files' tags, or tag them with the Discogs release ID, then rescan.
+	DE	Den Albuminterpreten zu den Dateitags hinzufügen oder die Dateien mit der Discogs-Release-ID versehen und anschließend neu scannen.
 
 PLUGIN_SQUEEZEWAX_FIX_VARIOUS_GATED
 	EN	Tag the files with the Discogs release ID, then rescan.
+	DE	Die Dateien mit der Discogs-Release-ID versehen und anschließend neu scannen.
 
 PLUGIN_SQUEEZEWAX_QUEUE_STREAMING_NOTE
 	EN	Albums with only streaming tracks cannot be tagged. If their title or artist differs from your Discogs collection, they stay not owned.
+	DE	Veröffentlichungen mit reinen Streaming-Titeln können nicht getaggt werden. Weichen Titel oder Interpret von der Discogs-Sammlung ab, verbleiben sie im Status "nicht im Besitz".
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_IN_FILE
 	EN	One file carries two tags naming different releases
+	DE	Eine Datei enthält zwei Tags mit unterschiedlichen Releases.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE
 	EN	A Discogs tag holds a value that is not a release ID SqueezeWax can read. Correct it to the release number or its Discogs address, or delete it, then rescan.
+	DE	Ein Discogs-Tag enthält einen Wert, der keine von SqueezeWax lesbare Release-ID darstellt. Den Wert auf die Releasenummer oder die Discogs-URL korrigieren oder löschen und anschließend neu scannen.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_UNREADABLE_MIXED
 	EN	This file names a release, but another Discogs tag on it cannot be read. Delete or correct that value, then rescan.
+	DE	Diese Datei verweist auf eine Veröffentlichung, jedoch kann ein weiterer Discogs-Tag darin nicht gelesen werden. Den entsprechenden Wert korrigieren oder löschen und anschließend neu scannen.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_IDS
 	EN	These files name different releases
+	DE	Diese Dateien benennen unterschiedliche Releases
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_CROSS_PARTIAL
 	EN	Only some of these files carry a Discogs tag
+	DE	Nur einige dieser Dateien enthalten einen Discogs-Tag
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_NO_TAG_ON
 	EN	No Discogs tag on
+	DE	Kein Discogs-Tag auf
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_GONE
 	EN	Conflict recorded, tags no longer readable.
+	DE	Konflikt aufgezeichnet, Tags nicht mehr lesbar.
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGS_RESOLVED
 	EN	The tags no longer disagree. The next scan will clear this.
+	DE	Die Tags widersprechen sich nicht mehr. Der nächste Scan wird dies bereinigen.
 
 PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON
 	EN	Show tags
+	DE	Tags anzeigen
 
 PLUGIN_SQUEEZEWAX_QUEUE_SHOWTAGS_BUTTON_RUNNING
 	EN	Reading tags...
+	DE	Lese Tags...
 
 PLUGIN_SQUEEZEWAX_QUEUE_NOT_FOUND
 	EN	That album is no longer there. The page may be out of date; reload it.
+	DE	Diese Veröffentlichung ist nicht mehr vorhanden. Die Seite ist möglicherweise veraltet - bitte neu laden.
 
 PLUGIN_SQUEEZEWAX_MENU_OWN_PRESSING
 	EN	You own a pressing
+	DE	Release im Besitz
 
 PLUGIN_SQUEEZEWAX_MENU_OWN_VERSION
 	EN	You own a version
+	DE	Version im Besitz
 
 PLUGIN_SQUEEZEWAX_MENU_LINK_OWNED
 	EN	Discogs: Browse your pressing
+	DE	Discogs: Release durchsuchen
 
 PLUGIN_SQUEEZEWAX_MENU_LINK_MASTER
 	EN	Discogs: Browse all versions
+	DE	Discogs: Alle Versionen durchsuchen
 
 PLUGIN_SQUEEZEWAX_MENU_DETAILS_RELEASE
 	EN	Discogs: Show your pressing's details
+	DE	Discogs: Release-Details anzeigen
 
 PLUGIN_SQUEEZEWAX_MENU_DETAILS_MASTER
 	EN	Discogs: Show master details
+	DE	Discogs: Master-Details anzeigen
 
 PLUGIN_SQUEEZEWAX_DETAILS_YEAR
 	EN	Year %s
+	DE	Jahr %s
 
 PLUGIN_SQUEEZEWAX_DETAILS_HAVE
 	EN	Have %s
+	DE	Haben %s
 
 PLUGIN_SQUEEZEWAX_DETAILS_WANT
 	EN	Want %s
+	DE	Suchen %s
 
 PLUGIN_SQUEEZEWAX_DETAILS_RATING
 	EN	Rating %s / 5 (%s ratings)
+	DE	Bewertung %s / 5 (%s Bewertungen)
 
 PLUGIN_SQUEEZEWAX_DETAILS_FOR_SALE
 	EN	For sale: %s
+	DE	Zu verkaufen: %s
 
 PLUGIN_SQUEEZEWAX_DETAILS_FOR_SALE_FROM
 	EN	For sale: %s, from %s %s
+	DE	Zu verkaufen: %s, ab %s %s
 
 PLUGIN_SQUEEZEWAX_DETAILS_NONE_FOR_SALE
 	EN	None for sale
+	DE	Nichts zu verkaufen
 
 PLUGIN_SQUEEZEWAX_DETAILS_NOTICE
 	EN	Data provided by Discogs
 
 PLUGIN_SQUEEZEWAX_DETAILS_BUSY
 	EN	Discogs is busy, try again in %s s
+	DE	Discogs ist ausgelastet; bitte in %s Sekunden erneut versuchen.
 
 PLUGIN_SQUEEZEWAX_DETAILS_UNAUTHORIZED
 	EN	Discogs rejected the token – check Settings
+	DE	Discogs hat das Token abgelehnt – bitte die Einstellungen überprüfen.
 
 PLUGIN_SQUEEZEWAX_DETAILS_NOT_FOUND
 	EN	Not found on Discogs
+	DE	Nicht auf Discogs gefunden
 
 PLUGIN_SQUEEZEWAX_DETAILS_NO_ANSWER
 	EN	Discogs did not answer – try again
+	DE	Discogs hat nicht geantwortet - bitte erneut versuchen.
 
 PLUGIN_SQUEEZEWAX_DETAILS_NO_TOKEN
 	EN	Add your Discogs token in Settings
+	DE	Discogs-Token in den Einstellungen hinterlegen
 
 PLUGIN_SQUEEZEWAX_LIBRARY_OWNED
 	EN	Records I own
+	DE	Tonträger im Besitz
 
 PLUGIN_SQUEEZEWAX_DERIVE
 	EN	Master releases
+	DE	Master-Releases
 
 PLUGIN_SQUEEZEWAX_DERIVE_DESC
 	EN	Some albums are identified by a pressing that SqueezeWax has not yet linked to the record it is a pressing of. It asks Discogs about them a few at a time, in the background, so ownership can keep changing for a while after a scan.
+	DE	Einige Veröffentlichungen werden über ein Release identifiziert, das SqueezeWax noch nicht direkt mit der Ursprungsveröffentlichung verknüpft hat. Die Daten werden im Hintergrund nacheinander von Discogs abgefragt, sodass sich der Besitzstatus nach einem Scan noch eine Weile im Hintergrund aktualisieren kann.
 
 PLUGIN_SQUEEZEWAX_DERIVE_PROGRESS
 	EN	Deriving masters: %s of %s releases
+	DE	Leite Master ab: %s von %s Releases
 
 PLUGIN_SQUEEZEWAX_DERIVE_RUNNING
 	EN	running
+	DE	läuft
 
 PLUGIN_SQUEEZEWAX_DERIVE_WAITING
 	EN	waiting
+	DE	wartet
 
 PLUGIN_SQUEEZEWAX_DERIVE_PAUSED
 	EN	paused — resumes after the next library scan or Sync collection now
+	DE	pausiert - wird nach dem nächsten Mediathek-Scan oder "Sammlung jetzt synchronisieren" fortgesetzt
 
 PLUGIN_SQUEEZEWAX_NEW_MASTERS_NOTICE
 	EN	New master releases found. Press 'Sync collection now' to update which records you own.
+	DE	Neue Master-Releases gefunden. Auf "Sammlung jetzt synchronisieren" klicken, um den Besitzstatus der Tonträger zu aktualisieren.
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION
 	EN	Discogs
+	DE	Discogs
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION_DATA
 	EN	Data provided by Discogs.
@@ -376,6 +497,8 @@ PLUGIN_SQUEEZEWAX_ATTRIBUTION_NOTAFFILIATED
 
 PLUGIN_SQUEEZEWAX_ATTRIBUTION_SITE
 	EN	discogs.com
+	DE	discogs.com
 
 PLUGIN_SQUEEZEWAX_QUEUE_TAGGING_TIPS
 	EN	Tagging tips
+	DE	Tagging-Tipps

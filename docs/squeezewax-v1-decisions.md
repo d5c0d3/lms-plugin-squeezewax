@@ -7149,6 +7149,8 @@ in the design chat "Top-level menu setting request".
 
 ### 15.45 Owned pressings are stored — reverses §14.10 — 2026-10-17 (owner)
 
+Amended 2026-10-22 by §15.56.
+
 GitHub #7. Decided in the design chat.
 
 1. The collection sync keeps, per album, the release id(s) of the collection
@@ -7595,4 +7597,179 @@ GitHub #21.
    `_rebuildMatchTable` must not be reused for a later rebuild as it stands. A
    one-line warning comment sits above `@MATCH_COLUMNS`.
 
-Next free decision number: §15.52.
+### 15.52 1.0.0 is 1.0.0b9's code; #2 is a known limitation — 2026-10-20 (owner)
+
+1. **1.0.0 adds no feature.** It is 1.0.0b9's code (master `6281b9b`, hardware
+   report 91) with its version and wording changed for release. Every open
+   feature issue ships after 1.0.0, one per release (§15.43).
+2. **When:** after 1.0.0b9 has run on the forum without a blocking report. The
+   owner calls it; no fixed period. Wanted, not required: piCorePlayer and
+   large-library reports (TODO items). A blocking report gets a fix as 1.0.0b10
+   with its own hardware check first.
+3. **GitHub #2 ("Rescan album") is after 1.0.0**, as its design note already
+   placed it (`claude/design-gh2-rescan-album.md`, "Order of work"; TODO "A1
+   (GitHub #2)", owner 2026-10-17). Not ready: Discogs' "Collection Items By
+   Release" endpoint is unverified, and the order of LMS's rescan notifications
+   needs a real server. It becomes a README known limitation. **Cost accepted
+   until then (inferred):** each "Rescan album" starts a full collection sync,
+   about 4 requests on the reference collection, about 51 on a 5,000-item one
+   (§15.50 sizing), during which details menus may say "busy".
+4. **Milestones.** `1.1.0` = #13, #16, #17 together (owner, 2026-10-19). #2 and
+   the other open issues get no milestone yet; their order is decided after
+   1.0.0. A milestone is one release (§15.43 ruling 1).
+5. **The release step itself** (version 1.0.0, README "This is a beta" line,
+   release `repo.xml`, official plugin listing) is planned in its own session
+   when the owner calls 1.0.0.
+
+### 15.53 Release order after 1.0.0 — 2026-10-20 (owner)
+
+Amends §15.52 item 4 ("order decided after 1.0.0"). One feature per release (§15.43); each
+milestone is one release on GitHub.
+
+| Release | Issue | Why there |
+|---|---|---|
+| 1.0.1 | #22 no collection sync after "Rescan album" | Fix, no migration; split from #2. |
+| 1.1.0 | #13, #16, #17 | One release (owner, 2026-10-19). |
+| 1.2.0 | #3 Material "Discogs" item | Decided (§15.44), user-requested, no migration. Open: minimum Material version. |
+| 1.3.0 | #2 Rescan album (tag re-read, one lookup) | Phase 0 first: Discogs "Collection Items By Release" endpoint (unverified). |
+| 1.4.0 | #7 owned pressings | Decided (§15.45); migration. Designed with #10, ships alone (§15.45 item 7). |
+| 1.5.0 | #10 wantlist | Builds on #7; Listen Later and Discogs questions first. |
+| none | #18 multi-language | Translations only (owner, 2026-10-20); ships when a translator is found. |
+| none | #9, #11, #12 | Undecided; no milestone. |
+
+- **Split (owner, 2026-10-20):** stopping the full collection sync after "Rescan album" leaves
+  #2 (which decided it 2026-10-17 as part of #2) and ships first as **1.0.1**, GitHub #22. A fix
+  to the released version per §15.43 ruling 5: branch from the last promoted commit, no
+  migration, merged forward. Why: that sync re-checks ownership with the old tags (inferred from
+  `Plugin.pm` `_rescanDone` / `_syncTick`), and costs ~51 requests per album rescan at 5,000
+  items. Trade-off (inferred): a Discogs collection change is then noticed at the next scan or
+  "Sync collection now", not after an album rescan.
+- **Before 1.0.1 is built:** how to tell an album rescan from a full scan. Both end in
+  `['rescan','done']`; whether the `rescan album` command is visible first, and in what order, is
+  unverified (#2 design note) and needs a real server. Same check #2 needs; do it once.
+- Considered: fixing it in 1.0.0 instead (as b10). Not chosen: 1.0.0 stays b9's code (§15.52).
+- The order may change by a later dated decision; the milestone follows the decision.
+
+### 15.54 Database changes after 1.0.0 must not cost users a rebuild — 2026-10-20 (owner)
+
+Raised by the owner: a user who installs 1.0.0 should not soon have to rebuild the database.
+
+1. **Rule.** After 1.0.0, a database change must:
+   1. run by itself when LMS starts after the update (`Schema.pm` `_migrate`, verified by reading);
+   2. add, not destroy: master lookups are kept (§15.51) and no existing data is lost;
+   3. never require "Starting over";
+   4. not bump `LOGIC_VERSION` (the next scan re-reads every file, §15.24) without its own dated
+      decision;
+   5. state its cost in the release notes: Discogs requests at the next sync, and scan time if any.
+
+   A change that cannot meet these is a `2.0.0` (§15.43 ruling 2).
+2. **Why 1.0.0 still ships without #7** (amends nothing in §15.52). Planned changes, inferred from
+   the records, none built:
+   - #7 (1.4.0) adds storage for owned-pressing ids, filled by the next normal sync (§15.45 items 1
+     and 5). No rescan or master lookup expected.
+   - #10 (1.5.0): shape not designed (unverified).
+   - #13, #16, #22, #2: no database change (#13's design avoids a table rebuild; #16 is settings
+     only; §15.53).
+
+   Before 1.0.0, changes went in because they broke existing users (#8, §15.46 item 4). #7 only
+   adds. Pulling it into 1.0.0 would delay 1.0.0 by a feature-sized beta and would not end
+   migrations (#10 likely adds one).
+3. **Unchanged:** an update still cannot be undone without "Starting over" (`Schema.pm` `_migrate`
+   refuses a newer database). README already says so.
+4. **Not planned:** narrowing the CHECKs that still allow 'manual' and 'orphan' (a full table
+   rebuild "for no gain", `Schema.pm` comment above `_migration_8`).
+
+### 15.55 German translation (GitHub #23): review rules — 2026-10-24 (owner)
+
+Amends the #18 row of §15.53 only in that a translator now exists. Which release carries German is
+NOT decided here.
+
+1. **Contribution.** Dentaku242 (GitHub #23, 2026-10-21): DE for all 127 string IDs, matching
+   1.0.0b9's EN (checked at 5b53aa8). One EN difference: "→" was lost as "?" in FIRST_STEPS.
+2. **The three Discogs notices stay English, with no DE line:** ATTRIBUTION_NOTAFFILIATED,
+   ATTRIBUTION_DATA, DETAILS_NOTICE. Why: the Discogs API Terms of Use (updated 2025-05-27) give the
+   exact English wording, and the German version of the terms keeps it English. Translation is not
+   addressed (unverified whether allowed).
+3. **Review covers real issues only:** the notices, labels a user must find (buttons, views, LMS
+   menus, Discogs pages), broken characters, wrong meaning. Wording and style otherwise stay as the
+   translator wrote them.
+4. **Changes requested in #23:**
+   - FIRST_STEPS: LMS labels SETUP_RESCAN "Medienbibliothek erneut durchsuchen" and
+     SETUP_STANDARDRESCAN "Nach neuen und veränderten Mediendateien suchen" (slimserver public/9.1
+     @ e9430b4); restore "→".
+   - CURRENCY_UNKNOWN: "Sammlung jetzt synchronisieren".
+   - TOKEN_DESC: "Tonträger im Besitz".
+   - DETAILS_HAVE "Haben %s", DETAILS_WANT "Suchen %s" (Discogs German site, owner screenshots
+     2026-10-24).
+5. **Discogs German labels are checked manually by the owner only.** No automated fetching or
+   browsing of discogs.com: the Discogs Terms of Service (updated 2026-02-23) exclude robots,
+   scraping and similar tools.
+6. **Server language only.** Per-app language stays in #18, not designed.
+
+### 15.56 Multiple pressings: other owned pressings, linked by master — amends §15.45 — 2026-10-22 (owner)
+
+GitHub #7.
+
+1. **What is shown.** For exact and version albums: a submenu listing the user's other owned
+   pressings of the same master. Each entry has:
+   - its link;
+   - "Release details" (fetched on open, as today, §15.31);
+   - "Play this version" when an LMS album is tagged with that release.
+
+   This amends §15.45 item 2: "Play this version" is new. If only one pressing is ripped, there is
+   no "Play".
+2. **Linked by master id only.** The album's master is `Ownership.pm` `_effectiveMaster` (tag,
+   else lookup). The other pressings' masters come from the stored collection entries (§15.45
+   items 1 and 6). No title and artist fallback: the same title and artist is not the same record
+   (e.g. Peter Gabriel I-IV).
+3. **`version` stays an ownership state** (§15.46 item 1 unchanged). Under §15.22, a single wrongly
+   tagged file in a correct album is not a version but a conflict (`Tags.pm` `examineCandidates`).
+4. **Accepted gaps** (inferred from reading, not run):
+   1. the list is empty until the master lookup has run for a new tag (`Derive.pm`);
+   2. a version album found by title and artist with no matching master gets no list;
+   3. a release without a master gets no list.
+5. **Not planned.** An untagged album matching two owned pressings stays ambiguous (outside the
+   well-tagged premise, §14.4). Two rips of the same pressing: recorded, not designed.
+6. **Open for #7's design.**
+   1. LMS merges same-title, same-artist rips across folders when disc tags exist and there is no
+      differing MusicBrainz album id (verified by reading slimserver public/9.1 @ 05968ee,
+      `Slim/Schema.pm` `_createOrUpdateAlbum`; not run). The README must say how to keep pressings
+      apart.
+   2. Unverified: how a menu item opens another album in Material, the web UI and SqueezePlay.
+
+### 15.57 German in 1.0.0 — 2026-10-28 (owner)
+
+Amends §15.52 item 1 and closes the timing question left open in §15.55.
+
+1. **1.0.0 = 1.0.0b9's code plus the German strings from GitHub #23 (§15.55).** No other change.
+2. **Why:** strings only. LMS reads plugin strings as UTF-8 (`Slim/Utils/Strings.pm` `loadFile`,
+   `'<:utf8'`), logs and skips a malformed line (`parseStrings`, `logError`), and falls back to EN
+   for a missing language (`storeString`, `$failsafeLang = 'EN'`). Read at slimserver `public/9.1`
+   @ `847ca05`, not run.
+3. **Check:** no extra beta. The 1.0.0 build itself is checked before promotion: a container run
+   (this session, unpackaged tree) and an owner check of the German menus and settings page on a
+   real server (release-step session).
+4. **Translator:** Dentaku242 agreed to all review changes, GPL-2.0 inclusion and credit as
+   "Dentaku" (#23, 2026-10-24).
+
+### 15.58 1.0.0 release step — 2026-10-28 (owner)
+
+1. **Order:** build 1.0.0 on `v1-buildout` -> owner checks it on a real server (update from
+   1.0.0b9; German menus and settings page, §15.57) -> `promote-master.sh 1.0.0 <report>` ->
+   GitHub release `v1.0.0` on the promoted master commit -> close #23, forum post.
+2. **Official listing deferred** (owner, 2026-10-28). Not submitted to
+   `LMS-Community/lms-plugin-repository` `include.json` for now. Until it is, §15.43 ruling 10
+   does not apply: the website `repo.xml` stays the one user channel, and the README keeps
+   "SqueezeWax is not on the main LMS plugin list". Submission is "add the URL to include.json"
+   (that repo's README @ `6c8ab51`, read); by pull request is inferred.
+3. **GitHub release: yes.** Tag `v1.0.0` on master's promotion commit, zip attached, release notes
+   from this record and the README. Created by the owner (Claude Code does not push or create
+   tags).
+4. **Translation licence.** Dentaku agreed to "GPL-2.0" in writing (#23, 2026-10-24). "or later"
+   (README: GPL-2.0-or-later) is the owner's inference from that wording and Dentaku's forum
+   messages, **not confirmed in writing**. It matters only if the licence ever moves past
+   GPL-2.0.
+5. **Database:** no change from 1.0.0b9; no Discogs requests or rescan caused by the update
+   (§15.54 item 5).
+
+Next free decision number: §15.59.

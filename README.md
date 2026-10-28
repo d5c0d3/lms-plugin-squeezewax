@@ -93,7 +93,7 @@ replace it with this one; don't keep both.
 
 Then install and enable SqueezeWax from the plugin list.
 
-**This is a beta.** Newer builds appear in the plugin list as updates. You
+Newer versions appear in the plugin list as updates. You
 cannot go back to an older version: an update may change the SqueezeWax
 database, and an older version refuses a newer database. If you need a clean
 start, see [Starting over](#starting-over).
@@ -160,6 +160,9 @@ if one of those actions is submitted anyway.
 While a scan is running or "Master releases" is shown, the page updates those
 lines by itself every 5 seconds, without reloading and without touching
 anything you have typed.
+
+Screen text follows the LMS server language. German is available. Discogs data
+and the Discogs notices stay as Discogs provides them.
 
 ## Using it
 
@@ -254,7 +257,10 @@ anything you have typed.
   only by the title-and-artist rule. There is no way to link an album by hand.
 - Removing the Discogs tag from an identified album does not remove its
   identification. Retag it with the right release ID instead.
-- This is a beta. Tested on one Linux and one Docker server. Untested: Windows,
+- After "Rescan album" in an album's menu, SqueezeWax does not re-read that
+  album's Discogs tags; a new or fixed tag shows after the next full scan. The
+  rescan also starts a full collection sync. (GitHub #2, planned after 1.0.0.)
+- Tested on one Linux and one Docker server. Untested: Windows,
   macOS, piCorePlayer.
 - Whether ownership results need a freshness limit is an open question with
   Discogs (Help Center request #1281019); the plugin may change with the
@@ -312,3 +318,4 @@ API Terms of Use.
 - SqueezeWax by d5c0d3.
 - Collection data from [Discogs](https://www.discogs.com/).
 - Built for Lyrion Music Server.
+- German translation by Dentaku.

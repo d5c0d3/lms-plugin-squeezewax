@@ -17,25 +17,46 @@ Shared reminder list. Both I and Claude Code read and update this.
 report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
 reference server SQLite 3.46.1)
 
-`master` = 1.0.0b5 (promoted at `075f38a`, pushed 2026-10-17; the website's repo.xml
-names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
-matches it).
+`master` = 1.0.0b9 (promoted at `6281b9b`, 2026-10-20; `origin/master` repo.xml
+names version 1.0.0b9, sha 026ba09218bc094869a0926ca1870307d5e9351c).
 
-Next free decision number: **§15.52** (2026-10-20).
+Next free decision number: **§15.59** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 
-- [ ] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+- [ ] **1.0.0 = 1.0.0b9's code** (§15.52). Waiting for: no blocking forum
+      report on b9 (owner calls it). Then a release-step session: version 1.0.0,
+      README 'This is a beta' line, release `repo.xml`, official listing.
+      Release step also: owner checks German menus and settings page on a real
+      server before promotion (§15.57).
+      → 2026-10-28: release step started (§15.58).
+      → 2026-10-28: **1.0.0 check passed** (owner, real server; label
+      `owner-2026-10-28`). Updated 1.0.0b9 → 1.0.0 from the dev repo.xml, restart
+      clean, no strings parse error. Server language German: settings page, album
+      menu, release details, review queue and 'Tonträger im Besitz' in German;
+      Discogs notices in English. Album menu shows 'Release' wording: expected,
+      §15.55 item 3.
+- [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
+      → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
       #21 (lookups survive database changes, §15.51), and is promoted instead of
       b8 after its own checks ("1.0.0b9 checks" under Waiting — needs a real
       server).
 
-- [ ] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+- [x] **GitHub #14 — settings notice when new masters need a sync** (§15.47).
+      → 2026-10-20: done. The fresh-install case failed in b7 (notice showed in
+      the gaps between derive runs), was fixed in b8 (§15.48), and checked again
+      in b9 (hidden while running/waiting, shown after, gone after the sync). See
+      "1.0.0b7 checks", "1.0.0b8 checks", "1.0.0b9 checks". Released in 1.0.0b9.
       Needs a real server: fresh install with tags but no master tags. The
       notice appears after the master job finishes, is absent while it runs, and
       is gone after 'Sync collection now'. Absent on a settled library.
-- [ ] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+- [x] **GitHub #15 — compilation hint + "Tagging for SqueezeWax" (wording/docs).**
+      → 2026-10-20: queue-page link and own-compilation parts ticked ("1.0.0b7
+      checks"). Still open: the live-site anchor, below (owner checks in a browser).
+      → 2026-10-20: done. Owner checked in a browser after the b9 promotion
+      (`6281b9b`): the "Tagging tips" link opens the user guide at "Tagging for
+      SqueezeWax". Released in 1.0.0b9.
       Needs a real server: the queue page shows the link; an own compilation with
       its release-ID tag removed leaves the queue after a rescan (#8 part 9).
       After the next promotion to master: the queue page's "Tagging tips" link
@@ -43,7 +64,7 @@ Next free decision number: **§15.52** (2026-10-20).
       (anchor `#tagging-for-squeezewax`, inferred from the site's heading-id
       pattern, unverified until published). Before that promotion it lands at the
       top of the page, because the website serves master.
-- [ ] **GitHub #8 — review queue read-only, manual matching removed (decisions
+- [x] **GitHub #8 — review queue read-only, manual matching removed (decisions
       §15.46).** Before 1.0.0. Needs a plan (Opus): migration of existing manual
       rows, superseded decisions, docs, tests. Needs a real server: update from a
       build with manual rows.
@@ -51,6 +72,8 @@ Next free decision number: **§15.52** (2026-10-20).
       `plans/build-order-gh8-queue-read-only.md`; built for 1.0.0b6
       (`137efda`..`0be60ba`). Hardware checks: "1.0.0b6 / GitHub #8 checks" under
       Waiting — needs a real server.
+      → 2026-10-20: done. Built for 1.0.0b6, checks passed ("1.0.0b6 / GitHub #8
+      checks"), issue closed.
 - [ ] **"Duplicate library ID: squeezewaxOwned"** (hand-off check A5, 2026-10-17).
       Seen once in the fix session's server.log (13:46:29, mid-run, not at start;
       source `VirtualLibraries.pm:176`, `registerLibrary` finds the id already
@@ -1487,6 +1510,16 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Open design questions
 
+- [ ] **2026-10-22, #7 (§15.56), needs a real server: does LMS merge two rips of
+      different pressings of one album?** Read in slimserver public/9.1 @ 05968ee,
+      `Slim/Schema.pm` `_createOrUpdateAlbum`: same title and artist merge across
+      folders when disc tags exist and no differing MusicBrainz album id. Not run.
+      The README must say how to keep pressings apart.
+- [ ] **2026-10-22, #7 (§15.56): how does a menu item open another album** in
+      Material, the web UI and SqueezePlay? Unverified.
+- 2026-10-22, #7: decided §15.56 (2a keep version, 2b version albums get the list,
+  master only).
+
 - [ ] **2026-10-20: is the Discogs rate limit per IP or per token?** Unverified
       (§15.50): the developer page names neither; only a third-party listing says
       "source IP". The design holds either way (headers are the only truth; the
@@ -1536,7 +1569,9 @@ Each names its sites so the work is mechanical rather than a search.
       Partly answers 2026-09-13 "per-release lookup of the caller's own
       collection entry?".
 - [ ] **2026-10-15: A1 (GitHub #2) — "Rescan album" also updates SqueezeWax for that album**
-      (decisions §15.43; feature split). Owner, 2026-10-17: (1) Stop today's
+      (decisions §15.43; feature split). After 1.0.0, milestone 1.3.0 (§15.53);
+      README known limitation. Part (1) moved to GitHub #22, 1.0.1 (§15.53; item
+      below). Owner, 2026-10-17: (1) Stop today's
       unconditional fallback sync after rescan album. Inferred: `_syncTick` does
       not skip it, since no scan marker is written, so each album rescan costs a
       full sync, about ceil(items/100)+1 requests (`API.pm` PER_PAGE): 4 for 203
@@ -1551,9 +1586,16 @@ Each names its sites so the work is mechanical rather than a search.
       Needs a real server: the album id arrives before `['rescan','done']`; an
       album whose LMS id changes keeps its match (`album_key`); a rescan album
       queued during a full scan; a manual-match album stays manual.
+- [ ] **2026-10-20: GitHub #22 — no collection sync after "Rescan album"; milestone
+      1.0.1 (§15.53).** Split from #2: a fix to the released version (§15.43 ruling
+      5), branch from the last promoted commit, no migration, merged forward. The
+      1.0.1 build drops the "also starts a full collection sync" sentence from
+      README's "Rescan album" known limitation (not edited now). Blocked on
+      "how to tell an album rescan from a full scan" under Waiting — needs a real
+      server.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
-      restart).**
+      restart); milestone 1.2.0 (§15.53).**
       Open: the minimum Material version for `lmsbrowse`.
       Needs a real server: the item appears in LyrPlay, Squeeze-LX and a desktop
       browser; whether the apps need reopening after the setting is switched on;
@@ -2493,6 +2535,10 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
+- [ ] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
+      Does a subscriber see `rescan album <id>` before `['rescan','done']`, and
+      with which arguments. Both end in `['rescan','done']`. One check serves both
+      issues; do it once.
 - [x] **1.0.0b9 checks (GitHub #19, §15.50).** **2026-10-20 session (reference
       server, LMS 9.1.1, share mounted, owner present): all PASS.** Backup
       `tmp/checkb9/backup-2026-10-20-1234/`; zip sha1 `026ba092…351c` as published;
@@ -3554,6 +3600,18 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — external
 
+- [x] **2026-10-24: GitHub #23: translator's answer** on GPL-2.0 inclusion, credit
+      name, and the review (§15.55). Done 2026-10-24: agreed to all, GPL-2.0,
+      credit "Dentaku".
+- [x] **1.0.0 release step: owner checks German menus and settings page on a real
+      server before promotion (§15.57).** → 2026-10-28: passed (owner,
+      `owner-2026-10-28`).
+- [x] **2026-10-24: GitHub #23: decide which release carries German.** → §15.57
+      (1.0.0, 2026-10-28).
+- [x] **GitHub #23: plugin licence is GPL-2.0-or-later (README); translator agreed
+      to "GPL-2.0".** Owner asked to confirm "or later".
+      → 2026-10-28: owner inference, not confirmed in writing (§15.58 item 4).
+
 - [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
       identified albums, how many carry a master tag, collection items. §15.50's
       large case assumes the worst (~5,000 identified releases, ~5,000-item
@@ -4026,6 +4084,15 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Deferred by decision — not forgotten
 
+- [ ] **Official listing in `LMS-Community/lms-plugin-repository` `include.json`**
+  (§15.58 item 2). When done: §15.43 ruling 10 applies (betas only in `beta.xml`),
+  README Install line changes after the listing is live.
+- [ ] **German 'Veröffentlichung' vs 'Release' in menus** (Discogs German uses
+  'Veröffentlichung' for a release). Kept as translated (§15.55 item 3); ask
+  Dentaku, next release if wanted.
+
+- Every database change after 1.0.0 meets §15.54 (GitHub #7, #10 comments 2026-10-20).
+
 - [ ] **2026-10-20: sliding pause from `Remaining`, above the reserve** (§15.50
       "Considered, deferred"). Needs the b9 per-request `Remaining` lines first:
       does the count recover during 15 s gaps, or only after 60 idle seconds?
@@ -4079,7 +4146,7 @@ Each names its sites so the work is mechanical rather than a search.
   menu.
 
 - [ ] **GitHub #10 — Discogs wantlist: album menu line + "Records I want" view**
-  (owner, 2026-10-17; open, `needs-design`). Investigate first, Listen Later's
+  (owner, 2026-10-17; open, `needs-design`; milestone 1.5.0, §15.53). Investigate first, Listen Later's
   Wish List (verified by reading `SimonArnold002/LMS-Listen-to-Later` @
   `ecb3622`): a local list in `listenlater.db` (`albums.status='wishlist'`,
   `ListenLater/DB.pm`), any source, no Discogs use, "Buy" opens Bandcamp only
