@@ -7737,4 +7737,19 @@ GitHub #7.
       apart.
    2. Unverified: how a menu item opens another album in Material, the web UI and SqueezePlay.
 
-Next free decision number: §15.57.
+### 15.57 German in 1.0.0 — 2026-10-28 (owner)
+
+Amends §15.52 item 1 and closes the timing question left open in §15.55.
+
+1. **1.0.0 = 1.0.0b9's code plus the German strings from GitHub #23 (§15.55).** No other change.
+2. **Why:** strings only. LMS reads plugin strings as UTF-8 (`Slim/Utils/Strings.pm` `loadFile`,
+   `'<:utf8'`), logs and skips a malformed line (`parseStrings`, `logError`), and falls back to EN
+   for a missing language (`storeString`, `$failsafeLang = 'EN'`). Read at slimserver `public/9.1`
+   @ `847ca05`, not run.
+3. **Check:** no extra beta. The 1.0.0 build itself is checked before promotion: a container run
+   (this session, unpackaged tree) and an owner check of the German menus and settings page on a
+   real server (release-step session).
+4. **Translator:** Dentaku242 agreed to all review changes, GPL-2.0 inclusion and credit as
+   "Dentaku" (#23, 2026-10-24).
+
+Next free decision number: §15.58.
