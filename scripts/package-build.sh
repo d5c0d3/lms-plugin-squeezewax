@@ -35,7 +35,7 @@
 #     silently not be offered) and must be higher than repo.xml's version by
 #     Slim::Utils::Versions->compareVersions, loaded from refs/slimserver/.
 #   - Line guard: on a branch named vN-buildout the new version's first number
-#     must be N. Other branch names warn and continue; master is refused.
+#     must be N. Any other branch is refused (§15.61); so is master.
 #   - aN is a dev build and is never promoted; bN is a beta; plain is a release.
 #
 # Usage:
@@ -183,7 +183,8 @@ case "$GH_BRANCH" in
 		fi
 		;;
 	*)
-		echo "warning: branch ${GH_BRANCH} is not vN-buildout; the version line was not checked" >&2
+		echo "error: builds only run on vN-buildout (decisions §15.61); current branch: ${GH_BRANCH}" >&2
+		exit 1
 		;;
 esac
 
