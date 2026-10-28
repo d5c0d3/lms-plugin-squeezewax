@@ -20,7 +20,7 @@ reference server SQLite 3.46.1)
 `master` = 1.0.0 (promoted at `500ef4f`, 2026-10-28; `origin/master` repo.xml
 names version 1.0.0, sha 155145b3071b9e4b8869a69527c6fb19d621b131).
 
-Next free decision number: **§15.60** (2026-10-28).
+Next free decision number: **§15.61** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 
@@ -1588,13 +1588,15 @@ Each names its sites so the work is mechanical rather than a search.
       Needs a real server: the album id arrives before `['rescan','done']`; an
       album whose LMS id changes keeps its match (`album_key`); a rescan album
       queued during a full scan; a manual-match album stays manual.
+      Rescan-order question answered for #2 too (§15.60).
 - [ ] **2026-10-20: GitHub #22 — no collection sync after "Rescan album"; milestone
       1.0.1 (§15.53).** Split from #2: a fix to the released version (§15.43 ruling
       5), branch from the last promoted commit, no migration, merged forward. The
       1.0.1 build drops the "also starts a full collection sync" sentence from
-      README's "Rescan album" known limitation (not edited now). Blocked on
-      "how to tell an album rescan from a full scan" under Waiting — needs a real
-      server.
+      README's "Rescan album" known limitation (not edited now). Unblocked
+      2026-10-28: rule §15.60 item 3 (ignore an album notice while a full scan is
+      pending; never cancel a sync a full scan armed). Hardware check: §15.60
+      item 4.
 - [ ] **2026-10-15: A2 (GitHub #3) — decided, decisions §15.44 (option 2,
       setting off by default, More entries stay, switching off needs a
       restart); milestone 1.2.0 (§15.53).**
@@ -2537,10 +2539,11 @@ Each names its sites so the work is mechanical rather than a search.
 
 ## Waiting — needs a real server
 
-- [ ] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
+- [x] **How to tell an album rescan from a full scan (GitHub #22, #2; §15.53).**
       Does a subscriber see `rescan album <id>` before `['rescan','done']`, and
       with which arguments. Both end in `['rescan','done']`. One check serves both
-      issues; do it once.
+      issues; do it once. → 2026-10-28: answered (§15.60; source + owner server
+      check, tests A and B).
 - [x] **1.0.0b9 checks (GitHub #19, §15.50).** **2026-10-20 session (reference
       server, LMS 9.1.1, share mounted, owner present): all PASS.** Backup
       `tmp/checkb9/backup-2026-10-20-1234/`; zip sha1 `026ba092…351c` as published;

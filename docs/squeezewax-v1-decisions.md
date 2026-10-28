@@ -7782,4 +7782,27 @@ Amends §15.52 item 1 and closes the timing question left open in §15.55.
 3. **`promote-master.sh` runs `scripts/site-check.sh` and warns, but does not stop,** when a release
    still mentions beta/alpha (exit 2, run continues). The word scan does not replace the review.
 
-Next free decision number: §15.60.
+### 15.60 GitHub #22: telling an album rescan from a full scan — 2026-10-28 (owner)
+
+Answers the blocker in §15.53 ("Before 1.0.1 is built"). Evidence: source read, `LMS-Community/slimserver` `public/9.1` @ `847ca05` (2026-10-24; `refs/` pinned `a670a38` not re-checked), plus an owner server check the same day (CLI port 9090, `subscribe rescan`; SqueezeWax 1.0.0 installed).
+
+1. **What LMS sends (verified, source).**
+   - "Rescan album" sends `rescan album <albumId>` (`Slim/Menu/AlbumInfo.pm` `rescanAlbum`).
+   - A command's notice is queued before its handler runs (`Slim/Control/Request.pm` `execute`); notices go out first-in, first-out (`checkNotifications`).
+   - The album rescan runs synchronously in the server (`Slim/Control/Commands.pm` `rescanCommand`, `no_async => 1`) and queues its own `rescan done` (`Slim/Utils/Scanner/Local.pm` ~391). Album mode is never an external scan (`rescanCommand`, `$mode !~ /album|track/`).
+   - A rescan requested while a scan runs, or while the settings page holds scans (`Slim/Web/Settings/Server/Basic.pm` `doQueueScanTasks(1)`, :37 and :160-161), is queued (`Slim/Music/Import.pm` `queueScanTask`): its notice goes out **at once**, and **again** when `nextScanTask` runs it.
+2. **What the server showed (verified, observed 2026-10-28).**
+   - Test A, plain "Rescan album": `rescan album 4900`, `rescan done`.
+   - Test B, "Look for new and changed media files", then "Rescan album" during it: `rescan`, `rescan`, `rescan album 4900`, `rescan done`, `rescan done`, `rescan album 4900`, `rescan done`. The two `rescan` lines are the settings page's queue-then-run (item 1, last bullet); the double `done` is the known duplicate (`Plugin.pm` comment above `_rescanDone`).
+   - Test B shows the trap: the early album notice comes right before the **full** scan's `done`.
+3. **Rule for 1.0.1 (owner).** The server listens to `rescan` notices as well as `rescan done`:
+   1. a `rescan` notice whose mode is not `album` → "full scan pending";
+   2. `rescan album <id>` → ignored if a full scan is pending (it will be sent again when it runs); otherwise "album rescan pending";
+   3. `rescan done` → if only an album rescan is pending: **no collection sync**. Anything else: today's behaviour. Then clear both.
+   4. **Must not:** an album-only `done` must not cancel, delay or re-arm a sync already armed by a full scan (today `_rescanDone` kills and re-sets the `_syncTick` timer on every `done`).
+   5. A `done` with nothing pending (startup scan, auto-rescan, "Clear library and rescan everything", anything unobserved) keeps today's behaviour. Safe default.
+4. **Checks at build time (unverified now).** That `Slim::Control::Request::subscribe` with a `rescan` filter delivers `rescan album …` and `rescan` as the CLI's `subscribe rescan` did (CLI filter is `isCommand([['rescan']])`, `Slim/Plugin/CLI/Plugin.pm`; the plugin-side matcher not read). Hardware check for 1.0.1 repeats tests A and B and confirms: A → no sync line; B → the full scan's sync runs once, the album rescan adds none.
+5. **LMS behaviour noted, no action.** Two *different* album rescans queued during one scan collapse into one: the queue key `rescan|<mode>|<_singledir>` ignores the album id (`_target`), and a repeat within 5 s is skipped (`queueScanTask`, `recentlyScanned` `EXPIRES => 5`).
+6. **Where evidence is thin.** One server, one run per test; the server's LMS version was not re-read that day (LMS 9.1.1 on 2026-10-20). Source read on `public/9.1` HEAD, not that build. Docker server not checked. Scans that send no `rescan` notice (item 3.5) not observed.
+
+Next free decision number: §15.61.
