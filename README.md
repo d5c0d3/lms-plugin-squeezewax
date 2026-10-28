@@ -93,7 +93,7 @@ replace it with this one; don't keep both.
 
 Then install and enable SqueezeWax from the plugin list.
 
-**This is a beta.** Newer builds appear in the plugin list as updates. You
+Newer versions appear in the plugin list as updates. You
 cannot go back to an older version: an update may change the SqueezeWax
 database, and an older version refuses a newer database. If you need a clean
 start, see [Starting over](#starting-over).
@@ -260,7 +260,7 @@ and the Discogs notices stay as Discogs provides them.
 - After "Rescan album" in an album's menu, SqueezeWax does not re-read that
   album's Discogs tags; a new or fixed tag shows after the next full scan. The
   rescan also starts a full collection sync. (GitHub #2, planned after 1.0.0.)
-- This is a beta. Tested on one Linux and one Docker server. Untested: Windows,
+- Tested on one Linux and one Docker server. Untested: Windows,
   macOS, piCorePlayer.
 - Whether ownership results need a freshness limit is an open question with
   Discogs (Help Center request #1281019); the plugin may change with the

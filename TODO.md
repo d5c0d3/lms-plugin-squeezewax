@@ -17,11 +17,10 @@ Shared reminder list. Both I and Claude Code read and update this.
 report 87 = 1.0.0b5 check, 2026-10-17 (repro container SQLite 3.22.0 +
 reference server SQLite 3.46.1)
 
-`master` = 1.0.0b5 (promoted at `075f38a`, pushed 2026-10-17; the website's repo.xml
-names 1.0.0b5, sha 1a056569fee05e51d98b136ad3459a027f54d636, and the master zip
-matches it).
+`master` = 1.0.0b9 (promoted at `6281b9b`, 2026-10-20; `origin/master` repo.xml
+names version 1.0.0b9, sha 026ba09218bc094869a0926ca1870307d5e9351c).
 
-Next free decision number: **§15.58** (2026-10-28).
+Next free decision number: **§15.59** (2026-10-28).
 
 ## v1 RELEASE CHECKLIST
 
@@ -30,6 +29,7 @@ Next free decision number: **§15.58** (2026-10-28).
       README 'This is a beta' line, release `repo.xml`, official listing.
       Release step also: owner checks German menus and settings page on a real
       server before promotion (§15.57).
+      → 2026-10-28: release step started (§15.58).
 - [x] **1.0.0b8 promotion on hold; 1.0.0b9 replaces it** (owner, 2026-10-20).
       → 2026-10-20: done. b9 promoted to master `6281b9b` (hardware report 91).
       b9 ships GitHub #19 (master job pacing, §15.50), #20 (README timing) and
@@ -3601,8 +3601,9 @@ Each names its sites so the work is mechanical rather than a search.
       server before promotion (§15.57).**
 - [x] **2026-10-24: GitHub #23: decide which release carries German.** → §15.57
       (1.0.0, 2026-10-28).
-- [ ] **GitHub #23: plugin licence is GPL-2.0-or-later (README); translator agreed
+- [x] **GitHub #23: plugin licence is GPL-2.0-or-later (README); translator agreed
       to "GPL-2.0".** Owner asked to confirm "or later".
+      → 2026-10-28: owner inference, not confirmed in writing (§15.58 item 4).
 
 - [ ] **2026-10-20: the forum user's real figures** (GitHub #20): LMS albums,
       identified albums, how many carry a master tag, collection items. §15.50's
@@ -4073,6 +4074,10 @@ Each names its sites so the work is mechanical rather than a search.
       need a reset ("Starting over") or a second LMS.** Needs a real server.
 
 ## Deferred by decision — not forgotten
+
+- [ ] **Official listing in `LMS-Community/lms-plugin-repository` `include.json`**
+  (§15.58 item 2). When done: §15.43 ruling 10 applies (betas only in `beta.xml`),
+  README Install line changes after the listing is live.
 
 - Every database change after 1.0.0 meets §15.54 (GitHub #7, #10 comments 2026-10-20).
 

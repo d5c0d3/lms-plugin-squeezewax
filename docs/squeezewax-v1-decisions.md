@@ -7752,4 +7752,24 @@ Amends §15.52 item 1 and closes the timing question left open in §15.55.
 4. **Translator:** Dentaku242 agreed to all review changes, GPL-2.0 inclusion and credit as
    "Dentaku" (#23, 2026-10-24).
 
-Next free decision number: §15.58.
+### 15.58 1.0.0 release step — 2026-10-28 (owner)
+
+1. **Order:** build 1.0.0 on `v1-buildout` -> owner checks it on a real server (update from
+   1.0.0b9; German menus and settings page, §15.57) -> `promote-master.sh 1.0.0 <report>` ->
+   GitHub release `v1.0.0` on the promoted master commit -> close #23, forum post.
+2. **Official listing deferred** (owner, 2026-10-28). Not submitted to
+   `LMS-Community/lms-plugin-repository` `include.json` for now. Until it is, §15.43 ruling 10
+   does not apply: the website `repo.xml` stays the one user channel, and the README keeps
+   "SqueezeWax is not on the main LMS plugin list". Submission is "add the URL to include.json"
+   (that repo's README @ `6c8ab51`, read); by pull request is inferred.
+3. **GitHub release: yes.** Tag `v1.0.0` on master's promotion commit, zip attached, release notes
+   from this record and the README. Created by the owner (Claude Code does not push or create
+   tags).
+4. **Translation licence.** Dentaku agreed to "GPL-2.0" in writing (#23, 2026-10-24). "or later"
+   (README: GPL-2.0-or-later) is the owner's inference from that wording and Dentaku's forum
+   messages, **not confirmed in writing**. It matters only if the licence ever moves past
+   GPL-2.0.
+5. **Database:** no change from 1.0.0b9; no Discogs requests or rescan caused by the update
+   (§15.54 item 5).
+
+Next free decision number: §15.59.
